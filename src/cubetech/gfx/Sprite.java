@@ -32,8 +32,8 @@ public class Sprite {
         this.Position = Position;
         this.Size = Size;
         this.Texture = tex;
-        this.TexOffset = texOffset;
-        this.TexSize = texSize;
+        this.TexOffset = new Vector2f(texOffset.x, texOffset.y);
+        this.TexSize = new Vector2f(texSize.x, texSize.y);
         this.Color.x = this.Color.y = this.Color.z = this.Color.w = 1;
         Angle = 0;
     }
@@ -66,7 +66,9 @@ public class Sprite {
         // draw a quad textured to match the sprite
         GL11.glPushMatrix();
         GL11.glTranslatef(Position.x+Size.x/2f, Position.y+Size.y/2f, 0);
-        GL11.glRotatef(Angle * 180f/(float)Math.PI,0,0,1);
+        
+        if(Angle != 0f)
+            GL11.glRotatef(Angle * 180f/(float)Math.PI,0,0,1);
 
         // Texture coords are flipped on y axis
         GL11.glBegin(GL11.GL_QUADS);

@@ -25,43 +25,50 @@ public class GameLoopApplet extends Thread {
     
     @Override
     public void run() {
+        System.err.println("GameLoopApplet Running");
         running = true;
         try {
             Display.setParent(displayParent);
             Display.create();
             Display.setVSyncEnabled(true);
             try {
-			// get modes
-			DisplayMode[] dm = org.lwjgl.util.Display.getAvailableDisplayModes(800, 600, -1, -1, -1, -1, -1, -1);
+                // get modes
+                DisplayMode use = new DisplayMode(800, 600);
 
-			org.lwjgl.util.Display.setDisplayMode(dm, new String[] { "width=" + 800, "height=" + 600, "freq=" + 60,
-					"bpp=" + org.lwjgl.opengl.Display.getDisplayMode().getBitsPerPixel()});
-			//return true;
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+                        Display.setDisplayMode(use);
+//                DisplayMode[] dm = org.lwjgl.util.Display.getAvailableDisplayModes(800, 600, -1, -1, -1, -1, -1, -1);
+//
+//                org.lwjgl.util.Display.setDisplayMode(dm, new String[] { "width=" + 800, "height=" + 600, "freq=" + 60,
+//                                "bpp=" + org.lwjgl.opengl.Display.getDisplayMode().getBitsPerPixel()});
+                //return true;
+            } catch (Exception e) {
+                running = false;
+                System.err.println(e);
+                    e.printStackTrace();
+            }
            // initGL();
         } catch(LWJGLException ex) {
+            System.err.println(ex.toString());
             ex.printStackTrace();
         }
         GameLoop.InitRef();
-        
+        System.err.println("Starting GameLoop");
         GameLoop();
     }
 
     public void GameLoop() {
         Ref.loop.Init();
-        while(running) {
-            try {
+        try {
+            while(running) {
                 Ref.loop.RunFrame();
-            } catch (Exception ex) {
-                Logger.getLogger(GameLoopApplet.class.getName()).log(Level.SEVERE, null, ex);
-                System.exit(-1);
             }
-            
-
+            Display.destroy();
+        } catch (Exception ex) {
+            System.err.println("GameLoop() ERROR:");
+            System.err.println(ex.toString());
+            Logger.getLogger(GameLoopApplet.class.getName()).log(Level.SEVERE, null, ex);
+            //System.exit(-1);
         }
-        Display.destroy();
     }
 
 //    protected void initGL() {

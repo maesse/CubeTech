@@ -47,12 +47,19 @@ public class SpriteManager {
     }
 
     public void DrawNormal() {
-        
+
+        Sprite spr;
         for (int i= 0; i < NormalSpriteOffset; i++) {
-            Sprites[NormalSprites[i]].Draw();
+            spr = Sprites[NormalSprites[i]];
+//            if(!Cull(spr))
+                spr.Draw();
         }
         
     }
+
+//    boolean Cull(Sprite sprite) {
+//
+//    }
     public void DrawHUD() {
         for (int i= 0; i < HUDSpriteOffset; i++) {
             Sprites[HUDSprites[i]].Draw();

@@ -90,8 +90,9 @@ public class Window {
 			// create default windowed display 640*480 @ 100, 100
 			setDefaultDisplayMode();
 
-			window_x = window_y = 100;
-			Display.setLocation(window_x, window_y);
+                        DisplayMode mod = Display.getDesktopDisplayMode();
+
+			Display.setLocation((int)(mod.getWidth()/2f - 400), (int)(mod.getHeight()/2f - 300));
 
 			Display.create();
                         Display.setVSyncEnabled(true);
@@ -305,10 +306,13 @@ public class Window {
 	protected boolean setDefaultDisplayMode() {
 		try {
 			// get modes
-			DisplayMode[] dm = org.lwjgl.util.Display.getAvailableDisplayModes(800, 600, -1, -1, -1, -1, -1, -1);
+			//DisplayMode[] dm = org.lwjgl.util.Display.getAvailableDisplayModes(800, 600, -1, -1, -1, -1, -1, -1);
+                       // DisplayMode disp = Display.getDesktopDisplayMode();
+                        DisplayMode use = new DisplayMode(800, 600);
 
-			org.lwjgl.util.Display.setDisplayMode(dm, new String[] { "width=" + 800, "height=" + 600, "freq=" + 60,
-					"bpp=" + org.lwjgl.opengl.Display.getDisplayMode().getBitsPerPixel()});
+                        Display.setDisplayMode(use);
+//			org.lwjgl.util.Display.setDisplayMode(dm, new String[] { "width=" + 800, "height=" + 600, "freq=" + 60,
+//					"bpp=" + org.lwjgl.opengl.Display.getDisplayMode().getBitsPerPixel()});
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();

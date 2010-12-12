@@ -1,86 +1,480 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech;
 
+import cubetech.entities.Bombah;
+import cubetech.entities.Drone;
+import cubetech.entities.Entity;
+import cubetech.entities.PlayerFinish;
 import cubetech.gfx.CubeTexture;
+import cubetech.gfx.ResourceManager;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
-import cubetech.gfx.TextManager.Align;
 import cubetech.input.Key;
 import cubetech.input.KeyEvent;
 import cubetech.input.KeyEventListener;
-
-import cubetech.misc.Button;
 import cubetech.misc.Ref;
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
-import org.jbox2d.collision.AABB;
-import org.jbox2d.collision.CircleDef;
-import org.jbox2d.collision.PolygonDef;
-import org.jbox2d.collision.PolygonShape;
-import org.jbox2d.collision.ShapeDef;
-import org.jbox2d.collision.ShapeType;
-import org.jbox2d.common.Color3f;
-import org.jbox2d.common.Vec2;
-import org.jbox2d.common.XForm;
-import org.jbox2d.dynamics.Body;
-import org.jbox2d.dynamics.BodyDef;
-import org.jbox2d.dynamics.DebugDraw;
+import java.util.Enumeration;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 import org.lwjgl.input.Keyboard;
-import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.vector.Vector2f;
-import org.lwjgl.util.vector.Vector4f;
 
 /**
  * Current world (level) that is loaded, and it's state
  * @author mads
  */
-public class World implements KeyEventListener {
+public final class World implements KeyEventListener {
     Block[] Blocks = new Block[10000];
-    //ArrayList<Block> Blocks = new ArrayList<Block>();
-    Mode mode = Mode.Edit; // Start in edit for now
-    public Camera camera;
     int NextBlockHandle = 0;
 
-    CubeTexture scaleTex;
-    CubeTexture background;
-    CubeTexture dims;
-    CubeTexture toFront;
-    CubeTexture grid;
-    CubeTexture open;
-    CubeTexture save;
-    CubeTexture newfile;
+    public ArrayList<Entity> Entities = new ArrayList<Entity>();
+    Entity[] entToRemove = new Entity[30];
+    int entToRemoveOffset = 0;
 
+    public Camera camera;
+    public Player player;
+    WorldEditor worldEdit;
+    Mode mode = Mode.Game; // Start in edit for now
+    
+    CubeTexture background;
     boolean EnableBackground = true;
 
-    org.jbox2d.dynamics.World b2World;
+    WorldSector[] worldSectors = new WorldSector[256];
+    public Vector2f WorldMin = new Vector2f(0, -3*16f);
+    public Vector2f WorldMax = new Vector2f(80*16f,40*16f);
+    String[] maps;
+    int currentMap = 0;
+    int numWorldSectors = 0;
 
-    // Edit mode
-    int selectedHandle = -1;
-    boolean editMouseLock = false;
-    Corner editCorder = Corner.BOTTOMLEFT;
-    EditFunc editFunc = EditFunc.NONE;
-    Vector2f editMouseOrigin;
-    Vector2f texScaleStart;
-    Button toFrontButton;
-    Button gridButton;
-    Button openButton;
-    Button saveButton;
-    Button newButton;
-    float editAngle;
-    boolean gridEnabled = false;
-    EditFunc oldFunc = EditFunc.NONE;
 
-    ArrayList<CubeTexture> editTextures = new ArrayList<CubeTexture>();
-    int editTextureSelected;
+    public enum Mode {
+        Game,
+        Edit
+    }
 
-    Player player;
-    DebugDraw  dd;
+    public World() {
+        Ref.world = this;
+        background = (CubeTexture)(Ref.ResMan.LoadResource("data/horizont.png").Data);
+
+        maps = new String[4];
+        maps[0] = "map0.map";
+        maps[1] = "map1.map";
+        maps[2] = "map2.map";
+        maps[3] = "map3.map";
+
+        Ref.Input.AddKeyEventListener(this);
+
+        worldEdit = new WorldEditor(this);
+        StartNewGame();
+        LoadWorld(maps[0]);
+    }
+
+    boolean LoadNextMap(int lives, float energy, boolean bigguy, int score) {
+        currentMap++;
+
+        if(maps.length <= currentMap) {
+            // No more maps!
+            currentMap = 0;
+            return false;
+        }
+        
+        String map = maps[currentMap];
+        
+        boolean result = LoadWorld(map);
+        player.ResetPlayer();
+        player.lives = lives;
+        player.energy = energy;
+        player.bigguy = bigguy;
+        player.score = score;
+        return result;
+    }
+
+     public void StartNewGame() {
+         ClearWorld();
+         NextBlockHandle = 0;
+        camera = new Camera(new Vector2f(), 192);
+
+        int numx = 80;
+        int numy = 5;
+        int height = 40;
+
+        for (int i= 0; i < numy; i++) {
+            for (int j= 0; j < numx; j++) {
+                Blocks[NextBlockHandle] = new Block(NextBlockHandle, new Vector2f(16f*j,-16f*i), new Vector2f(16,16));
+                Blocks[NextBlockHandle].Texture = (CubeTexture)(Ref.ResMan.LoadResource("data/tile.png").Data);
+
+                NextBlockHandle++;
+            }
+        }
+        for (int i= 1; i < height; i++) {
+             Blocks[NextBlockHandle] = new Block(NextBlockHandle, new Vector2f(0,16f*i), new Vector2f(16,16));
+                Blocks[NextBlockHandle].Texture = (CubeTexture)(Ref.ResMan.LoadResource("data/tile.png").Data);
+
+                NextBlockHandle++;
+         }
+        for (int i= 1; i < height; i++) {
+             Blocks[NextBlockHandle] = new Block(NextBlockHandle, new Vector2f(16f*(numx-1),16f*i), new Vector2f(16,16));
+                Blocks[NextBlockHandle].Texture = (CubeTexture)(Ref.ResMan.LoadResource("data/tile.png").Data);
+
+                NextBlockHandle++;
+         }
+        for (int i= 1; i < numx; i++) {
+             Blocks[NextBlockHandle] = new Block(NextBlockHandle, new Vector2f(16f*i,16f*(height-1)), new Vector2f(16,16));
+                Blocks[NextBlockHandle].Texture = (CubeTexture)(Ref.ResMan.LoadResource("data/tile.png").Data);
+
+                NextBlockHandle++;
+         }
+        player = new Player(this, new Vector2f(camera.Position.x + camera.VisibleSize.x/2f, camera.Position.y + camera.VisibleSize.y/2f));
+        WorldUpdated(false);
+    }
+
+    public AreaBlocks GetAreaBlocks(Vector2f mins, Vector2f maxs) {
+        AreaBlocks area = new AreaBlocks(1000, mins, maxs);
+        AreaBlocks_r(worldSectors[0], area);
+
+        return area;
+    }
+
+    void AreaBlocks_r(WorldSector sector, AreaBlocks area) {
+        for (int i= 0; i < sector.nIndices; i++) {
+            if(area.dataOffset >= area.data.length)
+                return;
+
+            area.data[area.dataOffset++] = sector.blockIndices[i];
+        }
+        if(sector.Axis == -1)
+            return;
+
+        if(sector.Axis == 0) {
+            if(area.maxs.x > sector.Dist)
+                AreaBlocks_r(sector.children[0], area);
+            if(area.mins.x < sector.Dist)
+                AreaBlocks_r(sector.children[1], area);
+        } else {
+            if(area.maxs.y > sector.Dist)
+                AreaBlocks_r(sector.children[0], area);
+            if(area.mins.y < sector.Dist)
+                AreaBlocks_r(sector.children[1], area);
+        }
+    }
+
+    void FillWorldSectors() {
+        for (int i= 0; i < NextBlockHandle; i++) {
+            Block block = Blocks[i];
+            if(block == null)
+                continue;
+
+            WorldSector node = worldSectors[0];
+            while(node.Axis != -1) {
+                
+                if(node.Axis == 0) {
+                    if(block.Position.x > node.Dist)
+                        node = node.children[0];
+                    else if(block.Position.x + block.Size.x < node.Dist)
+                        node = node.children[1];
+                    else
+                        break;
+
+                } else {
+                    if(block.Position.y > node.Dist)
+                        node = node.children[0];
+                    else if(block.Position.y + block.Size.y < node.Dist)
+                        node = node.children[1];
+                    else
+                        break;
+                }
+            }
+
+            // link it in
+            node.blockIndices[node.nIndices++] = i;
+        }
+    }
+    
+    WorldSector CreateWorldSectors(int depth, Vector2f min, Vector2f max) {
+        WorldSector anode = new WorldSector();
+        worldSectors[numWorldSectors++] = anode;
+        if(depth == 6) {
+            anode.Axis = -1;
+            anode.children[0] = anode.children[1] = null;
+            return anode;
+        }
+
+        Vector2f size = new Vector2f(max.x - min.x, max.y - min.y);
+        if(size.x > size.y)
+            anode.Axis = 0;
+        else
+            anode.Axis = 1;
+        anode.Dist = 0.5f * (VecIndex(max, anode.Axis) + VecIndex(min, anode.Axis));
+
+        Vector2f maxs = new Vector2f(max.x, max.y);
+        Vector2f mins = new Vector2f(min.x, min.y);
+
+        if(anode.Axis == 0)
+            maxs.x = mins.x = anode.Dist;
+        else
+            maxs.y = mins.y = anode.Dist;
+        anode.children[0] = CreateWorldSectors(depth +1, mins, max);
+        anode.children[1] = CreateWorldSectors(depth +1, min, maxs);
+
+        return anode;
+    }
+
+    public static float VecIndex(Vector2f vec, int index) {
+        switch(index)
+        {
+            case 0:
+                return vec.x;
+            case 1:
+                return vec.y;
+        }
+        return vec.x;
+    }
+
+    public void ClearWorld() {
+        NextBlockHandle = 0;
+        camera = new Camera(new Vector2f(0, 0), 192);
+//        player = new Player(this, new Vec2(20, 20));
+        worldEdit.ClearEditor();
+        //worldEdit = new WorldEditor(this);
+    }
+
+    public void WorldUpdated(boolean commingFromEditor) {
+        Entities.clear();
+        numWorldSectors = 0;
+        CreateWorldSectors(0, WorldMin,WorldMax);
+        FillWorldSectors();
+
+        for (int i= 0; i < NextBlockHandle; i++) {
+            Block block = Blocks[i];
+            if(block == null || block.CustomVal == 0)
+                continue;
+
+            switch(block.CustomVal) {
+                case 1:
+                    if(!commingFromEditor)
+                    {
+                        // Position player at spawn
+                        player.position = new Vector2f(block.Position.x + block.Size.x /2f, block.Position.y + block.Size.y/2f);
+                    }
+                    break;
+                case 2:
+                    PlayerFinish finish = new PlayerFinish(block.Position);
+                     Entities.add(finish);
+                    // Add goal
+                    break;
+                case 3:
+                    Drone drone = new Drone(new Vector2f(block.Position.x + block.Size.x /2f, block.Position.y + block.Size.y/2f));
+                    Entities.add(drone);
+                    break;
+                case 4:
+                    Bombah bombah = new Bombah(new Vector2f(block.Position.x + block.Size.x /2f, block.Position.y + block.Size.y/2f));
+                    Entities.add(bombah);
+                    break;
+            }
+        }
+
+//        Entities.add(new Bombah(new Vector2f(100, 100)));
+//        Entities.add(new Drone(new Vector2f(200, 30)));
+    }
+
+    
+
+    public boolean LoadWorld(String filename) {
+        URL url = null;
+        String[] data = null;
+        int line = 0;
+        if(filename.equals("map0.map")) {
+            String data2 = map0;
+            data = data2.split("\n");
+        }
+        else if(filename.equals("map1.map")) {
+            String data2 = map1;
+            data = data2.split("\n");
+        }
+        else if(filename.equals("map2.map")) {
+            String data2 = map2;
+            data = data2.split("\n");
+        }
+        else if(filename.equals("map3.map")) {
+            String data2 = map3;
+            data = data2.split("\n");
+        }else
+            return false;
+        
+//         url = World.class.getClassLoader().getResource("cubetech/data/"+filename);
+//
+//
+//        FileReader fr = null;
+//        try {
+//            if(url == null) {
+//                fr = new FileReader(filename);
+//            } else {
+//                fr = new FileReader(url.getFile());
+//            }
+//        } catch (FileNotFoundException ex) {
+//            try {
+//                fr = new FileReader(url.getFile());
+//            } catch (FileNotFoundException ex1) {
+//               Logger.getLogger(World.class.getName()).log(Level.SEVERE, null, ex);
+//            StartNewGame();
+//            return false;
+//            }
+//
+//
+//        }
+        NextBlockHandle = 0;
+        camera = new Camera(new Vector2f(), 192);
+        ClearWorld();
+
+//        BufferedReader in = new BufferedReader(fr);
+        try {
+            String parse = data[line++];
+            int nTex = Integer.parseInt(parse);
+            CubeTexture[] newTexs = null;
+            if(nTex > 0) {
+                newTexs = new CubeTexture[nTex];
+                for (int i= 0; i < nTex; i++) {
+                    parse = data[line++];
+                    newTexs[i] = (CubeTexture)(Ref.ResMan.LoadResource(parse).Data);
+                }
+            }
+            parse = data[line++];
+            int nBlocks = Integer.parseInt(parse);
+            if(nBlocks > 0) {
+
+                for (int i = 0; i < nBlocks; i++) {
+                    Block block = new Block(-1, null, null);
+                    parse = data[line++];
+                    String[] splitted = parse.split("(:)");
+                    if(splitted.length != 12)
+                        throw new IOException("Failed loading");
+                    block.Position = new Vector2f(Float.parseFloat(splitted[0]), Float.parseFloat(splitted[1]));
+                    block.Size = new Vector2f(Float.parseFloat(splitted[2]), Float.parseFloat(splitted[3]));
+
+                    block.Angle = Float.parseFloat(splitted[4]);
+                    block.TexOffset = new Vector2f(Float.parseFloat(splitted[5]), Float.parseFloat(splitted[6]));
+                    block.TexSize = new Vector2f(Float.parseFloat(splitted[7]), Float.parseFloat(splitted[8]));
+                    int texid = Integer.parseInt(splitted[9]);
+                    if(texid < 0 || texid >= newTexs.length)
+                        throw new IOException("Failed loading -- texture doesn't exist");
+                    block.Texture = newTexs[texid];
+                    block.Collidable = Integer.parseInt(splitted[10])==1?true:false;
+                    block.CustomVal = Integer.parseInt(splitted[11]);
+                    block.Handle = NextBlockHandle;
+                    Blocks[NextBlockHandle] = block;
+                    NextBlockHandle++;
+                }
+            }
+            player = new Player(this, new Vector2f(camera.Position.x + camera.VisibleSize.x/2f, camera.Position.y + camera.VisibleSize.y/2f));
+            WorldUpdated(false);
+        } catch (IOException ex) {
+            Logger.getLogger(World.class.getName()).log(Level.SEVERE, null, ex);
+            return false;
+            
+        }
+//        try {
+//            //fr.close();
+//        } catch (IOException ex) {
+//            Logger.getLogger(World.class.getName()).log(Level.SEVERE, null, ex);
+//        }
+
+        return true;
+    }
+
+    public void Render(int msec) {
+        if(mode == Mode.Edit) {
+            worldEdit.RenderEdit(msec);
+        } else {
+            RenderGame(msec);
+        }
+    }
+
+    public void RenderGame(int msec) {
+        // Render background
+
+        if(mode == Mode.Game) {
+            if(!player.transforming) {
+                entToRemoveOffset = 0;
+                for (int i= 0; i < Entities.size(); i++) {
+                    Entity ent = Entities.get(i);
+
+                    float xdiff = Math.abs(ent.GetPosition().x - Ref.world.player.position.x);
+                    if(xdiff > 200f && ent.GetType() != Collision.MASK_BULLETS)
+                        continue; // out of range
+
+                    ent.Update(msec);
+                    if(ent.ToRemove()) {
+                        entToRemove[entToRemoveOffset++] = ent;
+                    }
+                }
+            }
+            
+            player.Update(msec);
+            
+        }
+
+        if(EnableBackground) {
+            RenderBackground();
+        }
+
+        // Render all blocks
+        for (int i= 0; i < NextBlockHandle; i++) {
+            if(Blocks[i] != null && BlockVisible(Blocks[i]))
+                Blocks[i].Render();
+        }
+
+        // Render all entities
+        for (int i= 0; i < Entities.size(); i++) {
+            Entity ent = Entities.get(i);
+            ent.Render();
+        }
+
+        // Run player code if in game
+        if(mode == Mode.Game) {
+            
+            player.Render();
+
+            Vector2f camPos = new Vector2f(player.position.x - 192/2, player.position.y - 70);
+            float ms = (float)msec/200f;
+            //ms += Math.min((Math.abs(player.velocity.x)+ Math.abs(player.velocity.y)) / 5000f, 0.1f);
+            float invms = 1f-ms;
+            camera.Position.x = camera.Position.x * invms + camPos.x * ms;
+            camera.Position.y = camera.Position.y * invms + camPos.y * ms;
+        }
+        // Update camera position
+        camera.PositionCamera();
+
+        // Remove dead entities
+        for (int i= 0; i < entToRemoveOffset; i++) {
+            Entities.remove(entToRemove[i]);
+        }
+    }
+
+    
+    boolean BlockVisible(Block block) {
+        if(mode == Mode.Game && block.CustomVal != 0)
+            return false;
+
+        float dist = block.Position.x - camera.Position.x;
+        if(dist > 192f || dist < -10f -block.Size.x)
+            return false;
+        dist = block.Position.y - camera.Position.y + block.Size.y;
+        if(dist > 150f + block.Size.y || dist < -10f-block.Size.y)
+            return false;
+
+
+        return true;
+    }
 
     public void KeyPressed(KeyEvent evt) {
         Key event = (Key) evt.getSource();
+        // Check if user want to go to edit-mode
         if(event.key == Keyboard.KEY_F8) {
             if(mode == Mode.Edit)
                 LoadGame();
@@ -89,190 +483,19 @@ public class World implements KeyEventListener {
         }
     }
 
-    void LoadGame() {
-        mode = Mode.Game;
-        AABB worldaabb = new AABB(new Vec2(0, 0), new Vec2(1000, 100));
-        b2World = new org.jbox2d.dynamics.World(worldaabb, new Vec2(0, -16), false);
 
-        for (int i= 0; i < NextBlockHandle; i++) {
-            Block block = Blocks[i];
-            if(block == null)
-                continue;
-
-            PolygonDef sd = new PolygonDef();
-            sd.setAsBox(BoxScale(block.Size.x/2f), BoxScale(block.Size.y/2f));
-            //sd.setAsBox(block.Size.x, block.Size.y, new Vec2(block.Size.x, block.Size.y), block.Angle);
-            sd.density = 0f;
-            
-            BodyDef def = new BodyDef();
-            def.position.set(BoxScale(block.Position.x+block.Size.x/2f), BoxScale(block.Position.y+block.Size.y/2f));
-            //def.angle = block.Angle;
-            def.fixedRotation = true;
-            
-            Body body = b2World.createBody(def);
-            body.createShape(sd);
-            body.setMassFromShapes();
-            
-        }
-        player = new Player(this, new Vec2(BoxScale(camera.Position.x + camera.VisibleSize.x/2f), BoxScale(camera.Position.y + camera.VisibleSize.y/2f)));
-        dd = new DebugDraw() {
-
-            @Override
-            public void drawPolygon(Vec2[] vec2s, int i, Color3f clrf) {
-                GL11.glPolygonMode(GL11.GL_FRONT, GL11.GL_LINE);
-                GL11.glPolygonMode(GL11.GL_BACK, GL11.GL_LINE);
-                 GL11.glBegin(GL11.GL_POLYGON);
-                    {
-                     GL11.glColor3f(clrf.x, clrf.y, clrf.z);
-                for (int j= 0; j < i; j++) {
-                    
-//                        GL11.glTexCoord2f(TexOffset.x, TexOffset.y+TexSize.y);
-                        GL11.glVertex2f(vec2s[j].x*16f, vec2s[j].y*16f);
-
-
-                    }
-                    
-                }
-                 GL11.glEnd();
-                 GL11.glPolygonMode(GL11.GL_FRONT, GL11.GL_FILL);
-                GL11.glPolygonMode(GL11.GL_BACK, GL11.GL_FILL);
-            }
-
-            @Override
-            public void drawSolidPolygon(Vec2[] vec2s, int i, Color3f clrf) {
-                throw new UnsupportedOperationException("Not supported yet.");
-            }
-
-            @Override
-            public void drawCircle(Vec2 vec2, float f, Color3f clrf) {
-                throw new UnsupportedOperationException("Not supported yet.");
-            }
-
-            @Override
-            public void drawSolidCircle(Vec2 vec2, float f, Vec2 vec21, Color3f clrf) {
-                throw new UnsupportedOperationException("Not supported yet.");
-            }
-
-            @Override
-            public void drawPoint(Vec2 vec2, float f, Color3f clrf) {
-                throw new UnsupportedOperationException("Not supported yet.");
-            }
-
-            @Override
-            public void drawSegment(Vec2 vec2, Vec2 vec21, Color3f clrf) {
-                throw new UnsupportedOperationException("Not supported yet.");
-            }
-
-            @Override
-            public void drawXForm(XForm xform) {
-                throw new UnsupportedOperationException("Not supported yet.");
-            }
-
-            @Override
-            public void drawString(float f, float f1, String string, Color3f clrf) {
-                throw new UnsupportedOperationException("Not supported yet.");
-            }
-        };
-        b2World.setDebugDraw(dd);
-        
-    }
 
     void LoadEdit() {
         mode = Mode.Edit;
     }
 
-    public enum Mode {
-        Game,
-        Edit
-    }
+    void LoadGame() {
+        boolean fromEdit = (mode == Mode.Edit);
+        mode = Mode.Game;
+        player = new Player(this, new Vector2f(camera.Position.x + camera.VisibleSize.x/2f, camera.Position.y + camera.VisibleSize.y/2f));
 
-    public enum EditFunc {
-        NONE,
-        SELECT,
-        CORNER,
-        MOVE,
-        COPY,
-        CAMERAMOVE,
-        TEXSCALE,
-        TEXMOVE,
-        ROTATE
-    }
-
-    public enum Corner {
-        BOTTOMLEFT,
-        BOTTOMRIGHT,
-        TOPLEFT,
-        TOPRIGHT
-    }
-
-    public World() {
-        scaleTex = (CubeTexture)(Ref.ResMan.LoadResource("data/scale.png").Data);
-        background = (CubeTexture)(Ref.ResMan.LoadResource("data/horizont.png").Data);
-        dims = (CubeTexture)(Ref.ResMan.LoadResource("data/dims.png").Data);
-        toFront = (CubeTexture)(Ref.ResMan.LoadResource("data/tofront.png").Data);
-        grid = (CubeTexture)(Ref.ResMan.LoadResource("data/grid.png").Data);
-
-        open = (CubeTexture)(Ref.ResMan.LoadResource("data/open.png").Data);
-        save = (CubeTexture)(Ref.ResMan.LoadResource("data/save.png").Data);
-        newfile = (CubeTexture)(Ref.ResMan.LoadResource("data/new.png").Data);
-
-        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/tile.png").Data));
-        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/dims.png").Data));
-        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/horizont.png").Data));
-
-        newButton = new Button(" ", new Vector2f(0.925f, 0.85f),  new Vector2f(0.04f, 0.04f), newfile);
-        openButton = new Button(" ", new Vector2f(0.925f, 0.8f),  new Vector2f(0.04f, 0.04f), open);
-        saveButton = new Button(" ", new Vector2f(0.925f, 0.75f),  new Vector2f(0.04f, 0.04f), save);
-        
-        toFrontButton = new Button(" ", new Vector2f(0.925f, 0.7f),  new Vector2f(0.04f, 0.04f), toFront);
-        gridButton = new Button(" ", new Vector2f(0.925f, 0.65f),  new Vector2f(0.04f, 0.04f), grid);
-
-        camera = new Camera(new Vector2f(), 192);
-        Blocks[NextBlockHandle] = new Block(NextBlockHandle++, new Vector2f(0,0), new Vector2f(16,16));
-        Blocks[NextBlockHandle] = new Block(NextBlockHandle++, new Vector2f(16,0), new Vector2f(16,16));
-        Blocks[NextBlockHandle] = new Block(NextBlockHandle++, new Vector2f(32,0), new Vector2f(16,16));
-        Blocks[NextBlockHandle] = new Block(NextBlockHandle++, new Vector2f(64,0), new Vector2f(16,16));
-        Blocks[NextBlockHandle] = new Block(NextBlockHandle++, new Vector2f(64,16), new Vector2f(16,16));
-        Blocks[NextBlockHandle] = new Block(NextBlockHandle++, new Vector2f(64,32), new Vector2f(16,16));
-        Blocks[NextBlockHandle] = new Block(NextBlockHandle++, new Vector2f(96,0), new Vector2f(16,16));
-        Blocks[NextBlockHandle] = new Block(NextBlockHandle++, new Vector2f(128,96), new Vector2f(16,16));
-        Ref.Input.AddKeyEventListener(this);
-    }
-
-    public void Render(int msec) {
-        if(mode == Mode.Edit) {
-            RenderEdit(msec);
-        } else {
-            RenderGame(msec);
-        }
-    }
-
-    private float BoxScale(float f) {
-        return f/16f;
-    }
-
-    private void RenderGame(int msec) {
-        float step = (float)1f/60f;
-
-        if(mode == Mode.Game)
-            b2World.step(step, 10);
-        
-
-        camera.PositionCamera();
-        if(EnableBackground) {
-            RenderBackground();
-        }
-        for (int i= 0; i < NextBlockHandle; i++) {
-            if(Blocks[i] != null)
-                Blocks[i].Render();
-        }
-
-        if(mode == Mode.Game) {
-            player.Update();
-            player.Render();
-//            b2World.drawDebugData();
-            }
-
+        // Update collision data
+        WorldUpdated(fromEdit);
     }
 
     private void RenderBackground() {
@@ -286,513 +509,2381 @@ public class World implements KeyEventListener {
         spr.Set(camera.Position, camera.VisibleSize, background, new Vector2f(0, yoffset), new Vector2f(1, yoffset-0.33f));
     }
 
-    Vector2f MousePosToWorldPos(Vector2f mousePos) {
+    // From 0-1 viewspace to worldspace
+    public Vector2f MousePosToWorldPos(Vector2f mousePos) {
         return new Vector2f(camera.Position.x + mousePos.x * 192f, camera.Position.y + mousePos.y * camera.VisibleSize.y);
     }
+String map0 = "8\n"+
+"data/tile.png\n"+
+"data/dims.png\n"+"data/horizont.png\n"+"data/grass.png\n"+
+"data/grass2.png\n"+
+"data/Tiles_grass_set.png\n"+
+"data/Tiles_snow_set.png\n"+
+"data/Tiles_lava_set.png\n"+
+"570\n"+
+"0.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"32.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"48.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"64.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"80.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"96.0:0.0:19.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"176.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"192.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"224.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"240.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"256.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"272.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"288.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"304.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"320.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"336.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"352.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"368.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"384.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"400.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"432.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"448.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"464.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"480.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"496.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"512.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"528.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"544.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"118.0:-12.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"128.0:-11.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"176.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:80.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:96.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:112.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:128.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:144.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:160.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:176.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:192.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:208.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:224.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:240.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:256.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:272.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:288.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:304.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:320.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:336.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:352.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:368.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:384.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:400.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:416.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:432.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:448.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:464.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:480.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:496.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:512.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:528.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:544.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:560.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:576.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:592.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:608.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:80.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:96.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:112.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:128.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:144.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:160.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:176.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:192.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:208.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:224.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:240.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:256.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:272.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:288.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:304.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:320.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:336.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:352.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:368.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:384.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:400.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:416.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:432.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:448.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:464.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:480.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:496.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:512.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:528.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:544.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:560.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:576.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:592.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:608.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"208.0:32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"224.95998:48.239998:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"264.64:35.28:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"241.0:58.0:65.0:9.0:0.0:0.0:0.0:4.225483:0.72657657:3:1:0\n"+
+"400.0:15.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:31.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"467.0:11.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:2\n"+
+"46.08:33.84:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:1\n"+
+"508.71997:35.760002:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"486.47998:34.559998:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"544.0:16.0:16.0:191.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"508.48004:18.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"139.0:-22.0:25.0:26.0:0.68672866:0.014400024:0.026400032:1.0:1.0:4:0:0\n"+
+"160.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"160.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"100.0:-29.0:42.0:34.0:-0.55735904:0.014400024:0.026400032:1.0:1.0:4:0:0\n"+
+"128.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"112.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"96.0:-17.0:18.0:17.0:-1.5587904:0.007200012:0.062399976:1.2296926:0.9024886:3:1:0\n"+
+"96.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"472.0:62.0:4.0:15.0:-2.5696023:0.0:0.0:1.0:1.0:0:0:0\n"+
+"479.0:62.0:4.0:15.0:-3.854211:0.0:0.0:1.0:1.0:0:0:0\n"+
+"475.0:62.0:4.0:35.0:0.0:0.0:0.0:1.0:1.0:0:0:0\n";
 
-    boolean EditModeHUD() {
-        Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-        spr.Set(new Vector2f(0.92f, 0.1f), new Vector2f(0.05f, 0.8f), null, new Vector2f(0, 0), new Vector2f(0, 0));
-        spr.Color = new Vector4f(0, 0, 0, 0.4f);
+String map1 = "8\n"+
+"data/tile.png\n"+
+"data/dims.png\n"+
+"data/horizont.png\n"+
+"data/grass.png\n"+
+"data/grass2.png\n"+
+"data/Tiles_grass_set.png\n"+
+"data/Tiles_snow_set.png\n"+
+"data/Tiles_lava_set.png\n"+
+"600\n"+
+"0.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:80.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:96.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:112.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:128.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:144.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:160.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:176.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:192.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:208.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:224.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:240.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:256.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:272.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:288.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:304.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:320.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:336.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:352.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:368.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:384.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:400.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:416.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:432.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:448.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:464.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:480.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:496.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:512.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:528.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:544.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:560.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:576.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:592.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:608.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:80.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:96.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:112.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:128.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:144.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:160.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:176.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:192.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:208.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:224.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:240.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:256.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:272.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:288.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:304.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:320.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:336.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:352.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:368.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:384.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:400.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:416.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:432.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:448.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:464.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:480.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:496.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:512.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:528.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:544.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:560.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:576.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:592.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:608.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"68.0:30.0:16.0:16.0:0.0:0.0:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"99.0:46.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"147.0:83.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"32.719994:33.839996:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:1\n"+
+"182.0:59.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"198.0:75.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"215.0:90.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"99.0:30.0:16.0:16.0:0.0:0.08880005:0.081600115:0.059680372:0.074782655:5:1:0\n"+
+"131.0:14.0:16.0:16.0:0.0:0.08880005:0.081600115:0.059680372:0.074782655:5:1:0\n"+
+"116.0:14.0:16.0:16.0:0.0:0.08880005:0.081600115:0.059680372:0.074782655:5:1:0\n"+
+"100.0:14.0:16.0:16.0:0.0:0.08880005:0.081600115:0.059680372:0.074782655:5:1:0\n"+
+"83.0:46.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"83.399994:30.479996:16.0:16.0:0.0:0.08880005:0.081600115:0.059680372:0.074782655:5:1:0\n"+
+"84.0:15.0:16.0:16.0:0.0:0.08880005:0.081600115:0.059680372:0.074782655:5:1:0\n"+
+"68.0:15.0:16.0:16.0:0.0:-0.0024000548:0.07440008:0.059680372:0.074782655:5:1:0\n"+
+"64.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"133.0:45.0:36.0:30.0:-0.6140516:-0.0024000548:0.00959999:1.0:1.0:4:0:0\n"+
+"131.0:46.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"115.0:46.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"131.0:30.0:16.0:16.0:0.0:0.08880005:0.081600115:0.059680372:0.074782655:5:1:0\n"+
+"115.0:30.0:16.0:16.0:0.0:0.08880005:0.081600115:0.059680372:0.074782655:5:1:0\n"+
+"203.52002:27.84:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"215.0:106.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"163.0:127.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"147.0:127.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"131.0:127.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"115.0:127.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"83.0:127.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"99.0:127.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"67.0:127.0:16.0:16.0:0.0:0.004800111:0.07920013:0.059680372:0.074782655:5:1:0\n"+
+"163.0:143.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"121.0:148.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"67.0:143.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"52.0:143.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"36.0:143.0:16.0:16.0:0.0:0.06960007:0.0024000548:0.059680372:0.074782655:5:1:0\n"+
+"46.0:177.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"16.0:175.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"16.0:218.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"99.0:225.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"114.0:225.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"150.0:253.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"179.0:224.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"195.0:224.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"190.0:239.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:2\n";
 
+String map2 = "8\n"+
+"data/tile.png\n"+
+"data/dims.png\n"+
+"data/horizont.png\n"+
+"data/grass.png\n"+
+"data/grass2.png\n"+
+"data/Tiles_grass_set.png\n"+
+"data/Tiles_snow_set.png\n"+
+"data/Tiles_lava_set.png\n"+
+"565\n"+
+"0.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:80.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:96.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:112.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:128.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:144.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:160.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:176.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:192.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:208.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:224.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:240.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:256.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:272.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:288.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:304.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:320.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:336.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:352.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:368.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:384.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:400.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:416.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:432.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:448.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:464.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:480.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:496.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:512.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:528.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:544.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:560.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:576.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:592.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:608.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:80.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:96.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:112.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:128.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:144.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:160.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:176.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:192.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:208.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:224.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:240.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:256.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:272.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:288.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:304.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:320.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:336.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:352.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:368.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:384.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:400.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:416.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:432.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:448.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:464.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:480.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:496.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:512.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:528.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:544.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:560.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:576.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:592.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:608.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"139.0:10.0:62.0:77.0:0.0:0.0:0.0:1.0:1.0:4:0:0\n"+
+"120.0:13.0:84.0:15.0:0.0:0.0:0.0:2.9619436:0.90653497:4:0:0\n"+
+"192.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.47998:24.960003:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"272.4:29.279999:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"373.84003:25.919998:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"498.0:10.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"595.0:25.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"629.60004:23.040005:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"660.64:24.720001:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"736.0:16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"771.36:24.720001:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"785.44:58.56:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"858.64:26.400002:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"947.44:21.36:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:2\n"+
+"44.56:28.080002:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:1\n";
 
-        // Check if mouse is hovering the hud
-        boolean hit = false;
-        Vector2f mouseLocalPos = Ref.Input.playerInput.MousePos;
-        if(mouseLocalPos.x >= 0.92f && mouseLocalPos.x <= 0.97f) // inside x coords
-            if(mouseLocalPos.y >= 0.1f && mouseLocalPos.y <= 0.9f)
-                hit = true;
+String map3 = "8\n"+
+"data/tile.png\n"+
+"data/dims.png\n"+
+"data/horizont.png\n"+
+"data/grass.png\n"+
+"data/grass2.png\n"+
+"data/Tiles_grass_set.png\n"+
+"data/Tiles_snow_set.png\n"+
+"data/Tiles_lava_set.png\n"+
+"596\n"+
+"0.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"103.0:19.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:2\n"+
+"112.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:-64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:80.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:96.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:112.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:128.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:144.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:160.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:176.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:192.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:208.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:224.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:240.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:256.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:272.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:288.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:304.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:320.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:336.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:352.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:368.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:384.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:400.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:416.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:432.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:448.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:464.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:480.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:496.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:512.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:528.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:544.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:560.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:576.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:592.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:608.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"0.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:64.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:80.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:96.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:112.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:128.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:144.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:160.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:176.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:192.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:208.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:224.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:240.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:256.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:272.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:288.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:304.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:320.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:336.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:352.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:368.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:384.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:400.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:416.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:432.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:448.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:464.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:480.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:496.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:512.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:528.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:544.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:560.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:576.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:592.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:608.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"32.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"48.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"64.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"80.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"112.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"128.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"144.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"160.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"176.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"192.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"208.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"224.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"240.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"256.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"272.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"288.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"304.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"320.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"336.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"352.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"368.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"384.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"400.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"416.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"432.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"448.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"464.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"480.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"496.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"512.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"528.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"544.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"560.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"576.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"592.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"608.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"624.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"640.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"656.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"672.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"688.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"704.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"720.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"736.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"752.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"768.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"784.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"800.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"816.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"832.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"848.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"864.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"880.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"896.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"912.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"928.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"944.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"960.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"976.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"992.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1008.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1024.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1040.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1056.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1072.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1088.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1104.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1120.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1136.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1152.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1168.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1184.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1200.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1216.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1232.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1248.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"1264.0:624.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"66.0:16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"66.0:16.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"81.0:32.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"97.0:48.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:3:1:0\n"+
+"113.0:48.0:144.0:15.0:0.0:0.0:0.0:5.797932:1.0242275:3:1:0\n"+
+"96.0:0.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"33.68:23.039997:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:1\n"+
+"256.0:48.0:144.0:15.0:0.0:0.0:0.0:5.797932:1.0242275:3:1:0\n"+
+"384.0:61.0:15.0:159.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:59.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"39.0:99.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"16.0:141.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"96.0:165.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"136.0:128.0:54.0:44.0:-0.45517853:0.02159973:0.014399871:0.95488983:0.9622016:4:0:0\n"+
+"125.0:94.0:54.0:44.0:-2.5885413:0.028800048:0.016799927:0.97207934:0.96558017:4:0:0\n"+
+"94.0:112.0:54.0:44.0:-4.605647:0.016800003:0.021600036:1.0:1.0:4:0:0\n"+
+"108.0:135.0:54.0:44.0:-6.061507:0.021600036:0.014400024:0.98556244:0.97672594:4:0:0\n"+
+"113.0:180.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"129.0:180.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"145.0:180.0:20.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"203.0:181.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"260.0:199.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"325.96:230.64001:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"226.0:226.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"297.0:241.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"362.0:246.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"439.0:181.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"440.0:106.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"442.0:43.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"416.0:26.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"365.0:23.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"312.19995:23.799965:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"342.28:143.79999:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"113.0:196.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"149.0:196.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:1:0\n"+
+"131.0:208.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4\n"+
+"46.0:168.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"67.0:103.0:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:3\n"+
+"197.96:86.08001:16.0:16.0:0.0:0.0:0.0:1.0:1.0:0:0:4";
 
-
-
-
-        HandleEditMenuButtons();
-
-        return hit;
-    }
-
-    void HandleEditMenuButtons() {
-        Vector2f mouseLocalPos = Ref.Input.playerInput.MousePos;
-
-        if(newButton.Intersects(mouseLocalPos) && Ref.Input.playerInput.Mouse1 && Ref.Input.playerInput.Mouse1Diff) {
-            // New
-        }
-
-        if(openButton.Intersects(mouseLocalPos) && Ref.Input.playerInput.Mouse1 && Ref.Input.playerInput.Mouse1Diff) {
-            // Open
-        }
-        
-        if(saveButton.Intersects(mouseLocalPos) && Ref.Input.playerInput.Mouse1 && Ref.Input.playerInput.Mouse1Diff) {
-            // Save
-        }
-
-        if(toFrontButton.Intersects(mouseLocalPos) && Ref.Input.playerInput.Mouse1 && Ref.Input.playerInput.Mouse1Diff) {
-            // Do it
-            if(selectedHandle > 0) {
-                SendToFront(Blocks[selectedHandle]);
-            }
-        }
-
-        if(gridButton.Intersects(mouseLocalPos) && Ref.Input.playerInput.Mouse1&& Ref.Input.playerInput.Mouse1Diff) {
-            gridEnabled = !gridEnabled;
-            System.out.println("Diff");
-        }
-        else if(gridEnabled)
-            gridButton.OnMouseOver();
-
-        saveButton.Render();
-        newButton.Render();
-        openButton.Render();
-        toFrontButton.Render();
-        gridButton.Render();
-    }
-
-    void SendToFront(Block block) {
-        Block newblock = new Block(NextBlockHandle, new Vector2f(block.Position.x, block.Position.y), new Vector2f(block.Size.x, block.Size.y));
-        newblock.Texture = block.Texture;
-        newblock.Angle = block.Angle;
-        newblock.TexOffset = new Vector2f(block.TexOffset.x, block.TexOffset.y);
-        newblock.TexSize = new Vector2f(block.TexSize.x, block.TexSize.y);
-        selectedHandle = NextBlockHandle;
-        Blocks[NextBlockHandle++] = newblock;
-        Blocks[block.Handle] = null;
-        
-    }
-
-    void DrawTextureBar() {
-        Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-        spr.Set(new Vector2f(0.05f, 0.0f), new Vector2f(0.9f, 0.22f), null, new Vector2f(0,0),new Vector2f(1,1));
-        spr.Color = new Vector4f(0,0,0,0.4f);
-
-        if(editTextureSelected < 0)
-            return;
-
-        // Take input
-        if(Ref.Input.playerInput.WheelDelta != 0) {
-            if(Ref.Input.playerInput.WheelDelta> 0)
-                editTextureSelected++;
-            else
-                editTextureSelected--;
-
-            // Wrap
-            if(editTextureSelected >= editTextures.size())
-                editTextureSelected = editTextureSelected - editTextures.size();
-            else if(editTextureSelected < 0)
-                editTextureSelected = editTextures.size()+editTextureSelected;
-
-            Blocks[selectedHandle].Texture = editTextures.get(editTextureSelected);
-            
-        }
-
-        spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-        spr.Set(new Vector2f(0.5f, 0.1f), 0.1f, editTextures.get(editTextureSelected));
-
-        int numright = editTextures.size()-editTextureSelected-1;
-        if(numright > 4)
-            numright = 4;
-        
-        for (int i = 0; i < numright; i++) {
-            float invIFrac = (float)(numright - i)/(float)numright;
-
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-            spr.Set(new Vector2f(0.5f+i*0.1f+0.12f, 0.1f), 0.05f, editTextures.get(editTextureSelected+1+i));
-            spr.Color = new Vector4f(1, 1, 1, 0.3f + 0.7f * invIFrac);
-        }
-
-        int numleft = editTextureSelected;
-        if(numleft > 4)
-            numleft = 4;
-        for (int i = 0; i < numleft; i++) {
-            float invIFrac = (float)(numleft - i)/(float)numleft;
-
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-            spr.Set(new Vector2f(0.5f-i*0.1f-0.12f, 0.1f), 0.05f, editTextures.get(editTextureSelected-1-i));
-            spr.Color = new Vector4f(1, 1, 1, 0.4f + 0.6f * invIFrac);
-        }
-
-    }
-
-    void HandleEditMode() {
-
-        Vector2f mouseWorldPos = MousePosToWorldPos(Ref.Input.playerInput.MousePos);
-
-        if(editFunc == EditFunc.NONE || editFunc == EditFunc.SELECT) {
-            if(Ref.Input.playerInput.Mouse3) {
-                oldFunc = editFunc;
-                editFunc = EditFunc.CAMERAMOVE;
-                editMouseOrigin = mouseWorldPos;
-            }
-        } else if(editFunc == EditFunc.CAMERAMOVE) {
-            Vector2f diff = new Vector2f(mouseWorldPos.x - editMouseOrigin.x, mouseWorldPos.y - editMouseOrigin.y);
-            camera.Position.x += diff.x * 0.5f;
-            camera.Position.y += diff.y * 0.5f;
-            editMouseOrigin = mouseWorldPos;
-            if(!Ref.Input.playerInput.Mouse3)
-                editFunc = oldFunc;
-        }
-
-        EditModeHUD();
-
-        // Check if user is trying to select a block
-        int newSelect = -2;
-        if(Ref.Input.playerInput.Mouse1 && !editMouseLock && Ref.Input.playerInput.Mouse1Diff) {
-            boolean found = false;
-            for (int i= NextBlockHandle-1; i >=0 ; i--)
-            {
-                Block block = Blocks[i];
-                if(block == null)
-                    continue;
-                if(block.Intersects(mouseWorldPos)) {
-                    // Select block in next frame
-                    newSelect = block.Handle;
-                    found = true;
-                    break;
-                }
-            }
-            if(!found)
-                newSelect = -1;
-        }
-        
-        // A block is selected
-        if(selectedHandle >= 0) {
-            if(editFunc == EditFunc.NONE)
-                editFunc = EditFunc.SELECT;
-            Block block = Blocks[selectedHandle];
-            
-            switch(editFunc) {
-                case NONE:
-                    break;
-                case SELECT:
-                    if(Ref.Input.playerInput.Mouse1 && !editMouseLock && Ref.Input.playerInput.Mouse1Diff) {
-                        if(CheckCornerHit(mouseWorldPos, block) && !Ref.Input.IsKeyPressed(Keyboard.KEY_LCONTROL) && !Ref.Input.IsKeyPressed(Keyboard.KEY_SPACE)) {
-                            editFunc = EditFunc.CORNER;
-                        } else if(CheckBoundsHit(mouseWorldPos, block)) {
-                            if(Ref.Input.IsKeyPressed(Keyboard.KEY_LSHIFT)){
-                                editFunc = EditFunc.COPY;
-                                editMouseOrigin = new Vector2f(mouseWorldPos.x, mouseWorldPos.y);
-                                editMouseLock = true;
-                            } else if(Ref.Input.IsKeyPressed(Keyboard.KEY_LCONTROL) && !Ref.Input.IsKeyPressed(Keyboard.KEY_SPACE)) {
-                                editFunc = EditFunc.ROTATE;
-                                editMouseOrigin = new Vector2f(mouseWorldPos.x, mouseWorldPos.y);
-                                editMouseOrigin.x -= block.Position.x + block.Size.x / 2f;
-                                editMouseOrigin.y -= block.Position.y + block.Size.y / 2f;
-                                float lenght = 1/(float)Math.sqrt(editMouseOrigin.x * editMouseOrigin.x + editMouseOrigin.y * editMouseOrigin.y);
-                                editMouseOrigin.x *= lenght;
-                                editMouseOrigin.y *= lenght;
-                                editAngle = block.Angle;
-                                editMouseLock = true;
-                            
-                                
-                            } else if(!Ref.Input.IsKeyPressed(Keyboard.KEY_LCONTROL) && !Ref.Input.IsKeyPressed(Keyboard.KEY_SPACE)) {
-                                editFunc = EditFunc.MOVE;
-                                editMouseOrigin = new Vector2f(mouseWorldPos.x, mouseWorldPos.y);
-                                editMouseLock = true;
-                            }
-                        }
-                        
-                        if(Ref.Input.IsKeyPressed(Keyboard.KEY_LCONTROL) && Ref.Input.IsKeyPressed(Keyboard.KEY_SPACE)) {
-                            if(CheckCornerHit(mouseWorldPos, block) && editCorder == Corner.BOTTOMRIGHT) {
-                                // Texscale
-                                editFunc = EditFunc.TEXSCALE;
-                                editMouseOrigin = new Vector2f(mouseWorldPos.x, mouseWorldPos.y);
-                                editMouseLock = true;
-                                texScaleStart = block.TexSize;
-                                    
-                            } else if(CheckBoundsHit(mouseWorldPos, block)){
-                                editFunc = EditFunc.TEXMOVE;
-                                editMouseOrigin = new Vector2f(mouseWorldPos.x, mouseWorldPos.y);
-                                editMouseLock = true;
-                                texScaleStart = block.TexOffset;
-                            }
-                        }
-                    } else if(Ref.Input.IsKeyPressed(Keyboard.KEY_DELETE)) {
-                        // Remove this block
-                        Blocks[selectedHandle] = null;
-                        selectedHandle = -1;
-                        newSelect = -1;
-                        editFunc = editFunc.NONE;
-                    }
-                    if(Ref.Input.IsKeyPressed(Keyboard.KEY_LCONTROL) && Ref.Input.IsKeyPressed(Keyboard.KEY_SPACE))
-                        DrawEditBlock2(block.Position, block.Size);
-                    else
-                        DrawEditBlock(block.Position, block.Size);
-                    
-                    if(editFunc == EditFunc.SELECT) {
-                        // Show texturebar
-                        DrawTextureBar();
-                    }
-                    break;
-                case TEXMOVE:
-                    Vector2f diff = new Vector2f(mouseWorldPos.x - editMouseOrigin.x, mouseWorldPos.y - editMouseOrigin.y);
-                    
-                    if(Ref.Input.playerInput.Mouse1) {
-                        block.TexOffset = new Vector2f(texScaleStart.x, texScaleStart.y);
-                        block.TexOffset.x -= diff.x*0.01f;
-                        block.TexOffset.y += diff.y*0.01f;
-                    } else {
-                        block.TexOffset = new Vector2f(texScaleStart.x, texScaleStart.y);
-                        block.TexOffset.x -= diff.x*0.01f;
-                        block.TexOffset.y += diff.y*0.01f;
-                        editMouseLock = false;
-                        editFunc = EditFunc.SELECT;
-                    }
-                    DrawEditBlock2(block.Position, block.Size);
-                    break;
-                case TEXSCALE:
-                    Vector2f pos = new Vector2f();
-                    Vector2f size = new Vector2f();
-                    GetCornerTempBlock(block, mouseWorldPos, pos, size);
-                    if(Ref.Input.playerInput.Mouse1) {
-                        if(editCorder == Corner.BOTTOMRIGHT) {
-                            block.TexSize = new Vector2f(texScaleStart.x, texScaleStart.y);
-                            block.TexSize.x *= 1f/(size.x / block.Size.x);
-                            block.TexSize.y *= 1f/(size.y / block.Size.y);
-                        }
-
-                    } else {
-                        block.TexSize = new Vector2f(texScaleStart.x, texScaleStart.y);
-                        block.TexSize.x *= 1f/(size.x / block.Size.x);
-                        block.TexSize.y *= 1f/(size.y / block.Size.y);
-                        editMouseLock = false;
-                        editFunc = EditFunc.SELECT;
-                    }
-                    DrawEditBlock2(block.Position, block.Size);
-                    break;
-                case ROTATE:
-                    if(Ref.Input.playerInput.Mouse1) {
-                        Vector2f newdir = new Vector2f(mouseWorldPos.x, mouseWorldPos.y);
-                        newdir.x -= block.Position.x + block.Size.x / 2f;
-                        newdir.y -= block.Position.y + block.Size.y / 2f;
-
-                        float lenght = 1/(float)Math.sqrt(newdir.x * newdir.x + newdir.y * newdir.y);
-                        newdir.x *= lenght;
-                        newdir.y *= lenght;
-
-                        float angle =  editAngle + (float)(Math.atan2(newdir.y, newdir.x) - Math.atan2(editMouseOrigin.y, editMouseOrigin.x));
-                        
-                        //float angle = (float)Math.acos(Vector2f.dot(newdir, editMouseOrigin));
-                        block.Angle = angle;
-
-                    } else {
-                        editMouseLock = false;
-                        editFunc = EditFunc.SELECT;
-                    }
-                    break;
-                case CORNER:
-                    pos = new Vector2f();
-                    size = new Vector2f();
-                    GetCornerTempBlock(block, mouseWorldPos, pos, size);
-                    if(Ref.Input.playerInput.Mouse1) {
-                        pos.x = (int)pos.x;
-                        pos.y = (int)pos.y;
-                        size.x = (int)size.x;
-                        size.y = (int)size.y;
-                        block = new Block(-2, pos, size);
-                    } else {
-                        pos.x = (int)pos.x;
-                        pos.y = (int)pos.y;
-                        size.x = (int)size.x;
-                        size.y = (int)size.y;
-                        block.Position = pos;
-                        block.Size = size;
-                        editMouseLock = false;
-                        editFunc = EditFunc.SELECT;
-                    }
-                    DrawEditBlock(block.Position, block.Size);
-                    break;
-                case MOVE:
-                    diff = new Vector2f(mouseWorldPos.x - editMouseOrigin.x, mouseWorldPos.y - editMouseOrigin.y);
-                    if(Ref.Input.playerInput.Mouse1) {
-                        block = new Block(-2, new Vector2f((int)(block.Position.x + diff.x), (int)(block.Position.y + diff.y)), block.Size);
-                    } else {
-                        block.Position.x += diff.x;
-                        block.Position.y += diff.y;
-                        block.Position.x = (int)block.Position.x;
-                        block.Position.y = (int)block.Position.y;
-                        
-                        editFunc = editFunc.SELECT;
-                        editMouseLock = false;
-                        
-                    }
-                    DrawEditBlock(block.Position, block.Size);
-                    break;
-                case COPY:
-                    diff = new Vector2f(mouseWorldPos.x - editMouseOrigin.x, mouseWorldPos.y - editMouseOrigin.y);
-                    if(Ref.Input.playerInput.Mouse1) {
-                        // Display "ghost"
-                        block = new Block(-2, new Vector2f((int)(block.Position.x + diff.x), (int)(block.Position.y + diff.y)), block.Size);
-                        if(Ref.Input.playerInput.Mouse2) {
-                            // Rightclick while copying aborts
-                            editFunc = EditFunc.SELECT;
-                            editMouseLock = false;
-                        }
-                    } else {
-                        // Create copy of block
-                        Block newblock = new Block(NextBlockHandle, new Vector2f(block.Position.x, block.Position.y), new Vector2f(block.Size.x, block.Size.y));
-                        newblock.Texture = block.Texture;
-                        newblock.Angle = block.Angle;
-                        newblock.TexOffset = new Vector2f(block.TexOffset.x, block.TexOffset.y);
-                        newblock.TexSize = new Vector2f(block.TexSize.x, block.TexSize.y);
-                        Blocks[NextBlockHandle++] = newblock;
-                        
-                        newblock.Position.x += diff.x;
-                        newblock.Position.y += diff.y;
-                        block.Position.x = (int)block.Position.x;
-                        block.Position.y = (int)block.Position.y;
-                        editFunc = editFunc.SELECT;
-                        selectedHandle = newblock.Handle;
-                        editMouseLock = false;
-                    }
-                    DrawEditBlock(block.Position, block.Size);
-                    break;
-            }
-
-        } else if(editFunc != EditFunc.CAMERAMOVE)
-            editFunc = EditFunc.NONE;
-
-        if(!editMouseLock && (newSelect >= 0 || newSelect == -1)) {
-                selectedHandle = newSelect;
-                if(selectedHandle == -1)
-                    editFunc = editFunc.NONE;
-                else {
-                    //editTextureSelected
-                    int selectedTexId = Blocks[selectedHandle].Texture.GetID();
-                    int selectedIndex = 0;
-                    for (int i= 0; i < editTextures.size(); i++) {
-                        if(editTextures.get(i).GetID() == selectedTexId) {
-                            selectedIndex = i;
-                            break;
-                        }
-                    }
-                    editTextureSelected = selectedIndex;
-                }
-            }
-    }
-
-    private void GetCornerTempBlock(Block block, Vector2f mouseWorldPos, Vector2f pos, Vector2f size) {
-        Vector2f oppositeCorner = new Vector2f();
-        switch(editCorder) {
-            case BOTTOMLEFT:
-                oppositeCorner = new Vector2f(block.Position.x + block.Size.x, block.Position.y + block.Size.y);
-                break;
-            case BOTTOMRIGHT:
-                oppositeCorner = new Vector2f(block.Position.x, block.Position.y+block.Size.y);
-                break;
-            case TOPLEFT:
-                oppositeCorner = new Vector2f(block.Position.x+block.Size.x, block.Position.y);
-                break;
-            case TOPRIGHT:
-                oppositeCorner = new Vector2f(block.Position.x, block.Position.y);
-                break;
-        }
-        pos.x = oppositeCorner.x<mouseWorldPos.x?oppositeCorner.x:mouseWorldPos.x;
-        pos.y = oppositeCorner.y<mouseWorldPos.y?oppositeCorner.y:mouseWorldPos.y;
-        size.x = (oppositeCorner.x>mouseWorldPos.x?oppositeCorner.x:mouseWorldPos.x)-pos.x;
-        size.y = (oppositeCorner.y>mouseWorldPos.y?oppositeCorner.y:mouseWorldPos.y)-pos.y;
-    }
-
-    private boolean CheckBoundsHit(Vector2f mouseWorldPos, Block block)
-    {
-        if(mouseWorldPos.x >= block.Position.x && mouseWorldPos.x <= block.Position.x + block.Size.x) // inside x coords
-            if(mouseWorldPos.y >= block.Position.y&& mouseWorldPos.y <= block.Position.y + block.Size.y) {
-                return true;
-            }
-        return false;
-    }
-
-    private boolean CheckCornerHit(Vector2f mouseWorldPos, Block block) {
-        boolean hit = false;
-        float dimsSize = 2f;
-        // Bottom left
-        if(mouseWorldPos.x >= block.Position.x-dimsSize && mouseWorldPos.x <= block.Position.x + dimsSize) // inside x coords
-            if(mouseWorldPos.y >= block.Position.y-dimsSize && mouseWorldPos.y <= block.Position.y + dimsSize) {
-                editMouseLock = true;
-                editCorder = Corner.BOTTOMLEFT;
-                hit = true;
-            }
-        // Bottom right
-        if(mouseWorldPos.x >= block.Position.x-dimsSize+block.Size.x && mouseWorldPos.x <= block.Position.x + dimsSize+block.Size.x) // inside x coords
-            if(mouseWorldPos.y >= block.Position.y-1f && mouseWorldPos.y <= block.Position.y + 1f) {
-                editMouseLock = true;
-                editCorder = Corner.BOTTOMRIGHT;
-                hit = true;
-            }
-        // top left
-        if(mouseWorldPos.x >= block.Position.x-dimsSize && mouseWorldPos.x <= block.Position.x + dimsSize) // inside x coords
-            if(mouseWorldPos.y >= block.Position.y-dimsSize+block.Size.y && mouseWorldPos.y <= block.Position.y + dimsSize+block.Size.y) {
-                editMouseLock = true;
-                editCorder = Corner.TOPLEFT;
-                hit = true;
-            }
-        // top right
-        if(mouseWorldPos.x >= block.Position.x-dimsSize+block.Size.x && mouseWorldPos.x <= block.Position.x + dimsSize+block.Size.x) // inside x coords
-            if(mouseWorldPos.y >= block.Position.y-dimsSize+block.Size.y && mouseWorldPos.y <= block.Position.y + dimsSize+block.Size.y) {
-                editMouseLock = true;
-                editCorder = Corner.TOPRIGHT;
-                hit = true;
-            }
-
-        return hit;
-    }
-
-    private void DrawEditBlock(Vector2f pos, Vector2f size) {
-            // Hightlight selected
-            Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
-            spr.Set(pos, size, null, new Vector2f(0,0), new Vector2f(1, 1));
-            spr.Color = new Vector4f(1,1,1,0.2f);
-
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
-            spr.Set(pos, 1f, dims);
-
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
-            spr.Set(new Vector2f(pos.x + size.x, pos.y), 1f, dims);
-
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
-            spr.Set(new Vector2f(pos.x + size.x, pos.y + size.y), 1f, dims);
-
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
-            spr.Set(new Vector2f(pos.x, pos.y + size.y), 1f, dims);
-    }
-
-    private void DrawEditBlock2(Vector2f pos, Vector2f size) {
-            // Hightlight selected
-            Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
-            spr.Set(pos, size, null, new Vector2f(0,0), new Vector2f(1, 1));
-            spr.Color = new Vector4f(1,1,1,0.2f);
-
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
-            spr.Set(new Vector2f(pos.x + size.x, pos.y), 1f, dims);
-    }
-
-    private void RenderEdit(int msec) {
-        if(Ref.Input.IsKeyPressed(Keyboard.KEY_NUMPAD6)) {
-            camera.Position.x += 2f;
-        }
-        if(Ref.Input.IsKeyPressed(Keyboard.KEY_NUMPAD4)) {
-            camera.Position.x -= 2f;
-        }
-        if(Ref.Input.IsKeyPressed(Keyboard.KEY_NUMPAD8)) {
-            camera.Position.y += 2f;
-        }
-        if(Ref.Input.IsKeyPressed(Keyboard.KEY_NUMPAD2)) {
-            camera.Position.y -= 2f;
-        }
-        
-        // Game editing / debug mode
-        RenderBackground();
-        Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
-        float xoffset = camera.Position.x % 64;
-        float yoffset = camera.Position.y % 64;
-        Vector2f pos = new Vector2f(camera.Position.x - xoffset, camera.Position.y - yoffset);
-        spr.Set(pos, new Vector2f(192+64, 192+64), scaleTex, new Vector2f(0, 0), new Vector2f(4, 4));
-        
-        EnableBackground = false;
-        RenderGame(msec);
-        EnableBackground = true;
-
-        HandleEditMode();
-        
-
-        Ref.textMan.AddText(new Vector2f(0.5f, 0.9f), "Edit Mode", Align.CENTER);
-    }
 }

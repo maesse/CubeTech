@@ -35,7 +35,7 @@ public class GameLoop {
     CubeTexture cursor;
     public DisplayMode mode;
     long lastTime;
-    long time;
+    public long time;
 
     // Initializes classes that there need to be only one off
     public static void InitRef() {
@@ -58,6 +58,11 @@ public class GameLoop {
             System.exit(-1);
         }
         Ref.StateMan = new StateManager();
+        Ref.net = new Net();
+        Ref.common = new Common();
+        Ref.collision = new Collision();
+        Ref.soundMan = new SoundManager();
+        Ref.soundMan.initialize(12);
     }
 
     
@@ -68,6 +73,7 @@ public class GameLoop {
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         mode = Display.getDisplayMode();
+        Ref.common.Init();
     }
     
     public void RunFrame() throws Exception {
@@ -110,10 +116,7 @@ public class GameLoop {
         Ref.SpriteMan.DrawHUD();
         World world = ((HagserState)Ref.StateMan.GetGameState("hagser")).world;
 
-        if(world != null && world.b2World != null) {
-            world.camera.PositionCamera();
-            world.b2World.drawDebugData();
-            }
+
        // Display frame
        Display.sync(60);
        Display.update();

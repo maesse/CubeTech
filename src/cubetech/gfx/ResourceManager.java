@@ -161,7 +161,7 @@ public class ResourceManager {
 
         // create the texture ID for this texture
         int textureID = createTextureID();
-        CubeTexture texture = new CubeTexture(target,textureID);
+        CubeTexture texture = new CubeTexture(target,textureID,resourceName);
 
         // bind this texture
         glBindTexture(target, textureID);

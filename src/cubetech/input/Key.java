@@ -19,6 +19,7 @@ public class Key {
         // State
         public boolean Pressed;
         public long Time;
+        public boolean Changed;
 
         public Key(int key) {
             this.key = key;

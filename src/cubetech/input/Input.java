@@ -5,6 +5,7 @@
 
 package cubetech.input;
 
+import cubetech.client.Client;
 import cubetech.misc.Ref;
 import javax.swing.event.EventListenerList;
 import org.lwjgl.LWJGLException;
@@ -28,6 +29,10 @@ public class Input {
 
     public Input() {
         
+    }
+
+    public Key GetKey(int index) {
+        return keys[index];
     }
 
     public void AddKeyEventListener(KeyEventListener listener)
@@ -167,8 +172,12 @@ public class Input {
     }
 
     void KeyboardUpdate() {
-        //Keyboard.poll();
-
+        
+        for (int i= 0; i < keys.length; i++) {
+            if(keys[i] != null)
+                keys[i].Changed = false;
+        }
+        
         int nProcessed = 0;
         while(Keyboard.next()) {
             boolean pressed = Keyboard.getEventKeyState();
@@ -181,6 +190,7 @@ public class Input {
             if(currKey.Pressed != pressed && currKey.Time < msec) {
                 // Key changes state
                 currKey.Pressed = pressed;
+                currKey.Changed = true;
                 currKey.Time = msec;
                 currKey.Char = c;
                 if(pressed) {
@@ -192,5 +202,12 @@ public class Input {
             nProcessed++;
         }
         
+    }
+
+    public void SendCommand() {
+        if(Ref.common.client.state != Client.State.CONNECTED)
+            return;
+
+        // Write packet
     }
 }

@@ -19,6 +19,7 @@ public class CubeApplet extends Applet {
     GameLoopApplet gameThread;
 
     public void StartLWJGL() {
+        System.err.println("--Starting LWJGL--");
         gameThread = new GameLoopApplet();
         gameThread.displayParent = displayParent;
         gameThread.start();
@@ -29,6 +30,7 @@ public class CubeApplet extends Applet {
         try {
             gameThread.join();
         } catch(InterruptedException ex) {
+            System.err.println(ex.toString());
             ex.printStackTrace();
         }
     }
@@ -47,15 +49,19 @@ public class CubeApplet extends Applet {
     public void destroy() {
         remove(displayParent);
         super.destroy();
+        System.err.println("Destroyed.");
     }
 
     @Override
     public void init() {
         setLayout(new BorderLayout());
         try {
+
+
             displayParent = new Canvas() {
                 @Override
                 public final void addNotify() {
+                    System.err.println("AddNotify()");
                     super.addNotify();
                     StartLWJGL();
                 }

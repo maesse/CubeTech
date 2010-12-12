@@ -11,6 +11,7 @@ import cubetech.gfx.SpriteManager;
 import cubetech.misc.Ref;
 
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector4f;
 
 /**
  * Static block
@@ -25,9 +26,12 @@ public class Block {
     
     public Vector2f TexOffset;
     public Vector2f TexSize;
+    public boolean Collidable;
+
+    public int CustomVal;
 
     public Block(int Handle, Vector2f Position, Vector2f Size) {
-        
+        this.Collidable = true;
         this.Position = Position;
         this.Handle = Handle;
         this.Size = Size;
@@ -40,6 +44,8 @@ public class Block {
         Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
         spr.Set(Position, Size, Texture, TexOffset, TexSize);
         spr.Angle = Angle;
+        if(!Collidable)
+            spr.Color = new Vector4f(1, 1, 1, 0.7f);
     }
 
     public boolean Intersects(Vector2f point) {
