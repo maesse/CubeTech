@@ -117,7 +117,7 @@ public class Drone implements Entity {
         if(xdiff > 100f)
             return;
 
-        weaponTime = Ref.loop.time + 1000;
+        weaponTime = Ref.loop.time + 1000 + (int)(Ref.rnd.nextFloat()*500);
         Vector2f bulletpos = new Vector2f(Position.x, Position.y-Size.y*0.35f);
         Vector2f bulletvel = new Vector2f(50f,0);
 

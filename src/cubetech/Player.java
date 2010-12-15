@@ -11,6 +11,7 @@ import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
 import cubetech.gfx.TextManager.Align;
 import cubetech.misc.Ref;
+import cubetech.misc.SpatialQuery;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector4f;
 
@@ -124,8 +125,8 @@ public final class Player {
             if(block == null || block.CustomVal != 1)
                 continue;
 
-            position.x = block.Position.x + block.Size.x/2f;
-            position.y = block.Position.y + block.Size.y/2f;
+            position.x = block.getPosition().x + block.getSize().x/2f;
+            position.y = block.getPosition().y + block.getSize().y/2f;
             break;
         }
     }
@@ -143,9 +144,9 @@ public final class Player {
         if(gameover)
             return;
         
-        extent = new Vector2f(5,6);
-        if(bigguy)
-            extent = new Vector2f(9,7*2);
+//        extent = new Vector2f(5,6);
+//        if(bigguy)
+//            extent = new Vector2f(9,7*2);
 
         if(goalTime != 0) {
             if(goalTime + 1000 < Ref.loop.time) {
@@ -203,7 +204,7 @@ public final class Player {
         // Handle energy
         //energy -= ((float)msec/1000f)*0.005f;
         if(bigguy) {
-            energy -= ((float)msec/1000f)*0.1f;
+            energy -= ((float)msec/1000f)*0.05f;
         }
         if(energy <= 0f) {
             energy = 0f;
@@ -291,7 +292,7 @@ public final class Player {
         transforming = true;
         transformtime = Ref.loop.time + 1500; // Player gets control here
         transformtobig = toBigGuy;
-        health += 10;
+        health += 50;
         if(health > 100)
             health = 100;
     }
@@ -322,6 +323,8 @@ public final class Player {
 
     public void TakeDamage(float damage) {
         damage *= 1.5f;
+        if(bigguy)
+            damage /= 2f; // BigGuy only takes 50% dmg
         if(gameover || goalTime != 0)
             return; // Cant take dmg when not playing
         damageTime = Ref.loop.time;
@@ -332,8 +335,10 @@ public final class Player {
 
     void Die() {
         // Implement
-        if(dieTime == 0)
+        if(dieTime == 0) {
             dieTime = Ref.loop.time + 1000; // When to start again
+            lives--;
+            }
     }
 
     public void Render() {
@@ -384,6 +389,28 @@ public final class Player {
 
         RenderFireWeapon();
         RenderPlayerHud();
+
+        RenderSpatialDebug();
+    }
+
+    
+    void RenderSpatialDebug() {
+        SpatialQuery result = Ref.spatial.Query(position.x - extent.x, position.y - extent.y, position.x + extent.x, position.y + extent.y);
+        int queryNum = result.getQueryNum();
+        Object object;
+        while((object = result.ReadNext()) != null) {
+            if(object.getClass() != Block.class)
+                continue;
+            Block block = (Block)object;
+            if(block.LastQueryNum == queryNum)
+                continue; // duplicate
+            block.LastQueryNum = queryNum;
+
+            Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
+            spr.Set(block.getPosition(), block.getSize(), block.Texture, block.TexOffset, block.TexSize);
+            spr.Angle = block.getAngle();
+            spr.Color = new Vector4f(1, 0, 0, 1f);
+        }
     }
     
     void RenderPlayerHud() {
@@ -481,7 +508,7 @@ public final class Player {
         Vector2f bulletpos = new Vector2f(position.x, position.y-extent.y*0.35f);
         if(bigguy)
             bulletpos.y = position.y;
-        Vector2f bulletvel = new Vector2f(100f,0);
+        Vector2f bulletvel = new Vector2f(150f,0);
 
         if(lookright)
             bulletpos.x += extent.x + 2;
@@ -588,25 +615,27 @@ public final class Player {
             Vector2f up = new Vector2f(0, 6f);
             boolean stepped = false;
 
-            // Only step when colliding with world
-            if(coll.hitmask == Collision.MASK_WORLD) {
-                coll = Ref.collision.TestPosition(position, up, extent, mask);
-                if(!coll.Hit && newmove.y == 0f && velocity.y == 0f) {
-                    up.x += position.x;
-                    up.y += position.y;
-                    coll = Ref.collision.TestPosition(up, newmove, extent, mask);
-                    if(!coll.Hit) {
-                        // push down
-                        stepped = true;
-                        up.x += newmove.x;
-                        up.y += newmove.y;
-                        Vector2f down = new Vector2f(0, -8f);
-                        Ref.collision.TestPosition(up, down, extent, mask);
-                        position.x = up.x + down.x * coll.frac;
-                        position.y = up.y + down.y * coll.frac;
-                    }
-                }
-            }
+//            // Only step when colliding with world
+//            if(coll.hitmask == Collision.MASK_WORLD) {
+//                coll = Ref.collision.TestPosition(position, up, extent, mask);
+//                if(!coll.Hit && newmove.y == 0f && velocity.y == 0f) {
+//                    up.x += position.x;
+//                    up.y += position.y;
+//                    coll = Ref.collision.TestPosition(up, newmove, extent, mask);
+//                    if(!coll.Hit) {
+//                        // push down
+//                        stepped = true;
+//                        up.x += newmove.x;
+//                        up.y += newmove.y;
+//                        Vector2f down = new Vector2f(0, -5f);
+//                        coll = Ref.collision.TestPosition(up, down, extent, mask);
+//                        if(!coll.Hit) {
+//                            position.x = up.x + down.x * coll.frac;
+//                            position.y = up.y + down.y * coll.frac;
+//                        }
+//                    }
+//                }
+//            }
             
             if(!stepped) {
                 coll = Ref.collision.TestPosition(position, new Vector2f(newmove.x, 0f), extent, mask);
@@ -734,9 +763,9 @@ public final class Player {
 
     boolean GroundTrace() {
         CollisionResult result = Ref.collision.TestPosition(position, new Vector2f(0, -1f), extent, Collision.MASK_WORLD);
-        if(result.frac != 0f) {
-            position.y -= 1f * result.frac;
-        }
+//        if(!result.Hit) {
+//            position.y -= 1f;
+//        }
         return result.Hit;
     }
 

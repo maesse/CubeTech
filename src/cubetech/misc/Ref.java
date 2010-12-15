@@ -37,4 +37,5 @@ public class Ref {
     public static Collision collision;
     public static World world;
     public static SoundManager soundMan;
+    public static Spatial spatial;
 }

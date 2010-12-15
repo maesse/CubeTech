@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JFileChooser;
-import javax.swing.filechooser.FileFilter;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector4f;
@@ -176,8 +175,8 @@ public class WorldEditor {
                             break;
                         }
                     }
-                    out.write(String.format("%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s\n", b.Position.x, b.Position.y, b.Size.x, b.Size.y,
-                                                    b.Angle, b.TexOffset.x, b.TexOffset.y, b.TexSize.x, b.TexSize.y, selectedIndex, b.Collidable?1:0,b.CustomVal));
+                    out.write(String.format("%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s\n", b.getPosition().x, b.getPosition().y, b.getSize().x, b.getSize().y,
+                                                    b.getAngle(), b.TexOffset.x, b.TexOffset.y, b.TexSize.x, b.TexSize.y, selectedIndex, b.Collidable?1:0,b.CustomVal));
                 }
             }
             out.close();
@@ -319,12 +318,12 @@ public class WorldEditor {
                             } else if(Ref.Input.IsKeyPressed(Keyboard.KEY_LCONTROL) && !Ref.Input.IsKeyPressed(Keyboard.KEY_SPACE)) {
                                 editFunc = EditFunc.ROTATE;
                                 editMouseOrigin = new Vector2f(mouseWorldPos.x, mouseWorldPos.y);
-                                editMouseOrigin.x -= block.Position.x + block.Size.x / 2f;
-                                editMouseOrigin.y -= block.Position.y + block.Size.y / 2f;
+                                editMouseOrigin.x -= block.getPosition().x + block.getSize().x / 2f;
+                                editMouseOrigin.y -= block.getPosition().y + block.getSize().y / 2f;
                                 float lenght = 1/(float)Math.sqrt(editMouseOrigin.x * editMouseOrigin.x + editMouseOrigin.y * editMouseOrigin.y);
                                 editMouseOrigin.x *= lenght;
                                 editMouseOrigin.y *= lenght;
-                                editAngle = block.Angle;
+                                editAngle = block.getAngle();
                                 editMouseLock = true;
 
 
@@ -358,9 +357,9 @@ public class WorldEditor {
                         editFunc = editFunc.NONE;
                     }
                     if(Ref.Input.IsKeyPressed(Keyboard.KEY_LCONTROL) && Ref.Input.IsKeyPressed(Keyboard.KEY_SPACE))
-                        DrawEditBlockTexEdit(block.Position, block.Size);
+                        DrawEditBlockTexEdit(block.getPosition(), block.getSize());
                     else
-                        DrawEditBlock(block.Position, block.Size);
+                        DrawEditBlock(block.getPosition(), block.getSize());
 
                     if(editFunc == EditFunc.SELECT) {
                         // Show texturebar
@@ -381,7 +380,7 @@ public class WorldEditor {
                         editMouseLock = false;
                         editFunc = EditFunc.SELECT;
                     }
-                    DrawEditBlockTexEdit(block.Position, block.Size);
+                    DrawEditBlockTexEdit(block.getPosition(), block.getSize());
                     break;
                 case TEXSCALE:
                     Vector2f pos = new Vector2f();
@@ -390,24 +389,24 @@ public class WorldEditor {
                     if(Ref.Input.playerInput.Mouse1) {
                         if(editCorder == Corner.BOTTOMRIGHT) {
                             block.TexSize = new Vector2f(texScaleStart.x, texScaleStart.y);
-                            block.TexSize.x *= 1f/(size.x / block.Size.x);
-                            block.TexSize.y *= 1f/(size.y / block.Size.y);
+                            block.TexSize.x *= 1f/(size.x / block.getSize().x);
+                            block.TexSize.y *= 1f/(size.y / block.getSize().y);
                         }
 
                     } else {
                         block.TexSize = new Vector2f(texScaleStart.x, texScaleStart.y);
-                        block.TexSize.x *= 1f/(size.x / block.Size.x);
-                        block.TexSize.y *= 1f/(size.y / block.Size.y);
+                        block.TexSize.x *= 1f/(size.x / block.getSize().x);
+                        block.TexSize.y *= 1f/(size.y / block.getSize().y);
                         editMouseLock = false;
                         editFunc = EditFunc.SELECT;
                     }
-                    DrawEditBlockTexEdit(block.Position, block.Size);
+                    DrawEditBlockTexEdit(block.getPosition(), block.getSize());
                     break;
                 case ROTATE:
                     if(Ref.Input.playerInput.Mouse1) {
                         Vector2f newdir = new Vector2f(mouseWorldPos.x, mouseWorldPos.y);
-                        newdir.x -= block.Position.x + block.Size.x / 2f;
-                        newdir.y -= block.Position.y + block.Size.y / 2f;
+                        newdir.x -= block.getPosition().x + block.getSize().x / 2f;
+                        newdir.y -= block.getPosition().y + block.getSize().y / 2f;
 
                         float lenght = 1/(float)Math.sqrt(newdir.x * newdir.x + newdir.y * newdir.y);
                         newdir.x *= lenght;
@@ -416,7 +415,7 @@ public class WorldEditor {
                         float angle =  editAngle + (float)(Math.atan2(newdir.y, newdir.x) - Math.atan2(editMouseOrigin.y, editMouseOrigin.x));
 
                         //float angle = (float)Math.acos(Vector2f.dot(newdir, editMouseOrigin));
-                        block.Angle = angle;
+                        block.SetAngle(angle);
 
                     } else {
                         editMouseLock = false;
@@ -432,40 +431,40 @@ public class WorldEditor {
                         pos.y = (int)pos.y;
                         size.x = (int)size.x;
                         size.y = (int)size.y;
-                        block = new Block(-2, pos, size);
+                        block = new Block(-2, pos, size, false);
                     } else {
                         pos.x = (int)pos.x;
                         pos.y = (int)pos.y;
                         size.x = (int)size.x;
                         size.y = (int)size.y;
-                        block.Position = pos;
-                        block.Size = size;
+                        block.Set(pos, size);
                         editMouseLock = false;
                         editFunc = EditFunc.SELECT;
                     }
-                    DrawEditBlock(block.Position, block.Size);
+                    DrawEditBlock(block.getPosition(), block.getSize());
                     break;
                 case MOVE:
                     diff = new Vector2f(mouseWorldPos.x - editMouseOrigin.x, mouseWorldPos.y - editMouseOrigin.y);
                     if(Ref.Input.playerInput.Mouse1) {
-                        block = new Block(-2, new Vector2f((int)(block.Position.x + diff.x), (int)(block.Position.y + diff.y)), block.Size);
+                        block = new Block(-2, new Vector2f((int)(block.getPosition().x + diff.x), (int)(block.getPosition().y + diff.y)), block.getSize(), false);
                     } else {
-                        block.Position.x += diff.x;
-                        block.Position.y += diff.y;
-                        block.Position.x = (int)block.Position.x;
-                        block.Position.y = (int)block.Position.y;
+
+                        Vector2f poss = block.getPosition();
+                        poss.x += diff.x;
+                        poss.y += diff.y;
+                        block.SetPosition(poss);
 
                         editFunc = editFunc.SELECT;
                         editMouseLock = false;
 
                     }
-                    DrawEditBlock(block.Position, block.Size);
+                    DrawEditBlock(block.getPosition(), block.getSize());
                     break;
                 case COPY:
                     diff = new Vector2f(mouseWorldPos.x - editMouseOrigin.x, mouseWorldPos.y - editMouseOrigin.y);
                     if(Ref.Input.playerInput.Mouse1) {
                         // Display "ghost"
-                        block = new Block(-2, new Vector2f((int)(block.Position.x + diff.x), (int)(block.Position.y + diff.y)), block.Size);
+                        block = new Block(-2, new Vector2f((int)(block.getPosition().x + diff.x), (int)(block.getPosition().y + diff.y)), block.getSize(), false);
                         if(Ref.Input.playerInput.Mouse2) {
                             // Rightclick while copying aborts
                             editFunc = EditFunc.SELECT;
@@ -473,24 +472,25 @@ public class WorldEditor {
                         }
                     } else {
                         // Create copy of block
-                        Block newblock = new Block(world.NextBlockHandle, new Vector2f(block.Position.x, block.Position.y), new Vector2f(block.Size.x, block.Size.y));
+                        Block newblock = new Block(world.NextBlockHandle, new Vector2f(block.getPosition().x, block.getPosition().y), new Vector2f(block.getSize().x, block.getSize().y), true);
                         newblock.Texture = block.Texture;
-                        newblock.Angle = block.Angle;
+                        newblock.SetAngle(block.getAngle());
                         newblock.TexOffset = new Vector2f(block.TexOffset.x, block.TexOffset.y);
                         newblock.TexSize = new Vector2f(block.TexSize.x, block.TexSize.y);
                         world.Blocks[world.NextBlockHandle++] = newblock;
 
-                        newblock.Position.x += diff.x;
-                        newblock.Position.y += diff.y;
-                        block.Position.x = (int)block.Position.x;
-                        block.Position.y = (int)block.Position.y;
+                        Vector2f poss = block.getPosition();
+                        poss.x += diff.x;
+                        poss.y += diff.y;
+                        block.SetPosition(poss);
+                        
                         newblock.CustomVal = block.CustomVal;
                         newblock.Collidable = block.Collidable;
                         editFunc = editFunc.SELECT;
                         selectedHandle = newblock.Handle;
                         editMouseLock = false;
                     }
-                    DrawEditBlock(block.Position, block.Size);
+                    DrawEditBlock(block.getPosition(), block.getSize());
                     break;
             }
 
@@ -626,15 +626,16 @@ public class WorldEditor {
     }
 
     void SendToFront(Block block) {
-        Block newblock = new Block(world.NextBlockHandle, new Vector2f(block.Position.x, block.Position.y), new Vector2f(block.Size.x, block.Size.y));
+        Block newblock = new Block(world.NextBlockHandle, new Vector2f(block.getPosition().x, block.getPosition().y), new Vector2f(block.getSize().x, block.getSize().y), true);
         newblock.Texture = block.Texture;
-        newblock.Angle = block.Angle;
+        newblock.SetAngle(block.getAngle());
         newblock.TexOffset = new Vector2f(block.TexOffset.x, block.TexOffset.y);
         newblock.TexSize = new Vector2f(block.TexSize.x, block.TexSize.y);
         newblock.CustomVal = block.CustomVal;
         newblock.Collidable = block.Collidable;
         selectedHandle = world.NextBlockHandle;
         world.Blocks[world.NextBlockHandle++] = newblock;
+        world.Blocks[block.Handle].Remove();
         world.Blocks[block.Handle] = null;
 
     }
@@ -643,16 +644,16 @@ public class WorldEditor {
         Vector2f oppositeCorner = new Vector2f();
         switch(editCorder) {
             case BOTTOMLEFT:
-                oppositeCorner = new Vector2f(block.Position.x + block.Size.x, block.Position.y + block.Size.y);
+                oppositeCorner = new Vector2f(block.getPosition().x + block.getSize().x, block.getPosition().y + block.getSize().y);
                 break;
             case BOTTOMRIGHT:
-                oppositeCorner = new Vector2f(block.Position.x, block.Position.y+block.Size.y);
+                oppositeCorner = new Vector2f(block.getPosition().x, block.getPosition().y+block.getSize().y);
                 break;
             case TOPLEFT:
-                oppositeCorner = new Vector2f(block.Position.x+block.Size.x, block.Position.y);
+                oppositeCorner = new Vector2f(block.getPosition().x+block.getSize().x, block.getPosition().y);
                 break;
             case TOPRIGHT:
-                oppositeCorner = new Vector2f(block.Position.x, block.Position.y);
+                oppositeCorner = new Vector2f(block.getPosition().x, block.getPosition().y);
                 break;
         }
         pos.x = oppositeCorner.x<mouseWorldPos.x?oppositeCorner.x:mouseWorldPos.x;
@@ -663,8 +664,8 @@ public class WorldEditor {
 
     private boolean CheckBoundsHit(Vector2f mouseWorldPos, Block block)
     {
-        if(mouseWorldPos.x >= block.Position.x && mouseWorldPos.x <= block.Position.x + block.Size.x) // inside x coords
-            if(mouseWorldPos.y >= block.Position.y&& mouseWorldPos.y <= block.Position.y + block.Size.y) {
+        if(mouseWorldPos.x >= block.getPosition().x && mouseWorldPos.x <= block.getPosition().x + block.getSize().x) // inside x coords
+            if(mouseWorldPos.y >= block.getPosition().y&& mouseWorldPos.y <= block.getPosition().y + block.getSize().y) {
                 return true;
             }
         return false;
@@ -674,29 +675,29 @@ public class WorldEditor {
         boolean hit = false;
         float dimsSize = 2f;
         // Bottom left
-        if(mouseWorldPos.x >= block.Position.x-dimsSize && mouseWorldPos.x <= block.Position.x + dimsSize) // inside x coords
-            if(mouseWorldPos.y >= block.Position.y-dimsSize && mouseWorldPos.y <= block.Position.y + dimsSize) {
+        if(mouseWorldPos.x >= block.getPosition().x-dimsSize && mouseWorldPos.x <= block.getPosition().x + dimsSize) // inside x coords
+            if(mouseWorldPos.y >= block.getPosition().y-dimsSize && mouseWorldPos.y <= block.getPosition().y + dimsSize) {
                 editMouseLock = true;
                 editCorder = Corner.BOTTOMLEFT;
                 hit = true;
             }
         // Bottom right
-        if(mouseWorldPos.x >= block.Position.x-dimsSize+block.Size.x && mouseWorldPos.x <= block.Position.x + dimsSize+block.Size.x) // inside x coords
-            if(mouseWorldPos.y >= block.Position.y-1f && mouseWorldPos.y <= block.Position.y + 1f) {
+        if(mouseWorldPos.x >= block.getPosition().x-dimsSize+block.getSize().x && mouseWorldPos.x <= block.getPosition().x + dimsSize+block.getSize().x) // inside x coords
+            if(mouseWorldPos.y >= block.getPosition().y-1f && mouseWorldPos.y <= block.getPosition().y + 1f) {
                 editMouseLock = true;
                 editCorder = Corner.BOTTOMRIGHT;
                 hit = true;
             }
         // top left
-        if(mouseWorldPos.x >= block.Position.x-dimsSize && mouseWorldPos.x <= block.Position.x + dimsSize) // inside x coords
-            if(mouseWorldPos.y >= block.Position.y-dimsSize+block.Size.y && mouseWorldPos.y <= block.Position.y + dimsSize+block.Size.y) {
+        if(mouseWorldPos.x >= block.getPosition().x-dimsSize && mouseWorldPos.x <= block.getPosition().x + dimsSize) // inside x coords
+            if(mouseWorldPos.y >= block.getPosition().y-dimsSize+block.getSize().y && mouseWorldPos.y <= block.getPosition().y + dimsSize+block.getSize().y) {
                 editMouseLock = true;
                 editCorder = Corner.TOPLEFT;
                 hit = true;
             }
         // top right
-        if(mouseWorldPos.x >= block.Position.x-dimsSize+block.Size.x && mouseWorldPos.x <= block.Position.x + dimsSize+block.Size.x) // inside x coords
-            if(mouseWorldPos.y >= block.Position.y-dimsSize+block.Size.y && mouseWorldPos.y <= block.Position.y + dimsSize+block.Size.y) {
+        if(mouseWorldPos.x >= block.getPosition().x-dimsSize+block.getSize().x && mouseWorldPos.x <= block.getPosition().x + dimsSize+block.getSize().x) // inside x coords
+            if(mouseWorldPos.y >= block.getPosition().y-dimsSize+block.getSize().y && mouseWorldPos.y <= block.getPosition().y + dimsSize+block.getSize().y) {
                 editMouseLock = true;
                 editCorder = Corner.TOPRIGHT;
                 hit = true;

@@ -14,6 +14,7 @@ import cubetech.gfx.SpriteManager;
 import cubetech.gfx.TextManager;
 import cubetech.misc.Ref;
 import cubetech.input.Input;
+import cubetech.misc.Spatial;
 import cubetech.state.StateManager;
 import org.lwjgl.LWJGLException;
 import org.lwjgl.opengl.DisplayMode;
@@ -63,6 +64,7 @@ public class GameLoop {
         Ref.collision = new Collision();
         Ref.soundMan = new SoundManager();
         Ref.soundMan.initialize(12);
+        Ref.spatial = new Spatial();
     }
 
     
@@ -118,7 +120,7 @@ public class GameLoop {
 
 
        // Display frame
-       Display.sync(60);
+//       Display.sync(60);
        Display.update();
     }
 }

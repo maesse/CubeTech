@@ -27,15 +27,17 @@ public class GameLoopApplet extends Thread {
     public void run() {
         System.err.println("GameLoopApplet Running");
         running = true;
-        try {
-            Display.setParent(displayParent);
-            Display.create();
-            Display.setVSyncEnabled(true);
+//        try {
+            
             try {
                 // get modes
                 DisplayMode use = new DisplayMode(800, 600);
 
                         Display.setDisplayMode(use);
+                        Display.setParent(displayParent);
+            Display.create();
+//            Display.
+            Display.setVSyncEnabled(true);
 //                DisplayMode[] dm = org.lwjgl.util.Display.getAvailableDisplayModes(800, 600, -1, -1, -1, -1, -1, -1);
 //
 //                org.lwjgl.util.Display.setDisplayMode(dm, new String[] { "width=" + 800, "height=" + 600, "freq=" + 60,
@@ -47,10 +49,10 @@ public class GameLoopApplet extends Thread {
                     e.printStackTrace();
             }
            // initGL();
-        } catch(LWJGLException ex) {
-            System.err.println(ex.toString());
-            ex.printStackTrace();
-        }
+//        } catch(LWJGLException ex) {
+//            System.err.println(ex.toString());
+//            ex.printStackTrace();
+//        }
         GameLoop.InitRef();
         System.err.println("Starting GameLoop");
         GameLoop();

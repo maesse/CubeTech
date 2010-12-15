@@ -81,8 +81,8 @@ public class Window {
 	public boolean initialize() {
 		try {
 			// get available modes, and print out
-			located_modes = Display.getAvailableDisplayModes();
-			System.out.println("Found " + located_modes.length + " display modes");
+//			located_modes = Display.getAvailableDisplayModes();
+//			System.out.println("Found " + located_modes.length + " display modes");
 
 			// get 640x480, 800x600, 1024x768 modes
 			//findFixedModes();

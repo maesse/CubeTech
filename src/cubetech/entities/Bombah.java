@@ -79,10 +79,12 @@ public class Bombah implements Entity {
         if(lenght < 20f)
             speedcap *= 0.5f;
 
+        speedcap *= Ref.rnd.nextFloat()/2f + 0.5f;
+
         wishdir.x *= speedcap;
         wishdir.y *= speedcap;
 
-        if(Math.abs(wishdir.y) >= 10f && health > 0 && suicideTime == 0)
+        if(Math.abs(wishdir.y) >= 10f && health > 0 && suicideTime == 0 && Ref.rnd.nextFloat() > 0.8f) // 50% chance
             Jump(msec);
 
         wishdir.y *= 1f/speed;
@@ -107,7 +109,7 @@ public class Bombah implements Entity {
             AirMove(wishdir, msec);
         }
 
-        if(distance < 16f && health > 0 && suicideTime == 0) {
+        if(distance < 30f && health > 0 && suicideTime == 0) {
             Suicide();
         }
         if(suicideTime < Ref.loop.time && suicideTime != 0 && health > 0){
@@ -126,10 +128,10 @@ public class Bombah implements Entity {
 
         float distance = (float)Math.sqrt(wishdir.x * wishdir.x + wishdir.y * wishdir.y);
 
-        if(distance > 60f)
+        if(distance > 40f)
             return;
         int damage2 = 5;
-        float invfrac = 1f-(distance/60f);
+        float invfrac = 1f-(distance/40f);
         damage2 += (int)(damage*invfrac);
         Ref.world.player.TakeDamage(damage2);
         int snd = Ref.soundMan.addSound("data/explosion.wav");
