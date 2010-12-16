@@ -5,12 +5,9 @@
 
 package cubetech.misc;
 
-import cubetech.Collision;
-import cubetech.Common;
-import cubetech.Console;
+import cubetech.spatial.Spatial;
+import cubetech.collision.Collision;
 import cubetech.GameLoop;
-import cubetech.Net;
-import cubetech.SoundManager;
 import cubetech.World;
 import cubetech.gfx.ResourceManager;
 import cubetech.gfx.SpriteManager;

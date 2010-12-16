@@ -6,8 +6,8 @@
 package cubetech.entities;
 
 
-import cubetech.Collision;
-import cubetech.CollisionResult;
+import cubetech.collision.Collision;
+import cubetech.collision.CollisionResult;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
@@ -304,11 +304,12 @@ public class Bombah implements Entity {
 
         boolean onGround = GroundTrace();
         if(onGround) {
-            Velocity.y = (float)Math.sqrt(2 * 150 * 45);
+            Velocity.y = (float)Math.sqrt(2 * 350 * 45);
             jumpTime = Ref.loop.time;
-        } else if(jumpTime + 300 > Ref.loop.time) {
-            Velocity.y += 200f * (float)msec/1000f;
         }
+//        else if(jumpTime + 300 > Ref.loop.time) {
+//            Velocity.y += 200f * (float)msec/1000f;
+//        }
     }
 
     void RunAnimation() {
@@ -355,14 +356,14 @@ public class Bombah implements Entity {
     }
 
     public void Render() {
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.NORMAL);
+        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
         CubeTexture tex;
         if(health > 0)
             tex = walkAnim[runframe];
         else
             tex = explode[runframe];
-        Vector2f offset = new Vector2f(0.05f,0.05f);
-        Vector2f size = new Vector2f(0.9f, 0.9f);
+        Vector2f offset = new Vector2f(0.02f,0.02f);
+        Vector2f size = new Vector2f(0.98f, 0.98f);
         if(!lookright) {
             offset.x += size.x;
             size.x = -size.x;

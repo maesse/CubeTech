@@ -202,7 +202,7 @@ public class WorldEditor {
             world.camera.Position.y -= 2f;
         }
 
-        Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
+        Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
         float xoffset = world.camera.Position.x % 64;
         float yoffset = world.camera.Position.y % 64;
         Vector2f pos = new Vector2f(world.camera.Position.x - xoffset, world.camera.Position.y - yoffset);
@@ -351,6 +351,7 @@ public class WorldEditor {
                         }
                     } else if(Ref.Input.IsKeyPressed(Keyboard.KEY_DELETE)) {
                         // Remove this block
+                        block.Remove();
                         world.Blocks[selectedHandle] = null;
                         selectedHandle = -1;
                         newSelect = -1;
@@ -591,7 +592,7 @@ public class WorldEditor {
 
         if(newButton.Intersects(mouseLocalPos) && Ref.Input.playerInput.Mouse1 && Ref.Input.playerInput.Mouse1Diff) {
             // New
-            world.StartNewGame();
+            world.StartNewEmptyGame();
         }
 
         if(openButton.Intersects(mouseLocalPos) && Ref.Input.playerInput.Mouse1 && Ref.Input.playerInput.Mouse1Diff) {
@@ -708,30 +709,30 @@ public class WorldEditor {
 
     private void DrawEditBlock(Vector2f pos, Vector2f size) {
             // Hightlight selected
-            Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
+            Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(pos, size, null, new Vector2f(0,0), new Vector2f(1, 1));
             spr.Color = new Vector4f(1,1,1,0.2f);
 
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
+            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(pos, 1f, dims);
 
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
+            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(new Vector2f(pos.x + size.x, pos.y), 1f, dims);
 
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
+            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(new Vector2f(pos.x + size.x, pos.y + size.y), 1f, dims);
 
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
+            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(new Vector2f(pos.x, pos.y + size.y), 1f, dims);
     }
 
     private void DrawEditBlockTexEdit(Vector2f pos, Vector2f size) {
             // Hightlight selected
-            Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
+            Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(pos, size, null, new Vector2f(0,0), new Vector2f(1, 1));
             spr.Color = new Vector4f(1,1,1,0.2f);
 
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
+            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(new Vector2f(pos.x + size.x, pos.y), 1f, dims);
     }
 

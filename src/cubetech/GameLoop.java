@@ -5,6 +5,11 @@
 
 package cubetech;
 
+import cubetech.misc.Console;
+import cubetech.misc.SoundManager;
+import cubetech.misc.Common;
+import cubetech.misc.Net;
+import cubetech.collision.Collision;
 import cubetech.state.HagserState;
 import java.util.Random;
 import cubetech.gfx.ResourceManager;
@@ -14,7 +19,7 @@ import cubetech.gfx.SpriteManager;
 import cubetech.gfx.TextManager;
 import cubetech.misc.Ref;
 import cubetech.input.Input;
-import cubetech.misc.Spatial;
+import cubetech.spatial.Spatial;
 import cubetech.state.StateManager;
 import org.lwjgl.LWJGLException;
 import org.lwjgl.opengl.DisplayMode;

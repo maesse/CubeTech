@@ -18,7 +18,7 @@ public class SpriteManager {
     public int NormalSpriteOffset = 0;
 
     public enum Type {
-        NORMAL,
+        GAME,
         HUD
     }
 
@@ -29,7 +29,7 @@ public class SpriteManager {
     }
 
     public Sprite GetSprite(Type type) {
-        if(type == Type.NORMAL) {
+        if(type == Type.GAME) {
             if(SpriteOffset >= Sprites.length) {
                 System.err.print("SpriteManager: Sprite overflow");
                 SpriteOffset = 0;

@@ -56,7 +56,7 @@ public class MenuState implements IGameState {
             try {
                 // Start new game
                 if(Ref.world != null) {
-                    Ref.world.StartNewGame();
+//                    Ref.world.StartNewEmptyGame();
                     Ref.world.LoadWorld("map0.map");
                     }
                 Ref.StateMan.SetState("hagser");

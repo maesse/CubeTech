@@ -71,7 +71,7 @@ public class PlayerFinish implements Entity {
     }
 
     public void Render() {
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.NORMAL);
+        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
         if(PlayerTouch) {
             spr.Set(Position, size, chest[1], new Vector2f(), new Vector2f(1, 1));
         } else {
@@ -79,7 +79,7 @@ public class PlayerFinish implements Entity {
         }
 
         if(touchTime != 0) {
-            spr = Ref.SpriteMan.GetSprite(Type.NORMAL);
+            spr = Ref.SpriteMan.GetSprite(Type.GAME);
             spr.Set(Position, size, gold[goldanim], new Vector2f(), new Vector2f(1, 1));
         }
     }

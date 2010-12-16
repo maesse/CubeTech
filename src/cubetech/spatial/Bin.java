@@ -3,7 +3,7 @@
  * and open the template in the editor.
  */
 
-package cubetech.misc;
+package cubetech.spatial;
 
 /**
  * A Bin containing collidables
@@ -21,7 +21,7 @@ public class Bin {
     }
 
     public int Insert(Object object) {
-        System.out.println("Bin: Insert");
+//        System.out.println("Bin: Insert");
         Data[Offset] = object;
         return Offset++;
     }
@@ -35,7 +35,7 @@ public class Bin {
     }
 
     public void Remove(int index) {
-        System.out.println("Bin: remove");
+//        System.out.println("Bin: remove");
         if(index < 0 || index >= BIN_SIZE)
         {
             System.err.println("Bin.Remove() Index invalid: " + index);

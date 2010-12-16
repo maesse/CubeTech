@@ -3,7 +3,7 @@
  * and open the template in the editor.
  */
 
-package cubetech;
+package cubetech.misc;
 
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;

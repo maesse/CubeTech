@@ -3,7 +3,7 @@
  * and open the template in the editor.
  */
 
-package cubetech.misc;
+package cubetech.spatial;
 
 import org.openmali.FastMath;
 import org.openmali.vecmath2.Vector2i;

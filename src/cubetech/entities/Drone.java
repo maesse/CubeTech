@@ -5,8 +5,8 @@
 
 package cubetech.entities;
 
-import cubetech.Collision;
-import cubetech.CollisionResult;
+import cubetech.collision.Collision;
+import cubetech.collision.CollisionResult;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
@@ -60,6 +60,7 @@ public class Drone implements Entity {
 
     public void Update(int msec) {
         Vector2f wishdir = new Vector2f(0, (float)Math.sin(Ref.loop.time/500f));
+        
         wishdir.x *= -1f;
         wishdir.y *= -1f;
 
@@ -347,27 +348,31 @@ public class Drone implements Entity {
 
     boolean GroundTrace() {
         CollisionResult result = Ref.collision.TestPosition(Position, new Vector2f(0, -1f), Size, Collision.MASK_WORLD);
-        if(result.frac != 0f) {
-            Position.y -= 1f * result.frac;
-        }
+//        if(result.frac != 0f) {
+//            Position.y -= 1f * result.frac;
+//        }
         return result.Hit;
     }
 
     public void Render() {
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.NORMAL);
+        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
         CubeTexture tex;
         if(health > 0)
             tex = walkAnim[runframe];
         else
             tex = explode[runframe];
-        Vector2f offset = new Vector2f(0.05f,0.05f);
-        Vector2f size = new Vector2f(0.9f, 0.9f);
+        Vector2f offset = new Vector2f(0.05f,0.00f);
+        Vector2f size = new Vector2f(0.6f, 0.65f);
         if(!lookright) {
             offset.x += size.x;
             size.x = -size.x;
         }
-        spr.Set(new Vector2f(Position.x-Size.x, Position.y-Size.y*2f), new Vector2f(Size.x*2f, 16), tex, offset, size);
+        spr.Set(new Vector2f(Position.x-Size.x, Position.y-Size.y), new Vector2f(Size.x*2f, Size.y*2f), tex, offset, size);
 
+//        spr = Ref.SpriteMan.GetSprite(Type.GAME);
+//        spr.Set(new Vector2f(Position.x-Size.x, Position.y-Size.y), new Vector2f(Size.x*2f, Size.y*2f), null, offset, size);
+//        spr.Color = new Vector4f(1, 0, 0, 0.5f);
+        
         if(damageTime + 100 > Ref.loop.time) {
            float frac = (float)(damageTime+100-Ref.loop.time)/100f;
            spr.Color = new Vector4f(1, 0, 0, 0.5f + 0.5f*frac);

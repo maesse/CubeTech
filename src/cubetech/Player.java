@@ -5,13 +5,15 @@
 
 package cubetech;
 
+import cubetech.collision.Collision;
+import cubetech.collision.CollisionResult;
 import cubetech.entities.Bullet;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
 import cubetech.gfx.TextManager.Align;
 import cubetech.misc.Ref;
-import cubetech.misc.SpatialQuery;
+import cubetech.spatial.SpatialQuery;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector4f;
 
@@ -347,7 +349,7 @@ public final class Player {
             Ref.soundMan.playEffect(Ref.soundMan.addSound("data/coin.wav"));
 
         }
-        Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
+        Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
         Vector2f offset = new Vector2f(0.01f,0.01f);
         Vector2f size = new Vector2f(0.98f,0.98f);
         if(!transforming) {
@@ -406,7 +408,7 @@ public final class Player {
                 continue; // duplicate
             block.LastQueryNum = queryNum;
 
-            Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
+            Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(block.getPosition(), block.getSize(), block.Texture, block.TexOffset, block.TexSize);
             spr.Angle = block.getAngle();
             spr.Color = new Vector4f(1, 0, 0, 1f);
@@ -649,7 +651,7 @@ public final class Player {
                     }
                 else {
                     if(coll.hitmask == Collision.MASK_WORLD) {
-                        position.x += newmove.x * coll.frac;
+//                        position.x += newmove.x * coll.frac;
                         position.y += newmove.y * coll.frac;
                     }
                 }
@@ -762,10 +764,10 @@ public final class Player {
     }
 
     boolean GroundTrace() {
-        CollisionResult result = Ref.collision.TestPosition(position, new Vector2f(0, -1f), extent, Collision.MASK_WORLD);
-//        if(!result.Hit) {
-//            position.y -= 1f;
-//        }
+        CollisionResult result = Ref.collision.TestPosition(position, new Vector2f(0, -2f), extent, Collision.MASK_WORLD);
+        if(result.Hit && result.frac != 0.0f) {
+            position.y -= 2f * result.frac;
+        }
         return result.Hit;
     }
 
@@ -779,7 +781,7 @@ public final class Player {
                 fireFrame = 4;
             if(fireFrame < 0)
                 fireFrame = 0;
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
+            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             //spr.Set(position, 1f, shootanim[fi]);
             Vector2f offset2 = new Vector2f();
             Vector2f size2 = new Vector2f(1, 1);

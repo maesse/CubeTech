@@ -5,8 +5,8 @@
 
 package cubetech.entities;
 
-import cubetech.Collision;
-import cubetech.CollisionResult;
+import cubetech.collision.Collision;
+import cubetech.collision.CollisionResult;
 import cubetech.gfx.CubeTexture;
 
 import cubetech.gfx.Sprite;
@@ -75,7 +75,7 @@ public class Bullet implements Entity {
     }
 
     public void Render() {
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.NORMAL);
+        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
 
         float sizex = Size.x;
         float sizey = Size.y;

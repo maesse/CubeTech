@@ -9,10 +9,11 @@ import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
 import cubetech.misc.Ref;
-import cubetech.misc.SpatialHandle;
+import cubetech.spatial.SpatialHandle;
 
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector4f;
+import org.openmali.FastMath;
 
 /**
  * Static block
@@ -22,6 +23,7 @@ public class Block {
     public CubeTexture Texture;
     private Vector2f Position;
 
+    private Vector2f[] Axis;
 
     private Vector2f Size;
     public int Handle;
@@ -39,6 +41,9 @@ public class Block {
     public int LastQueryNum = 0;
 
     public Block(int Handle, Vector2f Position, Vector2f Size, boolean hookupSpatial) {
+        Axis = new Vector2f[2];
+        Axis[0] = new Vector2f(1, 0);
+        Axis[1] = new Vector2f(0, 1);
         this.Collidable = true;
         this.Position = Position;
         this.Handle = Handle;
@@ -62,6 +67,10 @@ public class Block {
     }
     public void SetAngle(float angle) {
         Angle = angle;
+        Axis[0].x = FastMath.cos(angle);
+        Axis[0].y = FastMath.sin(angle);
+        Axis[1].x = FastMath.cos(angle+FastMath.PI_HALF);
+        Axis[1].y = FastMath.sin(angle+FastMath.PI_HALF);
     }
 
     public void SetSize(Vector2f size) {
@@ -86,7 +95,7 @@ public class Block {
     }
 
     public void Render() {
-        Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
+        Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
         spr.Set(Position, Size, Texture, TexOffset, TexSize);
         spr.Angle = Angle;
         if(!Collidable)

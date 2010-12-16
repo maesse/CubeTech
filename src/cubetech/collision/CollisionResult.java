@@ -3,7 +3,7 @@
  * and open the template in the editor.
  */
 
-package cubetech;
+package cubetech.collision;
 
 import org.lwjgl.util.vector.Vector2f;
 

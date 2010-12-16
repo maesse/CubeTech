@@ -3,8 +3,9 @@
  * and open the template in the editor.
  */
 
-package cubetech;
+package cubetech.misc;
 
+import cubetech.misc.NumberHandle;
 import java.net.URL;
 import java.nio.IntBuffer;
 
@@ -15,6 +16,7 @@ import java.nio.IntBuffer;
 
 import java.nio.IntBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import org.lwjgl.BufferUtils;
 import org.lwjgl.LWJGLException;
@@ -54,11 +56,10 @@ public class SoundManager {
   /** Current index in our source list */
   private int sourceIndex;
 
-  private ArrayList<String> Knownsounds = new ArrayList<String>();
+  // Map already loaded sounds
+  private HashMap<String, NumberHandle> Knownsounds = new HashMap<String, NumberHandle>();
 
-  /**
-   * Creates a new SoundManager
-   */
+  
   public SoundManager() {
   }
 
@@ -105,28 +106,29 @@ public class SoundManager {
    *
    * @param channels Number of channels to create
    */
-  public void initialize(int channels) {
+    public void initialize(int channels) {
     try {
-     AL.create();
+        System.out.println("Initalizing sound with " + channels + " channels.");
+        AL.create();
 
-     // allocate sources
-     scratchBuffer.limit(channels);
-     AL10.alGenSources(scratchBuffer);
-     scratchBuffer.rewind();
-     scratchBuffer.get(sources = new int[channels]);
+        // allocate sources
+        scratchBuffer.limit(channels);
+        AL10.alGenSources(scratchBuffer);
+        scratchBuffer.rewind();
+        scratchBuffer.get(sources = new int[channels]);
 
-     // could we allocate all channels?
-     if(AL10.alGetError() != AL10.AL_NO_ERROR) {
-     	throw new LWJGLException("Unable to allocate " + channels + " sources");
-     }
+        // could we allocate all channels?
+        if(AL10.alGetError() != AL10.AL_NO_ERROR) {
+            throw new LWJGLException("Unable to allocate " + channels + " sources");
+        }
 
-     // we have sound
-     soundOutput = true;
-    } catch (LWJGLException le) {
-    	le.printStackTrace();
-      System.out.println("Sound disabled");
+        // we have sound
+        soundOutput = true;
+        } catch (LWJGLException le) {
+            le.printStackTrace();
+            System.out.println("Sound disabled");
+        }
     }
-  }
 
   /**
    * Adds a sound to the Sound Managers pool
@@ -134,28 +136,35 @@ public class SoundManager {
    * @param path Path to file to load
    * @return index into SoundManagers buffer list
    */
-  public int addSound(String path) {
-      for (int i= 0; i < Knownsounds.size(); i++) {
-          if(Knownsounds.get(i).equals(path))
-              return i;
-      }
-    // Generate 1 buffer entry
-    scratchBuffer.rewind().position(0).limit(1);
-    AL10.alGenBuffers(scratchBuffer);
-    buffers[bufferIndex] = scratchBuffer.get(0);
-    URL url = SoundManager.class.getClassLoader().getResource("cubetech/"+path);
-    // load wave data from buffer
-    WaveData wavefile = WaveData.create(url);
+    public int addSound(String path) {
+        // Check cache
+        NumberHandle handle = Knownsounds.get(path);
+        if(handle != null)
+          return handle.Handle;
+      
+        // Generate 1 buffer entry
+        scratchBuffer.rewind().position(0).limit(1);
+        AL10.alGenBuffers(scratchBuffer);
+        buffers[bufferIndex] = scratchBuffer.get(0);
 
-    // copy to buffers
-    AL10.alBufferData(buffers[bufferIndex], wavefile.format, wavefile.data, wavefile.samplerate);
+        // load wave data from buffer
+        URL url = SoundManager.class.getClassLoader().getResource("cubetech/"+path);
+        WaveData wavefile = WaveData.create(url);
 
-    // unload file again
-    wavefile.dispose();
-    Knownsounds.add(path);
-    // return index for this sound
-  	return bufferIndex++;
-  }
+        // copy to buffers
+        AL10.alBufferData(buffers[bufferIndex], wavefile.format, wavefile.data, wavefile.samplerate);
+
+        // unload file again
+        wavefile.dispose();
+
+        // Cache
+        handle = new NumberHandle();
+        handle.Handle = bufferIndex;
+        Knownsounds.put(path, handle);
+
+        // return index for this sound
+        return bufferIndex++;
+    }
 
   /**
    * Destroy this SoundManager
