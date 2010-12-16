@@ -73,6 +73,18 @@ public class Block {
         Axis[1].y = FastMath.sin(angle+FastMath.PI_HALF);
     }
 
+    public Vector2f GetCenter() {
+        return new Vector2f(Position.x + Size.x / 2f, Position.y + Size.y / 2f);
+    }
+
+    public Vector2f GetExtents() {
+        return new Vector2f(Size.x/2f, Size.y/2f);
+    }
+
+    public Vector2f[] GetAxis() {
+        return Axis;
+    }
+
     public void SetSize(Vector2f size) {
         this.Size = size;
         if(spaceHandle != null)
