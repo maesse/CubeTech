@@ -416,6 +416,7 @@ public class WorldEditor {
                         float angle =  editAngle + (float)(Math.atan2(newdir.y, newdir.x) - Math.atan2(editMouseOrigin.y, editMouseOrigin.x));
 
                         //float angle = (float)Math.acos(Vector2f.dot(newdir, editMouseOrigin));
+                        System.out.println(""+angle);
                         block.SetAngle(angle);
 
                     } else {
@@ -636,7 +637,7 @@ public class WorldEditor {
         newblock.Collidable = block.Collidable;
         selectedHandle = world.NextBlockHandle;
         world.Blocks[world.NextBlockHandle++] = newblock;
-        world.Blocks[block.Handle].Remove();
+        block.Remove();
         world.Blocks[block.Handle] = null;
 
     }

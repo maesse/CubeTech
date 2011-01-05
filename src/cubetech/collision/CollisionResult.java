@@ -21,6 +21,7 @@ public class CollisionResult {
     public Vector2f Start;
     public Vector2f Delta;
     public Vector2f Extent;
+    public Vector2f HitAxis = new Vector2f();
 
     public void Reset(Vector2f start, Vector2f delta, Vector2f extent) {
         Hit = false;
@@ -30,5 +31,6 @@ public class CollisionResult {
         this.Start = new Vector2f(start.x, start.y);
         this.Delta = new Vector2f(delta.x, delta.y);
         this.Extent = new Vector2f(extent.x, extent.y);
+        
     }
 }

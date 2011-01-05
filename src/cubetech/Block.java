@@ -68,9 +68,17 @@ public class Block {
     public void SetAngle(float angle) {
         Angle = angle;
         Axis[0].x = FastMath.cos(angle);
+        if(Axis[0].x < 0.0f)
+            Axis[0].x += FastMath.PI;
         Axis[0].y = FastMath.sin(angle);
+        if(Axis[0].y < 0.0f)
+            Axis[0].y += FastMath.PI;
         Axis[1].x = FastMath.cos(angle+FastMath.PI_HALF);
+        if(Axis[1].x < 0.0f)
+            Axis[1].x += FastMath.PI;
         Axis[1].y = FastMath.sin(angle+FastMath.PI_HALF);
+        if(Axis[1].y < 0.0f)
+            Axis[1].y += FastMath.PI;
     }
 
     public Vector2f GetCenter() {

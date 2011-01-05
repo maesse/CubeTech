@@ -15,7 +15,9 @@ import cubetech.gfx.TextManager.Align;
 import cubetech.misc.Ref;
 import cubetech.spatial.SpatialQuery;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
+import org.openmali.FastMath;
 
 /**
  *
@@ -32,6 +34,8 @@ public final class Player {
     final static float LITTLE_SPEED = 70;
     final static float BIG_JUMP = 2 * 270 * 45;
     final static float LITTLE_JUMP = 2 * 200 * 45;
+    final static float OVERBOUNCE = 1.001f;
+    final static float SV_GRAVITY = 300;
     float speed = 70f; // max speed
     float accel = 30f;
     float airaccel = 250f;
@@ -75,7 +79,8 @@ public final class Player {
     boolean gameover;
     int BigGuyWeaponTime = 200;
     int LittleGuyWeaponTime = 400;
-
+    boolean onGround = false;
+    Vector2f groundNormal;
     long countTime = 0;
 
     public Player(World world, Vector2f spawn) {
@@ -225,15 +230,17 @@ public final class Player {
         wishdir.x *= speed; // speed;
         wishdir.y *= speed; // speed;
 
+        
+        
+        // Gravity
+        onGround = GroundTrace();
+        if(!onGround)
+            velocity.y -= SV_GRAVITY * (float)msec/1000f * 0.5f;
+
         // Handle jumping
         if(Ref.Input.playerInput.Up) {
             Jump(msec);
         }
-        
-        // Gravity
-        boolean onGround = GroundTrace();
-        if(!onGround)
-            velocity.y -= 300f * (float)msec/1000f;
         
         // Landed or jumped, reset animation
         if(jumping == onGround)
@@ -242,10 +249,19 @@ public final class Player {
 
         // Move
         if(onGround) {
+            velocity.y = 0;
             Friction(msec);
             WalkMove(wishdir, msec);
         } else
             AirMove(wishdir, msec);
+
+        onGround = GroundTrace();
+
+        
+        velocity.y -= SV_GRAVITY * (float)msec/1000f * 0.5f;
+
+        if(onGround)
+            velocity.y = 0f;
         
         RunAnimation();
         HandleWeapon(msec);
@@ -594,7 +610,7 @@ public final class Player {
     }
 
     void Jump(int msec) {
-        boolean onGround = GroundTrace();
+        onGround = GroundTrace();
         if(onGround) {
             velocity.y = (float)Math.sqrt(bigguy?BIG_JUMP : LITTLE_JUMP);
             Ref.soundMan.playEffect(Ref.soundMan.addSound("data/jump.wav"));
@@ -605,58 +621,61 @@ public final class Player {
         
     }
 
-    void TryMove(int msec) {
-        Vector2f newmove = new Vector2f(velocity.x * (float)msec/1000f, velocity.y * (float)msec/1000f);
-        CollisionResult coll;
-        int mask = Collision.MASK_WORLD;
-        coll = Ref.collision.TestPosition(position, newmove, extent, mask);
-
-        if(!coll.Hit)
-            Vector2f.add(newmove, position, position);
-        else {
-            Vector2f up = new Vector2f(0, 6f);
-            boolean stepped = false;
-
-//            // Only step when colliding with world
-//            if(coll.hitmask == Collision.MASK_WORLD) {
-//                coll = Ref.collision.TestPosition(position, up, extent, mask);
-//                if(!coll.Hit && newmove.y == 0f && velocity.y == 0f) {
-//                    up.x += position.x;
-//                    up.y += position.y;
-//                    coll = Ref.collision.TestPosition(up, newmove, extent, mask);
-//                    if(!coll.Hit) {
-//                        // push down
-//                        stepped = true;
-//                        up.x += newmove.x;
-//                        up.y += newmove.y;
-//                        Vector2f down = new Vector2f(0, -5f);
-//                        coll = Ref.collision.TestPosition(up, down, extent, mask);
-//                        if(!coll.Hit) {
-//                            position.x = up.x + down.x * coll.frac;
-//                            position.y = up.y + down.y * coll.frac;
-//                        }
+    void TryMove(int msec, boolean grav) {
+        SlideMove(grav, msec);
+//        position.x += velocity.x * (float)msec/1000f;
+//        position.y += velocity.y * (float)msec/1000f;
+//        Vector2f newmove = new Vector2f(velocity.x * (float)msec/1000f, velocity.y * (float)msec/1000f);
+//        CollisionResult coll;
+//        int mask = Collision.MASK_WORLD;
+//        coll = Ref.collision.TestPosition(position, newmove, extent, mask);
+//
+//        if(!coll.Hit)
+//            Vector2f.add(newmove, position, position);
+//        else {
+//            Vector2f up = new Vector2f(0, 6f);
+//            boolean stepped = false;
+//
+////            // Only step when colliding with world
+////            if(coll.hitmask == Collision.MASK_WORLD) {
+////                coll = Ref.collision.TestPosition(position, up, extent, mask);
+////                if(!coll.Hit && newmove.y == 0f && velocity.y == 0f) {
+////                    up.x += position.x;
+////                    up.y += position.y;
+////                    coll = Ref.collision.TestPosition(up, newmove, extent, mask);
+////                    if(!coll.Hit) {
+////                        // push down
+////                        stepped = true;
+////                        up.x += newmove.x;
+////                        up.y += newmove.y;
+////                        Vector2f down = new Vector2f(0, -5f);
+////                        coll = Ref.collision.TestPosition(up, down, extent, mask);
+////                        if(!coll.Hit) {
+////                            position.x = up.x + down.x * coll.frac;
+////                            position.y = up.y + down.y * coll.frac;
+////                        }
+////                    }
+////                }
+////            }
+//
+//            if(!stepped) {
+//                coll = Ref.collision.TestPosition(position, new Vector2f(newmove.x, 0f), extent, mask);
+//                if(!coll.Hit) {
+//                    Vector2f.add(new Vector2f(newmove.x, 0f), position, position);
+//                    velocity.y = 0f;
+//                    }
+//                else if(!(coll = Ref.collision.TestPosition(position, new Vector2f(0f, newmove.y), extent, mask)).Hit) {
+//                    Vector2f.add(new Vector2f(0f, newmove.y), position, position);
+//                    velocity.x = 0f;
+//                    }
+//                else {
+//                    if(coll.hitmask == Collision.MASK_WORLD) {
+////                        position.x += newmove.x * coll.frac;
+//                        position.y += newmove.y * coll.frac;
 //                    }
 //                }
 //            }
-            
-            if(!stepped) {
-                coll = Ref.collision.TestPosition(position, new Vector2f(newmove.x, 0f), extent, mask);
-                if(!coll.Hit) {
-                    Vector2f.add(new Vector2f(newmove.x, 0f), position, position);
-                    velocity.y = 0f;
-                    }
-                else if(!(coll = Ref.collision.TestPosition(position, new Vector2f(0f, newmove.y), extent, mask)).Hit) {
-                    Vector2f.add(new Vector2f(0f, newmove.y), position, position);
-                    velocity.x = 0f;
-                    }
-                else {
-                    if(coll.hitmask == Collision.MASK_WORLD) {
-//                        position.x += newmove.x * coll.frac;
-                        position.y += newmove.y * coll.frac;
-                    }
-                }
-            }
-        }
+//        }
         
 
     }
@@ -702,7 +721,130 @@ public final class Player {
         }
 
         AirAccelerate(wishdir, wishspeed, airaccel, msec);
-        TryMove(msec);
+
+//        if(onGround) {
+//            ClipVelocity(velocity, groundNormal, velocity, OVERBOUNCE);
+//        }
+        TryMove(msec,!GroundTrace());
+    }
+
+    int SlideMove(boolean gravity, int msec) {
+        int numbumps = 4;
+        Vector2f pri_vel = new Vector2f(velocity.x, velocity.y);
+        Vector2f planes[] = new Vector2f[5];
+        Vector2f new_velocity = new Vector2f();
+        float time_left = (float)msec/1000f;
+        int numplanes = 0;
+        int bumpcount;
+        float allFraction = 0f;
+        Vector2f org_vel = new Vector2f(velocity.x, velocity.y);
+        
+        int blocked = 0;
+        for (bumpcount= 0; bumpcount < numbumps; bumpcount++) {
+            // calculate position we are trying to move to
+            Vector2f end = new Vector2f(time_left * velocity.x, time_left * velocity.y);
+
+            // see if we can make it there
+            CollisionResult res = Ref.collision.TestPosition(position, extent, end, Collision.MASK_WORLD);
+//            if(res.Hit == true && res.frac <= Collision.EPSILON) {
+//                // entity is completely trapped in another solid
+//                velocity.y = 0; // don't build up falling damage, but allow sideways acceleration
+//                return true;
+//            }
+            allFraction += res.frac;
+
+            if(res.frac > 0.0f) {
+                // actually covered some distance
+                position.x += end.x * res.frac;
+                position.y += end.y * res.frac;
+                org_vel = new Vector2f(velocity.x, velocity.y);
+                numplanes = 0;
+            }
+
+            if(res.frac == 1.0f)
+                break; // moved the entire distance
+
+            if(res.HitAxis.x > 0.7f)
+                blocked |= 1; // blocked by floor
+            if(res.HitAxis.x == 0.0f)
+                blocked |= 2; // step/wall
+
+            time_left -= time_left * res.frac;
+
+            if(numplanes >= 5) {
+                // this shouldn't really happen
+                velocity.x = velocity.y = 0;
+                break;
+            }
+
+//            //
+//            // if this is the same plane we hit before, nudge velocity
+//            // out along it, which fixes some epsilon issues with
+//            // non-axial planes
+//            //
+//            int i;
+//            for (i= 0; i < numplanes; i++) {
+//                if(Vector2f.dot(res.HitAxis, planes[i]) > 0.99f) {
+//                    Vector2f.add(res.HitAxis, velocity, velocity);
+//                    break;
+//                }
+//            }
+//            if(i < numplanes)
+//                continue;
+
+            planes[numplanes++] = res.HitAxis;
+            if(numplanes == 1 && !onGround) {
+                if(planes[0].x > 0.7f) {
+                    // Floor or slope
+                    ClipVelocity(org_vel, planes[0], new_velocity, 1f);
+                    org_vel = new_velocity;
+                } else
+                    ClipVelocity(org_vel, planes[0], new_velocity, 1f);
+
+                velocity = new Vector2f(new_velocity.x, new_velocity.y);
+                org_vel = new_velocity;
+            } else {
+                int i;
+                for (i= 0; i < numplanes; i++) {
+                    ClipVelocity(org_vel, planes[i], velocity, 1f);
+                    int j;
+                    for (j= 0; j < numplanes; j++) {
+                        if(j == i)
+                            continue;
+                        // Are we now moving against this plane?
+                        if(Vector2f.dot(velocity, planes[j]) < 0f)
+                            break; // not ok
+                    }
+                    if(j == numplanes) // didn't clip
+                        break;
+                }
+                if(i != numplanes) {
+
+                } else {
+                    // go along the crease
+                    if(numplanes != 2) {
+                        velocity = new Vector2f();
+                        break;
+                    }
+//                    Vector2f dir =
+                }
+
+                float vdiff = Vector2f.dot(velocity, pri_vel);
+                if(vdiff <= 0)
+                {
+                    velocity = new Vector2f();
+                    break;
+                }
+
+            }
+            
+        }
+//        position = origin;
+
+        if(allFraction == 0f)
+            velocity = new Vector2f();
+
+        return blocked;
     }
 
     void AirAccelerate(Vector2f wishdir, float wishspeed, float acceleration, int msec) {
@@ -738,6 +880,9 @@ public final class Player {
             wishspeed = speed;
         }
 
+        //ClipVelocity(wishdir, groundNormal, wishdir, OVERBOUNCE);
+        velocity.y = 0;
+
         float currentSpeed = Vector2f.dot(velocity, wishdir);
         float addSpeed = wishspeed  - currentSpeed;
         if(addSpeed > 0f)
@@ -750,6 +895,8 @@ public final class Player {
             velocity.y += accelspeed * wishdir.y;
         }
 
+        velocity.y = 0;
+        
         float speed2 = (float)Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
         if(speed2 < 1f)
         {
@@ -757,16 +904,53 @@ public final class Player {
             velocity.y = 0f;
             return;
         }
-
-        TryMove(msec);
-
         
+
+//        ClipVelocity(velocity, groundNormal, velocity, OVERBOUNCE);
+//        float norm = FastMath.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+//        velocity.x /= norm;
+//        velocity.y /= norm;
+//        velocity.x *= speed2;
+//        velocity.y *= speed2;
+
+
+        boolean oldOnground = onGround;
+        Vector2f moveVec = new Vector2f(velocity.x * (float)msec/1000f, velocity.y * (float)msec/1000f);
+        CollisionResult res = Ref.collision.TestPosition(position, extent, moveVec, Collision.MASK_WORLD);
+        if(!res.Hit) {
+            position.x += moveVec.x;
+            position.y += moveVec.y;
+            return;
+        }
+
+        // Don't walk up stairs if not on ground.
+        if(!oldOnground)
+            return;
+
+        TryMove(msec, false);
+
+
+    }
+
+    void ClipVelocity(Vector2f in, Vector2f normal, Vector2f out, float overbounce) {
+        float backoff = Vector2f.dot(in, normal);
+        if(backoff < 0)
+            backoff *= overbounce;
+        else
+            backoff /= overbounce;
+
+        float change = normal.x * backoff;
+        out.x = in.x - change;
+        change = normal.y * backoff;
+        out.y = in.y - change;
     }
 
     boolean GroundTrace() {
         CollisionResult result = Ref.collision.TestPosition(position, new Vector2f(0, -2f), extent, Collision.MASK_WORLD);
-        if(result.Hit && result.frac != 0.0f) {
-            position.y -= 2f * result.frac;
+        if(result.Hit) {
+            groundNormal = result.HitAxis;
+            if(result.frac != 0.0f)
+                position.y -= 2f * result.frac;
         }
         return result.Hit;
     }
