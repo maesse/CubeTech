@@ -372,7 +372,8 @@ public class Bombah implements Entity {
 
         if(damageTime + 100 > Ref.loop.time) {
            float frac = (float)(damageTime+100-Ref.loop.time)/100f;
-           spr.Color = new Vector4f(1, 0, 0, 0.5f + 0.5f*frac);
+           spr.SetColor(new Vector4f(1, 0, 0, 0.5f + 0.5f*frac));
+           //spr.Color = new Vector4f(1, 0, 0, 0.5f + 0.5f*frac);
         }
 
         if(runframe == 19)

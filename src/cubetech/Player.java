@@ -426,8 +426,10 @@ public final class Player {
 
             Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(block.getPosition(), block.getSize(), block.Texture, block.TexOffset, block.TexSize);
-            spr.Angle = block.getAngle();
-            spr.Color = new Vector4f(1, 0, 0, 1f);
+            spr.SetAngle(block.getAngle());
+            //spr.Angle = block.getAngle();
+            spr.SetColor(new Vector4f(1, 0, 0, 1f));
+            //spr.Color = new Vector4f(1, 0, 0, 1f);
         }
     }
     
@@ -435,7 +437,8 @@ public final class Player {
         // Black background
         Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
         spr.Set(new Vector2f(0.05f, 0.9f), new Vector2f(0.3f, 0.05f), null, new Vector2f(), new Vector2f(1, 1));
-        spr.Color = new Vector4f(0, 0, 0, 0.5f);
+        spr.SetColor(new Vector4f(0, 0, 0, 0.5f));
+        //spr.Color = new Vector4f(0, 0, 0, 0.5f);
 
         // Healthbar
         if(health > 0) {
@@ -445,7 +448,8 @@ public final class Player {
             if(damageTime + 300 > Ref.loop.time) {
                 float frac = (float)(damageTime+300-Ref.loop.time)/300f;
                 float invfrac = 1f-frac;
-                spr.Color = new Vector4f(frac + invfrac, invfrac, invfrac, 0.7f);
+                spr.SetColor(new Vector4f(frac + invfrac, invfrac, invfrac, 0.7f));
+                //spr.Color = new Vector4f(frac + invfrac, invfrac, invfrac, 0.7f);
             }
         }
 
@@ -457,11 +461,13 @@ public final class Player {
         // Draw Energybar
         spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
         spr.Set(new Vector2f(0.6f, 0.9f), new Vector2f(0.3f, 0.05f), null, new Vector2f(), new Vector2f(1, 1));
-        spr.Color = new Vector4f(0, 0, 0, 0.5f);
+        spr.SetColor(new Vector4f(0, 0, 0, 0.5f));
+        //spr.Color = new Vector4f(0, 0, 0, 0.5f);
         if(energy > 0f) {
             spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
             spr.Set(new Vector2f(0.605f, 0.905f), new Vector2f(0.29f * energy, 0.042f), energyBar, new Vector2f(), new Vector2f(1, 1));
-            spr.Color = new Vector4f(0, 1, 0, 0.7f);
+            spr.SetColor(new Vector4f(0, 1, 0, 0.7f));
+            //spr.Color = new Vector4f(0, 1, 0, 0.7f);
         }
 
         Ref.textMan.AddText(new Vector2f(0.98f, 0.85f), "Score: " + score, Align.RIGHT);

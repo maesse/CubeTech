@@ -521,7 +521,8 @@ public class WorldEditor {
     boolean EditModeHUD() {
         Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
         spr.Set(new Vector2f(0.92f, 0.1f), new Vector2f(0.05f, 0.8f), null, new Vector2f(0, 0), new Vector2f(0, 0));
-        spr.Color = new Vector4f(0, 0, 0, 0.4f);
+        spr.SetColor(new Vector4f(0, 0, 0, 0.4f));
+        //spr.Color = new Vector4f(0, 0, 0, 0.4f);
 
         // Check if mouse is hovering the hud
         boolean hit = false;
@@ -538,7 +539,8 @@ public class WorldEditor {
     void DrawTextureBar() {
         Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
         spr.Set(new Vector2f(0.05f, 0.0f), new Vector2f(0.9f, 0.22f), null, new Vector2f(0,0),new Vector2f(1,1));
-        spr.Color = new Vector4f(0,0,0,0.4f);
+        spr.SetColor(new Vector4f(0,0,0,0.4f));
+        //spr.Color = new Vector4f(0,0,0,0.4f);
 
         if(editTextureSelected < 0)
             return;
@@ -572,7 +574,8 @@ public class WorldEditor {
 
             spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
             spr.Set(new Vector2f(0.5f+i*0.1f+0.12f, 0.1f), 0.05f, editTextures.get(editTextureSelected+1+i));
-            spr.Color = new Vector4f(1, 1, 1, 0.3f + 0.7f * invIFrac);
+            spr.SetColor(new Vector4f(1, 1, 1, 0.3f + 0.7f * invIFrac));
+            //spr.Color = new Vector4f(1, 1, 1, 0.3f + 0.7f * invIFrac);
         }
 
         int numleft = editTextureSelected;
@@ -583,7 +586,8 @@ public class WorldEditor {
 
             spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
             spr.Set(new Vector2f(0.5f-i*0.1f-0.12f, 0.1f), 0.05f, editTextures.get(editTextureSelected-1-i));
-            spr.Color = new Vector4f(1, 1, 1, 0.4f + 0.6f * invIFrac);
+            spr.SetColor(new Vector4f(1, 1, 1, 0.4f + 0.6f * invIFrac));
+            //spr.Color = new Vector4f(1, 1, 1, 0.4f + 0.6f * invIFrac);
         }
 
     }
@@ -712,7 +716,8 @@ public class WorldEditor {
             // Hightlight selected
             Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(pos, size, null, new Vector2f(0,0), new Vector2f(1, 1));
-            spr.Color = new Vector4f(1,1,1,0.2f);
+            spr.SetColor(new Vector4f(1,1,1,0.2f));
+            //spr.Color = new Vector4f(1,1,1,0.2f);
 
             spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(pos, 1f, dims);
@@ -731,7 +736,8 @@ public class WorldEditor {
             // Hightlight selected
             Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(pos, size, null, new Vector2f(0,0), new Vector2f(1, 1));
-            spr.Color = new Vector4f(1,1,1,0.2f);
+            spr.SetColor(new Vector4f(1,1,1,0.2f));
+            //spr.Color = new Vector4f(1,1,1,0.2f);
 
             spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(new Vector2f(pos.x + size.x, pos.y), 1f, dims);

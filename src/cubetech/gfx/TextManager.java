@@ -204,7 +204,8 @@ public class TextManager {
                 Sprite sprite = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
                 //sprite.Set(finalpos, 0.1f,fontTex);
                 sprite.Set(finalpos, size, fontTex, texOffset, texSize);
-                sprite.Color = color;
+                sprite.SetColor(color);
+                //sprite.Color = color;
                 //sprite.Set(finalpos, size, fontTex, texOffset, size);
 
             } catch (Exception ex) {

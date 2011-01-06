@@ -44,7 +44,8 @@ public class Button {
             // White background
             spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
             spr.Set(new Vector2f(Rect.getX()/1000f, Rect.getY()/1000f), new Vector2f(Rect.getWidth()/1000f, Rect.getHeight()/1000f), null, new Vector2f(0,0), new Vector2f(1,1));
-            spr.Color = new Vector4f(1,1,1,0.2f);
+            spr.SetColor(new Vector4f(1,1,1,0.2f));
+            //spr.Color = new Vector4f(1,1,1,0.2f);
         } else {
             // no mouse over, just display background as normal
             Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);

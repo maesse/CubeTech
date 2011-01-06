@@ -73,7 +73,8 @@ public class Console implements KeyEventListener {
         // Background
         Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
         spr.Set(new Vector2f(0.5f,0.5f), 0.5f);
-        spr.Color = new Vector4f(0,0,0,0.5f);
+        spr.SetColor(new Vector4f(0,0,0,0.5f));
+        //spr.Color = new Vector4f(0,0,0,0.5f);
 
         // Commandline
         Ref.textMan.AddText(new Vector2f(0,0), cmdLine, TextManager.Align.LEFT);

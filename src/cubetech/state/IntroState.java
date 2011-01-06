@@ -161,7 +161,8 @@ public class IntroState implements IGameState {
 
             Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
             spr.Set(pos, 0.02f,tex);
-            spr.Color = color;
+            spr.SetColor(color);
+            //spr.Color = color;
         }
 
         // Reset this to msec

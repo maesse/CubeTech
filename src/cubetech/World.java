@@ -108,20 +108,23 @@ public final class World implements KeyEventListener {
         // Draw source rect
         Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
         spr.Set(new Vector2f(actual.Start.x - actual.Extent.x,actual.Start.y - actual.Extent.y), new Vector2f(actual.Extent.x * 2f,actual.Extent.y * 2f), null, new Vector2f(), new Vector2f(1, 1));
-        spr.Color = new Vector4f(0, 1, 0, 0.5f); // Green
+        spr.SetColor(new Vector4f(0, 1, 0, 0.5f));
+        //spr.Color = new Vector4f(0, 1, 0, 0.5f); // Green
 
         // Draw hit block if any
         if(actual.hitObject != null && actual.hitObject.getClass() == Block.class) {
             Block block = (Block)actual.hitObject;
             spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             spr.Set(new Vector2f(block.getPosition().x,block.getPosition().y), new Vector2f(block.getSize().x, block.getSize().y), null, new Vector2f(), new Vector2f(1, 1));
-            spr.Color = new Vector4f(1, 0, 0, 0.5f); // Red
+            spr.SetColor(new Vector4f(1, 0, 0, 0.5f));
+            //spr.Color = new Vector4f(1, 0, 0, 0.5f); // Red
         }
 
         // Draw where player would be with direction vector applied to position
         spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
         spr.Set(new Vector2f(actual.Start.x - actual.Extent.x + actual.Delta.x,actual.Start.y - actual.Extent.y+ actual.Delta.y), new Vector2f(actual.Extent.x * 2f,actual.Extent.y * 2f), null, new Vector2f(), new Vector2f(1, 1));
-        spr.Color = new Vector4f(0,0, 1, 0.3f); // Blue
+        spr.SetColor(new Vector4f(0,0, 1, 0.3f));
+        //spr.Color = new Vector4f(0,0, 1, 0.3f); // Blue
     }
 
     public void Render(int msec) {
@@ -150,6 +153,7 @@ public final class World implements KeyEventListener {
                 for (int i= 0; i < Entities.size(); i++) {
                     Entity ent = Entities.get(i);
 
+                    // Check distance to player..
                     float xdiff = Math.abs(ent.GetPosition().x - Ref.world.player.position.x);
                     if(xdiff > 200f && ent.GetType() != Collision.MASK_BULLETS)
                         continue; // out of range
