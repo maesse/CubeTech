@@ -5,63 +5,50 @@
 
 package cubetech.net;
 
+import java.nio.ByteBuffer;
+
 /**
  *
  * @author mads
  */
 public class NetBuffer {
-    byte[] data;
-    int offset = 0;
+    final static int BUFFER_SIZE = 1024;
+    ByteBuffer buffer = null;
     
     public NetBuffer() {
-        data = new byte[1024];
-        offset = 0;
+        buffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
     }
 
     public void ResetOffset() {
-        offset = 0;
+        buffer.rewind();
     }
 
     public void Write(int value) {
-        data[offset] = (byte)( value >> 24 );
-        data[offset+1] =(byte)( (value << 8) >> 24 );
-        data[offset+2] =(byte)( (value << 16) >> 24 );
-        data[offset+3] =(byte)( (value << 24) >> 24 );
-        offset += 4;
+        buffer.putInt(value);
     }
 
     public void Write(float value) {
-        int newval = Float.floatToRawIntBits(value);
-        Write(newval);
+        buffer.putFloat(value);
     }
 
     public void Write(String str) {
         byte[] strData = str.getBytes();
-        Write(strData.length);
-        System.arraycopy(strData, 0, data, offset, strData.length);
-
-        offset += strData.length;
+        buffer.putInt(strData.length);
+        buffer.put(strData);
     }
 
     public String ReadString() {
-        int nBytes = ReadInt();
-        String str = new String(data, offset, nBytes);
-        offset += nBytes;
+        byte[] data2 = new byte[buffer.getInt()];
+        buffer.get(data2);
+        String str = new String(data2);
         return str;
     }
 
     public float ReadFloat() {
-        int val = ReadInt();
-        return Float.intBitsToFloat(val);
+        return buffer.getFloat();
     }
 
     public int ReadInt() {
-        int value = (data[offset] & 0x000000ff)<<24;
-        value += (data[offset+1]& 0x000000ff)<<16;
-        value += (data[offset+2]& 0x000000ff)<<8;
-        value += (data[offset+3]& 0x000000ff);
-        offset += 4;
-
-        return value;
+        return buffer.getInt();
     }
 }
