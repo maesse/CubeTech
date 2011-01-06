@@ -8,7 +8,7 @@ package cubetech;
 import cubetech.misc.Console;
 import cubetech.misc.SoundManager;
 import cubetech.misc.Common;
-import cubetech.misc.Net;
+import cubetech.net.Net;
 import cubetech.collision.Collision;
 import cubetech.state.HagserState;
 import java.util.Random;

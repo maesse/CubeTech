@@ -3,7 +3,7 @@
  * and open the template in the editor.
  */
 
-package cubetech.misc;
+package cubetech.net;
 
 /**
  *
@@ -18,8 +18,12 @@ public class NetBuffer {
         offset = 0;
     }
 
+    public void ResetOffset() {
+        offset = 0;
+    }
+
     public void Write(int value) {
-        data[offset+0] =(byte)( value >> 24 );
+        data[offset] = (byte)( value >> 24 );
         data[offset+1] =(byte)( (value << 8) >> 24 );
         data[offset+2] =(byte)( (value << 16) >> 24 );
         data[offset+3] =(byte)( (value << 24) >> 24 );
@@ -34,9 +38,7 @@ public class NetBuffer {
     public void Write(String str) {
         byte[] strData = str.getBytes();
         Write(strData.length);
-        for (int i= 0; i < strData.length; i++) {
-            data[offset+i] = strData[i];
-        }
+        System.arraycopy(strData, 0, data, offset, strData.length);
 
         offset += strData.length;
     }
@@ -44,6 +46,7 @@ public class NetBuffer {
     public String ReadString() {
         int nBytes = ReadInt();
         String str = new String(data, offset, nBytes);
+        offset += nBytes;
         return str;
     }
 
@@ -53,11 +56,10 @@ public class NetBuffer {
     }
 
     public int ReadInt() {
-        int value = 0;
-        value |= data[offset]<<24;
-        value |= data[offset+1]<<16;
-        value |= data[offset+2]<<8;
-        value |= data[offset+3];
+        int value = (data[offset] & 0x000000ff)<<24;
+        value += (data[offset+1]& 0x000000ff)<<16;
+        value += (data[offset+2]& 0x000000ff)<<8;
+        value += (data[offset+3]& 0x000000ff);
         offset += 4;
 
         return value;

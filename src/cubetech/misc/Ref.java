@@ -5,6 +5,7 @@
 
 package cubetech.misc;
 
+import cubetech.net.Net;
 import cubetech.spatial.Spatial;
 import cubetech.collision.Collision;
 import cubetech.GameLoop;

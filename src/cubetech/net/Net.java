@@ -3,7 +3,7 @@
  * and open the template in the editor.
  */
 
-package cubetech.misc;
+package cubetech.net;
 
 import java.util.LinkedList;
 import java.util.Queue;
