@@ -43,7 +43,7 @@ public class Spatial {
                 boolean innew = x >= xmincell && x < xmaxcell && y >= ymincell && y < ymaxcell;
                 boolean inold = x >= handle.xmincell && x < handle.xmaxcell && y >= handle.ymincell && y < handle.ymaxcell;
 
-                System.out.println("innew: " + innew + " - inold: " + inold);
+               // System.out.println("innew: " + innew + " - inold: " + inold);
 
                 if(inold && innew)
                     continue; // No change, leave handle for this bin

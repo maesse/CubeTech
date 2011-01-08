@@ -63,13 +63,14 @@ public class GameLoop {
             Logger.getLogger(GameLoop.class.getName()).log(Level.SEVERE, null, ex);
             System.exit(-1);
         }
-        Ref.StateMan = new StateManager();
+        
         Ref.net = new Net();
         Ref.common = new Common();
         Ref.collision = new Collision();
         Ref.soundMan = new SoundManager();
         Ref.soundMan.initialize(12);
         Ref.spatial = new Spatial();
+        Ref.StateMan = new StateManager();
     }
 
     

@@ -2,10 +2,7 @@ package cubetech;
 
 import cubetech.collision.Collision;
 import cubetech.collision.CollisionResult;
-import cubetech.entities.Bombah;
-import cubetech.entities.Drone;
 import cubetech.entities.Entity;
-import cubetech.entities.PlayerFinish;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
@@ -61,16 +58,17 @@ public final class World implements KeyEventListener {
         Ref.world = this;
         background = (CubeTexture)(Ref.ResMan.LoadResource("data/horizont.png").Data);
 
-        maps = new String[4];
-        maps[0] = "map0.map";
-        maps[1] = "map1.map";
-        maps[2] = "map2.map";
-        maps[3] = "map3.map";
-
+//        maps = new String[4];
+//        maps[0] = "map0.map";
+//        maps[1] = "map1.map";
+//        maps[2] = "map2.map";
+//        maps[3] = "map3.map";
+//
         Ref.Input.AddKeyEventListener(this);
-
+//
         worldEdit = new WorldEditor(this);
-        LoadWorld(maps[0]);
+//        LoadWorld(maps[0]);
+        StartNewEmptyGame();
     }
 
     public void KeyPressed(KeyEvent evt) {
@@ -148,23 +146,21 @@ public final class World implements KeyEventListener {
     public void RenderGame(int msec) {
         // Update entities
         if(mode == Mode.Game) {
-            if(!player.transforming) {
-                entToRemoveOffset = 0;
-                for (int i= 0; i < Entities.size(); i++) {
-                    Entity ent = Entities.get(i);
+            entToRemoveOffset = 0;
+            for (int i= 0; i < Entities.size(); i++) {
+                Entity ent = Entities.get(i);
 
-                    // Check distance to player..
-                    float xdiff = Math.abs(ent.GetPosition().x - Ref.world.player.position.x);
-                    if(xdiff > 200f && ent.GetType() != Collision.MASK_BULLETS)
-                        continue; // out of range
+                // Check distance to player..
+                float xdiff = Math.abs(ent.GetPosition().x - Ref.world.player.position.x);
+                if(xdiff > 200f && ent.GetType() != Collision.MASK_BULLETS)
+                    continue; // out of range
 
-                    ent.Update(msec);
-                    if(ent.ToRemove()) {
-                        entToRemove[entToRemoveOffset++] = ent;
-                    }
+                ent.Update(msec);
+                if(ent.ToRemove()) {
+                    entToRemove[entToRemoveOffset++] = ent;
                 }
             }
-
+            
             // Update player
             player.Update(msec);
         }
@@ -237,17 +233,20 @@ public final class World implements KeyEventListener {
                     }
                     break;
                 case 2:
-                    PlayerFinish finish = new PlayerFinish(block.getPosition());
-                     Entities.add(finish);
+//                    PlayerFinish finish = new PlayerFinish(block.getPosition());
+//                     Entities.add(finish);
+                    System.out.println("PlayerFinish not supported any more");
                     // Add goal
                     break;
                 case 3:
-                    Drone drone = new Drone(new Vector2f(block.getPosition().x + block.getSize().x /2f, block.getPosition().y + block.getSize().y/2f));
-                    Entities.add(drone);
+//                    Drone drone = new Drone(new Vector2f(block.getPosition().x + block.getSize().x /2f, block.getPosition().y + block.getSize().y/2f));
+//                    Entities.add(drone);
+                    System.out.println("Drone not supported any more");
                     break;
                 case 4:
-                    Bombah bombah = new Bombah(new Vector2f(block.getPosition().x + block.getSize().x /2f, block.getPosition().y + block.getSize().y/2f));
-                    Entities.add(bombah);
+//                    Bombah bombah = new Bombah(new Vector2f(block.getPosition().x + block.getSize().x /2f, block.getPosition().y + block.getSize().y/2f));
+//                    Entities.add(bombah);
+                    System.out.println("Bombah not supported any more");
                     break;
             }
         }
@@ -299,7 +298,7 @@ public final class World implements KeyEventListener {
         player.ResetPlayer();
         player.lives = lives;
         player.energy = energy;
-        player.bigguy = bigguy;
+        //player.bigguy = bigguy;
         player.score = score;
         return result;
     }

@@ -124,6 +124,7 @@ public class IntroState implements IGameState {
     }
 
     public void RunFrame(int msec) {
+        Ref.soundMan.playEffect(Ref.soundMan.addSound("data/Cubetech.wav"));
         long time = Sys.getTime()/(Sys.getTimerResolution()/1000L);
 
         // Play intro for 3 secs

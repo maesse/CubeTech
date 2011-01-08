@@ -50,7 +50,7 @@ public class NetBufferTest {
         System.out.println("Writing " + value);
         NetBuffer instance = new NetBuffer();
         instance.Write(value);
-        instance.ResetOffset();
+        instance.Flip();
         int outval = instance.ReadInt();
         assertEquals(value, outval);
     }
@@ -64,7 +64,7 @@ public class NetBufferTest {
         System.out.println("Writing " + value);
         NetBuffer instance = new NetBuffer();
         instance.Write(value);
-        instance.ResetOffset();
+        instance.Flip();
         float outval = instance.ReadFloat();
         assertEquals(value, outval, 0.0f);
     }
@@ -82,7 +82,7 @@ public class NetBufferTest {
         System.out.println("Writing " + str);
         NetBuffer instance = new NetBuffer();
         instance.Write(str);
-        instance.ResetOffset();
+        instance.Flip();
         String outval = instance.ReadString();
         assertEquals(str, outval);
     }
@@ -109,7 +109,7 @@ public class NetBufferTest {
         System.out.println("Writing " + value2);
         instance.Write(value2);
         
-        instance.ResetOffset();
+        instance.Flip();
         
         String outval = instance.ReadString();
         assertEquals(str, outval);

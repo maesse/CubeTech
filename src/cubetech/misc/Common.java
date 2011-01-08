@@ -1,6 +1,7 @@
 package cubetech.misc;
 
 import cubetech.client.Client;
+import cubetech.net.Packet;
 import cubetech.server.Server;
 import org.lwjgl.Sys;
 
@@ -41,6 +42,7 @@ public class Common {
 
     int EventLoop() {
         Event ev;
+        Ref.net.PumpNet();
         while(true) {
             ev = GetEvent();
 
@@ -52,9 +54,9 @@ public class Common {
                     break;
                 case PACKET:
                     if(ev.Value2 == 0)
-                        server.PacketEvent(ev.data);
+                        server.PacketEvent((Packet)ev.data);
                     else
-                        client.PacketEvent(ev.data);
+                        client.PacketEvent((Packet)ev.data);
                     break;
             }
         }
@@ -62,13 +64,18 @@ public class Common {
 
     Event GetEvent() {
         // Try to get packet
+        Packet packet = Ref.net.GetPacket();
+        if(packet != null) {
+            // We have a packet!
+            return CreateEvent(packet.Time, Event.EventType.PACKET, 0, packet.type==Packet.SourceType.CLIENT?1:0, packet);
+        }
 
         Event evt = new Event();
         evt.Time = Milliseconds();
         return evt;
     }
 
-    Event CreateEvent(int time, Event.EventType type, int value, int value2, int dataSize, Object data) {
+    Event CreateEvent(int time, Event.EventType type, int value, int value2, Object data) {
         Event evt = new Event();
         if(time == 0)
             time = Milliseconds();
@@ -77,13 +84,13 @@ public class Common {
         evt.Type = type;
         evt.Value = value;
         evt.Value2 = value2;
-        evt.datasize = dataSize;
+       // evt.datasize = dataSize;
         evt.data = data;
 
         return evt;
     }
 
-    int Milliseconds() {
+    public int Milliseconds() {
         if(starttime == 0)
             starttime = (long)(Sys.getTime()/(long)(Sys.getTimerResolution()/1000f));
         return (int)((long)(Sys.getTime()/(long)(Sys.getTimerResolution()/1000f)) - starttime);

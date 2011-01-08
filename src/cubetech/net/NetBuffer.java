@@ -13,14 +13,28 @@ import java.nio.ByteBuffer;
  */
 public class NetBuffer {
     final static int BUFFER_SIZE = 1024;
-    ByteBuffer buffer = null;
+    private ByteBuffer buffer = null;
+    //private int Offset = 0;
+    //private boolean Writing = true;
     
     public NetBuffer() {
-        buffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
+        buffer = ByteBuffer.allocate(BUFFER_SIZE);
     }
 
-    public void ResetOffset() {
-        buffer.rewind();
+    public NetBuffer(ByteBuffer buf) {
+        buffer = buf;
+    }
+
+    public ByteBuffer GetBuffer() {
+        return buffer;
+    }
+
+    public void Clear() {
+        buffer.clear();
+    }
+
+    public void Flip() {
+        buffer.flip();
     }
 
     public void Write(int value) {
@@ -38,9 +52,14 @@ public class NetBuffer {
     }
 
     public String ReadString() {
-        byte[] data2 = new byte[buffer.getInt()];
-        buffer.get(data2);
-        String str = new String(data2);
+        int lenght = buffer.getInt();
+        if(lenght < 0 ||lenght >= 1024) {
+            System.out.println("NetBuffer.ReadString(): Invalid lenght: " + lenght);
+            return null;
+        }
+        byte[] strData = new byte[lenght];
+        buffer.get(strData);
+        String str = new String(strData);
         return str;
     }
 

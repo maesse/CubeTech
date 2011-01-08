@@ -5,6 +5,8 @@
 
 package cubetech.server;
 
+import cubetech.net.Packet;
+
 /**
  *
  * @author mads
@@ -35,7 +37,8 @@ public class Server {
 
     }
 
-    public void PacketEvent(Object data) {
-        throw new UnsupportedOperationException("Not yet implemented");
+    public void PacketEvent(Packet data) {
+        
+        System.out.println(data.buf.ReadString());
     }
 }
