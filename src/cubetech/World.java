@@ -12,6 +12,9 @@ import cubetech.input.KeyEventListener;
 import cubetech.misc.Ref;
 import cubetech.spatial.SpatialQuery;
 import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -353,6 +356,16 @@ public final class World implements KeyEventListener {
 
     public boolean LoadWorld(String filename) {
         InputStream is = World.class.getResourceAsStream("data/"+filename);
+        if(is == null) {
+            try {
+                FileInputStream fis = new FileInputStream(filename);
+                //FileReader fr = new FileReader(filename);
+               is = fis;
+            } catch (FileNotFoundException ex) {
+                Logger.getLogger(World.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            //is = ClassLoader.getSystemResourceAsStream(filename);
+        }
 
         NextBlockHandle = 0;
         camera = new Camera(new Vector2f(), 192);

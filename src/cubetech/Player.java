@@ -14,6 +14,7 @@ import cubetech.gfx.SpriteManager;
 import cubetech.gfx.TextManager.Align;
 import cubetech.misc.Ref;
 import cubetech.spatial.SpatialQuery;
+import java.util.ArrayList;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
@@ -24,16 +25,17 @@ import org.openmali.FastMath;
  * @author mads
  */
 public final class Player {
+
+    final static int MINTAILTIME = 32;
     // Entity
     public Vector2f position;
     public Vector2f velocity;
     public Vector2f extent;
 
     // Constants
-    final static float LITTLE_SPEED = 70;
-    float speed = 70f; // max speed
-    float accel = 30f;
-    float friction = 6f;
+    float speed = 130f; // max speed
+    float accel = 8f;
+    float friction = 4f;
     float stopspeed = 15f;
     World world;
     
@@ -42,40 +44,29 @@ public final class Player {
     float health;
     int score;
     float energy = 0f;
-//    boolean bigguy = false;
 
     // Textures
     CubeTexture heart;
     CubeTexture healthBar;
     CubeTexture energyBar;
-    //CubeTexture[] runanim = new CubeTexture[10];
-    //CubeTexture[] jumpanim = new CubeTexture[2];
-    //CubeTexture[] shootanim = new CubeTexture[5];
-    //CubeTexture[] runanim2 = new CubeTexture[10];
-    //CubeTexture[] jumpanim2 = new CubeTexture[2];
-    //CubeTexture[] evolveanim = new CubeTexture[14];
+    
 
     // Animation info
     long damageTime;
-    //boolean lookright = true;
-    //int runframe = 0;
-    //long nextanimTime = 0;
 
     // FLow control
-    //long jumpTime;
-    //boolean jumping = false;
-    //long weaponTime = 0;
-    //boolean transforming = false;
-    //boolean transformtobig = true;
     long dieTime = 0;
-    //long transformtime = 0;
-    //long goalTime = 0;
+    long nextTailTime = 0;
     boolean gameover;
-    //int BigGuyWeaponTime = 200;
-    //int LittleGuyWeaponTime = 400;
-    //boolean onGround = false;
-    //Vector2f groundNormal;
     long countTime = 0;
+    float TimeToNextTail = 300f;
+    long lastConnect = 0;
+    Vector2f LastDrop = new Vector2f();
+
+
+    ArrayList<CircleSplotion> splotions = new ArrayList<CircleSplotion>();
+    TailPart[] Tail = new TailPart[128];
+    int NextTail = 0;
 
     public Player(World world, Vector2f spawn) {
         this.world = world;
@@ -84,27 +75,57 @@ public final class Player {
         healthBar = (CubeTexture)(Ref.ResMan.LoadResource("data/healthbar.png").Data);
         energyBar = (CubeTexture)(Ref.ResMan.LoadResource("data/energybar.png").Data);
 
-//        for (int i = 0; i < 10; i++) {
-//            runanim[i] = (CubeTexture)((Ref.ResMan.LoadResource("data/ninjarun"+i+".png").Data));
-//            runanim2[i] = (CubeTexture)((Ref.ResMan.LoadResource("data/funrun"+i+".png").Data));
-//        }
-//        for (int i = 0; i < 2; i++) {
-//            jumpanim[i] = (CubeTexture)((Ref.ResMan.LoadResource("data/jump"+i+".png").Data));
-//            jumpanim2[i] = (CubeTexture)((Ref.ResMan.LoadResource("data/funfall"+i+".png").Data));
-//        }
-//        for (int i = 0; i < 5; i++) {
-//            shootanim[i] = (CubeTexture)((Ref.ResMan.LoadResource("data/shoot"+i+".png").Data));
-//        }
-//        for (int i = 0; i < 14; i++) {
-//            evolveanim[i] = (CubeTexture)((Ref.ResMan.LoadResource("data/funfusion"+(19+i)+".png").Data));
-//        }
+        for (int i= 0; i < Tail.length; i++) {
+            Tail[i] = new TailPart(heart);
+        }
         ResetPlayer();
     }
 
-//    public void Goal() {
-//        // Add up points
-//        goalTime = Ref.loop.time;
-//    }
+    void SpawnTail() {
+        Tail[NextTail].Position.x = position.x;
+        Tail[NextTail].Position.y = position.y;
+        Tail[NextTail].SetTime(4000);
+        
+        NextTail++;
+        if(NextTail >= Tail.length)
+            NextTail = 0;
+    }
+
+    void TailConnect(int collideIndex) {
+        // Get center point
+        int nParts;
+        if(collideIndex > NextTail)
+            nParts = Tail.length - collideIndex - 2 + NextTail;
+        else
+            nParts = NextTail - collideIndex;
+
+        float x = 0, y = 0;
+        for (int i= 0; i < nParts; i++) {
+            int tailIndex = i + collideIndex;
+            if(tailIndex >= Tail.length)
+                tailIndex -= Tail.length;
+            x += Tail[tailIndex].Position.x/(float)nParts;
+            y += Tail[tailIndex].Position.y/(float)nParts;
+        }
+
+        Vector2f center = new Vector2f(x, y);
+
+        // Get average distance to center
+        Vector2f tempDist = new Vector2f();
+        float avgLenght = 0f;
+        for (int i= 0; i < nParts; i++) {
+            int tailIndex = i + collideIndex;
+            if(tailIndex >= Tail.length)
+                tailIndex -= Tail.length;
+            Vector2f.sub(center, Tail[tailIndex].Position, tempDist);
+            float tmplen = FastMath.sqrt(tempDist.x * tempDist.x + tempDist.y * tempDist.y);
+            avgLenght += tmplen/(float)nParts;
+            Tail[tailIndex].SetPopTime(i*32);
+        }
+
+        splotions.add(new CircleSplotion(center, avgLenght));
+        lastConnect = Ref.loop.time;
+    }
 
     void Respawn() {
         if(dieTime == 0)
@@ -132,35 +153,10 @@ public final class Player {
         }
     }
 
-//    void NextMap() {
-//        // Save lives, energy and bigguy
-//        boolean diditwork = world.LoadNextMap(lives, energy, bigguy, score);
-//        if(!diditwork) {
-//            gameover = true;
-//        }
-//
-//    }
-
     public void Update(int msec) {
         if(gameover)
             return;
-        
-//        extent = new Vector2f(5,6);
-//        if(bigguy)
-//            extent = new Vector2f(9,7*2);
-
-//        if(goalTime != 0) {
-//            if(goalTime + 1000 < Ref.loop.time) {
-//                // Player can spawn
-//                if(Ref.Input.playerInput.Mouse1 || Ref.Input.playerInput.Up ||
-//                        Ref.Input.playerInput.Down || Ref.Input.playerInput.Left ||
-//                        Ref.Input.playerInput.Right || Ref.Input.playerInput.Jump) {
-//                    NextMap();
-//                }
-//
-//            }
-//            return;
-//        }
+       
 
         // Handle die
         if(dieTime != 0) {
@@ -177,43 +173,6 @@ public final class Player {
             return;
         }
 
-        // Handle transform
-//        if(transforming) {
-//            DontStuckTransform();
-//
-//            // Increment animation and return
-//            int aniframe = 0;
-//            float frac = (float)(transformtime - Ref.loop.time) / 1500f;
-//            if(frac < 0)
-//                frac = 0;
-//            else if(frac > 1)
-//                frac = 1;
-//            frac *= 13;
-//            aniframe = (int)frac;
-//            if(transformtobig)
-//                aniframe = 13-aniframe;
-//            runframe = aniframe;
-//
-//            if(transformtime < Ref.loop.time) {
-//                // Time to change form
-//                FinishTransform();
-//            }
-//
-//            return;
-//        }
-
-        // Handle energy
-        //energy -= ((float)msec/1000f)*0.005f;
-//        if(bigguy) {
-//            energy -= ((float)msec/1000f)*0.05f;
-//        }
-//        if(energy <= 0f) {
-//            energy = 0f;
-//            if(bigguy && !transforming) {
-//                StartTransform(false);
-//            }
-//        }
-
 
         // Direction player wants to move
         Vector2f wishdir = new Vector2f();
@@ -225,14 +184,155 @@ public final class Player {
             wishdir.y += 1f;
         if(Ref.Input.playerInput.Down)
             wishdir.y -= 1f;
+
+        float len = (float)Math.sqrt(wishdir.x * wishdir.x + wishdir.y * wishdir.y);
+        if(len != 0f) {
+            wishdir.x /= len;
+            wishdir.y /= len;
+        }
+
         wishdir.x *= speed; // speed;
         wishdir.y *= speed; // speed;
 
-        
+        Friction(msec);
 
-       // Friction(msec);
-       
+        WalkMove(wishdir, msec);
+        nextTailTime -= msec;
+        if(nextTailTime < 0)
+            nextTailTime = 0;
+
+        int toRemove = -1;
+
+        for (int i= 0; i < splotions.size(); i++) {
+            splotions.get(i).Update(msec);
+            if(toRemove == -1 && splotions.get(i).time == 0)
+                toRemove = i;
+        }
+
+        if(toRemove != -1)
+            splotions.remove(toRemove);
+
+        // Do the tail
+        Vector2f dropDist = new Vector2f();
+        if(velocity.x != 0 || velocity.y != 0) {
+            // Check dist to LastDrop
+            Vector2f.sub(LastDrop, position, dropDist);
+            float dist = FastMath.sqrt(dropDist.x * dropDist.x + dropDist.y * dropDist.y);
+            if(dist > 7) {
+                
+            //}
+            //if(nextTailTime == 0) {
+//                float currspeed = (float)Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+//                float frac = currspeed/(speed/2f);
+//                if(frac > 1f)
+//                    frac = 1f;
+//                frac = 1-frac;
+                SpawnTail();
+                LastDrop.x = position.x;
+                LastDrop.y = position.y ;
+                //nextTailTime = (long)(TimeToNextTail * frac);
+                //if(nextTailTime < MINTAILTIME)
+                //    nextTailTime = MINTAILTIME;
+            }
+        }
+
+        boolean collided = false;
+        Vector2f hags = new Vector2f();
+        int collideIndex = 0;
+        int minPart = NextTail - 15;
+        if(minPart < 0)
+            minPart += Tail.length;
+        
+        for (int i= 0; i < Tail.length; i++) {
+            Tail[i].Update(msec); // let it fade out
+            
+            if(collided || Tail[i].time == 0)
+                continue;
+
+            if((NextTail-i < 10 && NextTail-i >= 0) || (NextTail-i < 0 && NextTail+Tail.length-i < 10))
+                continue;
+
+            // Check for collision
+            Vector2f.sub(Tail[i].Position, position, hags);
+            float lens = (float)Math.sqrt(hags.x * hags.x + hags.y * hags.y);
+            if(lens < (8 + Tail[i].GetRadius())) {
+                collided = true;
+                collideIndex = i;
+            }
+        }
+
+        if(collided && Tail[collideIndex].Age >= 500) {
+            // from collideIndex to NextTail is connecting
+            if(lastConnect + 1000 < Ref.loop.time)
+                TailConnect(collideIndex);
+        }
     }
+
+    void WalkMove(Vector2f wishdir, int msec) {
+       // normalize
+       float wishspeed = (float)Math.sqrt(wishdir.x * wishdir.x + wishdir.y * wishdir.y);
+       if(wishspeed > 0) {
+           wishdir.x /= wishspeed;
+           wishdir.y /= wishspeed;
+
+       }
+       if(wishspeed > speed)
+       {
+           wishdir.x *= (speed/wishspeed);
+           wishdir.y *= (speed/wishspeed);
+           wishspeed = speed;
+       }
+
+
+       float currentSpeed = Vector2f.dot(velocity, wishdir);
+       float addSpeed = wishspeed  - currentSpeed;
+       if(addSpeed > 0f)
+       {
+           float accelspeed = accel * (float)msec/1000f * wishspeed;
+           if(accelspeed > addSpeed)
+               accelspeed = addSpeed;
+
+           velocity.x += accelspeed * wishdir.x;
+           velocity.y += accelspeed * wishdir.y;
+       }
+
+//       velocity.y = 0;
+
+       float speed2 = (float)Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+       if(speed2 < 1f)
+       {
+           velocity.x = 0f;
+           velocity.y = 0f;
+           return;
+       }
+
+       position.x += velocity.x * (float)msec/1000f;
+       position.y += velocity.y * (float)msec/1000f;
+
+
+
+
+   }
+
+    void Friction(int msec) {
+       float speed2 = (float)Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+       if(speed2 < 0.1f)
+           return;
+
+       float fric = friction;
+
+       float control = (speed2 < stopspeed ? stopspeed : speed2);
+       float drop = control * fric * (float)msec/1000f;
+
+       float newspeed = speed2 - drop;
+       if(newspeed < 0)
+           newspeed = 0;
+
+       newspeed /= speed2;
+
+       velocity.x *= newspeed;
+       velocity.y *= newspeed;
+   }
 
     // Resets the player for a new game
     void ResetPlayer() {
@@ -243,14 +343,6 @@ public final class Player {
 
         lives = 3;
         energy = 0f;
-//        runframe = 0;
-//        nextanimTime = 0;
-//        jumpTime = 0;
-//        jumping = false;
-//        weaponTime = 0;
-//        transforming = false;
-//        transformtobig = true;
-//        transformtime = 0;
     }
 
     // Called when something dies
@@ -264,43 +356,11 @@ public final class Player {
 
     // Kills adds energy
     void GotKill() {
-//        energy += 0.1f + Ref.rnd.nextFloat() * 0.1f;
-//        if(energy > 1f) {
-//            energy = 1f;
-//            if(!bigguy && !transforming)
-//                StartTransform(true);
-//        }
+
 
     }
 
-//    void StartTransform(boolean toBigGuy) {
-//        transforming = true;
-//        transformtime = Ref.loop.time + 1500; // Player gets control here
-//        transformtobig = toBigGuy;
-//        health += 50;
-//        if(health > 100)
-//            health = 100;
-//    }
-//
-//    void FinishTransform() {
-//        transforming = false;
-//        transformtime = 0;
-//        bigguy = transformtobig;
-//
-//        speed = bigguy?BIG_SPEED:LITTLE_SPEED;
-//        runframe = 0;
-//    }
 
-    // Dont wanna get stuck when transforming to bigguy
-//    void DontStuckTransform() {
-//        if(!transforming || !transformtobig)
-//            return;
-//
-//        CollisionResult coll = Ref.collision.TestPosition(position, new Vector2f(), new Vector2f(9,7*2), Collision.MASK_WORLD);
-//        if(coll.Hit) {
-//            position.y += 5f;
-//        }
-//    }
 
     public void HitByBullet(Bullet bullet) {
         TakeDamage(bullet.damage);
@@ -327,57 +387,31 @@ public final class Player {
     }
 
     public void Render() {
-        if(countTime != 0) {
-            countTime--;
-            Ref.soundMan.playEffect(Ref.soundMan.addSound("data/coin.wav"));
-
+        for (int i= 0; i < splotions.size(); i++) {
+            splotions.get(i).Render();
         }
+
+        for (int i= 0; i < Tail.length; i++) {
+            int index = NextTail + i + 1;
+            if(index >= Tail.length)
+                index -= Tail.length;
+            Tail[index].Render();
+        }
+
+
+
+
         Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
         Vector2f offset = new Vector2f(0.01f,0.01f);
         Vector2f size = new Vector2f(0.98f,0.98f);
         spr.Set(new Vector2f(position.x-8, position.y-7), new Vector2f(16f, 16f), null, offset, size);
         spr.SetColor(new Vector4f(1, 0, 0, 1));
-//        if(!transforming) {
-//
-//            CubeTexture tex = GetAnimation(offset, size);
-//
-//            if(bigguy) {
-//
-//                spr.Set(new Vector2f(position.x-11, position.y-16-6), new Vector2f(11*2f, 18*2f), tex, offset, size);
-//
-////                spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
-////                spr.Set(new Vector2f(position.x-extent.x, position.y-extent.y), new Vector2f(extent.x*2f, extent.y*2f), null, offset, size);
-////                spr.Color = new Vector4f(1, 0, 0, 0.7f);
-//            } else {
-//
-//
-////                spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.NORMAL);
-////                spr.Set(new Vector2f(position.x-extent.x, position.y-extent.y), new Vector2f(extent.x*2f, extent.y*2f), null, offset, size);
-////                spr.Color = new Vector4f(1, 0, 0, 0.7f);
-//            }
-//        } else {
-//
-//                offset.x = 0.0f;
-//                size.x = 0.7f;
-//                offset.y = 0.0f;
-//                size.y = 0.7f;
-//
-//            if(!lookright) {
-//                offset.x += size.x;
-//                //offset.y += size.y;
-//                size.x = -size.x;
-//                //size.y = -size.y;
-//            }
-//            // Custom transforming code
-//            CubeTexture tex = evolveanim[runframe];
-//            spr.Set(new Vector2f(position.x-17, position.y-27), new Vector2f(18*2f, 30*2f), tex, offset, size);
-//            //spr.Set(new Vector2f(position.x-11, position.y-16-6), new Vector2f(11*2f, 18*2f), tex, offset, size);
-//        }
+
 
         //RenderFireWeapon();
         RenderPlayerHud();
 
-        RenderSpatialDebug();
+       // RenderSpatialDebug();
     }
 
     
@@ -409,18 +443,7 @@ public final class Player {
         spr.SetColor(new Vector4f(0, 0, 0, 0.5f));
         //spr.Color = new Vector4f(0, 0, 0, 0.5f);
 
-        // Healthbar
-//        if(health > 0) {
-//            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-//            spr.Set(new Vector2f(0.055f, 0.905f), new Vector2f(0.29f * (float)health/100f, 0.042f), healthBar, new Vector2f(), new Vector2f((float)health/100, 1));
-//            //spr.Color = new Vector4f(0, 1, 0, 0.7f);
-//            if(damageTime + 300 > Ref.loop.time) {
-//                float frac = (float)(damageTime+300-Ref.loop.time)/300f;
-//                float invfrac = 1f-frac;
-//                spr.SetColor(new Vector4f(frac + invfrac, invfrac, invfrac, 0.7f));
-//                //spr.Color = new Vector4f(frac + invfrac, invfrac, invfrac, 0.7f);
-//            }
-//        }
+
 
         for (int i= 0; i < lives; i++) {
             spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
