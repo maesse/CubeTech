@@ -91,19 +91,24 @@ public class WorldEditor {
         newfile = (CubeTexture)(Ref.ResMan.LoadResource("data/new.png").Data);
 
         editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/tile.png").Data));
-        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/dims.png").Data));
-        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/horizont.png").Data));
-        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/grass.png").Data));
-        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/grass2.png").Data));
-        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/Tiles_grass_set.png").Data));
-        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/Tiles_snow_set.png").Data));
-        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/Tiles_lava_set.png").Data));
+//        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/dims.png").Data));
+//        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/horizont.png").Data));
+//        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/grass.png").Data));
+//        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/grass2.png").Data));
+//        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/Tiles_grass_set.png").Data));
+//        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/Tiles_snow_set.png").Data));
+//        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/Tiles_lava_set.png").Data));
+
+        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/Cave01.png").Data));
+        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/Cave02.png").Data));
+        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/Cave03.png").Data));
+        editTextures.add((CubeTexture)(Ref.ResMan.LoadResource("data/Cave04.png").Data));
 
         customTextures[0] = (CubeTexture)(Ref.ResMan.LoadResource("data/tile.png").Data);
-        customTextures[1] = (CubeTexture)(Ref.ResMan.LoadResource("data/playerstart.png").Data);
-        customTextures[2] = (CubeTexture)(Ref.ResMan.LoadResource("data/chest0.png").Data);
-        customTextures[3] = (CubeTexture)(Ref.ResMan.LoadResource("data/dronehover0.png").Data);
-        customTextures[4] = (CubeTexture)(Ref.ResMan.LoadResource("data/bombahwalk0.png").Data);
+//        customTextures[1] = (CubeTexture)(Ref.ResMan.LoadResource("data/playerstart.png").Data);
+//        customTextures[2] = (CubeTexture)(Ref.ResMan.LoadResource("data/chest0.png").Data);
+//        customTextures[3] = (CubeTexture)(Ref.ResMan.LoadResource("data/dronehover0.png").Data);
+//        customTextures[4] = (CubeTexture)(Ref.ResMan.LoadResource("data/bombahwalk0.png").Data);
 
         newButton = new Button(" ", new Vector2f(0.925f, 0.85f),  new Vector2f(0.04f, 0.04f), newfile);
         openButton = new Button(" ", new Vector2f(0.925f, 0.8f),  new Vector2f(0.04f, 0.04f), open);

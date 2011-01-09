@@ -35,6 +35,7 @@ public class CircleSplotion {
         time = LIFETIME;
         Age = 0;
         tex = (CubeTexture)(Ref.ResMan.LoadResource("data/splotion.png").Data);
+        Ref.soundMan.playEffect(Ref.soundMan.addSound("data/boom.wav"), 1.0f);
     }
 
     

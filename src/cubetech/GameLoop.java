@@ -64,7 +64,7 @@ public class GameLoop {
             System.exit(-1);
         }
         
-        Ref.net = new Net();
+//        Ref.net = new Net();
         Ref.common = new Common();
         Ref.collision = new Collision();
         Ref.soundMan = new SoundManager();
@@ -75,13 +75,14 @@ public class GameLoop {
 
     
     public void Init() {
-        tex = (CubeTexture)(Ref.ResMan.LoadResource("data/test.png").Data);
+        //tex = (CubeTexture)(Ref.ResMan.LoadResource("data/test.png").Data);
         cursor = (CubeTexture)(Ref.ResMan.LoadResource("data/cursor.png").Data);
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         mode = Display.getDisplayMode();
         Ref.common.Init();
+        
     }
     
     public void RunFrame() throws Exception {
@@ -127,7 +128,9 @@ public class GameLoop {
 
        // Display frame
 //       Display.sync(60);
+        Ref.soundMan.Update((int)frameMsec);
        Display.update();
+       
     }
 }
 

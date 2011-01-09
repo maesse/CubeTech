@@ -11,6 +11,7 @@ import cubetech.gfx.SpriteManager.Type;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector4f;
+import org.openmali.FastMath;
 
 /**
  *
@@ -26,12 +27,15 @@ public class TailPart {
     CubeTexture tex;
     int poptime = -1;
     boolean popdown = true;
+    float angle;
 
     public TailPart(CubeTexture tex) {
         this.tex = tex;
     }
 
     public void SetPopTime(int msec) {
+        if(time == 0)
+            return;
         poptime = msec;
     }
 
@@ -40,7 +44,8 @@ public class TailPart {
         return time == 0;
     }
 
-    public void SetTime(int msec) {
+    public void SetTime(int msec, Vector2f currentvelocity) {
+        angle = FastMath.atan2(currentvelocity.y, currentvelocity.x)+FastMath.PI_HALF;
         FADE_TIME = msec;
         time = msec;
         Age = 0;
@@ -91,7 +96,7 @@ public class TailPart {
 
         }
 
-        
+        spr.SetAngle(angle);
         spr.SetColor(new Vector4f(1, 1, 1, alpha));
 
         

@@ -14,11 +14,9 @@ import cubetech.spatial.SpatialQuery;
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -52,6 +50,9 @@ public final class World implements KeyEventListener {
     boolean collisionDebug = false;
     int collisionDebugOffset = 0;
 
+    public Vector2f WorldMins = new Vector2f();
+    public Vector2f WorldMaxs = new Vector2f(300,300);
+
     public enum Mode {
         Game,
         Edit
@@ -60,17 +61,8 @@ public final class World implements KeyEventListener {
     public World() {
         Ref.world = this;
         background = (CubeTexture)(Ref.ResMan.LoadResource("data/horizont.png").Data);
-
-//        maps = new String[4];
-//        maps[0] = "map0.map";
-//        maps[1] = "map1.map";
-//        maps[2] = "map2.map";
-//        maps[3] = "map3.map";
-//
         Ref.Input.AddKeyEventListener(this);
-//
         worldEdit = new WorldEditor(this);
-//        LoadWorld(maps[0]);
         StartNewEmptyGame();
     }
 
@@ -95,6 +87,10 @@ public final class World implements KeyEventListener {
                 collisionDebugOffset--;
             else if(event.key == Keyboard.KEY_F6)
                 collisionDebugOffset++;
+        }
+
+        if(mode == Mode.Game) {
+            player.HandleKey(event);
         }
     }
 
@@ -180,9 +176,9 @@ public final class World implements KeyEventListener {
             if(object.getClass() != Block.class)
                 continue;
             Block block = (Block)object;
-            if(block.LastQueryNum == queryNum)
-                continue; // duplicate
-            block.LastQueryNum = queryNum;
+//            if(block.LastQueryNum == queryNum)
+//                continue; // duplicate
+//            block.LastQueryNum = queryNum;
 
             if(!BlockVisible(block))
                 continue;
@@ -200,12 +196,14 @@ public final class World implements KeyEventListener {
         if(mode == Mode.Game) {
             player.Render();
 
-            // Move camera center towards player
-            Vector2f camPos = new Vector2f(player.position.x - 192/2, player.position.y - 70);
-            float ms = (float)msec/200f;
-            float invms = 1f-ms;
-            camera.Position.x = camera.Position.x * invms + camPos.x * ms;
-            camera.Position.y = camera.Position.y * invms + camPos.y * ms;
+            if(player.health > 0) {
+                // Move camera center towards player
+                Vector2f camPos = new Vector2f(player.position.x - 192/2, player.position.y - 70);
+                float ms = (float)msec/200f;
+                float invms = 1f-ms;
+                camera.Position.x = camera.Position.x * invms + camPos.x * ms;
+                camera.Position.y = camera.Position.y * invms + camPos.y * ms;
+            }
         }
         
         // Update camera position
@@ -312,36 +310,104 @@ public final class World implements KeyEventListener {
          NextBlockHandle = 0;
         camera = new Camera(new Vector2f(), 192);
 
-        int numx = 80;
-        int numy = 5;
-        int height = 40;
+        String mapname = "map";
+        int num = Ref.rnd.nextInt(4)+1;
+        if(num >= 4)
+            num = 3;
+        mapname += ""+num;
 
-        for (int i= 0; i < numy; i++) {
-            for (int j= 0; j < numx; j++) {
-                Blocks[NextBlockHandle] = new Block(NextBlockHandle, new Vector2f(16f*j,-16f*i), new Vector2f(16,16), true);
-                Blocks[NextBlockHandle].Texture = (CubeTexture)(Ref.ResMan.LoadResource("data/tile.png").Data);
-
-                NextBlockHandle++;
-            }
+        switch(num) {
+            default:
+            case 1:
+                WorldMins.x = -230;
+                WorldMins.y = -128;
+                WorldMaxs.x = 225;
+                WorldMaxs.y = 228;
+                break;
+            case 2:
+                WorldMins.x = -160;
+                WorldMins.y = -239;
+                WorldMaxs.x = 170;
+                WorldMaxs.y = 343;
+                break;
+            case 3:
+                WorldMins.x = -221;
+                WorldMins.y = -190;
+                WorldMaxs.x = 232;
+                WorldMaxs.y = 232;
+                break;
         }
-        for (int i= 1; i < height; i++) {
-             Blocks[NextBlockHandle] = new Block(NextBlockHandle, new Vector2f(0,16f*i), new Vector2f(16,16), true);
-                Blocks[NextBlockHandle].Texture = (CubeTexture)(Ref.ResMan.LoadResource("data/tile.png").Data);
 
-                NextBlockHandle++;
-         }
-        for (int i= 1; i < height; i++) {
-             Blocks[NextBlockHandle] = new Block(NextBlockHandle, new Vector2f(16f*(numx-1),16f*i), new Vector2f(16,16), true);
-                Blocks[NextBlockHandle].Texture = (CubeTexture)(Ref.ResMan.LoadResource("data/tile.png").Data);
+        LoadWorld(mapname);
 
-                NextBlockHandle++;
-         }
-        for (int i= 1; i < numx; i++) {
-             Blocks[NextBlockHandle] = new Block(NextBlockHandle, new Vector2f(16f*i,16f*(height-1)), new Vector2f(16,16), true);
-                Blocks[NextBlockHandle].Texture = (CubeTexture)(Ref.ResMan.LoadResource("data/tile.png").Data);
+//       int width = 30; //i
+//        int height = 30; //j
+//        for (int i= 0; i < width; i++) {
+//            for (int j= 0; j < height; j++) {
+//
+//                Blocks[NextBlockHandle] = new Block(NextBlockHandle, new Vector2f(-16*height/2+16f*i,-16*height/2+16f*j), new Vector2f(16,16), true);
+//               CubeTexture tex = (CubeTexture)(Ref.ResMan.LoadResource("data/Cave04.png").Data);
+//               if (j < 6){
+//                    if (i == 0){
+//                    Blocks[NextBlockHandle].Texture = tex;
+//                    Blocks[NextBlockHandle].TexOffset = new Vector2f(0.5f/256f+0f,32f/1024f*18f-32f/1024f*j);
+//                    Blocks[NextBlockHandle].TexSize = new Vector2f(1/8f,31.5f/1024f);
+//                    }else if (i > 0 && i != width-1){
+//                    Blocks[NextBlockHandle].Texture = tex;
+//                    Blocks[NextBlockHandle].TexOffset = new Vector2f(0.5f/256f+1f/8f,32f/1024f*18f-32f/1024f*j);
+//                    Blocks[NextBlockHandle].TexSize = new Vector2f(1/8f,31.5f/1024f);
+//                    }else if (i == width-1){
+//                    Blocks[NextBlockHandle].Texture = tex;
+//                    Blocks[NextBlockHandle].TexOffset = new Vector2f(0.5f/256f+2f/8f,32f/1024f*18f-32f/1024f*j);
+//                    Blocks[NextBlockHandle].TexSize = new Vector2f(1/8f,31.5f/1024f);
+//                    }
+//                }else if (j == 6){
+//                    if (i == 0){
+//                    Blocks[NextBlockHandle].Texture = tex;
+//                    Blocks[NextBlockHandle].TexOffset = new Vector2f(0.5f/256f+5f/8f,32f/1024f*6);
+//                    Blocks[NextBlockHandle].TexSize = new Vector2f(1/8f,31.5f/1024f);
+//                    }else if (i > 0 && i != width-1){
+//                    Blocks[NextBlockHandle].Texture = tex;
+//                    Blocks[NextBlockHandle].TexOffset = new Vector2f(0.5f/256f+6f/8f,32f/1024f*6);
+//                    Blocks[NextBlockHandle].TexSize = new Vector2f(1/8f,31.5f/1024f);
+//                    }else if (i == width-1){
+//                    Blocks[NextBlockHandle].Texture = tex;
+//                    Blocks[NextBlockHandle].TexOffset = new Vector2f(0.5f/256f+7f/8f,32f/1024f*6);
+//                    Blocks[NextBlockHandle].TexSize = new Vector2f(1/8f,31.5f/1024f);
+//                    }
+//                }else if(j > 0 && j != height-1){
+//                    if (i == 0){
+//                    Blocks[NextBlockHandle].Texture = tex;
+//                    Blocks[NextBlockHandle].TexOffset = new Vector2f(0.5f/256f+5f/8f,32f/1024f*5f);
+//                    Blocks[NextBlockHandle].TexSize = new Vector2f(1/8f,31.5f/1024f);
+//                    }else if (i > 0 && i != width-1){
+//                    Blocks[NextBlockHandle].Texture = tex;
+//                    Blocks[NextBlockHandle].TexOffset = new Vector2f(0.5f/256f+6f/8f,32f/1024f*5f);
+//                    Blocks[NextBlockHandle].TexSize = new Vector2f(1/8f,31.5f/1024f);
+//                    }else if (i == width-1){
+//                    Blocks[NextBlockHandle].Texture = tex;
+//                    Blocks[NextBlockHandle].TexOffset = new Vector2f(0.5f/256f+7f/8f,32f/1024f*5f);
+//                    Blocks[NextBlockHandle].TexSize = new Vector2f(1/8f,31.5f/1024f);
+//                    }
+//                }else if (j == height-1){
+//                    if (i == 0){
+//                    Blocks[NextBlockHandle].Texture = tex;
+//                    Blocks[NextBlockHandle].TexOffset = new Vector2f(0.5f/256f+5f/8f,32f/1024f*4f);
+//                    Blocks[NextBlockHandle].TexSize = new Vector2f(1/8f,31.5f/1024f);
+//                    }else if (i > 0 && i != width-1){
+//                    Blocks[NextBlockHandle].Texture = tex;
+//                    Blocks[NextBlockHandle].TexOffset = new Vector2f(0.5f/256f+6f/8f,32f/1024f*4f);
+//                    Blocks[NextBlockHandle].TexSize = new Vector2f(1/8f,31.5f/1024f);
+//                    }else if (i == width-1){
+//                    Blocks[NextBlockHandle].Texture = tex;
+//                    Blocks[NextBlockHandle].TexOffset = new Vector2f(0.5f/256f+7f/8f,32f/1024f*4f);
+//                    Blocks[NextBlockHandle].TexSize = new Vector2f(1/8f,31.5f/1024f);
+//                    }
+//                }
+//                NextBlockHandle++;
+//           }
+//        }
 
-                NextBlockHandle++;
-         }
         player = new Player(this, new Vector2f(camera.Position.x + camera.VisibleSize.x/2f, camera.Position.y + camera.VisibleSize.y/2f));
         WorldUpdated(false);
     }
@@ -426,12 +492,12 @@ public final class World implements KeyEventListener {
     private void RenderBackground() {
         Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
         
-        float yoffset = (camera.Position.y) / 650f;
+        float yoffset = (400) / 650f;
         if(yoffset > 1f)
             yoffset = 1f;
         yoffset = 0.62f - yoffset * 0.38f;
         
-        spr.Set(camera.Position, camera.VisibleSize, background, new Vector2f(0, yoffset), new Vector2f(1, yoffset-0.33f));
+        spr.Set(new Vector2f(camera.Position.x - 30, camera.Position.y - 30), new Vector2f(camera.VisibleSize.x + 60, camera.VisibleSize.y + 60), background, new Vector2f(0, yoffset), new Vector2f(1, yoffset-0.33f));
     }
 
     // From 0-1 viewspace to worldspace

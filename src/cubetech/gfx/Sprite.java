@@ -25,6 +25,7 @@ public class Sprite {
         TexSize = new Vector2f(1,1);
         Extent = new Vector2f();
         Center = new Vector2f();
+        Angle = 0f;
     }
 
     public void SetCenter(Vector2f position) {
@@ -71,6 +72,7 @@ public class Sprite {
         this.Color.x = this.Color.y = this.Color.z = this.Color.w = 1;
         this.TexOffset.x = this.TexOffset.y = 0f;
         this.TexSize.x = this.TexSize.y = 1f;
+        Angle = 0f;
     }
 
     public void Set(Vector2f Position, float radius, CubeTexture tex) {

@@ -4,6 +4,7 @@ import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
 import cubetech.misc.Ref;
+import cubetech.spatial.Cell;
 import cubetech.spatial.SpatialHandle;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector4f;
@@ -63,6 +64,12 @@ public class Block {
             spaceHandle = Ref.spatial.Create(Position.x, Position.y, Position.x + Size.x, Position.y + Size.y, this);
         }
     }
+
+    public void SpatialHandleChanged(Cell cell, int newIndex) {
+        spaceHandle.CellIndexChanged(cell, newIndex);
+    }
+
+    
 
     private void UpdateSpatial() {
         AbsExtent.x = Extent.x * Math.abs(Axis[0].x) + Extent.y * Math.abs(Axis[1].x);

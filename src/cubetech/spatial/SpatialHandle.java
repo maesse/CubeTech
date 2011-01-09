@@ -89,6 +89,20 @@ public class SpatialHandle {
         offset--;
     }
 
+    public void CellIndexChanged(Cell cell, int newIndex) {
+
+        int hashcode = cell.hashCode();
+        for (int i= 0; i < offset; i++) {
+            if(this.cellHash[i] == hashcode) {
+                System.out.println("Changing cell[" + i + "] from " + Index[i] + " to " + newIndex);
+                Index[i] = newIndex;
+                return;
+            }
+        }
+        
+        
+    }
+
     public Object getObject() {
         return object;
     }
@@ -109,4 +123,6 @@ public class SpatialHandle {
     public static SpatialHandle GetNew(Object object) {
         return new SpatialHandle(object);
     }
+
+
 }

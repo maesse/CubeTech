@@ -1,22 +1,26 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech;
 
-import cubetech.collision.Collision;
-import cubetech.collision.CollisionResult;
-import cubetech.entities.Bullet;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
 import cubetech.gfx.TextManager.Align;
+import cubetech.input.Key;
+import cubetech.misc.Button;
 import cubetech.misc.Ref;
 import cubetech.spatial.SpatialQuery;
+import cubetech.state.MenuState;
+import java.net.URL;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import org.lwjgl.input.Keyboard;
 import org.lwjgl.util.vector.Vector2f;
-import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 import org.openmali.FastMath;
 
@@ -25,10 +29,9 @@ import org.openmali.FastMath;
  * @author mads
  */
 public final class Player {
-
-    final static int MINTAILTIME = 32;
     // Entity
     public Vector2f position;
+    public Vector2f centerpos = new Vector2f();
     public Vector2f velocity;
     public Vector2f extent;
 
@@ -37,19 +40,31 @@ public final class Player {
     float accel = 8f;
     float friction = 4f;
     float stopspeed = 15f;
+    float healthOnKill = 5f;
     World world;
     
     // Player Info
     int lives;
     float health;
-    int score;
+    public int score;
     float energy = 0f;
+    int DrainDelayTime = 1000; // drain life every second
+    float DrainDamage = 100f/60f; // 24
+    long time;
+    long nextWaveTime;
+    boolean inWave = false;
 
     // Textures
     CubeTexture heart;
     CubeTexture healthBar;
+    CubeTexture healthBar2;
     CubeTexture energyBar;
-    
+    CubeTexture heartguy;
+    CubeTexture gameoverTex;
+    CubeTexture background;
+
+    Button retryButton;
+    Button submitButton;
 
     // Animation info
     long damageTime;
@@ -62,30 +77,418 @@ public final class Player {
     float TimeToNextTail = 300f;
     long lastConnect = 0;
     Vector2f LastDrop = new Vector2f();
+    boolean submitting = false;
+
+    int animFrame = 0;
+    int nextFrame = 0;
+    float lastAngle = 0;
+    long nextHealthDrainTime = 0;
+    String scorename = "";
+
+    int lastrandomCreature = 1;
+    int stepTime = 100;
 
 
     ArrayList<CircleSplotion> splotions = new ArrayList<CircleSplotion>();
     TailPart[] Tail = new TailPart[128];
     int NextTail = 0;
+    ArrayList<EnemyBase> enemies = new ArrayList<EnemyBase>();
+    ArrayList<EnemyBase> enemiesToRemove = new ArrayList<EnemyBase>();
+
+    // Health drawing offsets
+    Vector2f healthPosition = new Vector2f(0.03f, 0.77f);
+    Vector2f healthSize = new Vector2f(0.2f, 0.2f);
+    Vector2f healthTexOffset = new Vector2f(0f, 0);
+    Vector2f healthTexSize = new Vector2f(0.5f, 1f);
+    Vector2f healthPosition2 = new Vector2f(0.049f, 0.818f);
+    Vector2f healthTex2Offset = new Vector2f(0f, 0);
+    Vector2f healthTex2Size = new Vector2f(1f, 1f);
+    Vector2f healthSize2 = new Vector2f(0.157f, 0.2f);
+    long nextRandomSpawn ;
+    int spawnSound;
+    int stepSound;
+    int healthSound;
+    int painSound;
+    long healthsoundtime = 0;
 
     public Player(World world, Vector2f spawn) {
         this.world = world;
         position = spawn;
         heart = (CubeTexture)(Ref.ResMan.LoadResource("data/heart.png").Data);
-        healthBar = (CubeTexture)(Ref.ResMan.LoadResource("data/healthbar.png").Data);
+        healthBar = (CubeTexture)(Ref.ResMan.LoadResource("data/healthheart.png").Data);
+        healthBar2 = (CubeTexture)(Ref.ResMan.LoadResource("data/health2.png").Data);
         energyBar = (CubeTexture)(Ref.ResMan.LoadResource("data/energybar.png").Data);
-
+        heartguy = (CubeTexture)(Ref.ResMan.LoadResource("data/heartguy.png").Data);
+        background = (CubeTexture)(Ref.ResMan.LoadResource("data/menubutton.png").Data);
+        gameoverTex  = (CubeTexture)(Ref.ResMan.LoadResource("data/gameover.png").Data);
+        retryButton = new Button("New Game", new Vector2f(0.15f, 0.15f), new Vector2f(0.2f, 0.07f), background);
+        submitButton = new Button("Submit Score", new Vector2f(0.4f, 0.15f), new Vector2f(0.2f, 0.07f), background);
         for (int i= 0; i < Tail.length; i++) {
             Tail[i] = new TailPart(heart);
         }
         ResetPlayer();
+
+        stepSound = Ref.soundMan.addSound("data/footsteps.wav");
+        spawnSound = Ref.soundMan.addSound("data/sound13.wav");
+        healthSound = Ref.soundMan.addSound("data/sound10.wav");
+        painSound = Ref.soundMan.addSound("data/hurt.wav");
+
+        //enemies.add(new TestEnemy(50, 50));
+//        enemies.add(new Enemy6(30, 50, 0.5f*3.14f, 1500));
+//        enemies.add(new Enemy6(30, 40, 0.75f*3.14f, 1500));
+//        enemies.add(new Enemy6(30, 30, 2.512f*3.14f, 1500));
+//        enemies.add(new Enemy6(30, 20, 1f*3.14f, 1500));
+//        enemies.add(new Enemy6(30, 10, 1.25f*3.14f, 1500));
+
+        nextWaveTime = 20*1000; // first wave after 20 secs
+        //nextRandomSpawn = Ref.loop.time+1000;
+    }
+
+    
+
+    
+
+    public void Update(int msec) {
+        
+        // Handle die
+        if(dieTime != 0) {
+//            if(dieTime < Ref.loop.time) {
+//                // Player can spawn
+//                if(Ref.Input.playerInput.Mouse1 || Ref.Input.playerInput.Up ||
+//                        Ref.Input.playerInput.Down || Ref.Input.playerInput.Left ||
+//                        Ref.Input.playerInput.Right || Ref.Input.playerInput.Jump) {
+//                    Respawn();
+//                }
+//            }
+
+            // Handle death zoom
+            if(dieTime + 2000 > Ref.loop.time) {
+                Ref.world.camera.VisibleSize.x = 40 + ((Ref.world.camera.DefaultSize.x - 40f) * (1f-((Ref.loop.time-dieTime)/2000f)));
+                Ref.world.camera.VisibleSize.y = 30 + ((Ref.world.camera.DefaultSize.y - 30f) * (1f-((Ref.loop.time-dieTime)/2000f)));
+                Ref.world.camera.Position.x = position.x  - Ref.world.camera.VisibleSize.x/2f;
+                Ref.world.camera.Position.y = position.y - Ref.world.camera.VisibleSize.y/2f;
+                velocity.x = FastMath.cos(lastAngle-FastMath.PI_HALF+(FastMath.PI_HALF*(1f-((Ref.loop.time-dieTime)/2000f))*(float)msec)/50f);
+                velocity.y = FastMath.sin(lastAngle-FastMath.PI_HALF+(FastMath.PI_HALF*(1f-((Ref.loop.time-dieTime)/2000f))*(float)msec)/50f);
+            } else if(dieTime + 3000 < Ref.loop.time) {
+                // Fully zoomed, and showing death-picture
+                Vector2f mousePos = Ref.Input.playerInput.MousePos;
+                if(retryButton.Intersects(mousePos) && Ref.Input.playerInput.Mouse1) {
+                    // Exit Cubetech
+                    world.StartNewEmptyGame();
+                } else if(!submitting && submitButton.Intersects(mousePos) && Ref.Input.playerInput.Mouse1 ) {
+                    submitting = true;
+                    SubmitScore(scorename, score);
+                    try {
+                        Ref.StateMan.SetState("menu");
+                        ((MenuState)Ref.StateMan.GetGameState("menu")).ShowScoeboard();
+                    } catch (Exception ex) {
+                        Logger.getLogger(Player.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+
+                }
+
+                
+            }
+            return;
+        }
+
+        if(gameover)
+            return;
+
+        time += msec;
+
+        if(health < 30 && healthsoundtime < Ref.loop.time) {
+            Ref.soundMan.playEffect(healthSound, 1f);
+            healthsoundtime = Ref.loop.time + 3450;
+        }
+        
+        if(nextHealthDrainTime < Ref.loop.time) {
+            TakeDamage(DrainDamage, true);
+            nextHealthDrainTime = Ref.loop.time + DrainDelayTime;
+        }
+
+        EnemySpawner();
+        
+        // Update enemies
+        Vector2f tempdist = new Vector2f();
+        for (int i= 0; i < enemies.size(); i++) {
+            EnemyBase enem = enemies.get(i);
+            enem.Update(msec, centerpos);
+
+            // Does it need to be removed?
+            if(enem.RemoveMe)
+                enemiesToRemove.add(enem);
+            else {
+                Vector2f.sub(centerpos, enem.getPosition(), tempdist);
+
+                float len = FastMath.sqrt(tempdist.x * tempdist.x + tempdist.y * tempdist.y);
+                if(len < 10) {
+                    enem.Die();
+                    TakeDamage(10, false);
+                }
+            }
+        }
+
+        // Remove those that wanted to
+        for (int i= 0; i < enemiesToRemove.size(); i++) {
+            enemies.remove(enemiesToRemove.get(i));
+        }
+        enemiesToRemove.clear();
+
+
+        // Direction player wants to move
+        Vector2f wishdir = new Vector2f();
+        if(Ref.Input.playerInput.Left)
+            wishdir.x -= 1f;
+        if(Ref.Input.playerInput.Right)
+            wishdir.x += 1f;
+        if(Ref.Input.playerInput.Up)
+            wishdir.y += 1f;
+        if(Ref.Input.playerInput.Down)
+            wishdir.y -= 1f;
+
+        float len = (float)Math.sqrt(wishdir.x * wishdir.x + wishdir.y * wishdir.y);
+        if(len != 0f) {
+            wishdir.x /= len;
+            wishdir.y /= len;
+        }
+
+        wishdir.x *= speed; // speed;
+        wishdir.y *= speed; // speed;
+
+        float currspeed = (float)Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+        float speedFrac = currspeed/(speed*0.5f);
+        if(speedFrac > 1.0f)
+            speedFrac = 1.0f;
+
+        stepTime -= 1000 * speedFrac * (float)msec/1000f;
+        if(stepTime <= 0) {
+            Ref.soundMan.playEffect(stepSound, 1.0f);
+            
+            stepTime = 300;
+        }
+//        if(speedFrac < 0.4f)
+//            speedFrac = 0.4f;
+        nextFrame -= (int)((float)msec * speedFrac);
+        if(nextFrame <= 0) {
+            nextFrame = 100;
+            animFrame++;
+        }
+
+        Friction(msec);
+
+        WalkMove(wishdir, msec);
+        nextTailTime -= msec;
+        if(nextTailTime < 0)
+            nextTailTime = 0;
+
+        int toRemove = -1;
+
+        for (int i= 0; i < splotions.size(); i++) {
+            splotions.get(i).Update(msec);
+            if(toRemove == -1 && splotions.get(i).time == 0)
+                toRemove = i;
+        }
+
+        if(toRemove != -1)
+            splotions.remove(toRemove);
+
+        // Do the tail
+        Vector2f dropDist = new Vector2f();
+        if(velocity.x != 0 || velocity.y != 0) {
+            // Check dist to LastDrop
+            Vector2f.sub(LastDrop, position, dropDist);
+            float dist = FastMath.sqrt(dropDist.x * dropDist.x + dropDist.y * dropDist.y);
+            if(dist > 7) {
+                SpawnTail();
+                LastDrop.x = position.x;
+                LastDrop.y = position.y ;
+            }
+        }
+
+        boolean collided = false;
+        Vector2f hags = new Vector2f();
+        int collideIndex = 0;
+        int minPart = NextTail - 15;
+        if(minPart < 0)
+            minPart += Tail.length;
+        
+        for (int i= 0; i < Tail.length; i++) {
+            Tail[i].Update(msec); // let it fade out
+            
+            if(collided || Tail[i].time == 0)
+                continue;
+
+            if((NextTail-i < 10 && NextTail-i >= 0) || (NextTail-i < 0 && NextTail+Tail.length-i < 10))
+                continue;
+
+            // Check for collision
+            Vector2f.sub(Tail[i].Position, centerpos, hags);
+            float lens = (float)Math.sqrt(hags.x * hags.x + hags.y * hags.y);
+            if(lens < (8 + Tail[i].GetRadius())) {
+                collided = true;
+                collideIndex = i;
+            }
+        }
+
+        if(collided && Tail[collideIndex].Age >= 500) {
+            // from collideIndex to NextTail is connecting
+            if(lastConnect + 1000 < Ref.loop.time)
+                TailConnect(collideIndex);
+        }
+    }
+
+    
+    void EnemySpawner() {
+        if(inWave && nextWaveTime > Ref.loop.time)
+            return; // currently in a wave
+
+        if(!inWave && nextWaveTime < Ref.loop.time) {
+            // Time for a new wave
+            HandleWave();
+            return;
+        }
+        
+        if(nextRandomSpawn < Ref.loop.time) {
+           // Do random spawns
+            float secondsToNextRandom = 5;
+            nextRandomSpawn = Ref.loop.time + (int)(secondsToNextRandom * 1000f);
+            SpawnRandom();
+//            System.out.println("Spawning");
+        }
+    }
+
+    void HandleWave() {
+        // Use time to figure out how many to spawn
+        nextWaveTime = Ref.loop.time +  1000;
+    }
+
+    void SpawnRandom() {
+        int maxcreature = 1;
+        int nCreeps = 2;
+        if(time < 5000) {
+            
+        }
+        else if(time > 5000 && time < 20000) {
+            maxcreature = 2;
+            nCreeps = Ref.rnd.nextInt(3)+1;
+        }
+        else if(time < 30000) {
+            maxcreature = 3;
+            nCreeps = Ref.rnd.nextInt(6)+1;
+        }
+        else if(time < 40000) {
+            maxcreature = 4;
+            nCreeps = Ref.rnd.nextInt(8)+1;
+        }
+       else if(time < 50000) {
+            maxcreature = 5;
+            nCreeps = Ref.rnd.nextInt(10)+1;
+        }else{
+            nCreeps = Ref.rnd.nextInt(10)+(int)time/50000;
+        }
+
+
+        int creatureType = Ref.rnd.nextInt(maxcreature+1);
+        while(lastrandomCreature == creatureType) {
+            creatureType = Ref.rnd.nextInt(maxcreature+1);
+        }
+        lastrandomCreature = creatureType;
+
+        Vector2f[] creatureSpawns = new Vector2f[nCreeps];
+        boolean vertical = Ref.rnd.nextBoolean();
+        if(creatureType == 2) {
+            // Custom position spawns
+            Vector2f base = GetRandomPositionAwayFromPlayer();
+            
+            if(vertical) {
+                for (int i= 0; i < nCreeps; i++) {
+                    creatureSpawns[i] = new Vector2f(base.x, base.y+10*i);
+                }
+            } else {
+                for (int i= 0; i < nCreeps; i++) {
+                    creatureSpawns[i] = new Vector2f(base.x+10*i, base.y);
+                }
+            }
+        } else {
+            for (int i= 0; i < nCreeps; i++) {
+                creatureSpawns[i] = GetRandomPositionAwayFromPlayer();
+            }
+        }
+
+        System.out.println("Spawning" + creatureType);
+        Ref.soundMan.playEffect(spawnSound, 1.0f);
+        
+        switch(creatureType) {
+            case 0:
+                for (int i= 0; i < nCreeps; i++) {
+                    enemies.add(new EnemyCrap((int)creatureSpawns[i].x, (int)creatureSpawns[i].y));
+                }
+                break;
+           case 1:
+                for (int i= 0; i < nCreeps; i++) {
+                    enemies.add(new EnemyPlane((int)creatureSpawns[i].x, (int)creatureSpawns[i].y));
+                }
+                break;
+            case 2:
+                for (int i= 0; i < nCreeps; i++) {
+                    enemies.add(new EnemyCar((int)creatureSpawns[i].x, (int)creatureSpawns[i].y, vertical?FastMath.PI_HALF:0f, 1500));
+                }
+                break;
+            case 3:
+                for (int i= 0; i < nCreeps; i++) {
+                    enemies.add(new EnemySlowguy((int)creatureSpawns[i].x, (int)creatureSpawns[i].y));
+                }
+                break;
+            case 4:
+                for (int i= 0; i < nCreeps; i++) {
+                    enemies.add(new EnemyNadeGuy((int)creatureSpawns[i].x, (int)creatureSpawns[i].y));
+                }
+                break;
+            case 5:
+                for (int i= 0; i < nCreeps; i++) {
+                    enemies.add(new EnemyBlaster((int)creatureSpawns[i].x, (int)creatureSpawns[i].y));
+                }
+                break;
+        }
+    }
+
+    Vector2f GetRandomPositionAwayFromPlayer() {
+        Vector2f pos = new Vector2f();
+        float dist = 0f;
+        do {
+        pos.x = Ref.rnd.nextInt((int)(Ref.world.WorldMaxs.x-Ref.world.WorldMins.x+1))+Ref.world.WorldMins.x;
+        dist = pos.x - position.x;
+        } while(pos.x <= Ref.world.WorldMins.x || pos.x >= Ref.world.WorldMaxs.x || (dist < 20 && dist > -20));
+        do {
+        pos.y = Ref.rnd.nextInt((int)(Ref.world.WorldMaxs.y-Ref.world.WorldMins.y+1))+Ref.world.WorldMins.y;
+        dist = pos.y - position.y;
+        } while(pos.y <= Ref.world.WorldMins.y || pos.y >= Ref.world.WorldMaxs.y || (dist < 20 && dist > -20));
+        return pos;
+    }
+
+    void KillEnemiesInCircle(Vector2f center, float radius) {
+        Vector2f dist = new Vector2f();
+        for (int i= 0; i < enemies.size(); i++) {
+            EnemyBase enem = enemies.get(i);
+            Vector2f.sub(enem.getPosition(), center, dist);
+            float dista = FastMath.sqrt(dist.x * dist.x + dist.y * dist.y);
+            if(dista <= radius) {
+                enem.Die();
+                if(health < 100) {
+                    health += healthOnKill;
+                    if(health > 100)
+                        health = 100;
+                }
+            }
+        }
     }
 
     void SpawnTail() {
         Tail[NextTail].Position.x = position.x;
         Tail[NextTail].Position.y = position.y;
-        Tail[NextTail].SetTime(4000);
-        
+        Tail[NextTail].SetTime(4000, velocity);
+
         NextTail++;
         if(NextTail >= Tail.length)
             NextTail = 0;
@@ -120,12 +523,29 @@ public final class Player {
             Vector2f.sub(center, Tail[tailIndex].Position, tempDist);
             float tmplen = FastMath.sqrt(tempDist.x * tempDist.x + tempDist.y * tempDist.y);
             avgLenght += tmplen/(float)nParts;
-            Tail[tailIndex].SetPopTime(i*32);
+
         }
 
+        int nTail = 0;
+        for (int i= 0; i < Tail.length; i++) {
+            int offset = NextTail+i;
+            if(offset >= Tail.length)
+                offset -= Tail.length;
+
+            if(Tail[offset].time != 0) {
+                Tail[offset].SetPopTime(nTail*10);
+                nTail++;
+            }
+        }
+
+        avgLenght *= 1.2f;
+
         splotions.add(new CircleSplotion(center, avgLenght));
+        KillEnemiesInCircle(center, avgLenght);
         lastConnect = Ref.loop.time;
     }
+
+
 
     void Respawn() {
         if(dieTime == 0)
@@ -138,7 +558,7 @@ public final class Player {
         int oldLife = lives;
         ResetPlayer();
         lives = oldLife;
-       
+
         world.WorldUpdated(false);
 
          // Set at spawn position
@@ -153,128 +573,12 @@ public final class Player {
         }
     }
 
-    public void Update(int msec) {
-        if(gameover)
-            return;
-       
-
-        // Handle die
-        if(dieTime != 0) {
-            if(dieTime < Ref.loop.time) {
-                // Player can spawn
-                if(Ref.Input.playerInput.Mouse1 || Ref.Input.playerInput.Up ||
-                        Ref.Input.playerInput.Down || Ref.Input.playerInput.Left ||
-                        Ref.Input.playerInput.Right || Ref.Input.playerInput.Jump) {
-                    Respawn();
-                }
-                
-            }
-
-            return;
-        }
-
-
-        // Direction player wants to move
-        Vector2f wishdir = new Vector2f();
-        if(Ref.Input.playerInput.Left)
-            wishdir.x -= 1f;
-        if(Ref.Input.playerInput.Right)
-            wishdir.x += 1f;
-        if(Ref.Input.playerInput.Up)
-            wishdir.y += 1f;
-        if(Ref.Input.playerInput.Down)
-            wishdir.y -= 1f;
-
-        float len = (float)Math.sqrt(wishdir.x * wishdir.x + wishdir.y * wishdir.y);
-        if(len != 0f) {
-            wishdir.x /= len;
-            wishdir.y /= len;
-        }
-
-        wishdir.x *= speed; // speed;
-        wishdir.y *= speed; // speed;
-
-        Friction(msec);
-
-        WalkMove(wishdir, msec);
-        nextTailTime -= msec;
-        if(nextTailTime < 0)
-            nextTailTime = 0;
-
-        int toRemove = -1;
-
-        for (int i= 0; i < splotions.size(); i++) {
-            splotions.get(i).Update(msec);
-            if(toRemove == -1 && splotions.get(i).time == 0)
-                toRemove = i;
-        }
-
-        if(toRemove != -1)
-            splotions.remove(toRemove);
-
-        // Do the tail
-        Vector2f dropDist = new Vector2f();
-        if(velocity.x != 0 || velocity.y != 0) {
-            // Check dist to LastDrop
-            Vector2f.sub(LastDrop, position, dropDist);
-            float dist = FastMath.sqrt(dropDist.x * dropDist.x + dropDist.y * dropDist.y);
-            if(dist > 7) {
-                
-            //}
-            //if(nextTailTime == 0) {
-//                float currspeed = (float)Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-//                float frac = currspeed/(speed/2f);
-//                if(frac > 1f)
-//                    frac = 1f;
-//                frac = 1-frac;
-                SpawnTail();
-                LastDrop.x = position.x;
-                LastDrop.y = position.y ;
-                //nextTailTime = (long)(TimeToNextTail * frac);
-                //if(nextTailTime < MINTAILTIME)
-                //    nextTailTime = MINTAILTIME;
-            }
-        }
-
-        boolean collided = false;
-        Vector2f hags = new Vector2f();
-        int collideIndex = 0;
-        int minPart = NextTail - 15;
-        if(minPart < 0)
-            minPart += Tail.length;
-        
-        for (int i= 0; i < Tail.length; i++) {
-            Tail[i].Update(msec); // let it fade out
-            
-            if(collided || Tail[i].time == 0)
-                continue;
-
-            if((NextTail-i < 10 && NextTail-i >= 0) || (NextTail-i < 0 && NextTail+Tail.length-i < 10))
-                continue;
-
-            // Check for collision
-            Vector2f.sub(Tail[i].Position, position, hags);
-            float lens = (float)Math.sqrt(hags.x * hags.x + hags.y * hags.y);
-            if(lens < (8 + Tail[i].GetRadius())) {
-                collided = true;
-                collideIndex = i;
-            }
-        }
-
-        if(collided && Tail[collideIndex].Age >= 500) {
-            // from collideIndex to NextTail is connecting
-            if(lastConnect + 1000 < Ref.loop.time)
-                TailConnect(collideIndex);
-        }
-    }
-
     void WalkMove(Vector2f wishdir, int msec) {
        // normalize
        float wishspeed = (float)Math.sqrt(wishdir.x * wishdir.x + wishdir.y * wishdir.y);
        if(wishspeed > 0) {
            wishdir.x /= wishspeed;
            wishdir.y /= wishspeed;
-
        }
        if(wishspeed > speed)
        {
@@ -282,7 +586,6 @@ public final class Player {
            wishdir.y *= (speed/wishspeed);
            wishspeed = speed;
        }
-
 
        float currentSpeed = Vector2f.dot(velocity, wishdir);
        float addSpeed = wishspeed  - currentSpeed;
@@ -296,8 +599,6 @@ public final class Player {
            velocity.y += accelspeed * wishdir.y;
        }
 
-//       velocity.y = 0;
-
        float speed2 = (float)Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
        if(speed2 < 1f)
        {
@@ -305,13 +606,20 @@ public final class Player {
            velocity.y = 0f;
            return;
        }
+       float destx = position.x + velocity.x * (float)msec/1000f;
+       float desty = position.y + velocity.y * (float)msec/1000f;
+       if( destx < Ref.world.WorldMins.x || destx > Ref.world.WorldMaxs.x) {
+        velocity.x = 0;
+       }
+
+       if( desty < Ref.world.WorldMins.y || desty > Ref.world.WorldMaxs.y) {
+        velocity.y = 0;
+       }
 
        position.x += velocity.x * (float)msec/1000f;
        position.y += velocity.y * (float)msec/1000f;
-
-
-
-
+       centerpos.x = position.x ;
+       centerpos.y = position.y ;
    }
 
     void Friction(int msec) {
@@ -360,18 +668,17 @@ public final class Player {
 
     }
 
-
-
-    public void HitByBullet(Bullet bullet) {
-        TakeDamage(bullet.damage);
-    }
-
-    public void TakeDamage(float damage) {
-        damage *= 1.5f;
+    public void TakeDamage(float damage, boolean force) {
+//        damage *= 1.5f;
        //if(bigguy)
        //     damage /= 2f; // BigGuy only takes 50% dmg
         if(gameover)
             return; // Cant take dmg when not playing
+        if(damageTime + 300 > Ref.loop.time && !force)
+            return;
+        if(!force) {
+            Ref.soundMan.playEffect(painSound, 1.0f);
+        }
         damageTime = Ref.loop.time;
         this.health -= damage;
         if(health <= 0f)
@@ -379,14 +686,22 @@ public final class Player {
     }
 
     void Die() {
+        gameover = true;
+        dieTime = Ref.loop.time;
+        scorename = "";
+        submitting = false;
         // Implement
-        if(dieTime == 0) {
-            dieTime = Ref.loop.time + 1000; // When to start again
-            lives--;
-            }
+//        if(dieTime == 0) {
+//            dieTime = Ref.loop.time + 1000; // When to start again
+//            lives--;
+//            }
     }
 
     public void Render() {
+        for (int i= 0; i < enemies.size(); i++) {
+            enemies.get(i).Render();
+        }
+
         for (int i= 0; i < splotions.size(); i++) {
             splotions.get(i).Render();
         }
@@ -398,23 +713,113 @@ public final class Player {
             Tail[index].Render();
         }
 
-
-
-
         Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
-        Vector2f offset = new Vector2f(0.01f,0.01f);
-        Vector2f size = new Vector2f(0.98f,0.98f);
-        spr.Set(new Vector2f(position.x-8, position.y-7), new Vector2f(16f, 16f), null, offset, size);
-        spr.SetColor(new Vector4f(1, 0, 0, 1));
+        int index = animFrame % 3;
+        Vector2f offset = new Vector2f(0.00f,0.00f);
+        Vector2f size = new Vector2f(0.50f,0.50f);
+        if(index == 2) {
+           offset.y += 0.5f;
+        } else if(index == 1) {
+            offset.x += 0.5f;
+        }
 
 
-        //RenderFireWeapon();
+        float angle = 0;
+        if(velocity.x == 0f && velocity.y == 0f) {
+            angle = lastAngle;
+        } else {
+            angle = FastMath.atan2(velocity.y, velocity.x)+FastMath.PI_HALF;
+            lastAngle = angle;
+        }
+        spr.Set(new Vector2f(position.x-12, position.y-8), new Vector2f(25f, 16f), heartguy, offset, size);
+        spr.SetColor(new Vector4f(1, 1, 1, 1));
+        spr.SetAngle(angle);
+
         RenderPlayerHud();
 
-       // RenderSpatialDebug();
     }
 
     
+    
+
+    
+    void DrawHealthBar() {
+        // Empty heart
+        Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
+        spr.Set(healthPosition, healthSize, healthBar, healthTexOffset, healthTexSize);
+
+        // Fill up according to health
+        float tempheath = health;
+        if(tempheath <= 0f)
+            tempheath = 0.01f;
+        float healthFrac = tempheath/100f;
+        spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
+        healthTex2Offset.y =  1f - healthFrac ;
+        healthTex2Size.y = healthFrac;
+        healthSize2.y = 0.14f * healthFrac;
+        spr.Set(healthPosition2, healthSize2, healthBar2, healthTex2Offset, healthTex2Size);
+    }
+    
+    void RenderPlayerHud() {
+        // Black background
+//        Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
+//        spr.Set(new Vector2f(0.05f, 0.9f), new Vector2f(0.3f, 0.05f), null, new Vector2f(), new Vector2f(1, 1));
+//        spr.SetColor(new Vector4f(0, 0, 0, 0.5f));
+
+        
+
+//        for (int i= 0; i < lives; i++) {
+//            Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
+//            spr.Set(new Vector2f(0.4f + 0.045f*i, 0.925f), 0.025f, heart);
+//        }
+
+        
+        DrawHealthBar();
+
+        if(health <= 0 && dieTime + 3000 < Ref.loop.time) {
+            Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
+            spr.Set(new Vector2f(0.1f, 0.1f), new Vector2f(0.8f, 0.8f), gameoverTex, new Vector2f(), new Vector2f(1,1));
+
+
+            retryButton.Render();
+            if(!submitting)
+                submitButton.Render();
+            else {
+                Ref.textMan.AddText(new Vector2f(0.4f, 0.155f), "Submitted.", Align.LEFT);
+            }
+
+            Ref.textMan.AddText(new Vector2f(0.35f, 0.65f), "Your score: " + score, Align.CENTER);
+            String text = "Not bad, my man";
+            if(score < 100) {
+                text = "Thats horrible...";
+            } else if(score < 1000) {
+                text = "Getting there.";
+            } else if(score < 10000) {
+                text = "AWWW YEEEE";
+            } else {
+                text = "Whoa.";
+            }
+            Ref.textMan.AddText(new Vector2f(0.35f, 0.58f), text, Align.CENTER, new Vector4f(0.1f, 1.0f, 0.1f, 1.0f));
+
+            Ref.textMan.AddText(new Vector2f(0.15f, 0.245f), "Name: ", Align.LEFT);
+            Ref.textMan.AddText(new Vector2f(0.25f, 0.245f), scorename, Align.LEFT);
+            Ref.textMan.AddText(new Vector2f(0.15f, 0.30f), "Submit your score!", Align.LEFT);
+
+            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
+            spr.Set(new Vector2f(0.25f, 0.25f), new Vector2f(0.35f, 0.05f), null, new Vector2f(), new Vector2f(1, 1));
+            spr.SetColor(new Vector4f(0, 0, 0, 0.5f));
+            return;
+        }
+
+        Ref.textMan.AddText(new Vector2f(0.98f, 0.92f), "Score: " + score, Align.RIGHT);
+        int sec = (int)(time/1000);
+        int min = (int)(sec/60);
+        sec -= min*60;
+        Ref.textMan.AddText(new Vector2f(0.7f, 0.92f), "Time: " + min + ":" + sec , Align.RIGHT);
+    }
+
+    
+
     void RenderSpatialDebug() {
         SpatialQuery result = Ref.spatial.Query(position.x - extent.x, position.y - extent.y, position.x + extent.x, position.y + extent.y);
         int queryNum = result.getQueryNum();
@@ -435,86 +840,74 @@ public final class Player {
             //spr.Color = new Vector4f(1, 0, 0, 1f);
         }
     }
+
     
-    void RenderPlayerHud() {
-        // Black background
-        Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-        spr.Set(new Vector2f(0.05f, 0.9f), new Vector2f(0.3f, 0.05f), null, new Vector2f(), new Vector2f(1, 1));
-        spr.SetColor(new Vector4f(0, 0, 0, 0.5f));
-        //spr.Color = new Vector4f(0, 0, 0, 0.5f);
+byte[] EncryptData(String str) throws Exception {
+        final MessageDigest md = MessageDigest.getInstance("md5");
+        final byte[] digestOfPassword = md.digest("HG58YZ3CR9"
+                        .getBytes("utf-8"));
+        String skey = "passwordDR0wSS@P6660juht";
+        String sIV = "password";
 
-
-
-        for (int i= 0; i < lives; i++) {
-            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-            spr.Set(new Vector2f(0.4f + 0.045f*i, 0.925f), 0.025f, heart);
+        final byte[] keyBytes = Arrays.copyOf(digestOfPassword, 24);
+        for (int j = 0, k = 16; j < 8;) {
+                keyBytes[k++] = keyBytes[j++];
         }
 
-        // Draw Energybar
-//        spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-//        spr.Set(new Vector2f(0.6f, 0.9f), new Vector2f(0.3f, 0.05f), null, new Vector2f(), new Vector2f(1, 1));
-//        spr.SetColor(new Vector4f(0, 0, 0, 0.5f));
-//        //spr.Color = new Vector4f(0, 0, 0, 0.5f);
-//        if(energy > 0f) {
-//            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-//            spr.Set(new Vector2f(0.605f, 0.905f), new Vector2f(0.29f * energy, 0.042f), energyBar, new Vector2f(), new Vector2f(1, 1));
-//            spr.SetColor(new Vector4f(0, 1, 0, 0.7f));
-//            //spr.Color = new Vector4f(0, 1, 0, 0.7f);
-//        }
+        //final SecretKey key = new SecretKeySpec(keyBytes, "DESede");
+        final SecretKey key = new SecretKeySpec(skey.getBytes("utf-8"), "DESede");
+        final IvParameterSpec iv = new IvParameterSpec(sIV.getBytes("utf-8"));
 
-        Ref.textMan.AddText(new Vector2f(0.98f, 0.85f), "Score: " + score, Align.RIGHT);
+        final Cipher cipher = Cipher.getInstance("DESede/CBC/PKCS5Padding");
+        cipher.init(Cipher.ENCRYPT_MODE, key, iv);
 
-        if(dieTime != 0) {
-            Ref.textMan.AddText(new Vector2f(0.5f, 0.5f), "You died :(", Align.CENTER,new Vector4f(1, 0.8f, 0.8f, 1));
-            if(lives == 0) {
-                Ref.textMan.AddText(new Vector2f(0.5f, 0.4f), "GAME OVER MAN!", Align.CENTER,new Vector4f(1, 0.8f, 0.8f, 1));
-            }
-            
-        } else {
-//            if(goalTime != 0 && !gameover) {
-//                Ref.textMan.AddText(new Vector2f(0.5f, 0.6f), "Level Complete", Align.CENTER,new Vector4f(1, 0.8f, 0.8f, 1));
-//                Ref.textMan.AddText(new Vector2f(0.5f, 0.5f), "Click to continue", Align.CENTER,new Vector4f(1, 0.8f, 0.8f, 1));
-//            } else
-                if(gameover) {
-                Ref.textMan.AddText(new Vector2f(0.5f, 0.6f), "Game Over -- You reached the end", Align.CENTER,new Vector4f(1, 0.8f, 0.8f, 1));
-                Ref.textMan.AddText(new Vector2f(0.5f, 0.5f), "But you can still play around with F8 :)", Align.CENTER,new Vector4f(1, 0.8f, 0.8f, 1));
-            }
+        final byte[] plainTextBytes = str.getBytes("utf-8");
+        final byte[] cipherText = cipher.doFinal(plainTextBytes);
+        // final String encodedCipherText = new sun.misc.BASE64Encoder()
+        // .encode(cipherText);
+
+        return cipherText;
+
+    }
+
+    public void SubmitScore(String name, int score) {
+        try {
+            String payload = getHex(EncryptData("magic" + name + "\n" + score + "\n"));
+            URL scoreUrl = new URL("http://pd-eastcoast.com/rgjscore.php?s=" + payload);
+            scoreUrl.openStream().close();
+        } catch (Exception ex) {
+            Logger.getLogger(Player.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
 
-    
+    static final String HEXES = "0123456789ABCDEF";
+    public static String getHex( byte [] raw ) {
+    if ( raw == null ) {
+      return null;
+    }
+    final StringBuilder hex = new StringBuilder( 2 * raw.length );
+    for ( final byte b : raw ) {
+      hex.append(HEXES.charAt((b & 0xF0) >> 4))
+         .append(HEXES.charAt((b & 0x0F)));
+    }
+    return hex.toString();
+  }
 
-    
-    
-
-//    private void RenderFireWeapon() {
-//        Sprite spr;
-//        if(weaponTime > Ref.loop.time) {
-//            float frac  = (float)(weaponTime - Ref.loop.time)/(float)(bigguy?BigGuyWeaponTime:LittleGuyWeaponTime);
-//            frac *= 4;
-//            int fireFrame = (int)frac;
-//            if(fireFrame > 4)
-//                fireFrame = 4;
-//            if(fireFrame < 0)
-//                fireFrame = 0;
-//            spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
-//            //spr.Set(position, 1f, shootanim[fi]);
-//            Vector2f offset2 = new Vector2f();
-//            Vector2f size2 = new Vector2f(1, 1);
-//            if(!lookright) {
-//                offset2.x = 1;
-//                size2.x = -1;
-//            }
-//            if(!bigguy)
-//                spr.Set(new Vector2f(position.x + (lookright?4:(-extent.x*3f-4)), position.y-extent.y*1.5f),
-//                    new Vector2f(16, 16), shootanim[fireFrame],offset2, size2);
-//            else
-//                spr.Set(new Vector2f(position.x + (lookright?8:(-extent.x*2f-6)), position.y-9),
-//                    new Vector2f(16, 16), shootanim[fireFrame],offset2, size2);
-//        }
-//    }
-
-    
-
+    void HandleKey(Key event) {
+        if(dieTime + 3000 < Ref.loop.time && health <= 0) {
+            if(Character.isLetterOrDigit(event.Char) && scorename.length() < 23)
+                scorename += event.Char;
+            else {
+                switch(event.key) {
+                    case Keyboard.KEY_BACK:
+                        if(scorename.length() > 1)
+                            scorename = scorename.substring(0, scorename.length()-1);
+                        else if(scorename.length() == 1)
+                            scorename = "";
+                        break;
+                }
+            }
+        }
+    }
     
 }

@@ -11,4 +11,7 @@ package cubetech.misc;
  */
 public class NumberHandle {
     public int Handle;
+    public NumberHandle(int handle) {
+        Handle = handle;
+    }
 }

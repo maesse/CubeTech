@@ -16,6 +16,7 @@ import org.lwjgl.Sys;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector4f;
+import org.newdawn.slick.openal.Audio;
 
 /**
  *
@@ -26,6 +27,7 @@ public class IntroState implements IGameState {
     long startTime;
     CubeParticle[] particles = new CubeParticle[150];
     CubeTexture tex;
+    Audio introSound = null;
 
     public class CubeParticle {
         public Vector2f Position;
@@ -117,18 +119,21 @@ public class IntroState implements IGameState {
         }
 
         tex = (CubeTexture)(Ref.ResMan.LoadResource("data/particle.png")).Data;
+        introSound = Ref.soundMan.PlayOGG("data/cubetech.ogg", 0f, false, true);
+        //Ref.soundMan.playEffect(Ref.soundMan.addSound("data/explosion.wav"), 1.0f);
     }
 
     public void Exit() {
-        
+        introSound.stop();
+        Ref.soundMan.PlayBackgroundMusic(true);
     }
 
     public void RunFrame(int msec) {
-        Ref.soundMan.playEffect(Ref.soundMan.addSound("data/Cubetech.wav"));
+        
         long time = Sys.getTime()/(Sys.getTimerResolution()/1000L);
 
         // Play intro for 3 secs
-        if(time > startTime + 6000 || Ref.Input.IsKeyPressed(Keyboard.KEY_ESCAPE)) {
+        if(time > startTime + 8000 || Ref.Input.IsKeyPressed(Keyboard.KEY_ESCAPE)) {
             try {
                 // State change
                 Ref.StateMan.SetState("menu");
@@ -142,13 +147,13 @@ public class IntroState implements IGameState {
         // 0-2000 ms = process 0-1f, 2000-3000ms = process 1f
         float process = (time - startTime);
         float actual = process;
-        if(process > 2000)
-            process = 2000;
-        process /= 2000f;
+        if(process > 4500)
+            process = 4500;
+        process /= 4500f;
         Vector4f color = new Vector4f(1,1,1,process);
-        if(actual > 4000) {
-            color.w = (4500-actual)/500f;
-            if(actual > 4500)
+        if(actual > 6400) {
+            color.w = (7000-actual)/500f;
+            if(actual > 7000)
                 color.w = 0;
         }
         // Update and render all particles
@@ -172,16 +177,16 @@ public class IntroState implements IGameState {
 //        if(process > 2000)
 //            process = 2000;
         // Show text after 1500 msec
-        if(process > 1500) {
-            if(process > 2000) { // Fully faded in after 2000 msec
-                if(actual > 4500)
-                    Ref.textMan.AddText(new Vector2f(0.5f, 0.1f), "CubeTech.", Align.CENTER, new Vector4f(1,1,1,(5000f-actual)/500f));
+        if(process > 3000) {
+            if(process > 4000) { // Fully faded in after 2000 msec
+                if(actual > 6500)
+                    Ref.textMan.AddText(new Vector2f(0.5f, 0.1f), "CubeTech.", Align.CENTER, new Vector4f(1,1,1,(7000f-actual)/500f));
                 else
                     Ref.textMan.AddText(new Vector2f(0.5f, 0.1f), "CubeTech.", Align.CENTER);
             
             }
             else // Handle fading from 1500-2000
-                Ref.textMan.AddText(new Vector2f(0.5f, 0.1f), "CubeTech.", Align.CENTER, new Vector4f(1, 1,1,1f-(float)(2000-process)/500f));
+                Ref.textMan.AddText(new Vector2f(0.5f, 0.1f), "CubeTech.", Align.CENTER, new Vector4f(1, 1,1,1f-(float)(4000-process)/1000f));
         }
     }
 

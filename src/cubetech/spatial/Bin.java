@@ -5,6 +5,8 @@
 
 package cubetech.spatial;
 
+import cubetech.Block;
+
 /**
  * A Bin containing collidables
  * @author mads
@@ -49,7 +51,10 @@ public class Bin {
         }
 
         // Put tail in index position and decrement size
+
+
         Data[index] = Data[Offset-1];
+        ((Block)Data[index]).SpatialHandleChanged(cell, index);
         Offset--;
     }
 }
