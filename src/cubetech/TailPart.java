@@ -10,8 +10,7 @@ import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector2f;
-import org.lwjgl.util.vector.Vector4f;
-import org.openmali.FastMath;
+
 
 /**
  *
@@ -45,7 +44,7 @@ public class TailPart {
     }
 
     public void SetTime(int msec, Vector2f currentvelocity) {
-        angle = FastMath.atan2(currentvelocity.y, currentvelocity.x)+FastMath.PI_HALF;
+        angle = (float) (Math.atan2(currentvelocity.y, currentvelocity.x) + Math.PI / 2f);
         FADE_TIME = msec;
         time = msec;
         Age = 0;
@@ -97,7 +96,7 @@ public class TailPart {
         }
 
         spr.SetAngle(angle);
-        spr.SetColor(new Vector4f(1, 1, 1, alpha));
+        spr.SetColor(255,255,255,(int)(alpha*255));
 
         
     }

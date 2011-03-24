@@ -1,0 +1,8 @@
+texture "heartguy.png"
+translucent "2"
+ignorez "0"
+filter "1"
+color "255,255,255,255"
+texoffset "0,000000:0,500000"
+texsize "0,498047:0,500000"
+anim "3"

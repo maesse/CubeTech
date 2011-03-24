@@ -3,11 +3,13 @@
  
 #netbeans ignore personal stuff
 nbproject/private/
-
- 
+build
+dist
+*.log
 
 *~
 *.lock
 *.DS_Store
 *.swp
 *.out
+Thumbs.db

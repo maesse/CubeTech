@@ -5,7 +5,7 @@
 
 package cubetech.misc;
 
-import cubetech.misc.Window;
+import cubetech.common.Common;
 
 /**
  *
@@ -17,12 +17,7 @@ public class Main {
      * @param args the command line arguments
      */
     public static void main(String[] args) {
-        Window wct = new Window();
-		if (wct.initialize()) {
-			wct.execute();
-			wct.destroy();
-		}
-		System.exit(0);
+        Common.Startup(null, null);
     }
 
 }

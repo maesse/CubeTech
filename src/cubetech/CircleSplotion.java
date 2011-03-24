@@ -9,6 +9,7 @@ import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.misc.Ref;
+import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector4f;
 
@@ -26,7 +27,7 @@ public class CircleSplotion {
     public int time;
     public int Age;
     CubeTexture tex;
-    Vector4f color = new Vector4f(1, 1, 1, 1);
+    Color color = new Color(255,255,255,255);
     
 
     public CircleSplotion(Vector2f position, float radius) {
@@ -34,8 +35,8 @@ public class CircleSplotion {
         Radius = radius;
         time = LIFETIME;
         Age = 0;
-        tex = (CubeTexture)(Ref.ResMan.LoadResource("data/splotion.png").Data);
-        Ref.soundMan.playEffect(Ref.soundMan.addSound("data/boom.wav"), 1.0f);
+        tex = Ref.ResMan.LoadTexture("data/splotion.png");
+        Ref.soundMan.playEffect(Ref.soundMan.AddWavSound("data/boom.wav"), 1.0f);
     }
 
     
@@ -62,7 +63,7 @@ public class CircleSplotion {
 
         // Fade out
         if(Age >= LIFETIME-FADEOUT_TIME) {
-            color.w = (float)(LIFETIME-Age)/FADEOUT_TIME;
+            color.setAlpha((int)(((LIFETIME-Age)/FADEOUT_TIME)*255));
             spr.SetColor(color);
         }
     }

@@ -13,7 +13,6 @@ public class Event {
     public int Time;
     public EventType Type;
     public int Value, Value2;
-    public int datasize;
     public Object data;
 
     public Event() {

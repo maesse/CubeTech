@@ -1,8 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.input;
 
 import org.lwjgl.input.Keyboard;
@@ -14,15 +9,18 @@ import org.lwjgl.input.Keyboard;
 public class Key {
         public int key;
         public String Name;
-        public char Char;
+        public char Char = Keyboard.CHAR_NONE;
 
         // State
         public boolean Pressed;
-        public long Time;
+        public int Time;
         public boolean Changed;
 
         public Key(int key) {
             this.key = key;
-            Name = Keyboard.getKeyName(key);
+            if(key < 255)
+                Name = Keyboard.getKeyName(key);
+            else
+                Name = "EXTENDED";
         }
     }

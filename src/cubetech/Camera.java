@@ -1,14 +1,8 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech;
 
 import org.lwjgl.opengl.GL11;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector2f;
-import static org.lwjgl.opengl.GL11.*;
 /**
  *
  * @author mads
@@ -22,7 +16,7 @@ public class Camera {
         this.Position = position;
 
         // Variable height depending on the aspect ratio
-        float aspect = (float)Ref.loop.mode.getHeight()/(float)Ref.loop.mode.getWidth();
+        float aspect = (float)Ref.glRef.currentMode.getHeight()/(float)Ref.glRef.currentMode.getWidth();
         this.VisibleSize = new Vector2f(width, width * aspect);
         DefaultSize = new Vector2f(VisibleSize.x, VisibleSize.y);
     }

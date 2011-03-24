@@ -5,6 +5,15 @@
 
 package cubetech.net;
 
+import java.util.Random;
+import cubetech.common.Commands;
+import cubetech.misc.Ref;
+import cubetech.common.CVars;
+import cubetech.common.Common;
+import cubetech.gfx.ResourceManager;
+import java.net.InetSocketAddress;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -31,6 +40,12 @@ public class NetTest {
 
     @Before
     public void setUp() {
+        // Required by the net subsystem
+        Ref.commands = new Commands();
+        Ref.cvars = new CVars();
+        Ref.rnd = new Random();
+        Ref.ResMan = new ResourceManager();
+        Ref.common = new Common();
     }
 
     @After
@@ -42,37 +57,23 @@ public class NetTest {
      * Test of GetPacket method, of class Net.
      */
     @Test
-    public void testGetPacket() {
+    public void testOOBPacket() {
         System.out.println("GetPacket");
-        Net instance = new Net();
-        Packet expResult = null;
-        Packet result = instance.GetPacket();
-        assertEquals(expResult, result);
+        Net net = new Net();
+        net.SendOutOfBandPacket(NetChan.NetSource.CLIENT, new InetSocketAddress("localhost", Net.DEFAULT_PORT), "YO DAWG");
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException ex) {
+            Logger.getLogger(NetTest.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        net.PumpNet();
+        Packet result = net.GetPacket();
+        assertTrue(result.OutOfBand);
+        assertEquals("YO DAWG", result.buf.ReadString());
         // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
+        //fail("The test case is a prototype.");
     }
 
-    /**
-     * Test of InitServerSocket method, of class Net.
-     */
-    @Test
-    public void testInitServerSocket() throws Exception {
-        System.out.println("InitServerSocket");
-        Net instance = new Net();
-        
-        
-    }
 
-    /**
-     * Test of DestroyServerSocket method, of class Net.
-     */
-    @Test
-    public void testDestroyServerSocket() {
-        System.out.println("DestroyServerSocket");
-        Net instance = new Net();
-        instance.DestroyServerSocket();
-        // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
-    }
 
 }

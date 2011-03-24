@@ -10,7 +10,11 @@
 <project name="CubeTech" default="default" basedir=".">
     <description>Builds, tests, and runs the project CubeTech.</description>
     <import file="nbproject/build-impl.xml"/>
+
     <import file="nbproject/profiler-build-impl.xml"/>
+
+
+
     <!--
 
     There exist several targets which are by default empty and which can be 
@@ -72,4 +76,9 @@
     nbproject/build-impl.xml file. 
 
     -->
+<target name="-post-jar">
+            <exec dir="." executable="cmd">
+		<arg line="/c postbuild.bat"/>
+            </exec>
+        </target>
 </project>

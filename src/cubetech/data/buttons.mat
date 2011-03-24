@@ -1,0 +1,8 @@
+texture "buttons.png"
+translucent "2"
+ignorez "0"
+filter "1"
+color "255,255,255,255"
+texoffset "0,000000:0,695313"
+texsize "0,312500:0,304688"
+anim "3"

@@ -6,14 +6,14 @@
 package cubetech.net;
 
 import cubetech.misc.Ref;
-import java.net.SocketAddress;
+import java.net.InetSocketAddress;
 
 /**
  *
  * @author mads
  */
 public class Packet {
-    public SocketAddress endpoitn;
+    public InetSocketAddress endpoitn;
     public NetBuffer buf;
     public SourceType type;
     public int Time;
@@ -24,7 +24,8 @@ public class Packet {
         SERVER
     }
 
-    public Packet(SourceType type, SocketAddress endpoint, NetBuffer buf, boolean OutOfBand) {
+    public Packet(SourceType type, InetSocketAddress endpoint, NetBuffer buf, boolean OutOfBand) {
+        this.OutOfBand = OutOfBand;
         this.endpoitn = endpoint;
         this.type = type;
         this.buf = buf;

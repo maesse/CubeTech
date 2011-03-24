@@ -10,7 +10,7 @@ package cubetech.spatial;
  * @author mads
  */
 public class SpatialQuery {
-    final static int MAXSIZE = 14;
+    final static int MAXSIZE = 1000;
 
     Object[][] BinData = new Object[MAXSIZE][Bin.BIN_SIZE];
     int[]    BinSizes = new int[MAXSIZE];
@@ -18,6 +18,10 @@ public class SpatialQuery {
     int ReadOffset = 0;
     int ReadBinOffset = 0;
     int QueryNum = 0;
+
+//    private SpatialQuery() {
+//
+//    }
 
     public void Reset() {
         Offset = 0;

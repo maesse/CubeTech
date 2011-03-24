@@ -8,6 +8,7 @@ package cubetech.misc;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
+import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
 import cubetech.input.KeyEventListener;
 import org.lwjgl.util.Rectangle;
@@ -31,6 +32,10 @@ public class Button {
         this.Rect = new Rectangle((int)(pos.x*1000f), (int)(pos.y*1000f), (int)(size.x * 1000f), (int)(size.y*1000f));
     }
 
+    public void SetPosition(float x, float y)  {
+        Rect.setLocation((int)(x*1000), (int)(y*1000));
+    }
+
     public void Render() {
         // Background
         if(Hover) {
@@ -44,7 +49,7 @@ public class Button {
             // White background
             spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
             spr.Set(new Vector2f(Rect.getX()/1000f, Rect.getY()/1000f), new Vector2f(Rect.getWidth()/1000f, Rect.getHeight()/1000f), null, new Vector2f(0,0), new Vector2f(1,1));
-            spr.SetColor(new Vector4f(1,1,1,0.2f));
+            spr.SetColor(255,255,255,80);
             //spr.Color = new Vector4f(1,1,1,0.2f);
         } else {
             // no mouse over, just display background as normal
@@ -55,7 +60,7 @@ public class Button {
         Vector2f textCenter = new Vector2f(Rect.getX()+ Rect.getWidth()/2f, Rect.getY()+3);
         textCenter.x /= 1000f;
         textCenter.y /= 1000f;
-        Ref.textMan.AddText(textCenter, Text, Align.CENTER);
+        Ref.textMan.AddText(textCenter, Text, Align.CENTER, Type.HUD);
         
         // Reset mouse over
         Hover = false;

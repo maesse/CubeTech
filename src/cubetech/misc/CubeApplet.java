@@ -22,7 +22,18 @@ public class CubeApplet extends Applet {
         System.err.println("--Starting LWJGL--");
         gameThread = new GameLoopApplet();
         gameThread.displayParent = displayParent;
+        gameThread.applet = this;
         gameThread.start();
+    }
+
+    public void increaseResolution() {
+        if(Ref.cvars != null)
+            Ref.cvars.Set2("r_toggleRes", "1", true);
+    }
+
+    public void decreaseResolution() {
+        if(Ref.cvars != null)
+            Ref.cvars.Set2("r_toggleRes", "-1", true);
     }
 
     private void StopLWJGL() {

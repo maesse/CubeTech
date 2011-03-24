@@ -11,7 +11,6 @@ import cubetech.gfx.SpriteManager.Type;
 import cubetech.misc.Ref;
 import java.util.HashMap;
 import org.lwjgl.util.vector.Vector2f;
-import org.openmali.FastMath;
 
 /**
  *
@@ -34,7 +33,7 @@ public class CubeText {
     int colorcycle = 0;
     boolean colorcycleasc = true;
     public CubeText() {
-        cubes = (CubeTexture)(Ref.ResMan.LoadResource("data/cubes.png").Data);
+        cubes = Ref.ResMan.LoadTexture("data/cubes.png");
         charmap.put(0, "XXXX XXXXX XX X");
         charmap.put(1, "XXXX XXX X XXXX");
         charmap.put(2, "XXXX  X  X  XXX");
@@ -116,7 +115,7 @@ public class CubeText {
     }
 
     Vector2f Hags(float x, float y) {
-        return new Vector2f(x/800, y/600);
+        return new Vector2f(x/Ref.glRef.currentMode.getWidth(), y/Ref.glRef.currentMode.getHeight());
     }
 
     int DrawChaw(String map, boolean small, boolean whitespace) {
@@ -136,7 +135,7 @@ public class CubeText {
                         continue;
                     int x = index%3;
                     int y = index/3;
-                    float bonusHeight = ((FastMath.sin((float)(temptime+x*blockTimeFrac)/timefrac)+1f)/2f);
+                    float bonusHeight = (float) ((Math.sin((float)(temptime+x*blockTimeFrac)/timefrac)+1f)/2f);
                     //float bonusHeight2 = ((FastMath.sin((float)(temptime+y*blockTimeFrac)/timefrac)+1f)/2f);
                     float bonusHeight2 = 0f;
                     spr = Ref.SpriteMan.GetSprite(Type.HUD);
@@ -152,7 +151,7 @@ public class CubeText {
                         continue;
                     int x = index%5;
                     int y = index/5;
-                    float bonusHeight = ((FastMath.sin((float)(temptime+x*blockTimeFrac)/timefrac)+1f)/2f);
+                    float bonusHeight = (float) ((Math.sin((float)(temptime+x*blockTimeFrac)/timefrac)+1f)/2f);
                     //float bonusHeight2 = ((FastMath.sin((float)(temptime+y*blockTimeFrac)/timefrac)+1f)/2f);
                     float bonusHeight2 = 0f;
                     spr = Ref.SpriteMan.GetSprite(Type.HUD);
