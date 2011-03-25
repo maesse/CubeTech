@@ -3,7 +3,7 @@ package cubetech.entities;
 import cubetech.Game.Gentity;
 import cubetech.collision.CollisionResult;
 import cubetech.common.Common;
-import cubetech.common.Common.MoverState;
+
 import cubetech.common.Content;
 import cubetech.common.Helper;
 import cubetech.common.IReachedMethod;
@@ -22,9 +22,7 @@ import org.lwjgl.util.vector.Vector2f;
  * @author mads
  */
 public class Mover {
-
-    
-    Common.MoverState moverState;
+    MoverState moverState;
     int soundPos1;
     int soundPos2;
     int sound1to2;
@@ -45,12 +43,21 @@ public class Mover {
     
     Gentity ent;
 
+    public enum MoverState {
+        // stationary
+        POS1,
+        POS2,
+        // currently moving
+        _1TO2,
+        _2TO1
+    }
+
     public void initMover(Gentity ent) {
         this.ent = ent;
 
         ent.use =Use_BinaryMover;
         ent.reached = Reached_BinaryMover;
-        moverState = Common.MoverState.POS1;
+        moverState = MoverState.POS1;
 //        ent.r.svFlags.add(SvFlags.USE_CURRENT_ORIGIN);
         ent.s.eType = EntityType.MOVER;
         ent.r.currentOrigin.set(pos1);
@@ -239,14 +246,14 @@ public class Mover {
      * All entities in a mover team will move from pos1 to pos2
      * in the same amount of time
      */
-    public void matchTeam(Common.MoverState state, int time) {
+    public void matchTeam(MoverState state, int time) {
         Gentity slave;
         for(slave = ent; slave != null; slave = slave.mover.teamchain) {
             slave.mover.setMoverState(state, time);
         }
     }
 
-    public void setMoverState(Common.MoverState state, int time) {
+    public void setMoverState(MoverState state, int time) {
         moverState = state;
         ent.s.pos.time = time;
 //        System.out.println("Setting mover state: " + state + ", time: " + time);

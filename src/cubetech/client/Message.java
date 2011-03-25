@@ -22,6 +22,10 @@ public class Message implements KeyEventListener {
 
     public void SetField(MessageField field) {
         currentField = field;
+        if(field != null)
+            Ref.Input.SetKeyCatcher(Ref.Input.GetKeyCatcher() | Input.KEYCATCH_MESSAGE);
+        else
+            Ref.Input.SetKeyCatcher(Ref.Input.GetKeyCatcher() & ~Input.KEYCATCH_MESSAGE);
     }
 
     public boolean isChatMessageUp() {

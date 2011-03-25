@@ -8,8 +8,6 @@ import cubetech.net.Packet;
 import java.applet.Applet;
 import java.awt.Canvas;
 import java.util.EnumSet;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.swing.JOptionPane;
 import org.lwjgl.Sys;
 import org.lwjgl.opengl.Display;
@@ -32,15 +30,6 @@ public class Common {
     public static final int EV_EVENT_BITS = EV_EVENT_BIT1 | EV_EVENT_BIT2;
     public static final int DEFAULT_GRAVITY = 800;
 
-    public enum MoverState {
-        // stationary
-        POS1,
-        POS2,
-        // currently moving
-        _1TO2,
-        _2TO1
-    }
-
     // Cvars
     public CVar sv_running; // current server status
     public CVar cl_running; // current client status
@@ -48,6 +37,7 @@ public class Common {
     public CVar sv_paused;
     public CVar maxfps; // cap framerate
     public CVar errorMessage; // Will be set when an error occurs
+    public CVar developer;
 
     public CVar com_timer; // 1: LWJGLs timer, 2: Javas nano-seconds
     public CVar com_sleepy; // Enables thread sleeping when not running vsync
@@ -55,14 +45,13 @@ public class Common {
     public CVar com_sleepPrecision; // sleep and yield precision can vary
     public CVar com_yieldPrecision; // for different platforms/computers
 
-
     public int frametime; // the time this frame
     public ItemList items = new ItemList();
-    int lasttime; // the time last frame
-    int framemsec; // delta time between frames
-    boolean useSysTimer = true; // Controls the current timer. com_timer sets this.
-
-    Event tempevt = new Event();
+    
+    private int lasttime; // the time last frame
+    private int framemsec; // delta time between frames
+    private boolean useSysTimer = true; // Controls the current timer. com_timer sets this.
+    private Event tempevt = new Event();
     
 
     public enum ErrorCode {
@@ -70,6 +59,76 @@ public class Common {
         DROP, // print to console and disconnect from game
         SERVERDISCONNECT, // don't kill server
         DISCONNECT // client disconnected from the server
+    }
+
+    public void Init() {
+        lasttime = Milliseconds();
+        // Set up cvars
+        maxfps = Ref.cvars.Get("maxfps", "100", EnumSet.of(CVarFlags.ARCHIVE));
+        developer = Ref.cvars.Get("developer", "1", EnumSet.of(CVarFlags.ARCHIVE));
+        cl_running = Ref.cvars.Get("cl_running", "0", EnumSet.of(CVarFlags.ROM));
+        sv_running = Ref.cvars.Get("sv_running", "0", EnumSet.of(CVarFlags.ROM));
+        cl_paused = Ref.cvars.Get("cl_paused", "0", EnumSet.of(CVarFlags.ROM));
+        sv_paused = Ref.cvars.Get("sv_paused", "0", EnumSet.of(CVarFlags.ROM));
+        errorMessage = Ref.cvars.Get("errorMessage", "", EnumSet.of(CVarFlags.ROM));
+        com_sleepy = Ref.cvars.Get("com_sleepy", "0", EnumSet.of(CVarFlags.TEMP));
+        com_sleepPrecision = Ref.cvars.Get("com_sleepPrecision", "4", EnumSet.of(CVarFlags.TEMP));
+        com_yieldPrecision = Ref.cvars.Get("com_yieldPrecision", "1", EnumSet.of(CVarFlags.TEMP));
+        com_timer = Ref.cvars.Get("com_timer", "2", EnumSet.of(CVarFlags.TEMP));
+        com_timer.Max = 2;
+        com_timer.Min = 1;
+        useSysTimer = com_timer.iValue == 1;
+        errorMessage.modified = false;
+        // Init client and server
+        Ref.server.Init();
+        Ref.client.Init();
+    }
+
+    public static void LogDebug(String str) {
+        if(Ref.common.isDeveloper())
+            System.out.println("[D] " + str);
+    }
+
+    public static void Log(String str) {
+        System.out.println(str);
+    }
+
+    // Where the program starts
+    public static void Startup(Canvas parentDisplay, Applet applet) {
+        // Init
+        try {
+            Ref.InitRef();
+
+            Ref.glRef.InitWindow(parentDisplay, applet);
+            Ref.Input.Init(); // Initialize mouse and keyboard
+            Ref.common.Init();
+        } catch (Exception ex) {
+            System.out.println("Fatal crash: " + ex.toString());
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(Display.getParent(), ex);
+
+            if(Ref.glRef != null)
+                Ref.glRef.Destroy();
+            Display.destroy();
+            System.exit(-1);
+        }
+        
+        // Run
+        try {
+            while (!Display.isCloseRequested()) {
+                Ref.common.Frame();
+            }
+        } catch(ExitException ex) {
+        }
+
+        // Clean up
+        try {
+            // Allow the client to send a disconnect command, if appropiate
+            Ref.common.Error(ErrorCode.DROP, "Client quit");
+        } catch (Exception e) {}
+
+        Display.destroy();
+        System.exit(0);
     }
 
     public void Frame() {
@@ -130,50 +189,10 @@ public class Common {
         }
     }
 
-    // Where the program starts
-    public static void Startup(Canvas parentDisplay, Applet applet) {
-        try {
-            Ref.InitRef();
-
-            Ref.glRef.InitWindow(parentDisplay, applet);
-            Ref.Input.Init(); // Initialize mouse and keyboard
-            Ref.common.Init();
-        } catch (Exception ex) {
-            System.out.println("Fatal crash: " + ex.toString());
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(Display.getParent(), ex);
-
-            if(Ref.glRef != null)
-                Ref.glRef.Destroy();
-            Display.destroy();
-            System.exit(-1);
-        }
-        try {
-            // wait for user to close window
-            while (!Display.isCloseRequested()) {
-                Ref.common.Frame();
-            }
-        } catch(ExitException ex) {
-            
-        }
-
-        try {
-            // Allow the client to send a disconnect command, if appropiate
-            Ref.common.Error(ErrorCode.DROP, "Client quit");
-        } catch (Exception e) {}
-        
-        Display.destroy();
-        System.exit(0);
-    }
-
     public void HunkClear() {
         Ref.client.ShutdownCGame();
         Ref.server.ShutdownGameProgs();
     }
-    
-    
-
-
 
     public void Error(ErrorCode code, String str) {
         Ref.cvars.Set2("errorMessage", str, true);
@@ -203,27 +222,11 @@ public class Common {
         throw new ExitException("Shutdown");
     }
 
-    public void Init() {
-        lasttime = Milliseconds();
-        // Set up cvars
-        maxfps = Ref.cvars.Get("maxfps", "100", EnumSet.of(CVarFlags.ARCHIVE));
-        cl_running = Ref.cvars.Get("cl_running", "0", EnumSet.of(CVarFlags.ROM));
-        sv_running = Ref.cvars.Get("sv_running", "0", EnumSet.of(CVarFlags.ROM));
-        cl_paused = Ref.cvars.Get("cl_paused", "0", EnumSet.of(CVarFlags.ROM));
-        sv_paused = Ref.cvars.Get("sv_paused", "0", EnumSet.of(CVarFlags.ROM));
-        errorMessage = Ref.cvars.Get("errorMessage", "", EnumSet.of(CVarFlags.ROM));
-        com_sleepy = Ref.cvars.Get("com_sleepy", "0", EnumSet.of(CVarFlags.TEMP));
-        com_sleepPrecision = Ref.cvars.Get("com_sleepPrecision", "4", EnumSet.of(CVarFlags.TEMP));
-        com_yieldPrecision = Ref.cvars.Get("com_yieldPrecision", "1", EnumSet.of(CVarFlags.TEMP));
-        com_timer = Ref.cvars.Get("com_timer", "2", EnumSet.of(CVarFlags.TEMP));
-        com_timer.Max = 2;
-        com_timer.Min = 1;
-        useSysTimer = com_timer.iValue == 1;
-        errorMessage.modified = false;
-        // Init client and server
-        Ref.server.Init();
-        Ref.client.Init();
+    public boolean isDeveloper() {
+        return developer.iValue == 1;
     }
+
+    
 
     // This pumps the network system and hands off packets to the client and server
     // to handle. When there is no more packets, it returns the time.

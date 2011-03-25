@@ -90,6 +90,58 @@ public class Client {
 
     public Message message = new Message();
 
+    public void Init() {
+        System.out.println("--- Client Initialization ---");
+        cl = new ClientActive(); // Clear State
+        state = ConnectState.DISCONNECTED;
+        realtime = 0;
+
+        for (int i= 0; i < cl_pinglist.length; i++) {
+            cl_pinglist[i] = new Ping();
+        }
+        for (int i= 0; i < cl_localServers.length; i++) {
+            cl_localServers[i] = new ServerInfo();
+        }
+        for (int i= 0; i < cl_globalServers.length; i++) {
+            cl_globalServers[i] = new ServerInfo();
+        }
+//        for (int i= 0; i < cl_serverStatusList.length; i++) {
+//            cl_serverStatusList[i] = new ServerStatus();
+//        }
+
+
+        name = Ref.cvars.Get("name", "UnknownCube", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        rate = Ref.cvars.Get("rate", "25000", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        model = Ref.cvars.Get("model", "unknown", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        cl_updaterate = Ref.cvars.Get("cl_updaterate", "30", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        cl_updaterate.Min = 15;
+        cl_updaterate.Max = 115;
+        cl_timeout = Ref.cvars.Get("cl_timeout", "120", EnumSet.of(CVarFlags.NONE));
+        cl_cmdrate = Ref.cvars.Get("cl_cmdrate", "101", EnumSet.of(CVarFlags.ARCHIVE));
+        cl_timenudge = Ref.cvars.Get("cl_timenudge", "0", EnumSet.of(CVarFlags.TEMP));
+        cl_timenudge.Min = -30;
+        cl_timenudge.Max = 30;
+        cl_nodelta = Ref.cvars.Get("cl_nodelta", "0", EnumSet.of(CVarFlags.NONE));
+        cl_cmdbackup = Ref.cvars.Get("cl_cmdbackup", "1", EnumSet.of(CVarFlags.NONE));
+        cl_cmdbackup.Min = 0;
+        cl_cmdbackup.Max = 5;
+        cl_debugui = Ref.cvars.Get("cl_debugui", "0", EnumSet.of(CVarFlags.TEMP));
+        cl_debugui.modified = false;
+        cl_showfps  = Ref.cvars.Get("cl_showfps", "1", EnumSet.of(CVarFlags.TEMP));
+        cl_netquality = Ref.cvars.Get("cl_netquality", "50", EnumSet.of(CVarFlags.TEMP)); // allow 50ms cgame delta
+
+        Ref.commands.AddCommand("connect", new cmd_Connect());
+        Ref.commands.AddCommand("disconnect", new cmd_Disconnect());
+        Ref.commands.AddCommand("cmd", new cmd_Cmd());
+        Ref.commands.AddCommand("localservers", new cmd_LocalServers());
+        Ref.commands.AddCommand("internetservers", new cmd_InternetServers());
+
+        Ref.cvars.Set2("cl_running", "1", true);
+
+//        debugUI = new DebugUI();
+//        debugUI.setVisible(true);
+    }
+
     public void updateServerPinging(ServerListUI.ServerSource source) {
         serversource = source;
 
@@ -150,56 +202,7 @@ public class Client {
     // ServerInfoAccessors
     
 
-    public void Init() {
-        System.out.println("--- Client Initialization ---");
-        cl = new ClientActive(); // Clear State
-        state = ConnectState.DISCONNECTED;
-        realtime = 0;
-
-        for (int i= 0; i < cl_pinglist.length; i++) {
-            cl_pinglist[i] = new Ping();
-        }
-        for (int i= 0; i < cl_localServers.length; i++) {
-            cl_localServers[i] = new ServerInfo();
-        }
-        for (int i= 0; i < cl_globalServers.length; i++) {
-            cl_globalServers[i] = new ServerInfo();
-        }
-//        for (int i= 0; i < cl_serverStatusList.length; i++) {
-//            cl_serverStatusList[i] = new ServerStatus();
-//        }
-
-
-        name = Ref.cvars.Get("name", "UnknownCube", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        rate = Ref.cvars.Get("rate", "25000", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        model = Ref.cvars.Get("model", "unknown", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        cl_updaterate = Ref.cvars.Get("cl_updaterate", "30", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        cl_updaterate.Min = 15;
-        cl_updaterate.Max = 115;
-        cl_timeout = Ref.cvars.Get("cl_timeout", "120", EnumSet.of(CVarFlags.NONE));
-        cl_cmdrate = Ref.cvars.Get("cl_cmdrate", "101", EnumSet.of(CVarFlags.ARCHIVE));
-        cl_timenudge = Ref.cvars.Get("cl_timenudge", "0", EnumSet.of(CVarFlags.TEMP));
-        cl_timenudge.Min = -30;
-        cl_timenudge.Max = 30;
-        cl_nodelta = Ref.cvars.Get("cl_nodelta", "0", EnumSet.of(CVarFlags.NONE));
-        cl_cmdbackup = Ref.cvars.Get("cl_cmdbackup", "1", EnumSet.of(CVarFlags.NONE));
-        cl_cmdbackup.Min = 0;
-        cl_cmdbackup.Max = 5;
-        cl_debugui = Ref.cvars.Get("cl_debugui", "0", EnumSet.of(CVarFlags.TEMP));
-        cl_showfps  = Ref.cvars.Get("cl_showfps", "1", EnumSet.of(CVarFlags.TEMP));
-        cl_netquality = Ref.cvars.Get("cl_netquality", "50", EnumSet.of(CVarFlags.TEMP)); // allow 50ms cgame delta
-
-        Ref.commands.AddCommand("connect", new cmd_Connect());
-        Ref.commands.AddCommand("disconnect", new cmd_Disconnect());
-        Ref.commands.AddCommand("cmd", new cmd_Cmd());
-        Ref.commands.AddCommand("localservers", new cmd_LocalServers());
-        Ref.commands.AddCommand("internetservers", new cmd_InternetServers());
-
-        Ref.cvars.Set2("cl_running", "1", true);
-
-        debugUI = new DebugUI();
-        debugUI.setVisible(true);
-    }
+    
 
     public void Frame(int msec) {
         if(Ref.common.cl_running.iValue == 0)
@@ -243,6 +246,8 @@ public class Client {
         
 
         if(cl_debugui.modified) {
+            if(debugUI == null && cl_debugui.iValue == 1)
+                debugUI = new DebugUI();
             debugUI.setVisible(cl_debugui.iValue == 1);
             cl_debugui.modified = false;
         }
@@ -1069,6 +1074,10 @@ public class Client {
             nFrames = 0;
             lastFpsUpdateTime = realtime;
         }
+//        if(true) {
+//        Ref.SpriteMan.Reset();
+//        return;
+//        }
         // Render normal sprites
         Ref.SpriteMan.DrawNormal();
 
@@ -1086,7 +1095,8 @@ public class Client {
 
         // Queue HUD renders
         Ref.Console.Render();
-        Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x, 0), ""+currentFPS, Align.RIGHT, Type.HUD);
+        if(cl_showfps.iValue == 1)
+            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x, 0), ""+currentFPS, Align.RIGHT, Type.HUD);
 //        Ref.textMan.Render();
         Ref.SpriteMan.DrawHUD();
         Ref.textMan.Render(); // Draw remaining text - shouldn't be any

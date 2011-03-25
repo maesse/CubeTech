@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import java.util.ArrayList;
 import java.util.AbstractMap.SimpleEntry;
 import java.net.URL;
 import java.applet.Applet;
@@ -21,6 +22,7 @@ import cubetech.common.ICommand;
 import cubetech.common.CVarFlags;
 import java.util.EnumSet;
 import cubetech.common.CVar;
+import cubetech.common.Commands.ExecType;
 import cubetech.common.Common.ErrorCode;
 import cubetech.misc.Ref;
 import java.awt.Canvas;
@@ -28,6 +30,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import org.lwjgl.opengl.ARBVertexArrayObject;
 import org.lwjgl.opengl.ARBVertexBufferObject;
+import org.lwjgl.opengl.ContextAttribs;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.DisplayMode;
 import org.lwjgl.opengl.GL20;
@@ -43,7 +46,7 @@ public class GLRef {
     private DisplayMode desktopMode;
     private ContextCapabilities caps = null;
     private Canvas displayParent; // Canvas this glContext exists in.
-    private boolean initialized = false;
+    private static boolean initialized = false;
 
     public CVar r_vsync;
     public CVar r_mode;
@@ -106,7 +109,7 @@ public class GLRef {
     // Set up cvars
     private void Init() {
         r_vsync = Ref.cvars.Get("r_vsync", "1", EnumSet.of(CVarFlags.NONE));
-        r_mode = Ref.cvars.Get("r_mode", "1280x720", EnumSet.of(CVarFlags.NONE));
+        r_mode = Ref.cvars.Get("r_mode", "1024x768", EnumSet.of(CVarFlags.NONE));
         r_fullscreen = Ref.cvars.Get("r_fullscreen", "0", EnumSet.of(CVarFlags.NONE));
         r_refreshrate = Ref.cvars.Get("r_refreshrate", "60", EnumSet.of(CVarFlags.NONE));
         r_mindepth = Ref.cvars.Get("r_mindepth", "0", EnumSet.of(CVarFlags.NONE));
@@ -167,6 +170,7 @@ public class GLRef {
                     Ref.common.Error(ErrorCode.FATAL, "Cannot change vsync; current thread is not the OpenGL thread");
                 }
                 Display.setVSyncEnabled(r_vsync.iValue == 1);
+                checkError();
             } catch (Exception ex) {
                 Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
                 //Ref.common.Error(ErrorCode.FATAL, "Cannot change vsync; cannot get current thread state");
@@ -216,20 +220,46 @@ public class GLRef {
             if(Ref.Input != null)
                 Ref.Input.ClearKeys();
 
-            if(fullscreen)
+            if(fullscreen) {
                 Display.setDisplayModeAndFullscreen(currentMode);
+                checkError();
+            }
             else {
                 Display.setFullscreen(false);
+                checkError();
                 Display.setDisplayMode(currentMode);
+                checkError();
                 // Center window if not running in custom window
                 if(displayParent == null) {
                     Display.setLocation((int)(desktopMode.getWidth()/2f - currentMode.getWidth()/2f), (int)(desktopMode.getHeight()/2f - currentMode.getHeight()/2f));
+                    checkError();
                 }
             }
 
         } catch (Exception ex) {
             System.out.println(ex);
         }
+    }
+
+    public DisplayMode[] getNiceModes() {
+        ArrayList<DisplayMode> modes = new ArrayList<DisplayMode>();
+        // Look through availableModes
+        for (int i= 0; i < availableModes.length; i++) {
+            DisplayMode validmode = availableModes[i];
+
+            if(validmode.getBitsPerPixel() != desktopMode.getBitsPerPixel())
+                continue; // We wan't the same pixeldepth as the desktop mode
+
+            if(validmode.getFrequency() != desktopMode.getFrequency()
+                    && validmode.getFrequency() != r_refreshrate.iValue && validmode.getFrequency() != 0)
+                continue; // We also want the same frequency
+
+            modes.add(validmode);
+        }
+
+        DisplayMode[] mode_array = new DisplayMode[modes.size()];
+        modes.toArray(mode_array);
+        return mode_array;
     }
 
     // Expecting "800x600" or "800:600"
@@ -240,6 +270,8 @@ public class GLRef {
             r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
             return; // not valid
         }
+
+        Ref.commands.ExecuteText(ExecType.NOW, "listmodes");
 
         if(Ref.Input != null)
             Ref.Input.ClearKeys();
@@ -263,7 +295,7 @@ public class GLRef {
                         continue; // We wan't the same pixeldepth as the desktop mode
 
                     if(validmode.getFrequency() != desktopMode.getFrequency()
-                            && validmode.getFrequency() != r_refreshrate.iValue)
+                            && validmode.getFrequency() != r_refreshrate.iValue && validmode.getFrequency() != 0)
                         continue; // We also want the same frequency
 
                     break;
@@ -279,20 +311,31 @@ public class GLRef {
             System.out.println("Setting displaymode: " + newmode);
             if(Display.isFullscreen()) {
                 Display.setDisplayModeAndFullscreen(newmode);
+                checkError();
                 Display.setDisplayMode(newmode); // Derp. This call is also needed.
+                checkError();
             } else {
                 Display.setDisplayMode(newmode);
+                checkError();
             }
             
             // Adjust viewport
             if(Display.isCreated()) {
                 glViewport(0, 0, newmode.getWidth(), newmode.getHeight());
+                checkError();
             }
             currentMode = newmode;
             resolution = new Vector2f(currentMode.getWidth(), currentMode.getHeight());
             r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
-        } catch(Exception e) { // Can be NumberFormatException and IndexOutOfBounds
+        } catch(NumberFormatException e) { // Can be NumberFormatException and IndexOutOfBounds
             System.out.println("Invalid displaymode: " + mode);
+            r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
+        } catch(IndexOutOfBoundsException e){
+            System.out.println("Invalid displaymode: " + mode);
+            r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
+        } catch (LWJGLException ex){
+            System.out.println("Invalid displaymode: " + mode);
+            System.out.println("LWJGL error: " + ex);
             r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
         }
 
@@ -362,26 +405,33 @@ public class GLRef {
     }
 
     public void InitWindow(Canvas parent, Applet applet) throws Exception {
+
         this.applet = applet;
+
         availableModes = Display.getAvailableDisplayModes();
+
         desktopMode = Display.getDesktopDisplayMode();
+        
         System.out.println("Desktop displaymode: " + desktopMode);
         displayParent = parent; // Save off canvas if there is one
         SetResolution(r_mode.sValue);
-
+        
         if(parent == null) {
             // If we are creating a new window, center it
             Display.setLocation((int)(desktopMode.getWidth()/2f - currentMode.getWidth()/2f),
                     (int)(desktopMode.getHeight()/2f - currentMode.getHeight()/2f));
             
+            
         } else {
             Display.setParent(displayParent); // Applets use this
+            
             if(applet != null)
                 isApplet = true;
         }
 
         // Create the display
         Display.create(new PixelFormat(8, 8, 0, 0));
+        checkError();
 
         // Set vsync
         try {
@@ -389,7 +439,23 @@ public class GLRef {
         } catch (Exception ex) {};
         
         initialized = true;
+        // Get max vertices
+        intBuf16.position(0);
+        glGetInteger(GL12.GL_MAX_ELEMENTS_VERTICES, intBuf16);
+        checkError();
+        maxVertices = intBuf16.get(0);
 
+        // Get max indices
+        intBuf16.position(0);
+        glGetInteger(GL12.GL_MAX_ELEMENTS_INDICES, intBuf16);
+        checkError();
+        maxIndices = intBuf16.get(0);
+        System.out.println("OpenGL version: " + glGetString(GL_VERSION));
+
+        System.out.println("VBO support detected (V: " + maxVertices + ") (I: " + maxIndices + ")");
+        caps = GLContext.getCapabilities();
+        if(!CheckCaps())
+            Ref.common.Error(ErrorCode.FATAL, "Your grahics card is not supported");
         doVaoWorkaround();
         
         OnPostDisplayCreate();
@@ -398,18 +464,23 @@ public class GLRef {
 
     // Some drivers mess up VBO's when there's no VAO's bound (even if not used)
     private void doVaoWorkaround() {
+        if(!caps.GL_ARB_vertex_array_object)
+            return;
+
         int index = ARBVertexArrayObject.glGenVertexArrays();
+        checkError();
         ARBVertexArrayObject.glBindVertexArray(index);
+        checkError();
     }
 
     // Starts up stuff that was waiting for a display to be created
     public void OnPostDisplayCreate() throws Exception {
-        caps = GLContext.getCapabilities();
+        
         currentMode = Display.getDisplayMode();
+        checkError();
         resolution = new Vector2f(currentMode.getWidth(), currentMode.getHeight());
         
-        if(!CheckCaps())
-            Ref.common.Error(ErrorCode.FATAL, "Your grahics card is not supported");
+        
         
         loadShaders();
         
@@ -423,19 +494,10 @@ public class GLRef {
         glDepthFunc(GL_LEQUAL);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glViewport(0, 0, currentMode.getWidth(), currentMode.getHeight());
+        checkError();
+        
 
-        // Get max vertices
-        intBuf16.position(0);
-        glGetInteger(GL12.GL_MAX_ELEMENTS_VERTICES, intBuf16);
-        maxVertices = intBuf16.get(0);
-
-        // Get max indices
-        intBuf16.position(0);
-        glGetInteger(GL12.GL_MAX_ELEMENTS_INDICES, intBuf16);
-        maxIndices = intBuf16.get(0);
-
-        System.out.println("OpenGL version: " + glGetString(GL_VERSION));
-        System.out.println("VBO support detected (V: " + maxVertices + ") (I: " + maxIndices + ")");
+        
 
         // Init systems waiting for opengl
         if(Ref.textMan != null)
@@ -446,7 +508,15 @@ public class GLRef {
 
         // There may be an error sitting in OpenGL.
         // If it isn't cleared, it may trigger an exception later on.
-        glGetError();
+        checkError();
+    }
+
+    public static void checkError() {
+        if(!initialized)
+            return;
+        int error = glGetError();
+        if(error != GL_NO_ERROR)
+            throw new RuntimeException("OpenGL error: " + error);
     }
 
     public void setShader(String str) {
@@ -497,6 +567,7 @@ public class GLRef {
 
     public int createVBOid() {
         ARBVertexBufferObject.glGenBuffersARB(intBuf);
+        GLRef.checkError();
         return intBuf.get(0);
     }
 
@@ -515,11 +586,12 @@ public class GLRef {
     public ByteBuffer mapVBO(BufferTarget target, int bufferId, int size) {
         int t = BufferTargetToOpenGL(target);
         ARBVertexBufferObject.glBindBufferARB(t, bufferId);
-        
+        GLRef.checkError();
         Integer bufferID = (target == BufferTarget.Index?0:1) + (bufferId+1) << 1;
         ByteBuffer cachedBuf = cachedBuffers.get(bufferID);
         boolean newBuffer = cachedBuf == null;
         ByteBuffer buf =  ARBVertexBufferObject.glMapBufferARB(t, ARBVertexBufferObject.GL_WRITE_ONLY_ARB, size, cachedBuf);
+        GLRef.checkError();
         buf.order(ByteOrder.nativeOrder());
 
         if(newBuffer)
@@ -533,25 +605,32 @@ public class GLRef {
     public void unmapVBO(BufferTarget target, boolean unbind) {
         int t = BufferTargetToOpenGL(target);
         ARBVertexBufferObject.glUnmapBufferARB(t);
-        if(unbind)
+        GLRef.checkError();
+        if(unbind) {
             ARBVertexBufferObject.glBindBufferARB(t, 0);
+            GLRef.checkError();
+        }
     }
 
     void unbindVBO(BufferTarget target) {
         int t = BufferTargetToOpenGL(target);
         ARBVertexBufferObject.glBindBufferARB(t, 0);
+        GLRef.checkError();
     }
 
     void bindVBO(BufferTarget target, int bufferId) {
         int t = BufferTargetToOpenGL(target);
         ARBVertexBufferObject.glBindBufferARB(t, bufferId);
+        GLRef.checkError();
     }
 
     // Size is in elements, so 1 int = 1 size
     public void sizeVBO(BufferTarget target, int bufferid, int size) {
         int t = BufferTargetToOpenGL(target);
         ARBVertexBufferObject.glBindBufferARB(t, bufferid);
+        GLRef.checkError();
         ARBVertexBufferObject.glBufferDataARB(t, size, ARBVertexBufferObject.GL_DYNAMIC_DRAW_ARB);
+        GLRef.checkError();
     }
 
 //    public void fillVBO(int bufferid, FloatBuffer data) {

@@ -1,12 +1,13 @@
 package cubetech.entities;
 
 import cubetech.Game.Gentity;
-import cubetech.common.Common.MoverState;
+
 import cubetech.common.Content;
 import cubetech.common.Helper;
 import cubetech.common.IBlockedMethod;
 import cubetech.common.IThinkMethod;
 import cubetech.common.ITouchMethod;
+import cubetech.entities.Mover.MoverState;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector2f;
 

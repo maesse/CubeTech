@@ -178,6 +178,7 @@ public class SpriteManager {
 //        GL11.glEnableClientState(GL11.GL_VERTEX_ARRAY);
         ARBVertexShader.glEnableVertexAttribArrayARB(0); // position
         ARBVertexShader.glVertexAttribPointerARB(0, 3, GL11.GL_FLOAT, false, stride, 0);
+
 //
 //        GL11.glEnableClientState(GL11.GL_COLOR_ARRAY);
         ARBVertexShader.glEnableVertexAttribArrayARB(1); // color
@@ -186,7 +187,7 @@ public class SpriteManager {
 //        GL11.glEnableClientState(GL11.GL_TEXTURE_COORD_ARRAY);
         ARBVertexShader.glEnableVertexAttribArrayARB(2); // coords
         ARBVertexShader.glVertexAttribPointerARB(2, 2, GL11.GL_FLOAT, false, stride, 4*4);
-
+        GLRef.checkError();
 
         
         CubeTexture currentTex = null;
@@ -208,6 +209,7 @@ public class SpriteManager {
 //                callLenght = 1;
 
                 GL12.glDrawRangeElements(GL11.GL_TRIANGLES, callStart, callEnd-1, callLenght, GL11.GL_UNSIGNED_INT, offset);
+                GLRef.checkError();
                 //GL12.glDrawRangeElements(GL11.GL_TRIANGLES, callStart, callEnd, callLenght, GL11.GL_UNSIGNED_INT, offset);
             }
 
@@ -232,6 +234,7 @@ public class SpriteManager {
         GL20.glDisableVertexAttribArray(2);
         Ref.glRef.unbindVBO(BufferTarget.Vertex);
         Ref.glRef.unbindVBO(BufferTarget.Index);
+        GLRef.checkError();
     }
 
     public void DrawHUD() {

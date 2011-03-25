@@ -71,8 +71,9 @@ public class TextManager {
         public Vector2f MaxSize;
         public Type type;
         public float scale;
+        public int layer;
 
-        public TextQueue(Vector2f pos, String text, Align align, Color color, Vector2f maxSize, Type type, float scale) {
+        public TextQueue(Vector2f pos, String text, Align align, Color color, Vector2f maxSize, Type type, float scale, int layer) {
             Position = pos;
             Text = text;
             Align = align;
@@ -80,6 +81,7 @@ public class TextManager {
             MaxSize = maxSize;
             this.type = type;
             this.scale = scale;
+            this.layer = layer;
         }
     }
 
@@ -206,6 +208,7 @@ public class TextManager {
 
     private void PrintText(TextQueue queue) {
         Vector2f pos = queue.Position;
+        int layer = queue.layer;
         Color color = new Color(queue.color);
         String text = queue.Text;
         Align align = queue.Align;
@@ -336,6 +339,7 @@ public class TextManager {
             Sprite sprite = Ref.SpriteMan.GetSprite(type);
             sprite.Set(finalpos, size, fontTex, texOffset, texSize);
             sprite.SetColor(color);
+            sprite.SetDepth(layer);
 
             // Count up chars
             currW += (int)charSizes[letter].x;
@@ -351,9 +355,19 @@ public class TextManager {
     public Vector2f AddText(Vector2f pos, String text, Align align, Type type, float scale) {
         return AddText(pos, text, align, null, null, type, scale);
     }
+    
+    // Adds text, uses default color (white) and maxsize is screen bounds
+    public Vector2f AddText(Vector2f pos, String text, Align align, Type type, float scale, int layer) {
+        return AddText(pos, text, align, null, null, type, scale, layer);
+    }
 
     // Splits the text so it fits nicely in the given maxsize (doesn't cap height)
     public Vector2f AddText(Vector2f pos, String text, Align align, Color color, Vector2f maxSize, Type type, float scale) {
+        return AddText(pos, text, align, color, maxSize, type, scale, 0);
+    }
+
+    // Splits the text so it fits nicely in the given maxsize (doesn't cap height)
+    public Vector2f AddText(Vector2f pos, String text, Align align, Color color, Vector2f maxSize, Type type, float scale, int layer) {
         if(maxSize == null)
             maxSize = Ref.glRef.GetResolution();
         if(color == null)
@@ -364,7 +378,7 @@ public class TextManager {
 //        else if(type == Type.GAME)
 //            scale /= 6f;
         
-        textque.add(new TextQueue(pos, text, align, color, maxSize, type, scale)); // Queue up for rendering
+        textque.add(new TextQueue(pos, text, align, color, maxSize, type, scale, layer)); // Queue up for rendering
         PopQueue(); // Process immediatly, this will create a lot of sprites
 
 

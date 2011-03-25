@@ -15,6 +15,7 @@ public abstract class CComponent {
     private Vector4f margin = new Vector4f(); // this gets added to the size
     private CContainer parent = null;
     private boolean mouseEnter = false;
+    public Object tag = null;
 
     public abstract void Render(Vector2f parentPosition);
     

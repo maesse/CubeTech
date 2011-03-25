@@ -41,6 +41,7 @@ public class CubeTexture {
         if(loaded) {
 //            GL13.glActiveTexture(GL13.GL_TEXTURE0);
             glBindTexture(Target, TextureID);
+            GLRef.checkError();
 //            GL20.glUniform1i(Ref.glRef.shader.GetTextureIndex(), TextureID);
         }
     }

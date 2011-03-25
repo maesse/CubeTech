@@ -362,7 +362,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             spr.SetColor(255, 0, 0, (int)(alpha*255));
         spr.SetDepth(PLAYER_LAYER);
 
-        Ref.textMan.AddText(new Vector2f(cent.lerpOrigin.x, cent.lerpOrigin.y+Game.PlayerMaxs.y), "" + cgs.clientinfo[cent.currentState.ClientNum].name, Align.CENTER, Type.GAME, 1f);
+        Ref.textMan.AddText(new Vector2f(cent.lerpOrigin.x, cent.lerpOrigin.y+Game.PlayerMaxs.y), "" + cgs.clientinfo[cent.currentState.ClientNum].name, Align.CENTER, Type.GAME, 1, PLAYER_LAYER+1);
     }
 
     private void Draw2D() {

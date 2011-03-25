@@ -39,7 +39,7 @@ public class SoundManager {
 
   // 3d distance model
   CVar s_minDistance = Ref.cvars.Get("s_minDistance", "30", EnumSet.of(CVarFlags.CHEAT));
-  CVar s_falloff = Ref.cvars.Get("s_falloff", "1", EnumSet.of(CVarFlags.CHEAT));
+  CVar s_falloff = Ref.cvars.Get("s_falloff", "0.4", EnumSet.of(CVarFlags.CHEAT));
   // doppler settings
   CVar s_dopplerfactor = Ref.cvars.Get("s_dopplerfactor", "1.0", EnumSet.of(CVarFlags.CHEAT));
   CVar s_dopplerspeed = Ref.cvars.Get("s_dopplerspeed", "500", EnumSet.of(CVarFlags.CHEAT)); // speed of sound

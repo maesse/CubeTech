@@ -43,8 +43,12 @@ public class MainMenuUI implements IMenu {
                 Ref.ui.SetActiveMenu(UI.MENU.SERVERS);
             }
         }));
-        cont.addComponent(new CButton("Sup3 Long",buttonBg, Align.CENTER,1.5f));
-        cont.addComponent(new CButton("Sup4",buttonBg, Align.CENTER,1.5f));
+//        cont.addComponent(new CButton("Sup3 Long",buttonBg, Align.CENTER,1.5f));
+        cont.addComponent(new CButton("Options",buttonBg, Align.CENTER,1.5f, new ButtonEvent() {
+            public void buttonPressed(CComponent button, MouseEvent evt) {
+                Ref.ui.SetActiveMenu(UI.MENU.OPTIONS);
+            }
+        }));
         cont.addComponent(new CButton("Quit",buttonBg, Align.CENTER,1.5f,new ButtonEvent() {
             public void buttonPressed(CComponent button, MouseEvent evt) {
                 Ref.common.Shutdown();

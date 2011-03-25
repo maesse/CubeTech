@@ -37,7 +37,7 @@ public class Shader {
 
         // Create program
         shaderId = ARBShaderObjects.glCreateProgramObjectARB();
-
+        GLRef.checkError();
         // Load vertex and fragment shader
         if(shaderId > 0) {
             vertShader = createVertShader(name);
@@ -49,39 +49,49 @@ public class Shader {
         // Bind it all up and validate
         if(vertShader > 0 && fragShader > 0) {
             ARBShaderObjects.glAttachObjectARB(shaderId, vertShader);
+            GLRef.checkError();
             ARBShaderObjects.glAttachObjectARB(shaderId, fragShader);
+            GLRef.checkError();
             if(geomShader > 0) {
                 ARBShaderObjects.glAttachObjectARB(shaderId, geomShader);
+                GLRef.checkError();
                 ARBGeometryShader4.glProgramParameteriARB(shaderId, ARBGeometryShader4.GL_GEOMETRY_INPUT_TYPE_ARB, GL11.GL_POINTS);
+
                 ARBGeometryShader4.glProgramParameteriARB(shaderId, ARBGeometryShader4.GL_GEOMETRY_OUTPUT_TYPE_ARB, GL11.GL_POINTS);
                 ARBGeometryShader4.glProgramParameteriARB(shaderId, ARBGeometryShader4.GL_GEOMETRY_VERTICES_OUT_ARB, 4);
+                GLRef.checkError();
 
             }
             GL20.glBindAttribLocation(shaderId, 0, "v_position");
             GL20.glBindAttribLocation(shaderId, 1, "v_color");
             GL20.glBindAttribLocation(shaderId, 2, "v_coords");
+            GLRef.checkError();
             
             ARBShaderObjects.glLinkProgramARB(shaderId);
             ARBShaderObjects.glValidateProgramARB(shaderId);
+            GLRef.checkError();
         } else throw new Exception("Could not load fragment or vertex shader");
-
-        boolean infoString = checkShader(shaderId);
+        GLRef.checkError();
+        boolean infoString = checkShader(shaderId, true);
         if(!infoString)
             throw new Exception("Shader assembly failed.");
-        
+        GLRef.checkError();
         uniform_texture = ARBShaderObjects.glGetUniformLocationARB(shaderId, "tex");
         attr_position = GL20.glGetAttribLocation(shaderId, "v_position");
         attr_coords = GL20.glGetAttribLocation(shaderId, "v_coords");
         attr_color = GL20.glGetAttribLocation(shaderId, "v_color");
+        GLRef.checkError();
     }
 
     public void Bind() {
         ARBShaderObjects.glUseProgramObjectARB(shaderId);
         ARBShaderObjects.glUniform1iARB(uniform_texture, 0); // Bind TEXTURE0 to "tex"
+        GLRef.checkError();
     }
 
     public static void Release() {
         ARBShaderObjects.glUseProgramObjectARB(0);
+        GLRef.checkError();
     }
 
     public int GetTextureIndex() {
@@ -110,7 +120,8 @@ public class Shader {
         ARBShaderObjects.glCompileShaderARB(vertShader);
 
         // Check it
-        boolean info = checkShader(vertShader);
+        boolean info = checkShader(vertShader, false);
+        GLRef.checkError();
         if(!info) {
             System.err.println("Vertex shader check failed.");
             return 0;
@@ -137,7 +148,8 @@ public class Shader {
         ARBShaderObjects.glCompileShaderARB(geomShader);
 
         // Check it
-        boolean info = checkShader(geomShader);
+        boolean info = checkShader(geomShader, false);
+        GLRef.checkError();
         if(!info) {
             System.err.println("Geometry shader check failed.");
             return 0;
@@ -167,7 +179,8 @@ public class Shader {
         ARBShaderObjects.glCompileShaderARB(fragShader);
 
         // Check it
-        boolean info = checkShader(fragShader);
+        boolean info = checkShader(fragShader, false);
+        GLRef.checkError();
         if(!info) {
             System.err.println("Fragment shader check failed.");
             return 0;
@@ -175,22 +188,26 @@ public class Shader {
         return fragShader;
     }
 
-    private boolean checkShader(int shader) {
+    private boolean checkShader(int shader, boolean checklink) {
         // OpenGL returns len > 1 when everythings OK.
         IntBuffer buf = BufferUtils.createIntBuffer(1);
         ARBShaderObjects.glGetObjectParameterARB(shader, ARBShaderObjects.GL_OBJECT_INFO_LOG_LENGTH_ARB, buf);
-
+        GLRef.checkError();
         int lenght = buf.get();
         if(lenght > 1) {
             // Got some output
             ByteBuffer bytebuf = BufferUtils.createByteBuffer(lenght);
             buf.flip(); // flip the int buffer for reuse
             ARBShaderObjects.glGetInfoLogARB(shader, buf, bytebuf);
+            GLRef.checkError();
             byte[] infoBytes = new byte[lenght];
             bytebuf.get(infoBytes);
             System.out.println(new String(infoBytes).trim());
             //return new String(infoBytes);
         }
+
+        if(checklink)
+            return GL20.glGetProgram(shader, GL20.GL_LINK_STATUS)==GL11.GL_TRUE;
 
         return GL20.glGetShader(shader, GL20.GL_COMPILE_STATUS)==GL11.GL_TRUE;
 

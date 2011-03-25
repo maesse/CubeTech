@@ -247,6 +247,7 @@ public class Sprite {
             } else if(special == GL11.GL_SCISSOR_BOX) {
                 GL11.glScissor(a, b, c, d);
             }
+            GLRef.checkError();
             return;
         }
             
@@ -280,7 +281,8 @@ public class Sprite {
             
         }
         GL11.glEnd();
-
+        
         GL11.glPopMatrix();
+        GLRef.checkError();
     }
 }

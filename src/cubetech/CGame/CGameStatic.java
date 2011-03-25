@@ -43,6 +43,7 @@ public final class CGameStatic {
         String info = ConfigString(CS.CS_SERVERINFO);
         gametype = Integer.parseInt(Info.ValueForKey(info, "g_gametype"));
         Ref.cvars.Set2("g_gametype", ""+gametype, true);
+        Ref.cvars.Set2("sv_speed", Info.ValueForKey(info, "sv_speed"), true);
         maxclients = Integer.parseInt(Info.ValueForKey(info, "sv_maxclients"));
         mapname = Info.ValueForKey(info, "mapname");
     }
