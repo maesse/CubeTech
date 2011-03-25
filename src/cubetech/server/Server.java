@@ -92,7 +92,7 @@ public class Server implements ITrace {
 
     SvEntity SvEntityForGentity(SharedEntity ent) {
         if(ent == null || ent.s.ClientNum < 0 || ent.s.ClientNum >= Common.MAX_GENTITIES)
-            System.out.println("FAIL");
+            Ref.common.Error(Common.ErrorCode.DROP, "SvEntityForGentity invalid");
         return sv.svEntities[ent.s.ClientNum];
     }
 
@@ -219,8 +219,8 @@ public class Server implements ITrace {
         // shut down the existing game if it is running
         ShutdownGameProgs();
 
-        System.out.println("Server initializating...");
-        System.out.println("Map: " + mapname);
+        Common.Log("Server initializating...");
+        Common.Log("Map: " + mapname);
         
         
         // Notice the client system
@@ -271,7 +271,7 @@ public class Server implements ITrace {
         try {
             Ref.cm.LoadMap(mapname, false);
         } catch (ClipmapException ex) {
-            System.out.println(ex.toString());
+            Common.Log(ex.toString());
             Ref.common.Error(Common.ErrorCode.DROP, ex.toString());
             return;
         }
@@ -337,7 +337,7 @@ public class Server implements ITrace {
 
     public void SetConfigString(int index, String p) {
         if(index < 0 || index >= 1025) {
-            System.out.println("SetConfigString: Bad Index " + index);
+            Common.Log("SetConfigString: Bad Index " + index);
             return;
         }
 
@@ -378,7 +378,7 @@ public class Server implements ITrace {
 
     void SendServerCommand(SvClient cl, String str) {
         if(str.length() > 1022) {
-            System.out.println("SendServerCommand: Str too long: " + str);
+            Common.Log("SendServerCommand: Str too long: " + str);
             return;
         }
         
@@ -431,7 +431,7 @@ public class Server implements ITrace {
             // some address translating routers periodically change UDP
             // port assignments
             if(cl.netchan.addr.getPort() != data.endpoitn.getPort()) {
-                System.out.println("Fixing up translation port");
+                Common.Log("Fixing up translation port");
                 cl.netchan.addr = new InetSocketAddress(cl.netchan.addr.getAddress(), data.endpoitn.getPort());
             }
 
@@ -470,7 +470,7 @@ public class Server implements ITrace {
             // sequenced messages to the old client
         }
         else
-            System.out.println("bad connectionless packet from " + data.endpoitn + ": " + str);
+            Common.LogDebug("bad connectionless packet from " + data.endpoitn + ": " + str);
     }
 
     private void CheckTimeouts() {
@@ -495,7 +495,7 @@ public class Server implements ITrace {
         if(Ref.common.sv_running.iValue != 1)
             return;
 
-        System.out.println("--- Server Shutdown (" + string + ") ---");
+        Common.Log("--- Server Shutdown (" + string + ") ---");
         if(clients.length > 0) {
             FinalMessage(string);
         }
@@ -586,7 +586,7 @@ public class Server implements ITrace {
             chal = Info.ValueForKey(userinfo, "qport");
             qport = Integer.parseInt(chal);
         } catch (NumberFormatException e) {
-            System.out.println("Malformed challenge in connection attempt");
+            Common.Log("Malformed challenge in connection attempt");
             return;
         }
         String ip = from.getAddress().toString();
@@ -602,7 +602,7 @@ public class Server implements ITrace {
                     if(challenges[i].challenge == challenge)
                         break;
                     else
-                        System.out.println("Hey man");
+                        Common.LogDebug("Hey man");
                 }
             }
 
@@ -616,12 +616,12 @@ public class Server implements ITrace {
             Challenge ch = challenges[i];
             if(ch.wasRefused) {
                 // Return silently, so that error messages written by the server keep being displayed.
-                System.out.println("Silent refuse");
+                Common.LogDebug("Silent refuse");
                 return;
             }
 
             int ping = time - ch.pingTime;
-            System.out.println("Client connected with challenge ping of " + ping);
+            Common.Log("Client connected with challenge ping of " + ping);
             ch.connected = true;
         }
 
@@ -635,7 +635,7 @@ public class Server implements ITrace {
 
             if(from.getAddress().equals(cl.netchan.addr.getAddress()) &&
                     (from.getPort() == cl.netchan.addr.getPort() || qport == cl.netchan.qport)) {
-                System.out.println("Reconnect...");
+                Common.LogDebug("Reconnect...");
                 clients[i] = new SvClient();
                 clients[i].id = i;
                 newcl = clients[i];
@@ -664,7 +664,7 @@ public class Server implements ITrace {
 
             if(newcl == null) {
                 Ref.net.SendOutOfBandPacket(NetSource.SERVER, from, String.format("print \"Server is full.\""));
-                System.out.println("Rejected connection: Server is full");
+                Common.Log("Rejected connection: Server is full");
                 return;
             }
 
@@ -689,7 +689,7 @@ public class Server implements ITrace {
         String denied = Ref.game.Client_Connect(i, true);
         if(denied != null) {
             Ref.net.SendOutOfBandPacket(NetSource.SERVER, from, String.format("print \"%s\"", denied));
-            System.out.println("Rejected a connection: " + denied);
+            Common.Log("Rejected a connection: " + denied);
             return;
         }
 
@@ -727,7 +727,7 @@ public class Server implements ITrace {
 
     private void GetWorldBounds(Vector2f mins, Vector2f maxs) {
         if(Ref.cm.cm == null) {
-            System.out.println("GetWorldBounds: Cannot return valid result, not map loaded.");
+            Common.Log("GetWorldBounds: Cannot return valid result, not map loaded.");
             maxs.x = 1000;
             maxs.y = 1000;
             return;
@@ -790,7 +790,7 @@ public class Server implements ITrace {
 
         // Unlink from worldsector
         if(!ent.worldSector.UnlinkEntity(ent)) {
-            System.out.println("Warning: UnlinkEntity: Not found in worldsector");
+            Common.Log("Warning: UnlinkEntity: Not found in worldsector");
         }
     }
 
@@ -966,7 +966,7 @@ public class Server implements ITrace {
         
         String arg = Commands.ArgsFrom(tokens, 1);
         if(arg.length() > 128) {
-            System.out.println("SV: Ignored CL info packet, huge arg: " + arg);
+            Common.Log("SV: Ignored CL info packet, huge arg: " + arg);
             return;
         }
 
@@ -1083,13 +1083,13 @@ public class Server implements ITrace {
 
     private void cmd_Map(String[] tokens) {
         if(tokens.length < 2) {
-            System.out.println("usage: map <mapname>");
+            Common.Log("usage: map <mapname>");
             return;
         }
 
         // Check if map exists before changing
         if(!ResourceManager.FileExists(tokens[1])) {
-            System.out.println("Cannot find map: " + tokens[1]);
+            Common.Log("Cannot find map: " + tokens[1]);
             return;
         }
 

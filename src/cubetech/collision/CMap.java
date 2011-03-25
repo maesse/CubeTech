@@ -1,6 +1,7 @@
 package cubetech.collision;
 
 import cubetech.Block;
+import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Helper;
 import cubetech.gfx.CubeMaterial;
@@ -75,7 +76,7 @@ public class CMap {
     
     public int ToSubModel(Block b) {
         if(b.CustomVal > 0) {
-            System.out.println("ToSubModel: Warning: Block is already in a model");
+            Common.Log("ToSubModel: Warning: Block is already in a model");
             subModels.get(b.CustomVal-1).removeBlock(b);
         }
 
@@ -108,12 +109,12 @@ public class CMap {
     private boolean LoadHeader(NetBuffer buf) {
         int magic = buf.ReadInt();
         if(magic != CMap.MAPMAGIC) {
-            System.out.println("LoadWorld: Map is not a valid cubetech map");
+            Common.Log("LoadWorld: Map is not a valid cubetech map");
             return false;
         }
         int version = buf.ReadInt();
         if(version != CMap.MAPVERSION) {
-            System.out.println("LoadWorld: Map uses a different version");
+            Common.Log("LoadWorld: Map uses a different version");
             return false;
         }
         return true;
@@ -136,7 +137,7 @@ public class CMap {
         int size = blocks.size();
         if(index >= size) {
             if(index > size) {
-                System.out.println("BlockUpdate: Missed some blocks :/");
+                Common.Log("BlockUpdate: Missed some blocks :/");
             }
 
             
@@ -146,7 +147,7 @@ public class CMap {
         }
         Block b = blocks.get(index);
         if(b.Handle != index)
-            System.out.println("CMap.GetBlock: index & block index mismatch");
+            Common.Log("CMap.GetBlock: index & block index mismatch");
         return b;
     }
 
@@ -210,7 +211,7 @@ public class CMap {
 
             Block block = new Block(numblocks, position, size, true);
             if(numblocks != blocks.size())
-                System.out.println("CMap: numblocks & block array size mismatch");
+                Common.Log("CMap: numblocks & block array size mismatch");
             block.SetAngle(angle);
             block.setMaterial(mat);
 //            block.TexOffset = new Vector2f(texOffset);
@@ -278,7 +279,7 @@ public class CMap {
     public Block AddBlock() {
         Block b = new Block(numblocks, new Vector2f(), new Vector2f(1, 1), true);
         if(numblocks != blocks.size())
-            System.out.println("CMap.AddBlock(): numblock & block.size() mismatch");
+            Common.Log("CMap.AddBlock(): numblock & block.size() mismatch");
         numblocks++;
         blocks.add(b);
         return b;

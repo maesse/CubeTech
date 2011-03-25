@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import cubetech.common.Common;
 import cubetech.misc.Ref;
 import java.net.URL;
 import java.nio.ByteBuffer;
@@ -202,7 +203,7 @@ public class Shader {
             GLRef.checkError();
             byte[] infoBytes = new byte[lenght];
             bytebuf.get(infoBytes);
-            System.out.println(new String(infoBytes).trim());
+            Common.Log(new String(infoBytes).trim());
             //return new String(infoBytes);
         }
 

@@ -53,7 +53,7 @@ public class Game {
     }
 
     public void Init(int leveltime, int randSeed, boolean restart) {
-        System.out.println("--- Game init ---");
+        Common.Log("--- Game init ---");
         g_cheats = Ref.cvars.Get("g_cheats", "0", EnumSet.of(CVarFlags.NONE));
 
         level = new LevelLocal();
@@ -258,9 +258,9 @@ public class Game {
         // Sorry, we're full.
         if(i == Common.ENTITYNUM_MAX_NORMAL) {
             for (i = 0;i < Common.MAX_GENTITIES; i++) {
-                System.out.println(String.format("%s: %s", i, g_entities[i].classname));
+                Common.Log(String.format("%s: %s", i, g_entities[i].classname));
             }
-            System.out.println("No free entities.");
+            Common.Log("No free entities.");
         }
 
         // open up a new slot
@@ -294,7 +294,7 @@ public class Game {
     }
 
     public void ShutdownGame(boolean b) {
-        System.out.println("--- GAME SHUTDOWN ---");
+        Common.Log("--- GAME SHUTDOWN ---");
     }
 
     public void Client_Begin(int i) {
@@ -379,7 +379,7 @@ public class Game {
     boolean callSpawn(Gentity ent) {
         if(ent.classname == null || ent.classname.isEmpty())
         {
-            System.out.println("callSpawn: Null classname");
+            Common.LogDebug("callSpawn: Null classname");
             return false;
         }
 
@@ -397,7 +397,7 @@ public class Game {
             return true;
         }
 
-        System.out.println(ent.classname + " doesn't have a spawn function");
+        Common.LogDebug(ent.classname + " doesn't have a spawn function");
         return false;
     }
 
@@ -422,7 +422,7 @@ public class Game {
     // Adds an event+parm and twiddles the event counter
     public void AddEvent(Gentity ent, int evt, int evtParms) {
         if(evt == 0) {
-            System.out.println("Zero event added for entity " + ent.s.ClientNum);
+            Common.LogDebug("Zero event added for entity " + ent.s.ClientNum);
             return;
         }
 

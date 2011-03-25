@@ -91,7 +91,7 @@ public class Client {
     public Message message = new Message();
 
     public void Init() {
-        System.out.println("--- Client Initialization ---");
+        Common.Log("--- Client Initialization ---");
         cl = new ClientActive(); // Clear State
         state = ConnectState.DISCONNECTED;
         realtime = 0;
@@ -272,7 +272,7 @@ public class Client {
         // packet from server
         //
         if(!data.endpoitn.equals(clc.ServerAddr)) {
-            System.out.println("Sequence packet without connection");
+            Common.LogDebug("Sequence packet without connection");
             return;
         }
 
@@ -348,7 +348,7 @@ public class Client {
                     ParseDownload(packet.buf);
                     break;
                 default:
-                    System.out.println("Illegable server message.");
+                    Common.Log("Illegable server message.");
                     break;
             }
         }
@@ -363,7 +363,7 @@ public class Client {
         String c = tokens[0];
         if(c.equalsIgnoreCase("challengeResponse")) {
             if(state != ConnectState.CONNECTING) {
-                System.out.println("Unwanted challenge response recived. Ignored");
+                Common.Log("Unwanted challenge response recived. Ignored");
                 return;
             }
 
@@ -375,11 +375,11 @@ public class Client {
                 c = tokens[2];
                 try {
                     if(clc.challenge != Integer.parseInt(c)){
-                        System.out.println("Challenge response was recived from an unexpected source");
+                        Common.Log("Challenge response was recived from an unexpected source");
                         return;
                     }
                 } catch(NumberFormatException e) {
-                    System.out.println("Bogus challenge response was recived from an unexpected source");
+                    Common.Log("Bogus challenge response was recived from an unexpected source");
                     return;
                 }
             }
@@ -399,18 +399,18 @@ public class Client {
         if(c.equalsIgnoreCase("connectResponse")) {
             if(state >= ConnectState.CONNECTED)
             {
-                System.out.println("Duplicate connection recieved. Rejected.");
+                Common.Log("Duplicate connection recieved. Rejected.");
                 return;
             }
 
             if(state != ConnectState.CHALLENGING) {
-                System.out.println("ConnectResonse while not connecting. Ignoring.");
+                Common.Log("ConnectResonse while not connecting. Ignoring.");
                 return;
             }
 
             if(!packet.endpoitn.equals(clc.ServerAddr))
             {
-                System.out.println("ConnectResponse from wrong address. ignored.");
+                Common.Log("ConnectResponse from wrong address. ignored.");
                 return;
             }
 
@@ -453,7 +453,7 @@ public class Client {
         // echo request from server
         if(c.equalsIgnoreCase("print")) {
             clc.servermessage = tokens[1];
-            System.out.println(clc.servermessage);
+            Common.Log(clc.servermessage);
             return;
         }
 
@@ -463,7 +463,7 @@ public class Client {
             return;
         }
 
-        System.out.println("Unknown OOB packet from " + packet.endpoitn.toString());
+        Common.LogDebug("Unknown OOB packet from " + packet.endpoitn.toString());
     }
     
     
@@ -477,7 +477,7 @@ public class Client {
 
         if(state < ConnectState.CONNECTED || cmd.charAt(0) == '+')
         {
-            System.out.println("Unknown command " + cmd);
+            Common.Log("Unknown command " + cmd);
             return;
         }
 
@@ -494,7 +494,7 @@ public class Client {
         // also leave one slot open for the disconnect command in this case.
         if((isDisconnect && unacknowledged > 64) ||
                 (!isDisconnect  && unacknowledged >= 64)) {
-            System.out.println("Client command overflow.");
+            Ref.common.Error(ErrorCode.DROP, "Client command overflow.");
         }
 
         clc.reliableCommands[++clc.reliableSequence & 63] = cmd;
@@ -590,7 +590,7 @@ public class Client {
             case ConnectState.CONNECTING:
                 String data = "getchallenge " + clc.challenge;
                 Ref.net.SendOutOfBandPacket(NetSource.CLIENT, clc.ServerAddr, data);
-                System.out.println("Connecting...");
+                Common.Log("Connecting...");
                 break;
             case ConnectState.CHALLENGING:
                 // sending back the challenge
@@ -676,11 +676,11 @@ public class Client {
                 // Read baseline
                 int newnum = buf.ReadInt();
                 if(newnum < 0 || newnum >= Common.MAX_GENTITIES) {
-                    System.out.println("ParseGameState: Baseline number out of range");
+                    Ref.common.Error(ErrorCode.DROP, "ParseGameState: Baseline number out of range");
                 }
                 cl.entityBaselines[newnum].ReadDeltaEntity(buf, nullstate2, newnum);
             } else {
-                System.out.println("ParseGameState(): Bad command byte");
+                Ref.common.Error(ErrorCode.DROP, "ParseGameState(): Bad command byte");
             }
         }
 
@@ -790,7 +790,7 @@ public class Client {
         if(count > 32)
         {
             count = 32;
-            System.out.println("WritePacket: Can't send more than 32 usercommands pr frame");
+            Common.Log("WritePacket: Can't send more than 32 usercommands pr frame");
         }
 
         PlayerInput old = nullstate;
@@ -857,7 +857,6 @@ public class Client {
         // use the lastExecutedServerCommand instead of the serverCommandSequence
         // otherwise server commands sent just before a gamestate are dropped
         Ref.cgame = new CGame();
-        System.out.println(clc.lastExecutedServerCommand);
         Ref.cgame.Init(clc.serverMessageSequence, clc.lastExecutedServerCommand, clc.ClientNum);
 
         // we will send a usercmd this frame, which
@@ -915,14 +914,14 @@ public class Client {
             oldsnap = cl.snapshots[newsnap.deltanum & 31];
             if(!oldsnap.valid) {
                 // Should never happen
-                System.out.println("ParseSnapshot: Delta from invalid frame");
+                Common.Log("ParseSnapshot: Delta from invalid frame");
             }
             else if(oldsnap.messagenum != newsnap.deltanum) {
                 // The frame that the server did the delta from
                 // is too old, so we can't reconstruct it properly.
-                System.out.println("Delta frame too old");
+                Common.LogDebug("Delta frame too old");
             } else if(cl.parseEntitiesNum - oldsnap.parseEntitiesNum > Common.MAX_GENTITIES - 128)
-                System.out.println("ParseSnapshot: Delta parseEntitiesnum too old");
+                Common.LogDebug("ParseSnapshot: Delta parseEntitiesnum too old");
             else
                 newsnap.valid = true; // valid delta parse
         }
@@ -1145,7 +1144,7 @@ public class Client {
         String cmd = clc.serverCommands[commandNumber & 63];
         clc.lastExecutedServerCommand = commandNumber;
 
-//        System.out.println("ServerCommand: " + cmd);
+        Common.LogDebug("ServerCommand: " + cmd);
 
         String[] tokens = Commands.TokenizeString(cmd, false);
         if(tokens[0].equalsIgnoreCase("disconnect")) {
@@ -1205,7 +1204,7 @@ public class Client {
         // TODO: If necessary
 
         // drop the connection
-        System.out.println("Server disconnected for unknown reasons.");
+        Common.Log("Server disconnected for unknown reasons.");
         Ref.cvars.Set2("errorMessage", "Server disconnected for unknown reasons.", true);
         Disconnect(true);
     }
@@ -1217,7 +1216,7 @@ public class Client {
             // if this isn't the correct protocol version, ignore it
             int protocol = Integer.parseInt(Info.ValueForKey(info, "protocol"));
             if(protocol != Net.MAGIC_NUMBER) {
-                System.out.println("Different protocol info packet: " + protocol);
+                Common.Log("Different protocol info packet: " + protocol);
                 return;
             }
 
@@ -1226,7 +1225,7 @@ public class Client {
                 if(ping.adr != null && ping.time <= 0 && from.equals(ping.adr)) {
                     // calc ping time
                     ping.time = Ref.common.Milliseconds() - ping.start;
-                    System.out.println("Ping time " + ping.time + "ms from " + ping.adr);
+                    Common.Log("Ping time " + ping.time + "ms from " + ping.adr);
 
                     // save of info
                     ping.info = info;
@@ -1249,7 +1248,7 @@ public class Client {
             }
 
             if(i == serversourceList.length) {
-                System.out.println("No room for more servers in the list");
+                Common.LogDebug("No room for more servers in the list");
                 return;
             }
 
@@ -1271,7 +1270,7 @@ public class Client {
                 cl_nGlobalServers++;
             
         } catch(NumberFormatException e) {
-            System.out.println("Failed parsing ServerInfo packet: " + e.getMessage());
+            Common.LogDebug("Failed parsing ServerInfo packet: " + e.getMessage());
         }
     }
 
@@ -1386,7 +1385,7 @@ public class Client {
     }
 
     private void BeginDownload(String file) {
-        System.out.println("Begin download: " + file);
+        Common.LogDebug("Begin download: " + file);
 
         clc.downloadName = file;
         clc.downloadBlock = 0;
@@ -1398,7 +1397,7 @@ public class Client {
 
     private void ParseDownload(NetBuffer buf) {
         if(clc.downloadName == null) {
-            System.out.println("Recieving unrequested download");
+            Common.Log("Recieving unrequested download");
             AddReliableCommand("stopdl", false);
             return;
         }
@@ -1426,7 +1425,7 @@ public class Client {
         buf.GetBuffer().get(data);
 
         if(clc.downloadBlock != block) {
-            System.out.println("ParseDownload: Expected block " + clc.downloadBlock + ", got " + block);
+            Common.Log("ParseDownload: Expected block " + clc.downloadBlock + ", got " + block);
             return;
         }
 
@@ -1486,7 +1485,7 @@ public class Client {
         public void RunCommand(String[] args) {
             if(args.length != 2)
             {
-                System.out.println("usage: connect <hostname[:ip]>");
+                Common.Log("usage: connect <hostname[:ip]>");
                 return;
             }
 
@@ -1509,13 +1508,13 @@ public class Client {
 
             InetSocketAddress endp = Ref.net.LookupHost(server);
             if(endp == null || endp.getAddress() == null) {
-                System.out.println("Connect failed: Could not lookup hostname");
+                Common.Log("Connect failed: Could not lookup hostname");
                 state = ConnectState.DISCONNECTED;
                 return;
             }
 
             if(endp.getHostName() != null)
-            System.out.println(String.format("%s resolved to %s", endp.getHostName(), endp.getAddress().getHostAddress()));
+            Common.Log(String.format("%s resolved to %s", endp.getHostName(), endp.getAddress().getHostAddress()));
 
 
 
@@ -1540,7 +1539,7 @@ public class Client {
     // Console commands
     private class cmd_LocalServers implements ICommand {
         public void RunCommand(String[] args) {
-            System.out.println("Scanning for local servers on the network...");
+            Common.LogDebug("Scanning for local servers on the network...");
 
             // reset the list, waiting for response+
             serversourceList = cl_localServers;
@@ -1571,7 +1570,7 @@ public class Client {
 
     private class cmd_InternetServers implements ICommand {
         public void RunCommand(String[] args) {
-            System.out.println("Scanning for global servers...");
+            Common.LogDebug("Scanning for global servers...");
 
             // reset the list, waiting for response
             serversourceList = cl_globalServers;
@@ -1611,7 +1610,7 @@ public class Client {
     private class cmd_Cmd implements ICommand {
         public void RunCommand(String[] args) {
             if(state != ConnectState.ACTIVE) {
-                System.out.println("Not connected to a server.");
+                Common.Log("Not connected to a server.");
                 return;
             }
 
@@ -1657,7 +1656,7 @@ public class Client {
         dest.ps = clSnap.ps;
         dest.numEntities = clSnap.numEntities;
         if(dest.numEntities > Snapshot.MAX_ENTITIES_IN_SNAPSHOT) {
-            System.out.println(String.format("GetSnapshot(): truncated %d entities to %d", dest.numEntities, Snapshot.MAX_ENTITIES_IN_SNAPSHOT));
+            Common.LogDebug(String.format("GetSnapshot(): truncated %d entities to %d", dest.numEntities, Snapshot.MAX_ENTITIES_IN_SNAPSHOT));
             dest.numEntities = Snapshot.MAX_ENTITIES_IN_SNAPSHOT;
         }
         for (int i= 0; i < dest.numEntities; i++) {

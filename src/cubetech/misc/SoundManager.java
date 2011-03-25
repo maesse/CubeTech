@@ -2,6 +2,7 @@ package cubetech.misc;
 
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
+import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.gfx.ResourceManager;
 import java.io.IOException;
@@ -260,7 +261,7 @@ public class SoundManager {
         if(newsound == null) {
              URL url = ResourceManager.getClassLoader().getResource("cubetech/"+name);
              if(url == null) {
-                 System.out.println("PlayOGG: Could not find file: " + name);
+                 Common.Log("PlayOGG: Could not find file: " + name);
                  return null;
              }
 

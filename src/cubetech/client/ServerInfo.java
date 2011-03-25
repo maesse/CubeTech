@@ -1,5 +1,6 @@
 package cubetech.client;
 
+import cubetech.common.Common;
 import cubetech.common.IThinkMethod;
 import cubetech.common.Info;
 import java.net.InetSocketAddress;
@@ -31,7 +32,7 @@ public class ServerInfo {
                 maxClients = Integer.parseInt(Info.ValueForKey(info, "sv_maxclients"));
                 gametype = Integer.parseInt(Info.ValueForKey(info, "gametype"));
             } catch(NumberFormatException e) {
-                System.out.println("ServerInfo: Couldn't fully parse the info: " + info + ": " + e.getMessage());
+                Common.LogDebug("ServerInfo: Couldn't fully parse the info: " + info + ": " + e.getMessage());
             }
         }
         this.ping = ping;

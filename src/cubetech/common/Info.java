@@ -45,7 +45,7 @@ public class Info {
 
         for (int i= 0; i < blacklist.length(); i++) {
             if(key.contains(blacklist.subSequence(i, i+1))) {
-                System.out.println("ValueForKey: Can't get keys with " + blacklist);
+                Common.LogDebug("ValueForKey: Can't get keys with " + blacklist);
                 return "";
             }
         }
@@ -73,7 +73,7 @@ public class Info {
 
         for (int i= 0; i < blacklist.length(); i++) {
             if(key.contains(blacklist.subSequence(i, i+1))) {
-                System.out.println("ValueForKey: Can't get keys with " + blacklist);
+                Common.LogDebug("ValueForKey: Can't get keys with " + blacklist);
                 return s;
             }
         }
@@ -91,7 +91,7 @@ public class Info {
     public static String RemoveKey(String s, String key) {
         if(key.contains("\\"))
         {
-            System.out.println("RemoveKey: Key can't contain \\");
+            Common.LogDebug("RemoveKey: Key can't contain \\");
             return s;
         }
 

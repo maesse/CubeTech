@@ -5,6 +5,7 @@
 
 package cubetech.misc;
 
+import cubetech.common.Common;
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -26,7 +27,7 @@ public class MasterServer {
             URL url = new URL("http://pd-eastcoast.com/rgj6/heartbeat.php?port=" + port);
             url.openStream().close();
         } catch (IOException ex) {
-            System.out.println("Failed to send heartbeat");
+            Common.Log("Failed to send heartbeat");
             Logger.getLogger(MasterServer.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
@@ -97,7 +98,7 @@ public class MasterServer {
             buildAddressList();
             return addresses;
         } catch (IOException ex) {
-            System.out.println("Failed to get serverlist from master server");
+            Common.Log("Failed to get serverlist from master server");
             Logger.getLogger(MasterServer.class.getName()).log(Level.SEVERE, null, ex);
         }
 

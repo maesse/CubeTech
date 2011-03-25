@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import cubetech.common.Common;
 import cubetech.gfx.GLRef.BufferTarget;
 import cubetech.misc.Ref;
 import java.nio.ByteBuffer;
@@ -130,7 +131,7 @@ public class SpriteManager {
         for (int i= 0; i < NormalSpriteOffset; i++) {
             Sprite spr = Sprites[NormalSprites[i]];
             if(spr.invalid) {
-                System.out.println("Invalid sprite");
+                Common.LogDebug("Invalid sprite");
                 spr.invalid = false;
             }
             // Does it need alpha sorting?
@@ -241,7 +242,7 @@ public class SpriteManager {
         for (int i= 0; i < HUDSpriteOffset; i++) {
             int index = HUDSprites[i];
             if(Sprites[index].invalid) {
-                System.out.println("Invalid sprite");
+                Common.LogDebug("Invalid sprite");
                 Sprites[index].invalid = false;
             }
             Sprites[index].Draw();

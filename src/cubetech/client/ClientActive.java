@@ -79,7 +79,7 @@ public class ClientActive {
         // if we have gotten to this point, cl.snap is guaranteed to be valid
         if(!snap.valid)
         {
-            System.out.println("SetCGameGtime(): !snap.valid");
+            Common.Log("SetCGameGtime(): !snap.valid");
             return;
         }
 
@@ -88,7 +88,7 @@ public class ClientActive {
             return; // paused
 
         if(snap.serverTime < oldFrameServerTime) {
-            System.out.println("SetCGameTime(): snap.servertime < oldFrameServerTime");
+            Common.Log("SetCGameTime(): snap.servertime < oldFrameServerTime");
             return;
         }
         oldFrameServerTime = snap.serverTime;
@@ -203,7 +203,7 @@ public class ClientActive {
         try {
             serverid = Integer.parseInt(Info.ValueForKey(systeminfo, "sv_serverid"));
         } catch(NumberFormatException e) {
-            System.out.println("serverid not included in systeminfo - derp.");
+            Common.Log("serverid not included in systeminfo - derp.");
             return;
         }
 

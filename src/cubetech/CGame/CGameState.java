@@ -316,7 +316,7 @@ public class CGameState {
 
             // FIXME: why would trap_GetSnapshot return a snapshot with the same server time
             if(snap != null && r && dest.serverTime == snap.serverTime) {
-                System.out.println("Derp?");
+                Common.LogDebug("Derp?");
             }
 
             // if it succeeded, return

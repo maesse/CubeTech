@@ -165,7 +165,7 @@ public class Gentity {
         while((t = Ref.game.Find(t, GentityFilter.TARGETNAME, target)) != null)  {
             if(t == this)
             {
-                System.out.println("WARNING: Entity used self");
+                Common.Log("WARNING: Entity used self");
             }
             else {
                 if(t.use != null)
@@ -173,7 +173,7 @@ public class Gentity {
             }
 
             if(!this.inuse) {
-                System.out.println("entity was remoevd while using targets");
+                Common.Log("entity was remoevd while using targets");
                 return;
             }
 

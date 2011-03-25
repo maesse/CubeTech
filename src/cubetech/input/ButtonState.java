@@ -1,5 +1,6 @@
 package cubetech.input;
 
+import cubetech.common.Common;
 import cubetech.common.ICommand;
 import cubetech.misc.Ref;
 
@@ -114,7 +115,7 @@ public class ButtonState {
         else if(down[1] == 0)
             down[1] = key;
         else {
-            System.out.println("Three keys down for a button!");
+            Common.LogDebug("Three keys down for a button!");
             return;
         }
 

@@ -5,6 +5,7 @@
 
 package cubetech.net;
 
+import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.misc.Ref;
 import java.net.InetSocketAddress;
@@ -145,7 +146,7 @@ public class NetChan {
         //
         //if(seq <= seq - (incomingSequence + 1)) {
         if(seq <= incomingSequence) {
-            System.out.println("Out of order packetseq " + seq + " at " + incomingSequence);
+            Common.LogDebug("Out of order packetseq " + seq + " at " + incomingSequence);
             return false;
         }
 
@@ -154,7 +155,7 @@ public class NetChan {
         //
         dropped = seq - (incomingSequence + 1);
         if(dropped > 0)
-            System.out.println("Dropped " + dropped + " at " + seq);
+            Common.LogDebug("Dropped " + dropped + " at " + seq);
 
         //
 	// if this is the final framgent of a reliable message,
@@ -175,14 +176,14 @@ public class NetChan {
             if(fragStart != fragmentLenght) {
                 // we can still keep the part that we have so far,
 		// so we don't need to clear chan->fragmentLength
-                System.out.println("Dumping fragment");
+                Common.LogDebug("Dumping fragment");
                 return false;
             }
 
             // copy the fragment to the fragment buffer
             if(fragLen < 0 || packet.buf.GetBuffer().position() + fragLen > packet.buf.GetBuffer().limit()
                     || fragmentLenght + fragLen > fragmentBuffer.length) {
-                System.out.println("Illegal fragment lenght");
+                Common.LogDebug("Illegal fragment lenght");
                 return false;
             }
 
@@ -195,7 +196,7 @@ public class NetChan {
             }
 
             if(fragmentLenght > MSG_LEN) {
-                System.out.println("FragmentLenght > MAX_LEN");
+                Common.LogDebug("FragmentLenght > MAX_LEN");
                 return false;
             }
 

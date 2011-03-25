@@ -146,14 +146,14 @@ public class ItemList {
             if(!Ref.common.items.canItemBeGrabbed(self.s, other.getClient().ps))
                 return;
 
-            System.out.println("Item touched: " + other.s.ClientNum + ", " + self.item.classname);
+            Common.LogDebug("Item touched: " + other.s.ClientNum + ", " + self.item.classname);
             int respawn = 0;
             switch(self.item.type) {
                 case HEALTH:
                     respawn = PickupHealth(self, other);
                     break;
                 default:
-                    System.out.println("need to implement " + self.item.type);
+                    Common.LogDebug("need to implement " + self.item.type);
                     break;
             }
 

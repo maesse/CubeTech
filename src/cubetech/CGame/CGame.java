@@ -368,15 +368,18 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     private void Draw2D() {
         DrawChat();
 
-        Ref.textMan.AddText(new Vector2f(0, 0), "Position: " + cg.refdef.Origin, Align.LEFT, Type.HUD);
-        Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()), "Velocity: " + cg.predictedPlayerState.velocity, Align.LEFT, Type.HUD);
-        Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Ping: " + Ref.cgame.cg.snap.ps.ping, Align.LEFT, Type.HUD);
+        if(Ref.common.isDeveloper()) {
+            Ref.textMan.AddText(new Vector2f(0, 0), "Position: " + cg.refdef.Origin, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()), "Velocity: " + cg.predictedPlayerState.velocity, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Ping: " + Ref.cgame.cg.snap.ps.ping, Align.LEFT, Type.HUD);
+        }
         Ref.textMan.AddText(new Vector2f(0, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()), "HP: " + Ref.cgame.cg.snap.ps.stats.Health, Align.LEFT, Type.HUD);
 //        Ref.textMan.AddText(new Vector2f(0, 0.75f), "Interp: " + Ref.cgame.cg.frameInterpolation, Align.LEFT, Type.HUD);
 
         if(cg.predictedPlayerState.stats.Health <= 0) {
-            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y /2f  - Ref.textMan.GetCharHeight()), "^5You are dead", Align.CENTER, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y/2f), "Click mouse to spawn", Align.CENTER, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y /2f  - Ref.textMan.GetCharHeight()*2), "^5You are dead", Align.CENTER, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y/2f  - Ref.textMan.GetCharHeight()), "Click mouse to spawn", Align.CENTER, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y/2f), "ESC for menu", Align.CENTER, Type.HUD);
         }
 
         // Handle changes from server
@@ -593,14 +596,14 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     private void SetBlock(String[] tokens) {
         if(tokens.length != 3)
         {
-            System.out.println("SetBlock: Invalid arg count");
+            Common.Log("SetBlock: Invalid arg count");
             return;
         }
 
         int blockIndex = Integer.parseInt(tokens[1]);
         String blockCmd = tokens[2];
         if(blockCmd.isEmpty() || blockIndex < 0) {
-            System.out.println("Invalid setblock args");
+            Common.Log("Invalid setblock args");
             return;
         }
 
@@ -667,7 +670,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     }
 
     public void Shutdown() {
-        System.out.println("--- CGAME SHUTDOWN ---");
+        Common.Log("--- CGAME SHUTDOWN ---");
         Ref.Input.RemoveKeyEventListener(this, Input.KEYCATCH_CGAME);
         Ref.Input.RemoveMouseEventListener(this, Input.KEYCATCH_CGAME);
     }
@@ -760,14 +763,14 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             return;
         }
 
-        System.out.println("Unkown cgame command: " + cmd);
+        Common.Log("Unkown cgame command: " + cmd);
     }
 
     public void Print(String str) {
         ChatLine line = chatLines[chatIndex++ % chatLines.length];
         line.str = str;
         line.time = Ref.client.realtime;
-        System.out.println(str);
+        Common.Log(str);
     }
 
     private void ConfigStringModified(String[] tokens) {
@@ -775,7 +778,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         try {
             num = Integer.parseInt(tokens[1]);
         } catch(NumberFormatException ex) {
-            System.out.println("ConfigStringModifies(): Couldn't parse number: " + tokens[1]);
+            Common.LogDebug("ConfigStringModifies(): Couldn't parse number: " + tokens[1]);
             return;
         }
 

@@ -1,6 +1,7 @@
 package cubetech.collision;
 
 import cubetech.Block;
+import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.misc.Ref;
 import java.util.ArrayList;
@@ -35,7 +36,7 @@ public class BlockModel {
         blocks.add(b);
         if(b.CustomVal > 1) {
             if(b.CustomVal == modelIndex)
-                System.out.println("WARNING: BlockModel.addBlock: Block is already in this model");
+                Common.Log("WARNING: BlockModel.addBlock: Block is already in this model");
             else
             {
                 // Remove from old model
@@ -54,7 +55,7 @@ public class BlockModel {
 
     public void removeBlock(Block b) {
         if(b.CustomVal != modelIndex) {
-            System.out.println("BlockModel.removeBlock: Block's model is " + b.CustomVal + ", this model is " + modelIndex + ", cannot remove.");
+            Common.Log("BlockModel.removeBlock: Block's model is " + b.CustomVal + ", this model is " + modelIndex + ", cannot remove.");
             return;
         }
 
@@ -88,7 +89,7 @@ public class BlockModel {
     // Move the model to this position (centered)
     public void moveTo(Vector2f position) {
         if(moving)
-            System.out.println("BlockModel.moveTo: Warning, called recursively");
+            Common.Log("BlockModel.moveTo: Warning, called recursively");
 
 //        System.out.println(position);
 

@@ -177,7 +177,7 @@ public class CEntity {
         int event = currentState.evt & ~Common.EV_EVENT_BITS;
 
         if(event == 0) {
-            System.out.println("Zero event");
+            Common.LogDebug("Zero event");
             return;
         }
 
@@ -188,7 +188,7 @@ public class CEntity {
             case Event.ITEM_PICKUP:
                 int index = currentState.evtParams;
                 if(index < 0 || index >= Ref.common.items.getItemCount()) {
-                    System.out.println("Invalid ITEM_PICKUP GItem index: " + index);
+                    Common.LogDebug("Invalid ITEM_PICKUP GItem index: " + index);
                     break;
                 }
                 GItem item = Ref.common.items.getItem(index);
@@ -198,7 +198,7 @@ public class CEntity {
                 Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.cgame.cgs.media.s_itemRespawn, 1.0f);
                 break;
             default:
-                System.out.println("Unknown event: " + event);
+                Common.LogDebug("Unknown event: " + event);
                 break;
         }
     }

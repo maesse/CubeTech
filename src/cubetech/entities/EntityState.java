@@ -77,7 +77,7 @@ public class EntityState {
         if(buf.ReadBool()) {
             // Remoev
             ClientNum = Common.ENTITYNUM_NONE;
-            System.out.println("Removed entity");
+            Common.LogDebug("Removed entity");
             return;
         }
 

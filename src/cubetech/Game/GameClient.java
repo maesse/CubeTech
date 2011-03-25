@@ -124,7 +124,7 @@ public class GameClient extends Gentity {
         }
 
         if(ps.moveType != MoveType.EDITMODE) {
-            System.out.println("Player not in EDITMODE :S");
+            Common.LogDebug("Player not in EDITMODE :S");
             return;
         }
 
@@ -212,7 +212,7 @@ public class GameClient extends Gentity {
 
     private void ClientSpawn() {
         int index = s.ClientNum;
-        System.out.println("Spawning : " + pers.Name);
+        Common.LogDebug("Spawning : " + pers.Name);
         // toggle the teleport bit so the client knows to not lerp
         // and never clear the voted flag
         int flags = ps.eFlags & EntityFlags.TELEPORT_BIT;
@@ -480,7 +480,7 @@ public class GameClient extends Gentity {
         Vector2f spawn = null;
 
         if(spots.isEmpty()) {
-            System.out.println("Warning: No spawn points found.");
+            Common.LogDebug("Warning: No spawn points found.");
         } else {
             spot = spots.get(Ref.rnd.nextInt(spots.size()));
         }

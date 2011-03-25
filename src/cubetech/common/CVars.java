@@ -64,17 +64,17 @@ public class CVars {
     }
 
     void cmd_ListCVars(String[] tokens) {
-        System.out.println("CVar list:");
+        Common.Log("CVar list:");
         for(CVar var: vars.values()) {
-            System.out.println(" " + var.Name + " \t" + var.sValue);
+            Common.Log(" " + var.Name + " \t" + var.sValue);
         }
-        System.out.println("----");
+        Common.Log("----");
     }
 
     void cmd_Print(String[] tokens) {
         if(tokens.length != 2)
         {
-            System.out.println("Usage: print <variable>");
+            Common.Log("Usage: print <variable>");
             return;
         }
 
@@ -83,7 +83,7 @@ public class CVars {
         if(cv != null)
             cv.Print();
         else
-            System.out.println("CVar " + name + " doesn't exist.");
+            Common.Log("CVar " + name + " doesn't exist.");
     }
 
     public CVar Find(String str) {
@@ -122,13 +122,13 @@ public class CVars {
 
     public CVar Get(String name, String value, EnumSet<CVarFlags> flags) {
         if(name == null || name.length() == 0 || value == null) {
-            System.out.println("CVar: Get w/ null arguments");
+            Common.Log("CVar: Get w/ null arguments");
             return null;
         }
 
         if(!ValidateString(name))
         {
-            System.out.println("Invalid cvar name: " + name);
+            Common.Log("Invalid cvar name: " + name);
             name = "BADNAME";
         }
        
@@ -197,7 +197,7 @@ public class CVars {
     public CVar Set2(String name, String value, boolean force) {
         name = name.toLowerCase();
         if(!ValidateString(name)) {
-            System.out.println("WARNING: Invalid cvar name: " + name);
+            Common.Log("WARNING: Invalid cvar name: " + name);
             name = "BADNAME";
         }
 
@@ -243,12 +243,12 @@ public class CVars {
 
         if(!force) {
             if(var.flags.contains(CVarFlags.ROM)) {
-                System.out.println(name + " is read only.");
+                Common.Log(name + " is read only.");
                 return var;
             }
 
             if(var.flags.contains(CVarFlags.INIT)) {
-                System.out.println(name + " is write protected.");
+                Common.Log(name + " is write protected.");
                 return var;
             }
 
@@ -260,7 +260,7 @@ public class CVars {
                 } else if(value.equals(var.sValue))
                     return var;
 
-                System.out.println(name + " will be changed opun restarting.");
+                Common.Log(name + " will be changed opun restarting.");
                 var.latchedString = value;
                 var.modificationCount++;
                 var.modified = true;
@@ -367,7 +367,7 @@ public class CVars {
 
         if(changed) {
             if(warn)
-                System.out.println(", settings to " + value);
+                Common.Log(", settings to " + value);
 
             return ""+valf;
         }

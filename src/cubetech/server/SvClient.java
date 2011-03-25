@@ -118,12 +118,12 @@ public class SvClient {
 
         int cmdCount = buf.ReadInt();
         if(cmdCount < 1) {
-            System.out.println(name + ": UserMove cmdCount < 1");
+            Common.LogDebug(name + ": UserMove cmdCount < 1");
             return;
         }
 
         if(cmdCount > 32) {
-            System.out.println(name + ": UserMove cmdCount > 32");
+            Common.LogDebug(name + ": UserMove cmdCount > 32");
             return;
         }
 
@@ -175,7 +175,7 @@ public class SvClient {
     }
 
     private void ClientEnterWorld(PlayerInput cmd) {
-        System.out.println(name + ": Going from PRIMED to ACTIVE");
+        Common.LogDebug(name + ": Going from PRIMED to ACTIVE");
         state = ClientState.ACTIVE;
 
         // resend all configstrings using the cs commands since these are
@@ -346,7 +346,7 @@ public class SvClient {
                 continue;
 
             if(ent.s.ClientNum != i) {
-                System.out.println("Fixing ent.s number, was: " + ent.s.ClientNum + ", should be: " + i);
+                Common.LogDebug("Fixing ent.s number, was: " + ent.s.ClientNum + ", should be: " + i);
                 ent.s.ClientNum = i;
             }
 
@@ -364,7 +364,7 @@ public class SvClient {
 
             if(ent.r.svFlags.contains(SvFlags.CLIENTMASK)) {
                 if(frame.ps.clientNum >= 32)
-                    System.out.println("ClientMask >= 32");
+                    Common.LogDebug("ClientMask >= 32");
                 if((~ent.r.singleClient & (1 << frame.ps.clientNum)) == (1 << frame.ps.clientNum))
                     continue;
             }
@@ -378,7 +378,7 @@ public class SvClient {
             // broadcast entities are always sent
             if(ent.r.svFlags.contains(SvFlags.BROADCAST)) {
                 if(ent.s.eType >= EntityType.EVENTS) {
-                    System.out.println("Broadcasting event");
+                    Common.LogDebug("Broadcasting event");
                 }
                 AddEntToSnapshot(svEnt, ent, snapEntNums);
                 continue;
@@ -416,7 +416,7 @@ public class SvClient {
         else if(netchan.outgoingSequence - deltaMessage >= (32 -2))
         {
             // client hasn't gotten a good message through in a long time
-            System.out.println("Delta request from out of date packet");
+            Common.LogDebug("Delta request from out of date packet");
             lastframe = 0;
             oldframe = null;
         } else {
@@ -425,7 +425,7 @@ public class SvClient {
             lastframe = netchan.outgoingSequence - deltaMessage;
             // the snapshot's entities may still have rolled off the buffer, though
             if(oldframe.first_entity <= Ref.server.nextSnapshotEntities - Ref.server.numSnapshotEntities) {
-                System.out.println("Delta requit from out of date entities");
+                Common.LogDebug("Delta requit from out of date entities");
                 oldframe = null;
                 lastframe = 0;
             }
@@ -557,12 +557,12 @@ public class SvClient {
         // we check == instead of >= so a broadcast print added by SV_DropClient()
         // doesn't cause a recursive drop client
         if(reliableSequence - reliableAcknowledge == 64 +1) {
-            System.out.println("==== pending server commands ====");
+            Common.Log("==== pending server commands ====");
             int i;
             for (i=reliableAcknowledge+1; i<= reliableSequence; i++) {
-                System.out.println(String.format("cmd %d: %s", i, reliableCommands[i&63]));
+                Common.Log(String.format("cmd %d: %s", i, reliableCommands[i&63]));
             }
-            System.out.println(String.format("cmd %d: %s", i, str));
+            Common.Log(String.format("cmd %d: %s", i, str));
             DropClient("Server command overflow");
             return;
         }
@@ -719,14 +719,14 @@ public class SvClient {
         if(serverid != Ref.server.sv.serverid && downloadName == null && !lastClientCommandString.equals("nextdl")) {
             if(serverid < Ref.server.sv.serverid && serverid >= Ref.server.sv.restartedServerId) {
                 // they just haven't caught the map_restart yet
-                System.out.println(name + ": Ignoring pre map_restart/outdated client message");
+                Common.LogDebug(name + ": Ignoring pre map_restart/outdated client message");
                 return;
             }
 
             // if we can tell that the client has dropped the last
             // gamestate we sent them, resend it
             if(messageAcknowledge > gamestateMessageNum) {
-//                System.out.println(name + ": Dropped gamestate, resending");
+                Common.LogDebug(name + ": Dropped gamestate, resending");
                 SendClientGameState();
             }
             return;
@@ -735,7 +735,7 @@ public class SvClient {
         // this client has acknowledged the new gamestate so it's
         // safe to start sending it the real time again
         if(oldServerTime > 0 && serverid == Ref.server.sv.serverid) {
-//            System.out.println("Acknowledged gamestate");
+            Common.LogDebug("Acknowledged gamestate");
             oldServerTime = 0;
         }
 
@@ -767,7 +767,7 @@ public class SvClient {
                 break;
             default:
                 if(cmd != CLC.OPS_EOF)
-                    System.out.println(name + ": Warning: bad command byte");
+                    Common.Log(name + ": Warning: bad command byte");
                 break;
         }
     }
@@ -783,7 +783,7 @@ public class SvClient {
 //        System.out.println(name + ": ClientCmd: " + seq + ":" + s);
         // drop the connection if we have somehow lost commands
         if(seq > lastClientCommand + 1) {
-            System.out.println(name + ": Lost clientcommands. Dropping");
+            Common.Log(name + ": Lost clientcommands. Dropping");
             DropClient( "Lost reliable commands");
             return false;
         }
@@ -867,7 +867,7 @@ public class SvClient {
                 return;
             }
 
-            System.out.println("Beginnign download of " + downloadName);
+            Common.LogDebug("Beginnign download of " + downloadName);
             downloadCurrentBlock = downloadCount = downloadXmitBlock = downloadClientBlock = 0;
             downloadEOF = false;
         }
@@ -888,7 +888,7 @@ public class SvClient {
                 try {
                     download.GetBuffer().get(downloadBlocks[curindex], 0, lenght);
                 } catch(BufferUnderflowException e) {
-                    System.out.println("unexpected eof");
+                    Common.LogDebug("unexpected eof");
                     lenght = 0;
                 }
             }
@@ -978,7 +978,7 @@ public class SvClient {
 
             // Find out if we are done.  A zero-length block indicates EOF
             if(downloadBlockSize[downloadClientBlock % MAX_DOWNLOAD_WINDOW] == 0) {
-                System.out.println("File " + downloadName + " complete.");
+                Common.LogDebug("File " + downloadName + " complete.");
                 CloseDownload();
                 return;
             }
@@ -996,7 +996,7 @@ public class SvClient {
 
     private void StopDownload() {
         if(downloadName != null)
-            System.out.println("Aborting file download: " + downloadName);
+            Common.LogDebug("Aborting file download: " + downloadName);
 
         CloseDownload();
     }
@@ -1031,7 +1031,7 @@ public class SvClient {
             return;
 
         // TODO: see if we already have a challenge for this ip
-        System.out.println("Dropping client");
+        Common.Log("Dropping client");
 
         // tell everyone why they got dropped
         Ref.server.SendServerCommand(null, String.format("print \"%s %s\"\n", name, reason));
@@ -1065,7 +1065,7 @@ public class SvClient {
             if(rate > 200000)
                 rate = 200000;
         } catch(NumberFormatException e) {
-            System.out.println("SvClient: Failed parsing rate");
+            Common.Log("SvClient: Failed parsing rate");
             rate = 25000;
         }
 
@@ -1078,7 +1078,7 @@ public class SvClient {
                 snapval = Ref.cvars.Find("sv_fps").iValue;
             snapshotMsec = (int)(1000f/(float)snapval)-1;
         } catch(NumberFormatException e) {
-            System.out.println("SvClient: Failed parsing cl_updaterate");
+            Common.Log("SvClient: Failed parsing cl_updaterate");
             snapshotMsec = 50;
         }
     }

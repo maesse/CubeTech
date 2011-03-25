@@ -1,6 +1,7 @@
 package cubetech.input;
 
 import cubetech.common.Commands;
+import cubetech.common.Common;
 import cubetech.common.ICommand;
 import cubetech.misc.Ref;
 import java.util.HashMap;
@@ -42,7 +43,7 @@ public class Binds implements KeyEventListener {
     public void BindKey(String key, String bind) {
         int keyIndex = StringToKey(key);
         if(keyIndex == 0) {
-            System.out.println(String.format("Binds.BindKey(%s, %s): Cannot bind, key not found.", key, bind));
+            Common.Log(String.format("Binds.BindKey(%s, %s): Cannot bind, key not found.", key, bind));
             return;
         }
 
@@ -52,7 +53,7 @@ public class Binds implements KeyEventListener {
     public void BindKey(int key, String bind) {
         // Check if key exists
         if(KeyToString(key).equals("NONE")) {
-            System.out.println(String.format("Binds.BindKey(%d, %s): Cannot bind, key not found.", key, bind));
+            Common.Log(String.format("Binds.BindKey(%d, %s): Cannot bind, key not found.", key, bind));
             return;
         }
 
@@ -106,7 +107,7 @@ public class Binds implements KeyEventListener {
         str = str.toUpperCase();
         if(stringToKeyMap.containsKey(str))
             return stringToKeyMap.get(str);
-        System.out.println("Binds.StringToKey(" + str + "): Unknown key");
+        Common.Log("Binds.StringToKey(" + str + "): Unknown key");
         return 0;
     }
 
@@ -114,7 +115,7 @@ public class Binds implements KeyEventListener {
     public String KeyToString(int key) {
         if(keyToStringMap.containsKey(key))
             return keyToStringMap.get(key);
-        System.out.println("Binds.KeyToString(" + key + "): Unknown key");
+        Common.Log("Binds.KeyToString(" + key + "): Unknown key");
         return "NONE";
     }
 
@@ -127,7 +128,7 @@ public class Binds implements KeyEventListener {
     private class Cmd_Bind implements ICommand {
         public void RunCommand(String[] args) {
             if(args.length < 2) {
-                System.out.println("bind <key> [command] : attach a command to a key");
+                Common.Log("bind <key> [command] : attach a command to a key");
                 return;
             }
 
@@ -139,9 +140,9 @@ public class Binds implements KeyEventListener {
             if(args.length == 2) {
                 // Display bind
                 if(binds.containsKey(key))
-                    System.out.println(String.format("\"%s\" = \"%s\"", args[1], binds.get(key)));
+                    Common.Log(String.format("\"%s\" = \"%s\"", args[1], binds.get(key)));
                 else
-                    System.out.println(String.format("\"%s\" is not bound.", args[1]));
+                    Common.Log(String.format("\"%s\" is not bound.", args[1]));
                 return;
             }
 

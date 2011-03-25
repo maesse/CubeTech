@@ -3,6 +3,7 @@ package cubetech.misc;
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
 import cubetech.common.Commands;
+import cubetech.common.Common;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
@@ -69,11 +70,11 @@ public class Console implements KeyEventListener, LogEventListener {
     public void ExecuteAndLog(String str, boolean force) {
         if(str.trim().length() == 0) {
             if(force) // force out an empty line
-                System.out.println(con_cmdprefix.sValue);
+                Common.Log(con_cmdprefix.sValue);
             return; // Ignore empty line
         }
 
-        System.out.println(con_cmdprefix.sValue + str);
+        Common.Log(con_cmdprefix.sValue + str);
         Ref.commands.ExecuteText(Commands.ExecType.NOW, str);
         if(!commandLog.isEmpty() && commandLog.get(commandLog.size()-1).equalsIgnoreCase(str))
             return; // same as last line, don't add to commandlog
@@ -183,7 +184,7 @@ public class Console implements KeyEventListener, LogEventListener {
                     buf.append(str);
                     buf.append("  ");
                 }
-                System.out.println(buf.toString());
+                Common.Log(buf.toString());
             }
             return;
         }

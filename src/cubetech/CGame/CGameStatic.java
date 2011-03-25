@@ -1,6 +1,7 @@
 package cubetech.CGame;
 
 import cubetech.common.CS;
+import cubetech.common.Common;
 import cubetech.common.Info;
 import cubetech.misc.Ref;
 import java.util.HashMap;
@@ -92,7 +93,8 @@ public final class CGameStatic {
         try {
         levelStartTime = Integer.parseInt(gameState.get(CS.CS_LEVEL_START_TIME));
         } catch(NumberFormatException ex) {
-            System.out.println("SetConfigValues: Couldn't parse levelstarttime: " + gameState.get(CS.CS_LEVEL_START_TIME));
+            Common.LogDebug(ex.getMessage());
+            Ref.common.Error(Common.ErrorCode.DROP, "SetConfigValues: Couldn't parse levelstarttime: " + gameState.get(CS.CS_LEVEL_START_TIME));
         }
     }
 }

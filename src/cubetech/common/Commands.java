@@ -44,16 +44,16 @@ public final class Commands {
             public void RunCommand(String[] args) {
                 // Usage
                 if(args.length < 2) {
-                    System.out.println("usage: alias <name> [command]");
+                    Common.Log("usage: alias <name> [command]");
                     return;
                 }
 
                 // Print
                 if(args.length == 2) {
                     if(aliases.containsKey(args[1])) {
-                        System.out.println(String.format("alias \"%s\" = \"%s\"", args[1], aliases.get(args[1])));
+                        Common.Log(String.format("alias \"%s\" = \"%s\"", args[1], aliases.get(args[1])));
                     } else
-                        System.out.println(String.format("alias \"%s\" doesn't exist", args[1]));
+                        Common.Log(String.format("alias \"%s\" doesn't exist", args[1]));
                     return;
                 }
 
@@ -139,7 +139,7 @@ public final class Commands {
     // Adds command text at the end of the buffer, does NOT add a final \n
     public void AddText(String text) {
         if(cmd_text.length() + text.length() >= BUFFER_SIZE) {
-            System.out.println("AddText(): Command buffer overflow");
+            Common.Log("AddText(): Command buffer overflow");
             return;
         }
         cmd_text.append(text);
@@ -149,7 +149,7 @@ public final class Commands {
     // Adds a \n to the text
     private void InsertText(String text) {
         if(cmd_text.length() + text.length() + 1 >= BUFFER_SIZE) {
-            System.out.println("InsertText(): Command buffer overflow");
+            Common.Log("InsertText(): Command buffer overflow");
             return;
         }
 
@@ -162,7 +162,7 @@ public final class Commands {
     public void AddCommand(String name, ICommand cmd) {
         name = name.toLowerCase();
         if(registeredCommands.containsKey(name)) {
-            //System.out.println("AddCommand: " + name + " is already defined.");
+            Common.LogDebug("AddCommand: " + name + " is already defined.");
             //return;
             RemoveCommand(name);
         }
@@ -173,16 +173,16 @@ public final class Commands {
     public void RemoveCommand(String cmd) {
         cmd = cmd.toLowerCase();
         if(!registeredCommands.containsKey(cmd))
-            System.out.println("RemoveCommand: " + cmd + " didn't exist.");
+            Common.LogDebug("RemoveCommand: " + cmd + " didn't exist.");
         registeredCommands.remove(cmd);    
     }
 
     public void cmd_ListCmds(String[] tokens) {
-        System.out.println("Command listing:");
+        Common.Log("Command listing:");
         for(String str : registeredCommands.keySet()) {
-            System.out.println(" " + str);
+            Common.Log(" " + str);
         }
-        System.out.println("----");
+        Common.Log("----");
     }
 
     private void ExecuteString(String str) {

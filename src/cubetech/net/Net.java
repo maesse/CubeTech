@@ -7,6 +7,7 @@ package cubetech.net;
 
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
+import cubetech.common.Common;
 import cubetech.misc.Ref;
 import java.io.IOException;
 import java.net.BindException;
@@ -226,7 +227,7 @@ public final class Net {
             } catch (BindException e) {
                 if(i < 4)
                     continue;
-                System.out.println("Failed to find a bindable server port.");
+                Common.Log("Failed to find a bindable server port.");
                 throw e;
             }
         }
@@ -269,7 +270,7 @@ public final class Net {
             try {
                 port = Integer.parseInt(server.substring(portIndex+1, server.length()));
             } catch(NumberFormatException e) {
-                System.out.println("Failed parsing portnumber.");
+                Common.Log("Failed parsing portnumber.");
             }
 
             server = server.substring(0, portIndex);

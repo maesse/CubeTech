@@ -2,6 +2,7 @@ package cubetech.gfx;
 
 
 import cubetech.common.Commands;
+import cubetech.common.Common;
 import cubetech.misc.Ref;
 
 import java.io.BufferedInputStream;
@@ -76,7 +77,7 @@ public class CubeMaterial {
         if(!ResourceManager.FileExists(copyDest)) {
             if(ResourceManager.FileExists(copySrc)) {
                 if(!copySrc.equals(copyDest)) {
-                    System.out.println("Copying texture " + copySrc + " to " + copyDest);
+                    Common.Log("Copying texture " + copySrc + " to " + copyDest);
                     BufferedInputStream bis = ResourceManager.OpenFileAsInputStream(copySrc);
                     ResourceManager.SaveInputStreamToFile(bis, copyDest);
                     bis.close();
@@ -131,7 +132,7 @@ public class CubeMaterial {
         while((line = br.readLine()) != null) {
             String[] tokens = Commands.TokenizeString(line, false);
             if(tokens.length < 2) {
-                System.out.println("CubeMaterial.Load(" + path + ") Ignored line: " + line);
+                Common.Log("CubeMaterial.Load(" + path + ") Ignored line: " + line);
                 continue;
             }
 
@@ -156,32 +157,32 @@ public class CubeMaterial {
                 mat.framedelay = Integer.parseInt(tokens[1]);
 
             } else
-                System.out.println("CubeMaterial.Load(" + path + "): Unknown command " + line);
+                Common.Log("CubeMaterial.Load(" + path + "): Unknown command " + line);
         }
 
         // validate
         if(mat.textureName.equals("None"))
             throw new Exception("Could not load material: " + path + "\nInvalid data.");
         if(mat.translucent < 0 || mat.translucent > 2) {
-            System.out.println("CubeMaterial.Load(" + path + "): Invalid translucency " + mat.translucent);
+            Common.Log("CubeMaterial.Load(" + path + "): Invalid translucency " + mat.translucent);
             mat.translucent = 0;
         }
         if(mat.color.getAlpha() > 255 || mat.color.getGreen() > 255 || mat.color.getBlue() > 255 || mat.color.getRed() > 255) {
-            System.out.println("CubeMaterial.Load(" + path + "): Invalid color: " + mat.color);
+            Common.Log("CubeMaterial.Load(" + path + "): Invalid color: " + mat.color);
             mat.color = new Color(255, 255, 255, 255);
         }
         if(mat.textureSize.x == 0f && mat.textureSize.y == 0f) {
-            System.out.println("CubeMaterial.Load(" + path + "): Warning: Texturesize is 0");
+            Common.Log("CubeMaterial.Load(" + path + "): Warning: Texturesize is 0");
         }
         // grab path from material
         String p = CubeMaterial.getPath(path);
         String p2 = CubeMaterial.stripPath(mat.textureName);
         if(!ResourceManager.FileExists(mat.textureName) && !ResourceManager.FileExists(p + p2)) {
-            System.out.println("CubeMaterial.Load(" + path + "): Warning: Cannot find texture: " + mat.textureName);
-            System.out.println("(debug info: p=" + p + ", p2=" + p2 +")");
+            Common.Log("CubeMaterial.Load(" + path + "): Warning: Cannot find texture: " + mat.textureName);
+            Common.Log("(debug info: p=" + p + ", p2=" + p2 +")");
         }
         if(mat.animFrames <= 0) {
-            System.out.println("CubeMaterial.Load(" + path + "): Invalid animation frame count: " + mat.animFrames);
+            Common.Log("CubeMaterial.Load(" + path + "): Invalid animation frame count: " + mat.animFrames);
             mat.animFrames = 1;
         }
 
@@ -209,7 +210,7 @@ public class CubeMaterial {
         Vector2f vec = new Vector2f();
         String[] tokens = token.split(":");
         if(tokens.length < 2) {
-            System.out.println("CubeMaterial.parseVector2f(): Failed on " + token);
+            Common.Log("CubeMaterial.parseVector2f(): Failed on " + token);
             return vec;
         }
 
@@ -224,7 +225,7 @@ public class CubeMaterial {
         int r,g,b,a;
         String[] tokens = token.split(",");
         if(tokens.length < 4) {
-            System.out.println("CubeMaterial.parseColor(): failed on " + token);
+            Common.Log("CubeMaterial.parseColor(): failed on " + token);
             return new Color(255,255,255,255);
         }
         if(tokens[0].isEmpty())

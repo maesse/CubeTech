@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import cubetech.common.Common;
 import java.awt.RenderingHints;
 import java.awt.Graphics2D;
 import cubetech.misc.ClassPath;
@@ -101,12 +102,12 @@ public final class ResourceManager {
             CubeTexture tex = (CubeTexture)Ressources.get(name).Data;
             if(tex.loaded) {
                 // Derp?
-                System.out.println("CubeTexture marked unloaded thinks he's loaded?");
+                Common.LogDebug("CubeTexture marked unloaded thinks he's loaded?");
             } else {
                 try {
                     getTexture(name, GL_TEXTURE_2D, GL_RGBA, GL_LINEAR, GL_LINEAR, tex);
                 } catch (IOException ex) {
-                    System.out.println("Cannot load texture: File not found: " + name);
+                    Common.Log("Cannot load texture: File not found: " + name);
                 }
             }
             completedLoading[nLoaded++] = name;
@@ -149,7 +150,7 @@ public final class ResourceManager {
                     tex = getTexture(filename);
                     tex.loaded = true; // If this line runs, there was not exception -- so we should be in the clear
                 } catch (IOException ex) { // file not found
-                    System.out.println("Cannot load texture: File not found: " + filename);
+                    Common.Log("Cannot load texture: File not found: " + filename);
                     // Fallback to blank texture -- will never load as there isn't a point
                     tex = getUnloadedTexture(filename);
                 }
@@ -165,7 +166,7 @@ public final class ResourceManager {
             return tex;
         }
 
-        System.out.println("ResMan.LoadTexture: I don't understand this format: " + name);
+        Common.Log("ResMan.LoadTexture: I don't understand this format: " + name);
         return null;
     }
 

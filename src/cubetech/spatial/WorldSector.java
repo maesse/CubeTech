@@ -1,5 +1,6 @@
 package cubetech.spatial;
 
+import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.entities.SharedEntity;
 import cubetech.entities.SvEntity;
@@ -34,7 +35,7 @@ public final class WorldSector {
 
     public void LinkEntity(SvEntity ent) {
         if(ent.worldSector != null)
-            System.out.println("Warning: WorldSector.LinkEntity() entity is already linked");
+            Common.Log("Warning: WorldSector.LinkEntity() entity is already linked");
         ent.worldSector = this;
         entities.add(ent);
     }
@@ -78,7 +79,7 @@ public final class WorldSector {
     public static WorldSector CreateWorldSector(Vector2f mins, Vector2f maxs, int maxdepth) {
         int nNodes = 0;
         for (int i= 0; i <= maxdepth; i++) nNodes += Math.pow(2, i);
-        System.out.println("WorldSector: New worldsector will have " + nNodes + " nodes in total.");
+        Common.LogDebug("WorldSector: New worldsector will have " + nNodes + " nodes in total.");
 
         createNodeCount = 0;
         MaxDepth = maxdepth;
@@ -86,7 +87,7 @@ public final class WorldSector {
         
         // Check if results are as expected
         if(nNodes != createNodeCount) {
-            System.out.println(String.format("WorldSector: Initialization fail, expected %d sectords, got %d", nNodes, createNodeCount));
+            Common.Log(String.format("WorldSector: Initialization fail, expected %d sectords, got %d", nNodes, createNodeCount));
         }
         return rootNode;
     }

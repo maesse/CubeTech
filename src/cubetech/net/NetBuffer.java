@@ -1,5 +1,6 @@
 package cubetech.net;
 
+import cubetech.common.Common;
 import cubetech.common.Helper;
 import java.nio.ByteBuffer;
 import org.lwjgl.util.vector.Vector2f;
@@ -177,7 +178,7 @@ public class NetBuffer {
     public String ReadString() {
         int lenght = buffer.getInt();
         if(lenght < 0 ||lenght >= 1024) {
-            System.out.println("NetBuffer.ReadString(): Invalid lenght: " + lenght);
+            Common.LogDebug("NetBuffer.ReadString(): Invalid lenght: " + lenght);
             return null;
         }
         byte[] strData = new byte[lenght];

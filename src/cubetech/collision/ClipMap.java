@@ -1,5 +1,6 @@
 package cubetech.collision;
 
+import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.ICommand;
 import cubetech.misc.Ref;
@@ -24,7 +25,7 @@ public class ClipMap {
             public void RunCommand(String[] args) {
                 if(args.length != 2)
                 {
-                    System.out.println("usage: savemap <filename>");
+                    Common.Log("usage: savemap <filename>");
                     return;
                 }
 
@@ -63,7 +64,7 @@ public class ClipMap {
             FileChannel chan = new FileOutputStream(filename, false).getChannel();
             chan.write(buf);
             chan.close();
-            System.out.println("Saved map: " + filename);
+            Common.Log("Saved map: " + filename);
         } catch (IOException ex) {
             Logger.getLogger(ClipMap.class.getName()).log(Level.SEVERE, null, ex);
         }

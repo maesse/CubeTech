@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import cubetech.common.Common;
 import java.util.ArrayList;
 import java.util.AbstractMap.SimpleEntry;
 import java.net.URL;
@@ -213,7 +214,7 @@ public class GLRef {
     private void SetFullscreen(boolean fullscreen) {
         try {
             if(fullscreen && !currentMode.isFullscreenCapable()) {
-                System.out.println("Current resolution is not fullscreen capable");
+                Common.Log("Current resolution is not fullscreen capable");
                 return;
             }
 
@@ -237,7 +238,7 @@ public class GLRef {
             }
 
         } catch (Exception ex) {
-            System.out.println(ex);
+            Common.Log(ex.getMessage());
         }
     }
 
@@ -266,7 +267,7 @@ public class GLRef {
     public void SetResolution(String mode) {
         int xIndex = mode.indexOf("x");
         if(xIndex == -1 && (xIndex = mode.indexOf(":")) == -1) {
-            System.out.println("Invalid displaymode: " + mode);
+            Common.Log("Invalid displaymode: " + mode);
             r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
             return; // not valid
         }
@@ -303,12 +304,12 @@ public class GLRef {
             }
             
             if(Display.isFullscreen() && !newmode.isFullscreenCapable()) {
-                System.out.println("Displaymode not valid in fullscreen");
+                Common.Log("Displaymode not valid in fullscreen");
                 r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
                 return;
             }
 
-            System.out.println("Setting displaymode: " + newmode);
+            Common.Log("Setting displaymode: " + newmode);
             if(Display.isFullscreen()) {
                 Display.setDisplayModeAndFullscreen(newmode);
                 checkError();
@@ -328,14 +329,14 @@ public class GLRef {
             resolution = new Vector2f(currentMode.getWidth(), currentMode.getHeight());
             r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
         } catch(NumberFormatException e) { // Can be NumberFormatException and IndexOutOfBounds
-            System.out.println("Invalid displaymode: " + mode);
+            Common.Log("Invalid displaymode: " + mode);
             r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
         } catch(IndexOutOfBoundsException e){
-            System.out.println("Invalid displaymode: " + mode);
+            Common.Log("Invalid displaymode: " + mode);
             r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
         } catch (LWJGLException ex){
-            System.out.println("Invalid displaymode: " + mode);
-            System.out.println("LWJGL error: " + ex);
+            Common.Log("Invalid displaymode: " + mode);
+            Common.Log("LWJGL error: " + ex);
             r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
         }
 
@@ -412,7 +413,7 @@ public class GLRef {
 
         desktopMode = Display.getDesktopDisplayMode();
         
-        System.out.println("Desktop displaymode: " + desktopMode);
+        Common.Log("Desktop displaymode: " + desktopMode);
         displayParent = parent; // Save off canvas if there is one
         SetResolution(r_mode.sValue);
         
@@ -450,9 +451,9 @@ public class GLRef {
         glGetInteger(GL12.GL_MAX_ELEMENTS_INDICES, intBuf16);
         checkError();
         maxIndices = intBuf16.get(0);
-        System.out.println("OpenGL version: " + glGetString(GL_VERSION));
+        Common.Log("OpenGL version: " + glGetString(GL_VERSION));
 
-        System.out.println("VBO support detected (V: " + maxVertices + ") (I: " + maxIndices + ")");
+        Common.Log("VBO support detected (V: " + maxVertices + ") (I: " + maxIndices + ")");
         caps = GLContext.getCapabilities();
         if(!CheckCaps())
             Ref.common.Error(ErrorCode.FATAL, "Your grahics card is not supported");
@@ -546,11 +547,11 @@ public class GLRef {
         boolean okay = true;
         if(!caps.GL_ARB_vertex_buffer_object) {
             okay = false;
-            System.out.println("ARB_Vertex_Buffer_Object not supported by your graphics card");
+            Common.Log("ARB_Vertex_Buffer_Object not supported by your graphics card");
         }
         if(!caps.GL_ARB_vertex_shader) {
             okay = false;
-            System.out.println("ARB_vertex_shader is not supported by your graphics card.");
+            Common.Log("ARB_vertex_shader is not supported by your graphics card.");
         }
 //        if(!caps.GL_ARB_geometry_shader4) {
 //            okay = false;
@@ -558,7 +559,7 @@ public class GLRef {
 //        }
         if(!caps.GL_EXT_draw_range_elements) {
             okay = false;
-            System.out.println("EXT_draw_range_elements not supported by your graphics card");
+            Common.Log("EXT_draw_range_elements not supported by your graphics card");
         }
 //        caps.GL_ARB_draw_elements_base_vertex
 

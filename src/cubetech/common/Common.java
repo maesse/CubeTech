@@ -203,7 +203,7 @@ public class Common {
             Ref.client.FlushMemory();
             throw new FrameException(str);
         } else if(code == ErrorCode.DROP) {
-            Ref.server.Shutdown("Server crashed: " + str);
+            Ref.server.Shutdown("Server shutdown: " + str);
             Ref.client.Disconnect(true);
             Ref.client.FlushMemory();
             throw new FrameException(str);
