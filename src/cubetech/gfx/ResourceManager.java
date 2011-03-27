@@ -36,6 +36,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.ByteBuffer;
@@ -209,10 +210,18 @@ public final class ResourceManager {
 //        if(path.startsWith("cubetech"))
 
         URL url = getClassLoader().getResource((path.startsWith("cubetech")?"":"cubetech/")+path);
-        if(url == null) {
-            throw new IOException("Cannot find: " + path);
+
+        Image img = null;
+        if(url != null)
+            img = new ImageIcon(url).getImage();
+        else {
+            try {
+                img = new ImageIcon(path).getImage();
+
+            } catch (Exception ex) {
+                throw new IOException("Cannot find: " + path);
+            }
         }
-        Image img = new ImageIcon(url).getImage();
 
         // FIX: Don't load RGB as ARGB
         BufferedImage bufferedImage = new BufferedImage(img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
@@ -479,6 +488,33 @@ public final class ResourceManager {
         
         try {
             String[] strs = ClassPath.getClasspathFileNamesWithExtension(".mat");
+
+            if(!Ref.glRef.isApplet()) {
+                try {
+                    File dir = new File("data");
+                    String[] files =  dir.list(new FilenameFilter() {
+                        public boolean accept(File dir, String name) {
+                            if(name.length() > 4 && name.substring(name.length()-4).equalsIgnoreCase(".mat"))
+                                return true;
+                            return false;
+                        }
+                    });
+
+//                    System.out.println("Local filecount: " + files.length);
+
+                    String[] data = new String[strs.length + files.length];
+                    for (int i= 0; i < strs.length; i++) {
+                        data[i] = strs[i];
+                    }
+                    for (int i= 0; i < files.length; i++) {
+                        data[strs.length + i] = "data/" + files[i];
+                    }
+                    strs = data;
+                    
+                } catch(Exception ex) {
+                    System.out.println(ex);
+                }
+            }
             matList = strs;
             return strs;
         } catch (ZipException ex) {

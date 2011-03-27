@@ -2,6 +2,7 @@ package cubetech.collision;
 
 import cubetech.Block;
 import cubetech.common.Common;
+import cubetech.common.Content;
 
 import cubetech.misc.Ref;
 import cubetech.spatial.SpatialQuery;
@@ -13,13 +14,7 @@ import org.lwjgl.util.vector.Vector2f;
  */
 public class Collision {
     public static final float EPSILON = 0.0625f;
-    public static final int MASK_WORLD = 1;
-    public static final int MASK_PLAYER = 2;
-    public static final int MASK_BULLETS = 8;
-    public static final int MASK_BOMBAH = 4;
 
-    public static final int MASK_ENEMIES = 4;
-    public static final int MASK_ALL = 1 | 2 | 4 | 8;
 
     static final int RESULT_BUFFER_SIZE = 256;
     private CollisionResult[] resultBuffer = new CollisionResult[RESULT_BUFFER_SIZE];
@@ -274,7 +269,7 @@ public class Collision {
                 res.frac = 0f;
             res.Hit = true;
             res.entitynum = Common.ENTITYNUM_WORLD;
-            res.hitmask = MASK_WORLD;
+            res.hitmask = Content.SOLID;
             res.HitAxis = hitaxis;
             res.startsolid = startsolid;
         }
@@ -286,7 +281,7 @@ public class Collision {
         res.Reset(pos, dir, extent);
         
         // Trace against blocks
-        if((tracemask & MASK_WORLD) == MASK_WORLD) {
+        if((tracemask & Content.SOLID) == Content.SOLID) {
             Vector2f v = new Vector2f(-dir.x, -dir.y);
             res.frac = 1f;
 

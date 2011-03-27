@@ -125,6 +125,22 @@ public class Binds implements KeyEventListener {
         keyToStringMap.put(keyIndex, str);
     }
 
+    // Write all binds to this stringbuilder, for creating the config file
+    public void WriteBinds(StringBuilder dst) {
+        dst.append("unbindall\r\n");
+        for (Integer integer : binds.keySet()) {
+            String key = KeyToString(integer);
+
+            String value = binds.get(integer);
+
+            dst.append("bind ");
+            dst.append(key);
+            dst.append(" \"");
+            dst.append(value);
+            dst.append("\"\r\n");
+        }
+    }
+
     private class Cmd_Bind implements ICommand {
         public void RunCommand(String[] args) {
             if(args.length < 2) {

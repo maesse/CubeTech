@@ -130,6 +130,14 @@ public class OptionsUI implements IMenu {
         cont.doLayout();
         mainCont.addComponent(cont);
 
+        // Music
+//        cont = new CContainer(new FlowLayout(true, true, false));
+//        cbox = new CCheckbox("Music", setMusic);
+//        cbox.setSelectedDontFire(Ref.soundMan.playmusic);
+//        cont.addComponent(cbox);
+//        cont.doLayout();
+//        mainCont.addComponent(cont);
+
         // Resolution
         cont = new CContainer(new FlowLayout(true, true, false));
         cont.addComponent(new CLabel("Resolution: "));
@@ -225,6 +233,14 @@ public class OptionsUI implements IMenu {
     private ButtonEvent selectResolution = new ButtonEvent() {
         public void buttonPressed(CComponent button, MouseEvent evt) {
             popupContainer = resScroll;
+        }
+    };
+
+    private ButtonEvent setMusic = new ButtonEvent() {
+        public void buttonPressed(CComponent button, MouseEvent evt) {
+            boolean value = ((CCheckbox)button).isSelected();
+            if(value != Ref.soundMan.playmusic)
+                Ref.soundMan.PlayBackgroundMusic(value);
         }
     };
 

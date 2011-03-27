@@ -1,5 +1,6 @@
 package cubetech.common;
 
+import cubetech.Game.GameClient;
 import cubetech.Game.Gentity;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityState;
@@ -22,6 +23,7 @@ public class ItemList {
     public ItemList() {
 
         addItem(new GItem("item_health", "data/smallmedkit1.wav", null, "25 Health", 25, GItem.Type.HEALTH,0, Ref.ResMan.LoadTexture("data/bigmed.png")));
+        addItem(new GItem("item_boots", "data/doublejump.wav", null, "Moon Boots", 15, GItem.Type.POWERUP,0, Ref.ResMan.LoadTexture("data/boots.png")));
 
     }
 
@@ -29,6 +31,10 @@ public class ItemList {
         GItem item = items.get(pickupName.toLowerCase());
         return item;
     }
+
+//    public GItem findItemByPowerup(String powerup) {
+//
+//    }
 
     public GItem findItemByClassname(String classname) {
         for (int i= 0; i < items2.size(); i++) {
@@ -122,6 +128,18 @@ public class ItemList {
         }
     };
 
+    private int PickupPowerup(Gentity ent, Gentity other) {
+        int quantity = 0;
+        if(ent.count != 0)
+            quantity = ent.count;
+        else
+            quantity = ent.item.quantity;
+
+        GameClient cl = other.getClient();
+        cl.ps.powerups[ent.item.tag] += quantity * 1000;
+        return 60;
+    }
+
 
     private int PickupHealth(Gentity ent, Gentity other) {
         PlayerStats stats = other.getClient().ps.stats;
@@ -151,6 +169,9 @@ public class ItemList {
             switch(self.item.type) {
                 case HEALTH:
                     respawn = PickupHealth(self, other);
+                    break;
+                case POWERUP:
+                    respawn = PickupPowerup(self, other);
                     break;
                 default:
                     Common.LogDebug("need to implement " + self.item.type);

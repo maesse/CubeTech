@@ -1,8 +1,0 @@
-texture "derp.png"
-translucent "2"
-ignorez "0"
-filter "1"
-color "255,255,255,255"
-texoffset "0,000000:0,449219"
-texsize "0,609375:0,550781"
-anim "1"

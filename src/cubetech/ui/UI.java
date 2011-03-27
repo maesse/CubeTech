@@ -204,7 +204,21 @@ public class UI implements KeyEventListener, MouseEventListener {
                 }
             });
         popup = true;
-        popupMessage = text;
+
+
+        String shortStr = text;
+        String[] lines = text.split("\n");
+
+        int maxVisible = Ref.textMan.GetCharHeight() / (int)(Ref.glRef.GetResolution().y * 0.9f);
+        
+        
+        if(lines.length > maxVisible) {
+            for (int i= 0; i < maxVisible; i++) {
+                shortStr += lines[i] + '\n';
+            }
+            shortStr = shortStr.substring(0, shortStr.length()-1);
+        }
+        popupMessage = shortStr;
         popupMessageSize = null; // recalculate size on next frame
         Ref.Console.Close();
     }
@@ -214,7 +228,7 @@ public class UI implements KeyEventListener, MouseEventListener {
         Vector2f res = Ref.glRef.GetResolution();
 //        if(popupSize == null) {
             popupSize = new Vector2f(res);
-            popupSize.scale(0.5f);
+            popupSize.scale(0.75f);
             popupButton.setPosition(new Vector2f(0.5f * res.x - popupButton.getSize().x /2f, (0.5f*res.y + popupSize.y*0.5f - popupButton.getLayoutSize().y) ));
             //popupButton.SetPosition();
 //        }
@@ -227,7 +241,7 @@ public class UI implements KeyEventListener, MouseEventListener {
         //spr.Set(0.5f, 0.5f, 0.3f);
         spr.SetColor(30,30,30,200);
         
-        Ref.textMan.AddText(new Vector2f(0.5f*res.x, 0.5f*res.y +(((popupMessageSize.y-50))/2f)), popupMessage, Align.CENTER, null, popupSize, Type.HUD, 1);
+        Ref.textMan.AddText(new Vector2f(0.5f*res.x, 0.5f*res.y -(((popupMessageSize.y+16))/2f)), popupMessage, Align.CENTER, null, popupSize, Type.HUD, 1);
         
     }
 

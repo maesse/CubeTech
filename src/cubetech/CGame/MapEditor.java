@@ -1,6 +1,7 @@
 package cubetech.CGame;
 
 import cubetech.Block;
+import cubetech.Game.SpawnEntity;
 import cubetech.collision.BlockModel;
 
 import cubetech.common.CVar;
@@ -119,6 +120,9 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
     private BlockModel selectedModel = null;
     private boolean select_model = false;
 
+    ArrayList<SpawnEntity> entities = null;
+    boolean showEntities = false;
+
     enum Tool {
         SELECT,
         RESIZE,
@@ -137,6 +141,8 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         selectTool(Tool.SELECT);
         edit_nearlayer = Ref.cvars.Get("edit_nearlayer", "1", EnumSet.of(CVarFlags.NONE));
         edit_farlayer = Ref.cvars.Get("edit_farlayer", "100", EnumSet.of(CVarFlags.NONE));
+
+        entities =  Ref.game.spawnEntities.getList();
     }
 
     public void setGridSpacing(int units) {
@@ -174,6 +180,13 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
 //            EDITOR_LAYER = -val;
         }
 
+        if(showEntities) {
+            for (SpawnEntity spawnEntity : entities) {
+                Block b = spawnEntity.getBlock();
+                b.Render();
+            }
+        }
+
         selection_temp_mins.set(Integer.MAX_VALUE, Integer.MAX_VALUE);
         selection_temp_maxs.set(Integer.MIN_VALUE, Integer.MIN_VALUE);
         renderSelectedModel();
@@ -208,7 +221,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
 //            currentTexture.setTexsize(b.TexSize);
             Vector2f center = b.GetCenter();
             centerLabel.setText("Center:     \nx: "+center.x+"\ny: " + center.y + "\nz: " + b.getLayer());
-            extentLabel.setText("Extent:     \nx: " + b.GetExtents().x + "\ny: " + b.GetExtents().y);
+            extentLabel.setText("Extent:     \nx: " + b.GetExtents().x + "\ny: " + b.GetExtents().y + "\nH: " + b.Handle);
         } else {
 //            currentTexture.setTex(Ref.ResMan.getWhiteTexture());
             centerLabel.setText("Center:     \nx: N/A\ny: N/A\nz: N/A");
@@ -663,7 +676,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                         dragStart = new Vector2f(gameCoords.x - selectedModel.center.x, gameCoords.y - selectedModel.center.y);
                     }
                 } else {
-                    if(selectedBlock.Intersects(gameCoords)) {
+                    if(selectedBlock != null && selectedBlock.Intersects(gameCoords)) {
                         // Intiate block move
                         selectedBlockCopy = selectedBlock.clone();
                         selectedBlockCopy.setLayer(selectedBlockCopy.getLayer()+1);
@@ -677,15 +690,15 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
             if(snapToGrid) {
                 dragEnd = gameCoords;
                 applyGrid(dragEnd);
-            } else {
+            } else if(dragStart != null) {
                 if(dragEnd == null)
                     dragEnd = new Vector2f();
                 dragEnd.x = gameCoords.x - dragStart.x;
                 dragEnd.y = gameCoords.y - dragStart.y;
             }
-            if(select_model)
+            if(select_model && selectedModel != null)
                 selectedModel.moveTo(dragEnd);
-            else {
+            else if(selectedBlockCopy != null) {
                 selectedBlockCopy.SetCentered(dragEnd, selectedBlockCopy.GetExtents());    
                 updateUIBlock(selectedBlockCopy);
             }
@@ -742,6 +755,14 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         }
     }
 
+    private SpawnEntity hitEntity(Vector2f pos) {
+        for (SpawnEntity spawnEntity : entities) {
+            if(spawnEntity.getBlock().Intersects(pos))
+                return spawnEntity;
+        }
+        return null;
+    }
+
     // Select tool got a mouse event
     
     private void selectMouseEvent(MouseEvent evt) {
@@ -774,6 +795,10 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         select_index = 0;
         select_queue.clear();
 
+        SpawnEntity spEnt = hitEntity(gameCoords);
+        if(spEnt != null)
+            select_queue.add(spEnt.getBlock());
+
         Block b = null;
         
         SpatialQuery q = Ref.spatial.Query(gameCoords.x, gameCoords.y, gameCoords.x, gameCoords.y);
@@ -783,6 +808,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                     select_queue.add(b);
             }
         }
+        
 
         if(select_queue.size() > 0) {
 
@@ -1073,9 +1099,17 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         entityCont.setResizeToChildren(Direction.NONE);
         CScrollPane entityScrollCont = new CScrollPane(Direction.VERTICAL);
         CContainer entityList = new CContainer(new FlowLayout(false, false, true));
-        for (int i = 0; i < 10; i++) {
-            entityList.addComponent(new CButton("func_door", null, Align.LEFT, 0.5f));
-        }
+        entityList.addComponent(new CButton("item_boots", null, Align.LEFT, 0.5f, new ButtonEvent() {
+            public void buttonPressed(CComponent button, MouseEvent evt) {
+                SpawnEntity ent = new SpawnEntity("item_boots", Ref.cgame.cg.refdef.Origin);
+                Ref.game.spawnEntities.AddEntity(ent);
+                entities = Ref.game.spawnEntities.getList();
+                selectBlock(null);
+            }
+        }));
+//        for (int i = 0; i < 10; i++) {
+//
+//        }
         entityList.doLayout();
         entityScrollCont.addComponent(entityList);
         entityScrollCont.setSize2(entityCont.getInternalSize());
@@ -1083,7 +1117,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         entityCont.addComponent(entityScrollCont);
         entityCont.doLayout();
 
-        popupContainer = entityCont;
+//        popupContainer = entityCont;
 
         sidepanel = new CContainer(new FlowLayout(false, false, true));
         sidepanel.setPosition(new Vector2f(Ref.glRef.GetResolution().x - 260, 0));
@@ -1217,12 +1251,15 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                 Ref.cvars.Set2("cg_drawsolid", ""+(value?2:0), true);
             }
         }));
-        blockCont.addComponent(new CCheckbox("Show Entities", new ButtonEvent() {
+        CCheckbox showEnts = new CCheckbox("Show Entities", new ButtonEvent() {
             public void buttonPressed(CComponent button, MouseEvent evt) {
                 boolean value = ((CCheckbox)button).isSelected();
                 Ref.cvars.Set2("cg_drawentities", ""+(value?1:0), true);
+                showEntities = value;
             }
-        }));
+        });
+        showEnts.setSelected(Ref.cgame.cg_drawentities.iValue==1?true:false);
+        blockCont.addComponent(showEnts);
 
         // Top layer
         CContainer layerCont = new CContainer(new FlowLayout(true, true, false));
@@ -1307,8 +1344,8 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
 
             
         }
-        if(toEntity) {
-            miscCont.addComponent(new CButton("ToEntity", null, Align.CENTER, 0.8f, new ButtonEvent() {
+        if(toEntity || true) {
+            miscCont.addComponent(new CButton("Entity", null, Align.CENTER, 0.8f, new ButtonEvent() {
                 public void buttonPressed(CComponent button, MouseEvent evt) {
                     openEntityPopupMenu(OrgCoordsToPixelCoords(Ref.Input.playerInput.MousePos));
                 }

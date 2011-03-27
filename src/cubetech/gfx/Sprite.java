@@ -173,10 +173,14 @@ public class Sprite {
         dirty = true;
         invalid = false;
     }
+
+    
     
     public void FillBuffer(ByteBuffer buf) {
         if(dirty)
             updateData();
+        if(buf == null)
+            return;
         int derp = 0;
         for (int i= 0; i < data.length; i++) {
             buf.putFloat(data[i]);
@@ -230,13 +234,51 @@ public class Sprite {
         dirty = false;
     }
 
+    public void DrawFromBuffer() {
+        if(special != 0) {
+            if(special == GL11.GL_SCISSOR_TEST) {
+                if(value)
+                    GL11.glEnable(special);
+                else
+                    GL11.glDisable(special);
+            } else if(special == GL11.GL_SCISSOR_BOX) {
+                GL11.glScissor(a, b, c, d);
+            }
+            GLRef.checkError();
+            return;
+        }
+
+        GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+
+        // Texture coords are flipped on y axis
+        GL11.glBegin(GL11.GL_QUADS);
+        {
+            // Good ol' fixed function
+            GL11.glTexCoord2f(data[3], data[4]);
+            GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL11.glVertex3f(data[0], data[1], data[2]);
+
+            GL11.glTexCoord2f(data[8], data[9]);
+            GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL11.glVertex3f(data[5], data[6], data[7]);
+
+            GL11.glTexCoord2f(data[13], data[14]);
+            GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL11.glVertex3f(data[10], data[11], data[12]);
+
+            GL11.glTexCoord2f(data[18], data[19]);
+            GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL11.glVertex3f(data[15], data[16], data[17]);
+
+        }
+        GL11.glEnd();
+
+        GLRef.checkError();
+    }
+
     // Old immediate mode rendering
     public void Draw() {
-        if(Texture != null && Texture.loaded) {
-            GL11.glEnable(GL11.GL_TEXTURE_2D);
-            Texture.Bind();
-        } else
-            Ref.ResMan.SetWhiteTexture();
+        
 
         if(special != 0) {
             if(special == GL11.GL_SCISSOR_TEST) {
@@ -251,7 +293,7 @@ public class Sprite {
             return;
         }
             
-        GL11.glColor4b(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+        GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
         
         // draw a quad textured to match the sprite
         GL11.glPushMatrix();
@@ -263,21 +305,41 @@ public class Sprite {
         // Texture coords are flipped on y axis
         GL11.glBegin(GL11.GL_QUADS);
         {
-            GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y);
-            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(0, -Extent.x, -Extent.y, depth);
+            if(Ref.glRef.isShadersSupported()) {
+                // Fancy pants shaders
+                GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y);
+                GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                GL20.glVertexAttrib3f(0, -Extent.x, -Extent.y, depth);
 
-            GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y);
-            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(0, Extent.x, -Extent.y, depth);
+                GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y);
+                GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                GL20.glVertexAttrib3f(0, Extent.x, -Extent.y, depth);
 
-            GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
-            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(0, Extent.x, Extent.y, depth);
+                GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
+                GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                GL20.glVertexAttrib3f(0, Extent.x, Extent.y, depth);
 
-            GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y+TexSize.y);
-            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(0, -Extent.x, Extent.y, depth);
+                GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y+TexSize.y);
+                GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                GL20.glVertexAttrib3f(0, -Extent.x, Extent.y, depth);
+            } else {
+                // Good ol' fixed function
+                GL11.glTexCoord2f(TexOffset.x, TexOffset.y);
+                GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                GL11.glVertex3f( -Extent.x, -Extent.y, depth);
+
+                GL11.glTexCoord2f(TexOffset.x+TexSize.x, TexOffset.y);
+                GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                GL11.glVertex3f( Extent.x, -Extent.y, depth);
+
+                GL11.glTexCoord2f(TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
+                GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                GL11.glVertex3f( Extent.x, Extent.y, depth);
+
+                GL11.glTexCoord2f(TexOffset.x, TexOffset.y+TexSize.y);
+                GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                GL11.glVertex3f( -Extent.x, Extent.y, depth);
+            }
             
         }
         GL11.glEnd();

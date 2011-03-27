@@ -40,6 +40,13 @@ public final class Commands {
                     wait = 1;
             }
         });
+        AddCommand("crash", new ICommand() {
+            public void RunCommand(String[] args) {
+                String str = Args(args);
+                Ref.common.Error(Common.ErrorCode.FATAL, str);
+            }
+        });
+
         AddCommand("alias", new ICommand() {
             public void RunCommand(String[] args) {
                 // Usage

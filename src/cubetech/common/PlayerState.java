@@ -35,6 +35,18 @@ public class PlayerState {
 
     public int moveType = MoveType.SPECTATOR;
     public int stepTime; // counting towards 0 for a step
+    public int jumpTime; // while > 0, don't apply gravity
+    public boolean applyPull = false;
+    public boolean jumpDown = false;
+    public boolean canDoubleJump = false;
+
+    public int[] powerups = new int[NUM_POWERUPS];
+    public static int NUM_POWERUPS = 1;
+
+    public int movetime = 0;
+
+    public int maptime = 0;
+    
 
     // Wipe values
     public void Clear() {
@@ -55,6 +67,13 @@ public class PlayerState {
         ping = -1;
         moveType = MoveType.SPECTATOR;
         stepTime = 0;
+        jumpTime = 0;
+        applyPull = false;
+        jumpDown = false;
+        canDoubleJump = false;
+        powerups = new int[NUM_POWERUPS];
+        movetime = 0;
+        maptime = 0;
         stats = new PlayerStats();
     }
 
@@ -104,6 +123,13 @@ public class PlayerState {
         ps.stepTime = stepTime;
         ps.viewangles = new Vector2f(viewangles);
         ps.stats = stats.clone();
+        ps.jumpTime = jumpTime;
+        ps.applyPull = applyPull;
+        ps.jumpDown = jumpDown;
+        ps.canDoubleJump = canDoubleJump;
+        ps.movetime = movetime;
+        ps.maptime = maptime;
+        System.arraycopy(powerups, 0, ps.powerups, 0, NUM_POWERUPS);
         return ps;
 //        }
     }
@@ -153,7 +179,7 @@ public class PlayerState {
         else
             s.eType = EntityType.PLAYER;
         s.ClientNum = clientNum;
-
+        s.time = movetime;
         s.pos.base.x = origin.x;
         s.pos.base.y = origin.y;
         s.pos.type = Trajectory.INTERPOLATE;
@@ -237,6 +263,15 @@ public class PlayerState {
         msg.WriteDelta(ps.ping, ping);
         msg.WriteDelta(ps.moveType, moveType);
         msg.WriteDelta(ps.stepTime, stepTime);
+        msg.WriteDelta(ps.jumpTime, jumpTime);
+        msg.Write(applyPull);
+        msg.Write(jumpDown);
+        msg.Write(canDoubleJump);
+        msg.WriteDelta(ps.maptime, maptime);
+        for (int i= 0; i < NUM_POWERUPS; i++) {
+            msg.WriteDelta(ps.powerups[i], powerups[i]);
+        }
+        msg.WriteDelta(ps.movetime, movetime);
         stats.WriteDelta(msg, ps.stats);
 
     }
@@ -263,10 +298,19 @@ public class PlayerState {
         ping = msg.ReadDeltaInt(ps.ping);
         moveType = msg.ReadDeltaInt(ps.moveType);
         stepTime = msg.ReadDeltaInt(ps.stepTime);
+        jumpTime = msg.ReadDeltaInt(ps.jumpTime);
+        applyPull = msg.ReadBool();
+        jumpDown = msg.ReadBool();
+        canDoubleJump = msg.ReadBool();
+        maptime = msg.ReadDeltaInt(ps.maptime);
+        for (int i= 0; i < NUM_POWERUPS; i++) {
+            powerups[i] = msg.ReadDeltaInt(ps.powerups[i]);
+        }
+        movetime = msg.ReadDeltaInt(ps.movetime);
         stats.ReadDelta(msg, ps.stats);
     }
 
-    void AddPredictableEvent(int event, int eventParam) {
+    public void AddPredictableEvent(int event, int eventParam) {
         events[eventSequence & (Common.MAX_PS_EVENTS-1)] = event;
         eventParams[eventSequence & (Common.MAX_PS_EVENTS-1)] = eventParam;
         eventSequence++;

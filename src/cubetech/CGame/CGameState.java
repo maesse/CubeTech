@@ -9,6 +9,7 @@ package cubetech.CGame;
 import cubetech.client.CLSnapshot;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
+import cubetech.common.Content;
 import cubetech.common.Move;
 import cubetech.common.MoveQuery;
 import cubetech.common.PlayerState;
@@ -176,7 +177,7 @@ public class CGameState {
 
         // prepare for pmove
         MoveQuery move = new MoveQuery(Ref.cgame);
-        move.tracemask =  2;
+        move.tracemask =  Content.MASK_PLAYERSOLID;
 
         // save the state before the pmove so we can detect transitions
         PlayerState oldPlayerState = predictedPlayerState;
@@ -243,14 +244,14 @@ public class CGameState {
                     thisFrameTeleport = false;
                 } else {
                     // TODO: AdjustPositionForMover()
-                    if(oldPlayerState.origin.x != predictedPlayerState.origin.x
-                            || oldPlayerState.origin.y != predictedPlayerState.origin.y)
-                        Ref.cgame.Print("Prediction error");
+//                    if(oldPlayerState.origin.x != predictedPlayerState.origin.x
+//                            || oldPlayerState.origin.y != predictedPlayerState.origin.y)
+//                        Ref.cgame.Print("Prediction error");
                     Vector2f delta = new Vector2f();
                     Vector2f.sub(oldPlayerState.origin, predictedPlayerState.origin, delta);
                     float len = delta.length();
                     if(len > 0.1f) {
-                        Ref.cgame.Print("Prediction miss: " + len);
+//                        Ref.cgame.Print("Prediction miss: " + len);
                         if(Ref.cgame.cg_errorDecay.iValue > 0) {
                             int t = time - predictedErrorTime;
                             float f = (Ref.cgame.cg_errorDecay.fValue - t) / Ref.cgame.cg_errorDecay.fValue;

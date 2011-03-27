@@ -5,6 +5,8 @@
 
 package cubetech.spatial;
 
+import cubetech.common.Common;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 /**
@@ -22,6 +24,27 @@ public class Spatial {
 
     public void Clear() {
         data.clear();
+    }
+
+    public ArrayList<Bin> getBins(float minx, float miny, float maxx, float maxy) {
+        // Figure out what cells the box spans now
+        int xmincell = Cell.GetMinCell(minx);
+        int xmaxcell = Cell.GetMaxCell(maxx);
+        int ymincell = Cell.GetMinCell(miny);
+        int ymaxcell = Cell.GetMaxCell(maxy);
+
+        ArrayList<Bin> bins = new ArrayList<Bin>();
+
+        for (int y= ymincell; y < ymaxcell+1; y++) {
+            for (int x= xmincell; x < xmaxcell+1; x++) {
+                lookupCell.Set(x, y);
+                Bin bin = data.get(lookupCell);
+                if(bin != null)
+                bins.add(bin);
+            }
+        }
+
+        return bins;
     }
 
     // An object has moved, so update the handle and map
@@ -111,20 +134,25 @@ public class Spatial {
     }
 
     public void Remove(SpatialHandle handle) {
+        Common.LogDebug("Removing handle: " + handle);
         for (int y= handle.ymincell; y < handle.ymaxcell; y++) {
             for (int x= handle.xmincell; x < handle.xmaxcell; x++) {
                 // Get bin
                 lookupCell.Set(x, y);
                 Bin bin = data.get(lookupCell);
 
-                if(bin == null)
+                if(bin == null) {
+                    Common.LogDebug("Spatial.Remove: bin == null, there should be one :S");
                     continue;
+                }
 
                 int binIndex = handle.GetCellIndex(lookupCell);
                 if(binIndex == -1) {
                     System.err.println("Spatial.Update(): Handle says we're already remove from this bin");
                     continue;
                 }
+                
+//                Common.LogDebug("  -handle: " + handle);
                 // remove from bin
                 bin.Remove(binIndex);
                 // remove from handle

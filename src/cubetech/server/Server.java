@@ -199,7 +199,7 @@ public class Server implements ITrace {
         sv_fps.Min = 10;
         sv_timeout = Ref.cvars.Get("sv_timeout", "200", EnumSet.of(CVarFlags.TEMP));
         sv_hostname = Ref.cvars.Get("sv_hostname", "CubeTech Server", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.ARCHIVE));
-        sv_mapname = Ref.cvars.Get("mapname", "nomap", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.ARCHIVE));
+        sv_mapname = Ref.cvars.Get("mapname", "nomap", EnumSet.of(CVarFlags.SERVER_INFO));
         sv_lan = Ref.cvars.Get("sv_lan", "1", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.ARCHIVE));
         Ref.cvars.Get("nextmap", "", EnumSet.of(CVarFlags.TEMP));
         sv_maxclients = Ref.cvars.Get("sv_maxclients", "32", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.LATCH));
@@ -271,9 +271,7 @@ public class Server implements ITrace {
         try {
             Ref.cm.LoadMap(mapname, false);
         } catch (ClipmapException ex) {
-            Common.Log(ex.toString());
-            Ref.common.Error(Common.ErrorCode.DROP, ex.toString());
-            return;
+            Ref.common.Error(Common.ErrorCode.DROP, Common.getExceptionString(ex));
         }
         Ref.cvars.Set2("mapname", mapname, true);
         Ref.cvars.Set2("sv_mapChecksum", ""+Ref.cm.cm.checksum, true);
@@ -496,6 +494,7 @@ public class Server implements ITrace {
             return;
 
         Common.Log("--- Server Shutdown (" + string + ") ---");
+        
         if(clients.length > 0) {
             FinalMessage(string);
         }
@@ -518,6 +517,8 @@ public class Server implements ITrace {
     }
 
     private void FinalMessage(String string) {
+        if(sv.gameClients == null)
+            return;
         for (int i= 0; i < clients.length; i++) {
             SvClient cl = clients[i];
             if(cl.state != ClientState.ZOMBIE && cl.state != ClientState.FREE)
@@ -1088,7 +1089,7 @@ public class Server implements ITrace {
         }
 
         // Check if map exists before changing
-        if(!ResourceManager.FileExists(tokens[1])) {
+        if(!tokens[1].equals("newmap") && !ResourceManager.FileExists(tokens[1])) {
             Common.Log("Cannot find map: " + tokens[1]);
             return;
         }

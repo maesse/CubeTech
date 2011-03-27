@@ -1,8 +1,0 @@
-texture "SOME-MEN-JUST-WANT-TO-WATCH-THE-WORLD-BURN.jpg"
-translucent "2"
-ignorez "0"
-filter "1"
-color "255,255,255,255"
-texoffset "0,205882:0,180556"
-texsize "0,594118:0,416667"
-anim "1"

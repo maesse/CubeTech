@@ -350,7 +350,8 @@ public class Input {
                     // Special case handling for escape
                     // Toggle console
                     if((key == Keyboard.KEY_ESCAPE && IsKeyPressed(Keyboard.KEY_LSHIFT)) || key == Keyboard.KEY_F10) {
-                        Ref.Console.ToggleVisible();
+                        Ref.commands.ExecuteText(ExecType.NOW, "console");
+                        
                     }
                     else if(key == Keyboard.KEY_ESCAPE) {
                         if((GetKeyCatcher() & KEYCATCH_CONSOLE) > 0) {

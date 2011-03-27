@@ -21,6 +21,7 @@ import cubetech.common.PlayerState;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
+import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
@@ -32,9 +33,13 @@ import cubetech.input.KeyEventListener;
 import cubetech.input.MouseEvent;
 import cubetech.input.MouseEventListener;
 import cubetech.misc.Ref;
+import cubetech.spatial.Bin;
 import cubetech.spatial.SpatialQuery;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.lwjgl.util.Color;
 
 import org.lwjgl.util.vector.Vector2f;
@@ -51,7 +56,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_smoothclients = Ref.cvars.Get("cg_smoothclients", "0", EnumSet.of(CVarFlags.TEMP));
     CVar cg_errorDecay = Ref.cvars.Get("cg_errorDecay", "100", EnumSet.of(CVarFlags.TEMP));
     CVar cg_viewsize = Ref.cvars.Get("cg_viewsize", "100", EnumSet.of(CVarFlags.TEMP));
-    CVar cg_fov = Ref.cvars.Get("cg_fov", "180", EnumSet.of(CVarFlags.TEMP));
+    CVar cg_fov = Ref.cvars.Get("cg_fov", "350", EnumSet.of(CVarFlags.TEMP));
     CVar cg_chattime = Ref.cvars.Get("cg_chattime", "5000", EnumSet.of(CVarFlags.TEMP)); // show text for this long
     CVar cg_chatfadetime = Ref.cvars.Get("cg_chatfadetime", "500", EnumSet.of(CVarFlags.TEMP)); // + this time for fading out
     CVar cg_drawSolid = Ref.cvars.Get("cg_drawSolid", "0", EnumSet.of(CVarFlags.NONE));
@@ -60,6 +65,24 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_depthfar = Ref.cvars.Get("cg_depthfar", "1000", EnumSet.of(CVarFlags.ROM));
     CVar cg_viewmode = Ref.cvars.Get("cg_viewmode", "0", EnumSet.of(CVarFlags.NONE));
     CVar cg_drawentities = Ref.cvars.Get("cg_drawentities", "0", EnumSet.of(CVarFlags.ROM));
+    CVar cg_drawbin = Ref.cvars.Get("cg_drawbin", "0", EnumSet.of(CVarFlags.NONE));
+
+    // zoom to this fov
+    CVar camera_maxfov = Ref.cvars.Get("camera_maxfov", "1500", EnumSet.of(CVarFlags.TEMP));
+    // at this speed
+    CVar camera_maxspeed = Ref.cvars.Get("camera_maxspeed", "600", EnumSet.of(CVarFlags.TEMP));
+
+    // allow for smooth zooming
+    CVar camera_zoomspeed = Ref.cvars.Get("camera_zoomspeed", "10", EnumSet.of(CVarFlags.TEMP));
+
+    // player centering
+    CVar camera_hplayerpos = Ref.cvars.Get("camera_hplayerpos", "0.3", EnumSet.of(CVarFlags.TEMP));
+    CVar camera_vplayerpos = Ref.cvars.Get("camera_vplayerpos", "0.5", EnumSet.of(CVarFlags.TEMP));
+    
+    // Move camera in vertical direction when vertical velocity > this
+    CVar camera_vsnapmin = Ref.cvars.Get("camera_vsnapmin", "140", EnumSet.of(CVarFlags.TEMP));
+    CVar camera_vsnapmax = Ref.cvars.Get("camera_vsnapmax", "300", EnumSet.of(CVarFlags.TEMP));
+    
 
     CGameState cg;
     CGameStatic cgs;
@@ -74,9 +97,28 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     private HashMap<String, ICommand> commands = new HashMap<String, ICommand>();
     CubeTexture playerTexture;
     private MapEditor mapEditor = null;
+    public float speed;
+    public float lastFov = cg_fov.fValue;
+    public float lastVleft = camera_vplayerpos.fValue;
+
+    private CubeMaterial c_head;
+    private CubeMaterial c_arm;
+    private CubeMaterial c_body;
+    private CubeMaterial c_legs;
 
 //    private ColladaModel cm = ColladaModel.load("data/Dice.dae");
 
+    Cloud[] clouds = new Cloud[16];
+
+    private void RenderClouds() {
+        float time = Ref.client.frametime/1000f;
+        for (int i= 0; i < clouds.length; i++) {
+            if(clouds[i].isOutOfView(cg.refdef.xmin + cg.refdef.Origin.x, cg.refdef.Origin.y))
+                clouds[i].position(new Vector2f(cg.refdef.xmax + cg.refdef.Origin.x, cg.refdef.Origin.y));
+
+            clouds[i].Render(time);
+        }
+    }
 
     /**
     *=================
@@ -87,12 +129,25 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     *=================
     **/
     public void Init(int serverMessageSequence, int serverCommandSequence, int ClientNum) {
+        try {
+            c_head = CubeMaterial.Load("data/c_head.mat", true);
+            c_arm = CubeMaterial.Load("data/c_arm.mat", true);
+            c_legs = CubeMaterial.Load("data/c_legs.mat", true);
+            c_body = CubeMaterial.Load("data/c_body.mat", true);
+        } catch (Exception ex) {
+            Logger.getLogger(CGame.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
         playerTexture = Ref.ResMan.LoadTexture("data/enemy1.png");
         commands.put("+scores", new Cmd_ScoresDown());
         commands.put("-scores", new Cmd_ScoresUp());
 
         for (int i= 0; i < chatLines.length; i++) {
             chatLines[i] = new ChatLine();
+        }
+
+        for (int i= 0; i < clouds.length; i++) {
+            clouds[i] = new Cloud(new Vector2f());
         }
 
         // Clear everything
@@ -113,7 +168,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             else
                 Ref.cm.LoadMap(cgs.mapname, true);
         } catch (ClipmapException ex) {
-            Ref.common.Error(Common.ErrorCode.DROP, "Couldn't load map:_" + ex);
+            Ref.common.Error(Common.ErrorCode.DROP, "Couldn't load map:_" + Common.getExceptionString(ex));
         }
 
         cg.loading = true; // Dont defer now
@@ -169,6 +224,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg.clientframe++;
 
         cg.PredictPlayerState();
+
         CalcViewValues();
 
         Ref.soundMan.Respatialize(cg.refdef.Origin, cg.predictedPlayerState.velocity);
@@ -182,11 +238,108 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg.oldTime = cg.time;
 
         // Time to do some drawing
-        RenderScene(cg.refdef);
-        AddPacketEntities();
-        DebugDraw();
-        Draw2D();
+        RenderBackground();
+        if(cg_editmode.iValue == 0) {
+            RenderClouds();
+        }
+        
+        if(cg_drawbin.iValue != 1) {
+            RenderScene(cg.refdef);
+            AddPacketEntities();
+            DebugDraw();
+            Draw2D();
+
+        } else {
+            ArrayList<Bin> bins = Ref.spatial.getBins(cg.refdef.Origin.x + Game.PlayerMins.x, cg.refdef.Origin.y + Game.PlayerMins.y, cg.refdef.Origin.x + Game.PlayerMaxs.x, cg.refdef.Origin.y + Game.PlayerMaxs.y);
+            ArrayList<Block> blocks = new ArrayList<Block>();
+            for (int i= 0; i < bins.size(); i++) {
+                Bin bin = bins.get(i);
+                bin.getBlocks(blocks);
+            }
+
+            for (Block block : blocks) {
+//                if(block.LastQueryNum == queryNum)
+//                    continue; // duplicate
+//                block.LastQueryNum = queryNum;
+
+    //            if(!BlockVisible(block))
+    //                continue;
+
+                int layer = block.getLayer();
+
+                block.Render();
+            }
+
+//            int queryNum = result.getQueryNum();
+//            Object object;
+//
+//            int near = -cg_depthnear.iValue, far = -cg_depthfar.iValue;
+//
+//            if(Ref.cvars.Find("cg_editmode").iValue == 1) {
+//                near = -Ref.cvars.Find("edit_nearlayer").iValue;
+//                far = -Ref.cvars.Find("edit_farlayer").iValue;
+//            }
+//
+//            while((object = result.ReadNext()) != null) {
+//                if(object.getClass() != Block.class)
+//                    continue;
+//                Block block = (Block)object;
+//                if(block.LastQueryNum == queryNum)
+//                    continue; // duplicate
+//                block.LastQueryNum = queryNum;
+//
+//    //            if(!BlockVisible(block))
+//    //                continue;
+//
+//                int layer = block.getLayer();
+//
+//                if(layer > near || layer < far)
+//                    continue;
+//                block.Render();
+//            }
+        }
 //        cm.render(new Vector3f(0,0,-30));
+    }
+
+    private float getPullAccel() {
+
+        float pullstep = Ref.cvars.Find("sv_pullstep").fValue;
+        float accel = Ref.cvars.Find("sv_pullacceleration").fValue;
+        float spd = Math.abs(cg.predictedPlayerState.velocity.x);
+        if(spd > Ref.cvars.Find("sv_pull1").fValue)
+            accel *= pullstep;
+        if(spd > Ref.cvars.Find("sv_pull2").fValue)
+            accel *= pullstep;
+        if(spd > Ref.cvars.Find("sv_pull3").fValue)
+            accel *= pullstep;
+        if(spd > Ref.cvars.Find("sv_pull4").fValue)
+            accel *= pullstep;
+        if(spd > Ref.cvars.Find("sv_pull5").fValue)
+            accel *= pullstep;
+        if(spd > Ref.cvars.Find("sv_pull6").fValue)
+            accel *= pullstep;
+        return accel;
+    }
+
+    
+
+    private void RenderBackground() {
+        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
+
+        float yfrac = cg.refdef.Origin.y / Ref.cvars.Find("g_killheight").fValue;
+        if(yfrac < -1f)
+            yfrac = -1f;
+        if(yfrac > 1)
+            yfrac = 1f;
+
+        float xfrac = cg.refdef.Origin.x / 5000f;
+
+        Vector2f texSize = new Vector2f(1, 0.8f);
+        Vector2f texoffset = new Vector2f(0+xfrac,0.1f + yfrac * -0.1f);
+
+        spr.Set(new Vector2f(cg.refdef.Origin.x + cg.refdef.xmin, cg.refdef.Origin.y + cg.refdef.ymin),
+                new Vector2f(cg.refdef.w, cg.refdef.h), Ref.ResMan.LoadTexture("data/background_1.png"), texoffset, texSize);
+        spr.SetDepth(PLAYER_LAYER - 200);
     }
 
     private void DebugDraw() {
@@ -239,6 +392,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     }
 
     private void CalcViewValues() {
+        speed = (float) (speed * 0.8 + cg.predictedPlayerState.velocity.length() * 0.2f);
         cg.refdef = new ViewParams();
         cg.refdef.CalcVRect();
 
@@ -338,42 +492,123 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             return;
         }
 
+
+        float bounce = 0;
+
         GItem item = Ref.common.items.getItem(es.modelindex);
+        if(item.type == GItem.Type.POWERUP)
+            bounce = (float) Math.sin(cg.time/400f) * 2f;
         Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-        spr.Set(cent.lerpOrigin, GItem.ITEM_RADIUS, item.icon);
+        spr.Set(cent.lerpOrigin.x, cent.lerpOrigin.y + bounce, GItem.ITEM_RADIUS, item.icon);
         spr.SetDepth(PLAYER_LAYER-1);
         if(item.type == GItem.Type.HEALTH)
             spr.SetAngle(cg.autoAngle);
+        
     }
 
     // Render a player
     private void Player(CEntity cent) {
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-        spr.Set(new Vector2f(cent.lerpOrigin.x + Game.PlayerMins.x, cent.lerpOrigin.y + Game.PlayerMins.y), new Vector2f(Game.PlayerMaxs.x - Game.PlayerMins.x, Game.PlayerMaxs.y - Game.PlayerMins.y), null, null, null);
-        
-        spr.SetAngle((float) (Math.atan2(cent.lerpAngles.y, cent.lerpAngles.x) + Math.PI / 2f));
+//        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
+//        spr.Set(new Vector2f(cent.lerpOrigin.x + Game.PlayerMins.x, cent.lerpOrigin.y + Game.PlayerMins.y), new Vector2f(Game.PlayerMaxs.x - Game.PlayerMins.x, Game.PlayerMaxs.y - Game.PlayerMins.y), null, null, null);
+//
+//        spr.SetAngle((float) (Math.atan2(cent.lerpAngles.y, cent.lerpAngles.x) + Math.PI / 2f));
 
-        float alpha = 0.5f;
-        if(cent.interpolate)
-            alpha = 0.75f;
-        if(cent.currentState.ClientNum == Ref.client.cl.snap.ps.clientNum)
-            spr.SetColor(0, 255, 0, (int)(alpha*255));
-        else
-            spr.SetColor(255, 0, 0, (int)(alpha*255));
+//        float alpha = 0.5f;
+//        if(cent.interpolate)
+//            alpha = 0.75f;
+
+//        spr.SetDepth(PLAYER_LAYER);
+
+        int time = cent.currentState.time;
+
+
+        float px = cent.lerpOrigin.x;
+        float py = cent.lerpOrigin.y;
+        Vector2f bodysize = new Vector2f(15,30);
+        float bodyBias = 3f;
+
+        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
+        Vector2f armSize = new Vector2f(20,20);
+        spr.Set(new Vector2f(px - armSize.x * 0.5f + 3, py - armSize.y * 0.5f + bodyBias + bodysize.y*0.10f ),
+                armSize, c_arm.getTexture(), c_arm.getTextureOffset(), c_arm.getTextureSize());
+        spr.SetAngle((float) (Math.sin((time+1000) / 100f) * 0.5f) - 0.6f);
         spr.SetDepth(PLAYER_LAYER);
 
-        Ref.textMan.AddText(new Vector2f(cent.lerpOrigin.x, cent.lerpOrigin.y+Game.PlayerMaxs.y), "" + cgs.clientinfo[cent.currentState.ClientNum].name, Align.CENTER, Type.GAME, 1, PLAYER_LAYER+1);
+        // body
+        spr = Ref.SpriteMan.GetSprite(Type.GAME);
+        
+        spr.Set(new Vector2f(px - bodysize.x * 0.5f, py - bodysize.y * 0.5f + bodyBias),
+                bodysize, c_body.getTexture(), c_body.getTextureOffset(), c_body.getTextureSize());
+        spr.SetDepth(PLAYER_LAYER);
+
+        // head
+        spr = Ref.SpriteMan.GetSprite(Type.GAME);
+        Vector2f headsize = new Vector2f(12,12);
+        Vector2f headoffset = new Vector2f(2,-2);
+        spr.Set(new Vector2f(px - headsize.x * 0.5f + headoffset.x, py - headsize.y * 0.5f + bodyBias + headoffset.y + bodysize.y * 0.5f),
+                headsize, c_head.getTexture(), c_head.getTextureOffset(), c_head.getTextureSize());
+        spr.SetDepth(PLAYER_LAYER);
+
+        if(cent.currentState.ClientNum != Ref.client.cl.snap.ps.clientNum)
+            spr.SetColor(255, 30, 30, (int)(255));
+
+        // legs
+        spr = Ref.SpriteMan.GetSprite(Type.GAME);
+        Vector2f legsSize = new Vector2f(20,20);
+        spr.Set(new Vector2f(px - legsSize.x * 0.5f, py - legsSize.y * 0.5f + Game.PlayerMins.y + bodyBias),
+                legsSize, c_legs.getTexture(), c_legs.getTextureOffset(), c_legs.getTextureSize());
+        spr.SetAngle(-time/100f);
+        spr.SetDepth(PLAYER_LAYER);
+
+        // arms
+        spr = Ref.SpriteMan.GetSprite(Type.GAME);
+        
+        spr.Set(new Vector2f(px - armSize.x * 0.5f + 4, py - armSize.y * 0.5f + bodyBias + bodysize.y*0.10f ),
+                armSize, c_arm.getTexture(), c_arm.getTextureOffset(), c_arm.getTextureSize());
+        spr.SetAngle((float) (Math.sin(time / 100f) * 0.5f) - 0.6f);
+        spr.SetDepth(PLAYER_LAYER);
+
+
+        
+
+//        Ref.textMan.AddText(new Vector2f(cent.lerpOrigin.x, cent.lerpOrigin.y+Game.PlayerMaxs.y), "" + cgs.clientinfo[cent.currentState.ClientNum].name, Align.CENTER, Type.GAME, 1, PLAYER_LAYER+1);
     }
 
     private void Draw2D() {
+        Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+        spr.Set(new Vector2f(), Ref.glRef.GetResolution(), Ref.ResMan.LoadTexture("data/hags.png"), null, null);
+
+        // Render mapeditor if in editmode
+        if(cg_editmode.iValue == 1) {
+            mapEditor.Render();
+            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, 0.0f), "^3Edit Mode", Align.CENTER, Type.HUD);
+        }
+
+        float speeds = Math.abs(cg.snap.ps.velocity.x);
+        float maxspeed = 600;
+        float frac = speeds / maxspeed;
+        spr = Ref.SpriteMan.GetSprite(Type.HUD);
+        Vector2f size = new Vector2f(Ref.glRef.GetResolution().x * 0.75f, 64);
+        Vector2f position = new Vector2f(Ref.glRef.GetResolution().x/2f - size.x / 2f , Ref.glRef.GetResolution().y - size.y - 32 );
+        size.x *= frac;
+
+        spr.Set(position, size, Ref.ResMan.LoadTexture("data/energybar.png"), null, new Vector2f(1, 1));
+        
+
         DrawChat();
+
+
 
         if(Ref.common.isDeveloper()) {
             Ref.textMan.AddText(new Vector2f(0, 0), "Position: " + cg.refdef.Origin, Align.LEFT, Type.HUD);
             Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()), "Velocity: " + cg.predictedPlayerState.velocity, Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Ping: " + Ref.cgame.cg.snap.ps.ping, Align.LEFT, Type.HUD);
+            //Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Ping: " + Ref.cgame.cg.snap.ps.ping, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Pull accel: " + getPullAccel(), Align.LEFT, Type.HUD);
+
         }
-        Ref.textMan.AddText(new Vector2f(0, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()), "HP: " + Ref.cgame.cg.snap.ps.stats.Health, Align.LEFT, Type.HUD);
+        
+        Ref.textMan.AddText(new Vector2f(0, 0), "Time: " + cg.snap.ps.maptime, Align.LEFT, Type.HUD);
+//        Ref.textMan.AddText(new Vector2f(0, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()), "HP: " + Ref.cgame.cg.snap.ps.stats.Health, Align.LEFT, Type.HUD);
 //        Ref.textMan.AddText(new Vector2f(0, 0.75f), "Interp: " + Ref.cgame.cg.frameInterpolation, Align.LEFT, Type.HUD);
 
         if(cg.predictedPlayerState.stats.Health <= 0) {
@@ -382,11 +617,33 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y/2f), "ESC for menu", Align.CENTER, Type.HUD);
         }
 
+        // Draw powerups
+        PlayerState ps = cg.snap.ps;
+        for (int i= 0; i < PlayerState.NUM_POWERUPS; i++) {
+            if(ps.powerups[i] <= 0)
+                continue;
+
+            int ms = ps.powerups[i];
+            int sec = ms / 1000;
+
+            
+            GItem item = Ref.common.items.findItemByClassname("item_boots");
+            if(item == null) {
+                Common.LogDebug("CGame.Draw2D: Can't find item " + i);
+                continue;
+            }
+            spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            Vector2f res = Ref.glRef.GetResolution();
+            float radius = 32;
+            spr.Set(res.x - radius * 2, res.y - ( res.y * 0.7f + i * radius * 2) , radius, item.icon);
+            Ref.textMan.AddText(new Vector2f(res.x - radius * 2 , res.y * 0.7f + i * radius * 2 +5), ""+sec, Align.CENTER, Type.HUD);
+        }
+
         // Handle changes from server
-        if(cg.predictedPlayerState.moveType == MoveType.EDITMODE && cg_editmode.iValue == 0) {
+        if(cg.snap.ps.moveType == MoveType.EDITMODE && cg_editmode.iValue == 0) {
             // Turn on editmode
             Ref.cvars.Set2("cg_editmode", "1", true);
-        } else if(cg.predictedPlayerState.moveType != MoveType.EDITMODE && cg_editmode.iValue == 1) {
+        } else if(cg.snap.ps.moveType != MoveType.EDITMODE && cg_editmode.iValue == 1) {
             // Turn off editmode
             Ref.cvars.Set2("cg_editmode", "0", true);
         }
@@ -402,11 +659,9 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             }
         }
 
-        // Render mapeditor if in editmode
-        if(cg_editmode.iValue == 1) {
-            mapEditor.Render();
-            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, 0.0f), "^3Edit Mode", Align.CENTER, Type.HUD);
-        }
+        
+
+
 
         if(cg.showScores)
             DrawScoreboard();

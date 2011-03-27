@@ -13,7 +13,7 @@ package cubetech.spatial;
  */
 public class Cell {
     public final static int CELLSIZE = 96;
-    public final static float CELLSIZEF = 96;
+    public final static float CELLSIZEF = CELLSIZE;
     private int x, y;
 
     public static int GetMinCell(float value) {
@@ -21,7 +21,7 @@ public class Cell {
     }
 
     public static int GetMaxCell(float value) {
-        return (int)Math.ceil(value/CELLSIZEF);
+        return (int)Math.floor(value/CELLSIZEF)+1;
     }
 
     public Cell(int x, int y) {
@@ -44,8 +44,15 @@ public class Cell {
 
     @Override
     public int hashCode() {
-        long hags = (x << 16) | (y & 0xffff);
+        //int extra = (y < 0 ? 1 : 0) | (x < 0 ? 2 : 0);
+        long hags = ((x & 0xffff) << 12 ) | (y & 0xfff) | ((y < 0 ? 1 : 0) | (x < 0 ? 2 : 0) << 28);
+        
         return (int)hags;
+    }
+
+    @Override
+    public String toString() {
+        return "Cell[" + x + "," + y + "] (hash: " + hashCode() + ")";
     }
 
     @Override

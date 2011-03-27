@@ -1,6 +1,8 @@
 package cubetech.collision;
 
 import cubetech.Block;
+import cubetech.Game.SpawnEntities;
+import cubetech.Game.SpawnEntity;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Helper;
@@ -23,13 +25,16 @@ import org.lwjgl.util.vector.Vector2f;
  */
 public class CMap {
     public static final int MAPMAGIC = 0x98754567; // Expect maps to start with this value
-    public static final int MAPVERSION = 1; // Increment when map format changes
+    public static final int MAPVERSION = 3; // Increment when map format changes
+    public static final int MINVERSION = 1;
     public String name;
     public int checkcount; // incremented on trace
     public int checksum;
+    public int version;
     public ArrayList<Block> blocks = new ArrayList<Block>();
 
     public HashMap<String, Integer> textureNames = new HashMap<String, Integer>();
+    public SpawnEntities spawnEntities = new SpawnEntities();
     public CubeTexture[] textures;
     public int numblocks;
 
@@ -43,6 +48,10 @@ public class CMap {
 
     // Load a new map
     public CMap(String filepath) throws ClipmapException {
+        if(filepath.equals("newmap")) {
+            name = "newmap";
+            return;
+        }
         AbstractMap.SimpleEntry<NetBuffer, Integer> result;
         try {
             result = ResourceManager.OpenFileAsNetBuffer(filepath, false);
@@ -53,10 +62,15 @@ public class CMap {
         NetBuffer file = result.getKey();
         name = filepath;
 
+        Ref.spatial.Clear();
+
         if(!LoadHeader(file))
             throw new ClipmapException("CMap: Failed to verify header.");
+        if(version > 1)
+            LoadEntities(file);
         LoadTextures(file);
         LoadBlocks(file);
+        
     }
 
 //    public void SubModelChange(Block b, int newModel) {
@@ -112,12 +126,63 @@ public class CMap {
             Common.Log("LoadWorld: Map is not a valid cubetech map");
             return false;
         }
-        int version = buf.ReadInt();
-        if(version != CMap.MAPVERSION) {
+        version = buf.ReadInt();
+        if(version > CMap.MAPVERSION || version < CMap.MINVERSION) {
             Common.Log("LoadWorld: Map uses a different version");
             return false;
         }
         return true;
+    }
+
+    private void LoadEntities(NetBuffer buf) {
+        int nLines = buf.ReadInt();
+        System.out.println("CMap.LoadEntities line count: " + nLines);
+
+        boolean inEnt = false;
+        SpawnEntity spEnt = null;
+        Vector2f origin = null;
+        String className = null;
+        int currLine = 0;
+        while(currLine < nLines) {
+            currLine++;
+            
+            String line = buf.ReadString();
+            if(!inEnt) {
+                if(!line.startsWith("{"))
+                    Ref.common.Error(ErrorCode.DROP, "CMap.LoadEntities: Invalid start of entitiy: " + line);
+
+                line = line.substring(1).trim();
+                inEnt = true;
+                className = line;
+            } else {
+                if(line.startsWith("}")) {
+                    
+                    if(className.isEmpty() || origin == null)
+                        Ref.common.Error(ErrorCode.DROP, "CMap.LoadEntities: Entity entry didn't contain all the required values.");
+                    
+                    spEnt = new SpawnEntity(className, origin);
+                    
+                    spawnEntities.AddEntity(spEnt);
+                    spEnt = null;
+                    origin = null;
+                    inEnt = false;
+                    className = null;
+                } else {
+                    // Spawnvars
+                    if(line.startsWith("origin")) {
+                        if(origin != null)
+                            Common.LogDebug("CMap.LoadEntities: Overwriting origin");
+                        line = line.substring("origin ".length()).trim();
+                        origin = CubeMaterial.parseVector2f(line);                        
+                    }
+                }
+            }
+        }
+
+        if(inEnt) {
+            Common.LogDebug("CMap.LoadEntities: Warning: Loadning ended in open entity.");
+        }
+
     }
 
     // Doesn't load the textures, just skips this area of the map file
@@ -157,8 +222,13 @@ public class CMap {
         int nBlocks = buf.ReadInt();
         int blockpos = buf.GetBuffer().position();
 
+        Common.LogDebug("LoadBlocks offset: " + blockpos);
+
         // Seek to vector chunk
-        buf.GetBuffer().position(blockpos + nBlocks * 20);
+        int prBlockSize = 20;
+        if(version >= 3)
+            prBlockSize = 24;
+        buf.GetBuffer().position(blockpos + nBlocks * prBlockSize);
 
         // Read vectors
         int nvectors = buf.ReadInt();
@@ -167,13 +237,19 @@ public class CMap {
             sourceVectors[i] = buf.ReadVector();
         }
 
+
+
         // Seek back to blocks
         buf.GetBuffer().position(blockpos);
 
         // Read blocks
         for (int i = 0; i < nBlocks; i++) {
             Vector2f position = buf.ReadVector();
-            Vector2f size = sourceVectors[buf.ReadShort()];
+            int sizIndex = buf.ReadShort();
+            if(sizIndex >= sourceVectors.length) {
+                throw new ClipmapException("Invalid sourcevector index " + sizIndex);
+            }
+            Vector2f size = sourceVectors[sizIndex];
             float angle = buf.ReadFloat();
             int offsetId = buf.ReadShort();
             int sizeId = buf.ReadShort();
@@ -181,6 +257,9 @@ public class CMap {
             Vector2f texSize = sourceVectors[sizeId];
             int texIndex = buf.ReadByte();
             boolean colliable = buf.ReadByte() == 1;
+            int layer = -50;
+            if(version >= 3)
+                layer = buf.ReadInt();
 
             CubeMaterial mat = null;
             // Check material cache
@@ -214,6 +293,7 @@ public class CMap {
                 Common.Log("CMap: numblocks & block array size mismatch");
             block.SetAngle(angle);
             block.setMaterial(mat);
+            block.setLayer(layer);
 //            block.TexOffset = new Vector2f(texOffset);
 //            block.TexSize = new Vector2f(texSize);
             if(texIndex < 0 || texIndex >= textures.length) {
@@ -288,80 +368,124 @@ public class CMap {
 
     // 
     public NetBuffer SerializeMap() {
-            ByteBuffer bb = ByteBuffer.allocate(1024*1024*2);
-            NetBuffer buf = NetBuffer.CreateCustom(bb);
+        ByteBuffer bb = ByteBuffer.allocate(1024*1024*2);
+        NetBuffer buf = NetBuffer.CreateCustom(bb);
 
-            // Save header
-            buf.Write(CMap.MAPMAGIC);
-            // Save map version
-            buf.Write(CMap.MAPVERSION);
+        // Save header
+        buf.Write(CMap.MAPMAGIC);
+        // Save map version
+        buf.Write(CMap.MAPVERSION);
 
-            // Assemble textures
-            buf.Write(textures.length);
-            for (int i= 0; i < textures.length; i++) {
-                buf.Write(textures[i].name);
+        // Write entity strings
+        ArrayList<SpawnEntity> ents = Ref.game.spawnEntities.getList();
+        buf.Write(ents.size()*3);
+        for (SpawnEntity spawnEntity : ents) {
+            buf.Write("{ " + spawnEntity.className);
+            buf.Write(String.format("origin \"%f:%f\"", spawnEntity.origin.x, spawnEntity.origin.y));
+            buf.Write("}");
+        }
+
+        ArrayList<CubeTexture> textures = new ArrayList<CubeTexture>();
+        for (int i = 0; i < numblocks; i++) {
+            Block b = blocks.get(i);
+            if(!textures.contains(b.Material.getTexture()))
+                textures.add(b.Material.getTexture());
+        }
+
+        // Assemble textures
+        buf.Write(textures.size());
+        for (int i= 0; i < textures.size(); i++) {
+            buf.Write(textures.get(i).name);
+        }
+
+        Common.LogDebug("Save block offset: " + buf.GetBuffer().position());
+
+        // Save sizes
+        ArrayList<Vector2f> vectors = new ArrayList<Vector2f>();
+
+        int actualNum = 0;
+        for (int i = 0; i < numblocks; i++) {
+            Block b = blocks.get(i);
+            if(b.isRemoved() || !b.isLinked())
+                continue;
+            actualNum++;
+        }
+
+        buf.Write(actualNum);
+
+        for (int i = 0; i < numblocks; i++) {
+            Block b = blocks.get(i);
+            if(b.isRemoved()  || !b.isLinked())
+                continue;
+            int sizeIndex = -1;
+            int texOfsIndex = -1;
+            int texSizeIndex = -1;
+            for (int j= 0; j < vectors.size(); j++) {
+                Vector2f vec = vectors.get(j);
+                if(Helper.Equals(vec, b.getSize()))
+                    sizeIndex = j;
+                if(Helper.Equals(vec, b.Material.getTextureOffset(0)))
+                    texOfsIndex = j;
+                if(Helper.Equals(vec, b.Material.getTextureSize()))
+                    texSizeIndex = j;
+
+                if(texOfsIndex >= 0 && sizeIndex >= 0 && texSizeIndex >= 0)
+                    break; // got a value for everything
+            }
+            // Didn't get a vector for size
+            if(sizeIndex == -1) {
+                vectors.add(b.getSize());
+                sizeIndex = vectors.size()-1;
+            }
+            // Didn't get a vector for size
+            if(texOfsIndex == -1) {
+                vectors.add(b.Material.getTextureOffset(0));
+                texOfsIndex = vectors.size()-1;
+            }
+            // Didn't get a vector for size
+            if(texSizeIndex == -1) {
+                vectors.add(b.Material.getTextureSize());
+                texSizeIndex = vectors.size()-1;
             }
 
-            // Save sizes
-            ArrayList<Vector2f> vectors = new ArrayList<Vector2f>();
-
-            buf.Write(numblocks);
-
-            for (int i = 0; i < numblocks; i++) {
-                Block b = blocks.get(i);
-
-                int sizeIndex = -1;
-                int texOfsIndex = -1;
-                int texSizeIndex = -1;
-                for (int j= 0; j < vectors.size(); j++) {
-                    Vector2f vec = vectors.get(j);
-                    if(Helper.Equals(vec, b.getSize()))
-                        sizeIndex = j;
-                    if(Helper.Equals(vec, b.Material.getTextureOffset(0)))
-                        texOfsIndex = j;
-                    if(Helper.Equals(vec, b.Material.getTextureSize()))
-                        texSizeIndex = j;
-
-                    if(texOfsIndex >= 0 && sizeIndex >= 0 && texSizeIndex >= 0)
-                        break; // got a value for everything
-                }
-                // Didn't get a vector for size
-                if(sizeIndex == -1) {
-                    vectors.add(b.getSize());
-                    sizeIndex = vectors.size()-1;
-                }
-                // Didn't get a vector for size
-                if(texOfsIndex == -1) {
-                    vectors.add(b.Material.getTextureOffset(0));
-                    texOfsIndex = vectors.size()-1;
-                }
-                // Didn't get a vector for size
-                if(texSizeIndex == -1) {
-                    vectors.add(b.Material.getTextureSize());
-                    texSizeIndex = vectors.size()-1;
-                }
-
-                int textureIndex = textureNames.get(b.Material.getTexture().name);
-                buf.Write(b.getPosition());
-                buf.WriteShort(sizeIndex);
-                buf.Write(b.getAngle());
-                buf.WriteShort(texOfsIndex);
-                buf.WriteShort(texSizeIndex);
-                buf.WriteByte(textureIndex);
-                buf.Write(b.Collidable);
-//                buf.WriteByte(b.CustomVal);
+            int j = 0;
+            for (; j < textures.size(); j++) {
+                if(b.Material.getTexture() == textures.get(j))
+                    break;
             }
-
-            buf.Write(vectors.size());
-            for (int i= 0; i < vectors.size(); i++) {
-                buf.Write(vectors.get(i));
+            if(j == textures.size()) {
+                j = 0;
+                Common.Log("Couldn't find texture for block :" + b.Material.getTextureName());
             }
-            
+            //int textureIndex = textureNames.get(b.Material.getTexture().name);
+            int textureIndex = j;
+//            int bsize = buf.GetBuffer().position();
 
-            int size = bb.position();
-            bb.limit(size);
-            bb.flip();
-            return buf;
+            buf.Write(b.getPosition()); // 2*4
+            buf.WriteShort(sizeIndex); // 2
+            buf.Write(b.getAngle()); // 4
+            buf.WriteShort(texOfsIndex); // 2
+            buf.WriteShort(texSizeIndex); // 2
+            buf.WriteByte(textureIndex); // 1
+            buf.Write(b.Collidable); // 1
+
+            buf.Write(b.getLayer()); // 4
+
+//            bsize = buf.GetBuffer().position() - bsize;
+//            int test = 2;
+        }
+
+        buf.Write(vectors.size());
+        for (int i= 0; i < vectors.size(); i++) {
+            buf.Write(vectors.get(i));
+        }
+
+        
+
+        int size = bb.position();
+        bb.limit(size);
+        bb.flip();
+        return buf;
     }
 
 }

@@ -30,19 +30,20 @@ public class MainMenuUI implements IMenu {
 
     public MainMenuUI() {
         CubeTexture buttonBg = Ref.ResMan.LoadTexture("data/menubutton.png");
-        background = Ref.ResMan.LoadTexture("data/background.png");
+        background = Ref.ResMan.LoadTexture("data/rightmenubar.png");
 
         cont = new CContainer(new FlowLayout(false, true, true));
         cont.addComponent(new CButton("New Game",buttonBg, Align.CENTER, 1.5f, new ButtonEvent() {
             public void buttonPressed(CComponent button, MouseEvent evt) {
-                Ref.commands.ExecuteText(ExecType.NOW, "map data/map");
+                Ref.commands.ExecuteText(ExecType.NOW, "map data/themap16");
+                Ref.commands.ExecuteText(ExecType.NOW, "start");
             }
         }));
-        cont.addComponent(new CButton("Servers",buttonBg, Align.CENTER, 1.5f, new ButtonEvent() {
-            public void buttonPressed(CComponent button, MouseEvent evt) {
-                Ref.ui.SetActiveMenu(UI.MENU.SERVERS);
-            }
-        }));
+//        cont.addComponent(new CButton("Servers",buttonBg, Align.CENTER, 1.5f, new ButtonEvent() {
+//            public void buttonPressed(CComponent button, MouseEvent evt) {
+//                Ref.ui.SetActiveMenu(UI.MENU.SERVERS);
+//            }
+//        }));
 //        cont.addComponent(new CButton("Sup3 Long",buttonBg, Align.CENTER,1.5f));
         cont.addComponent(new CButton("Options",buttonBg, Align.CENTER,1.5f, new ButtonEvent() {
             public void buttonPressed(CComponent button, MouseEvent evt) {
@@ -62,6 +63,10 @@ public class MainMenuUI implements IMenu {
         spr.Set(new Vector2f(0, 0), Ref.glRef.GetResolution(), background, new Vector2f(), new Vector2f(1, 1));
         if(Ref.cvars.Find("ui_fullscreen").iValue == 0)
             spr.SetColor(255,255,255,127);
+        spr = Ref.SpriteMan.GetSprite(Type.HUD);
+        spr.Set(new Vector2f(Ref.glRef.GetResolution().x/2f - 200, Ref.glRef.GetResolution().y/2f + 100), new Vector2f(400, 200), Ref.ResMan.LoadTexture("data/logo.png"), new Vector2f(), new Vector2f(1, 1));
+//        if(Ref.cvars.Find("ui_fullscreen").iValue == 0)
+//            spr.SetColor(255,255,255,127);
 
 
         cont.setPosition(new Vector2f(Ref.glRef.GetResolution().x - cont.getSize().x, Ref.glRef.GetResolution().y - cont.getSize().y));

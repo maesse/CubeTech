@@ -105,8 +105,59 @@ public class SpriteManager {
         buf.flip();
         Ref.glRef.unmapVBO(BufferTarget.Index, true);
     }
+
+    private void DrawNormalFixedFunction() {
+        if(NormalSpriteOffset == 0)
+            return;
+
+        CubeTexture tex = null;
+        sortSprites.clear();
+        
+        for (int i= 0; i < NormalSpriteOffset; i++) {
+            Sprite spr = Sprites[NormalSprites[i]];
+            if(spr.invalid) {
+                Common.LogDebug("Invalid sprite");
+                spr.invalid = false;
+            }
+            // Does it need alpha sorting?
+            if(spr.sort) {
+                sortSprites.add(spr);
+            } else {
+                // Got texture change?
+                if(spr.Texture != tex) {
+                    tex = spr.Texture;
+                    tex.Bind();
+                }
+                spr.FillBuffer(null); // update internal buffer
+                spr.DrawFromBuffer();
+            }
+        }
+
+        Collections.sort(sortSprites, DEPTHCOMPARER);
+        
+        for (int i= 0; i < sortSprites.size(); i++) {
+            Sprite spr = sortSprites.get(i);
+            // Got texture change?
+            
+            if(spr.Texture != tex) {
+                tex = spr.Texture;
+                if(tex != null)
+                    tex.Bind();
+                else
+                    Ref.ResMan.SetWhiteTexture();
+            }
+            
+            spr.FillBuffer(null);
+            spr.DrawFromBuffer();
+        }
+    }
     
     public void DrawNormal() {
+        boolean useVBO = Ref.glRef.isShadersSupported();
+        if(!useVBO) {
+            DrawNormalFixedFunction();
+            return;
+        }
         if(vertexVBOId == -1) {
             vertexVBOId = Ref.glRef.createVBOid();
             Ref.glRef.sizeVBO(BufferTarget.Vertex, vertexVBOId, MAX_SPRITES*8*4);
@@ -122,7 +173,7 @@ public class SpriteManager {
             return;
 
         // nSprites * Sprite.Stride * 4 verts pr sprite
-        ByteBuffer buf = Ref.glRef.mapVBO(BufferTarget.Vertex, vertexVBOId, NormalSpriteOffset*Sprite.STRIDE*4);
+        ByteBuffer vboBuffer = Ref.glRef.mapVBO(BufferTarget.Vertex, vertexVBOId, NormalSpriteOffset*Sprite.STRIDE*4);
         ArrayList<SimpleEntry<Integer, CubeTexture>> textureChanges = new ArrayList<SimpleEntry<Integer, CubeTexture>>();
         CubeTexture tex = null;
         int spriteIndex = 0;
@@ -143,7 +194,7 @@ public class SpriteManager {
                     tex = spr.Texture;
                     textureChanges.add(new SimpleEntry<Integer, CubeTexture>(spriteIndex*6, tex));
                 }
-                spr.FillBuffer(buf); // fill VBO
+                spr.FillBuffer(vboBuffer); // fill VBO
                 spriteIndex++;
             }
 
@@ -162,13 +213,13 @@ public class SpriteManager {
                 tex = spr.Texture;
                 textureChanges.add(new SimpleEntry<Integer, CubeTexture>(spriteIndex*6, tex));
             }
-            spr.FillBuffer(buf); // fill VBO
+            spr.FillBuffer(vboBuffer); // fill VBO
             spriteIndex++;
         }
         textureChanges.add(new SimpleEntry<Integer, CubeTexture>(spriteIndex*6, null));
         //System.out.println("-----------");
         // Fill the OpenGL buffer
-        buf.flip();
+        vboBuffer.flip();
         Ref.glRef.unmapVBO(BufferTarget.Vertex, false);
 
         // Ensure our buffer is bound
@@ -239,12 +290,23 @@ public class SpriteManager {
     }
 
     public void DrawHUD() {
+        CubeTexture tex = Ref.ResMan.getWhiteTexture();
+        tex.Bind();
         for (int i= 0; i < HUDSpriteOffset; i++) {
             int index = HUDSprites[i];
-            if(Sprites[index].invalid) {
+            Sprite spr = Sprites[index];
+            if(spr.invalid) {
                 Common.LogDebug("Invalid sprite");
-                Sprites[index].invalid = false;
+                spr.invalid = false;
             }
+            if(spr.Texture != tex) {
+                tex = spr.Texture;
+                if(tex != null)
+                    tex.Bind();
+                else
+                    Ref.ResMan.SetWhiteTexture();
+            }
+                
             Sprites[index].Draw();
         }
     }

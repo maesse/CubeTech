@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import cubetech.common.Commands;
 import cubetech.common.Common;
 import java.util.ArrayList;
 import java.util.AbstractMap.SimpleEntry;
@@ -63,6 +64,8 @@ public class GLRef {
     public Shader shader = null;
     public HashMap<String, Shader> shaders = new HashMap<String, Shader>();
 
+    private boolean shadersSupported = true;
+    private boolean isMac = false;
 
     // VBO Buffer handling
 //    private static final int GLREF_MAX_BUFFERS = 100;
@@ -209,6 +212,12 @@ public class GLRef {
 
     public boolean isApplet() {
         return isApplet;
+    }
+
+    public Applet getApplet() {
+        if(isApplet())
+            return applet;
+        return null;
     }
 
     private void SetFullscreen(boolean fullscreen) {
@@ -451,8 +460,15 @@ public class GLRef {
         glGetInteger(GL12.GL_MAX_ELEMENTS_INDICES, intBuf16);
         checkError();
         maxIndices = intBuf16.get(0);
+        String osName = System.getProperty("os.name");
+        isMac = osName.startsWith("Mac OS X");
+        String osVersion = System.getProperty("os.version");
+        String osArch = System.getProperty("os.arch");
+        String jvmVersion = System.getProperty("java.runtime.version");
+        Common.Log("Operating System: " + osName + " - " + osVersion + " (" + osArch + ")");
+        Common.Log("Java version: " + jvmVersion);
+        Common.Log("LWJGL version: " + Display.getVersion());
         Common.Log("OpenGL version: " + glGetString(GL_VERSION));
-
         Common.Log("VBO support detected (V: " + maxVertices + ") (I: " + maxIndices + ")");
         caps = GLContext.getCapabilities();
         if(!CheckCaps())
@@ -481,9 +497,27 @@ public class GLRef {
         checkError();
         resolution = new Vector2f(currentMode.getWidth(), currentMode.getHeight());
         
+        String v = glGetString(GL_VERSION);
+        String[] tokens = Commands.TokenizeString(v, true);
+        for (int i= 0; i < tokens.length; i++) {
+            String token = tokens[i];
+            if(!Character.isDigit(token.charAt(0)))
+                continue;
+            String subTokens[] = token.split("\\.");
+            if(subTokens.length < 2)
+                continue;
+            if(Character.isDigit(subTokens[0].charAt(0)) && subTokens[0].charAt(0) <= '1') {
+                shadersSupported = false;
+                Common.Log("WARNING: Your graphics card does not support shaders");
+                break;
+            }
+        }
+
+        if(isMac)
+            shadersSupported = false;
         
-        
-        loadShaders();
+        if(shadersSupported)
+            loadShaders();
         
         // Set default states
         glEnable(GL_TEXTURE_2D);
@@ -512,6 +546,10 @@ public class GLRef {
         checkError();
     }
 
+    public boolean isShadersSupported() {
+        return shadersSupported;
+    }
+
     public static void checkError() {
         if(!initialized)
             return;
@@ -536,7 +574,7 @@ public class GLRef {
 //            Light.test();
         } catch (Exception ex) {
             Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
-            Ref.common.Error(ErrorCode.FATAL, "Failed to load graphics shaders\n" + ex);
+            Ref.common.Error(ErrorCode.FATAL, "Failed to load graphics shaders\n" + Common.getExceptionString(ex));
         }
 
     }

@@ -24,11 +24,44 @@ class ViewParams {
     public Matrix ProjectionMatrix;
     public Vector2f Angles = new Vector2f();
 
+    public float xmin, xmax, ymin, ymax;
+    public float w, h;
+
     public void SetupProjection() {
         // Use fovx and fovy to set up a matrix
         Vector2f vidSize = Ref.glRef.GetResolution();
         float aspect = vidSize.y/vidSize.x;
-        FovX = Ref.cgame.cg_fov.iValue;
+
+        float maxfov = Ref.cvars.Find("camera_maxfov").fValue;
+        float minfov = Ref.cgame.cg_fov.fValue;
+        float maxspeed = Ref.cvars.Find("camera_maxspeed").fValue;
+        float currentspeed = Ref.cgame.speed;
+
+        if(currentspeed > maxspeed)
+            currentspeed = maxspeed;
+
+        float speedFrac = currentspeed / maxspeed;
+        float fovadd = (maxfov-minfov) * speedFrac;
+
+        float fovChangeLimiter =  Ref.cvars.Find("camera_zoomspeed").fValue * (Ref.client.frame_msec / 1000f);
+        
+        float fovChange = (minfov + fovadd) - Ref.cgame.lastFov;
+        float fovChangeFrac = Math.abs(fovChange) / 10f;
+        fovChangeLimiter += fovChangeLimiter * fovChangeFrac;
+        boolean neg = fovChange < 0;
+        if(fovChangeLimiter < Math.abs(fovChange)) {
+            fovChange = fovChangeLimiter;
+        if(neg)
+            fovChange *= -1f;
+        }
+        
+
+        
+        FovX = (int)(Ref.cgame.lastFov + fovChange);
+
+        Ref.cgame.lastFov = Ref.cgame.lastFov + fovChange;
+        if(Ref.cgame.cg_editmode.iValue == 1)
+            FovX = Ref.cgame.cg_fov.iValue;
         FovY = (int)(FovX*aspect);
 //        this.VisibleSize = new Vector2f(width, width * aspect);
 //        DefaultSize = new Vector2f(VisibleSize.x, VisibleSize.y);
@@ -45,8 +78,91 @@ class ViewParams {
 //        }
         if(Ref.cgame.cg_viewmode.iValue == 1)
             setup3DProjection(90 * aspect, aspect, near, far);
-        else
-            GL11.glOrtho(-FovX/2f, FovX/2f, -FovX*aspect*0.5f, FovX*aspect*0.5f, near,far);
+        else if(Ref.cgame.cg_editmode.iValue == 0) {
+            float left = Ref.cvars.Find("camera_hplayerpos").fValue;
+
+            float vleft = Ref.cvars.Find("camera_vplayerpos").fValue;
+            float verticalVelocity = Ref.cgame.cg.predictedPlayerState.velocity.y;
+            float vsnapmin = Ref.cvars.Find("camera_vsnapmin").fValue;
+            float absVel = Math.abs(verticalVelocity);
+//            if(absVel > vsnapmin) {
+                float vsnapmax = Ref.cvars.Find("camera_vsnapmax").fValue;
+                float frac = 0f;
+                if(absVel > vsnapmax)
+                    frac = 1f;
+                else
+                    frac = (absVel-vsnapmin)/(vsnapmax-vsnapmin);
+
+                if(absVel < vsnapmin)
+                    frac = 0.2f;
+
+                if(frac < 0)
+                    frac = 0;
+                if(frac > 1)
+                    frac = 1;
+
+                float maxChange;
+                if(verticalVelocity > 0) {
+                    maxChange = vleft - 0.1f;
+            }
+                else
+                    maxChange = 0.9f - vleft;
+                
+                if(maxChange > 1)
+                    maxChange = 1;
+                if(maxChange < 0)
+                    maxChange = 0;
+
+                float change = -1f;
+                if(verticalVelocity > 0f) {
+                    change = 0.5f;
+                    if(Ref.cgame.lastVleft < vleft)
+                        change = 1f;
+                }
+
+                change *= maxChange * frac;
+
+//                float vChangeLimiter = 1f * 0.01f;
+//                float changeFromLastFrame = (vleft + change) - Ref.cgame.lastVleft;
+//                neg = changeFromLastFrame < 0f;
+//                if(vChangeLimiter < Math.abs(changeFromLastFrame)) {
+//                    changeFromLastFrame = vChangeLimiter;
+//
+//                    if(neg)
+//                        changeFromLastFrame *= -1f;
+//                }
+
+                //
+                vleft =  (vleft + change);
+
+                float delta = vleft - Ref.cgame.lastVleft;
+                float maxVChange = frac * 0.5f* (Ref.client.frame_msec/1000f);
+                if(Math.abs(delta) > maxVChange) {
+                    if(delta > 0f)
+                        delta = maxVChange;
+                    else
+                        delta = -maxVChange;
+                }
+                //vleft = Ref.cgame.lastVleft + changeFromLastFrame;
+                Ref.cgame.lastVleft += delta;
+                vleft = Ref.cgame.lastVleft;
+                //Ref.cgame.lastVleft = vleft;
+                //vleft += change;
+
+                
+
+//            }
+                xmin = -FovX*left;
+                xmax = FovX*(1f-left);
+                ymin = -FovX * aspect * (1f - vleft);
+                ymax = FovX * aspect * vleft;
+                w = xmax-xmin;
+                h = ymax - ymin;
+            GL11.glOrtho(-FovX*left, FovX*(1f-left), -FovX*aspect*(1f-vleft), FovX*aspect*vleft, near,far);
+
+        } else {
+            GL11.glOrtho(-FovX*0.5f, FovX*0.5f, -FovX*aspect*0.5f, FovX*aspect*0.5f, near,far);
+        }
 
         
         

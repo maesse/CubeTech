@@ -1,10 +1,17 @@
 package cubetech.common;
 
+import cubetech.gfx.ResourceManager;
 import cubetech.misc.FinishedUpdatingListener;
 import cubetech.misc.Ref;
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -39,8 +46,43 @@ public class CVars {
                 cmd_ListCVars(args);
             }
         });
+        Ref.commands.AddCommand("exec", cmd_Exec);
         
     }
+
+    private ICommand cmd_save = new ICommand() {
+        public void RunCommand(String[] args) {
+            Ref.common.WriteConfiguration(true);
+        }
+    };
+
+    private ICommand cmd_Exec = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(args.length != 2) {
+                Common.Log("exec <filename> : execute a script");
+                return;
+            }
+
+            if(!ResourceManager.FileExists(args[1])) {
+                Common.Log(args[1] + " doesn't exist.");
+                return;
+            }
+            
+            try {
+                StringBuilder str = new StringBuilder();
+                InputStreamReader rdr = new InputStreamReader (ResourceManager.OpenFileAsInputStream(args[1]));
+                int c;
+                while(( c = rdr.read()) != -1) {
+                    str.append((char)c);
+                }
+
+                Ref.commands.ExecuteText(Commands.ExecType.INSERT, str.toString());
+                
+            } catch (IOException ex) {
+                Common.LogDebug(Common.getExceptionString(ex));
+            }
+        }
+    };
 
     // Used for debugging UI
     public CVar GetCVarIndex(int index) {
@@ -62,6 +104,8 @@ public class CVars {
         }
         return str.toString();
     }
+
+
 
     void cmd_ListCVars(String[] tokens) {
         Common.Log("CVar list:");
@@ -373,5 +417,23 @@ public class CVars {
         }
 
         return value;
+    }
+
+    void WriteCVars(StringBuilder dst) {
+        for (CVar var : vars.values()) {
+            if(!var.flags.contains(CVarFlags.ARCHIVE))
+                continue;
+
+            dst.append(var.Name);
+            dst.append(" \"");
+            // Write latched string?
+            if(var.latchedString != null && !var.latchedString.isEmpty()) {
+                dst.append(var.latchedString);
+            } else {
+                dst.append(var.sValue);
+            }
+            dst.append("\"\r\n");
+        }
+        
     }
 }

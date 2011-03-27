@@ -56,8 +56,12 @@ public class GameClient extends Gentity {
 
             switch(event) {
                 case Event.FOOTSTEP:
-
+                case Event.STEP:
+                case Event.DIED:
+                case Event.HIT_WALL:
+                case Event.JUMP:
                     break;
+
                 default:
                     //System.out.println("Unhandled GClient event.");
                     break;
@@ -230,7 +234,7 @@ public class GameClient extends Gentity {
         r.mins = new Vector2f(Game.PlayerMins);
         r.maxs = new Vector2f(Game.PlayerMaxs);
         r.contents = Content.BODY;
-        ClipMask = Content.BODY | Content.SOLID;
+        ClipMask = Content.PLAYERCLIP | Content.BODY;
         ps.clientNum = index;
 
         ps.stats.Health = ps.stats.MaxHealth;
@@ -305,13 +309,16 @@ public class GameClient extends Gentity {
         else if(ps.stats.Health <= 0)
             ps.moveType = MoveType.DEAD;
 
+//        if(ps.moveType == MoveType.NORMAL)
+//            ps.applyPull = true;
+
         int oldEventSequence = ps.eventSequence;
 
         // Prepare for move
         MoveQuery move = new MoveQuery(Ref.server);
         move.ps = ps;
         move.cmd = cmd;
-        move.tracemask = Content.BODY;
+        move.tracemask = Content.MASK_PLAYERSOLID;
 
         // Do the move
         Move.Move(move);
@@ -352,6 +359,29 @@ public class GameClient extends Gentity {
         }
 
         ClientTimerActions(msec);
+
+        // Check for death
+        if(ps.origin.y < Ref.game.g_killheight.iValue) {
+            Die();
+        }
+    }
+
+    public void startPull() {
+        Ref.cvars.Set2("g_editmode", "0", true);
+        if(ps != null)
+            ps.applyPull = true;
+    }
+
+    public void Die() {
+        stopPull();
+        ps.AddPredictableEvent(Event.DIED, 0);
+        ps.velocity.set(0,0);
+        ps.stats.Health = 0;
+    }
+
+    public void stopPull() {
+        if(ps != null)
+            ps.applyPull = false;
     }
 
     
@@ -363,6 +393,15 @@ public class GameClient extends Gentity {
             if(ps.stats.Health > ps.stats.MaxHealth)
                 ps.stats.Health--;
 
+            if(ps.stats.Health > 0)
+                ps.maptime += 1;
+
+            for (int i= 0; i < ps.powerups.length; i++) {
+                if(ps.powerups[i] > 0)
+                    ps.powerups[i] -= 1000;
+                if(ps.powerups[i] < 0)
+                    ps.powerups[i] = 0;
+            }
         }
     }
 
@@ -412,8 +451,12 @@ public class GameClient extends Gentity {
     }
 
     public void respawn() {
+        
         // TODO: Spawn effect and maybe bodyque
         ClientSpawn();
+        Ref.game.respawnAllItems();
+        startPull();
+        ps.maptime = 0;
     }
 
     public String Client_Connect(int id, boolean firsttime) {

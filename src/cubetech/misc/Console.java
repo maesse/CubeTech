@@ -4,6 +4,7 @@ import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
 import cubetech.common.Commands;
 import cubetech.common.Common;
+import cubetech.common.ICommand;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
@@ -47,7 +48,14 @@ public class Console implements KeyEventListener, LogEventListener {
         Log.AddLogListener(this);
         con_cmdprefix = Ref.cvars.Get("con_cmdprefix", "] ", EnumSet.of(CVarFlags.NONE));
         con_scale = Ref.cvars.Get("con_scale", "1", EnumSet.of(CVarFlags.NONE));
+        Ref.commands.AddCommand("console", cmd_console);
     }
+
+    private ICommand cmd_console = new ICommand() {
+        public void RunCommand(String[] args) {
+            Ref.Console.ToggleVisible();
+        }
+    };
 
     public void ToggleVisible() {
         int catcher = Ref.Input.GetKeyCatcher();
@@ -75,7 +83,7 @@ public class Console implements KeyEventListener, LogEventListener {
         }
 
         Common.Log(con_cmdprefix.sValue + str);
-        Ref.commands.ExecuteText(Commands.ExecType.NOW, str);
+        Ref.commands.ExecuteText(Commands.ExecType.INSERT, str);
         if(!commandLog.isEmpty() && commandLog.get(commandLog.size()-1).equalsIgnoreCase(str))
             return; // same as last line, don't add to commandlog
         commandLog.add(str);

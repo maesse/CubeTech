@@ -22,6 +22,7 @@ public class CSlider extends CComponent {
      public CSlider(Vector2f size, ButtonEvent evt) {
         setSize(new Vector2f(size));
         texture = Ref.ResMan.LoadTexture("data/healthbar.png");
+        onValueChange = evt;
     }
 
     @Override
@@ -39,7 +40,7 @@ public class CSlider extends CComponent {
             if(frac > 1)
                 frac = 1;
 
-            if(Math.abs(frac-oldFrac) > 0.01f && onValueChange != null)
+            if(Math.abs(frac-oldFrac) > 0.001f && onValueChange != null)
                 onValueChange.buttonPressed(this, evt);
         }
     }

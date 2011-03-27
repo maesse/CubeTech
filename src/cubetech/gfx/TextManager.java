@@ -423,6 +423,9 @@ public class TextManager {
                 continue;
 
             if(bytes[i] == '\n') {
+                if(w-wordWidth == 0)
+                    wordWidth = 0; // word covers whole line
+                
                 if(newlineIndexes != null)
                         newlineIndexes.add(new AbstractMap.SimpleEntry<Integer, Integer>(i, w-wordWidth+9));
                 result.x = Math.max(result.x, w);

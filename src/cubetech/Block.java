@@ -1,5 +1,6 @@
 package cubetech;
 
+import cubetech.Game.SpawnEntity;
 import cubetech.collision.BlockModel;
 import cubetech.common.Helper;
 import cubetech.gfx.CubeMaterial;
@@ -47,6 +48,9 @@ public class Block {
 
     // Custom value, used for monsters, spawn, etc..
     public int CustomVal;
+
+    public SpawnEntity spawnEntity = null;
+    private boolean removed = false;
 
     @Override
     public Block clone() {
@@ -239,6 +243,8 @@ public class Block {
     }
 
     public void Render() {
+        if(removed)
+            return;
         Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
         spr.Set(Position, Size, Material.getTexture(), Material.getTextureOffset(), Material.getTextureSize());
         spr.SetAngle(Angle);
@@ -250,12 +256,26 @@ public class Block {
         spr.SetDepth(layer * DEPTH_MULTIPLIER);
     }
 
+    public boolean isLinked() {
+        return spaceHandle != null;
+    }
+
     // Important to call this, or the block will be removed but still colliable
     public void Remove() {
         if(spaceHandle != null)
             Ref.spatial.Remove(spaceHandle);
         if(isModel())
             getModel().removeBlock(this);
+        if(spawnEntity != null)
+        {
+            Ref.game.spawnEntities.removeEntity(spawnEntity);
+            spawnEntity = null;
+        }
+        removed = true;
+    }
+
+    public boolean isRemoved() {
+        return removed;
     }
 
     public final void SetPosition(Vector2f position) {
@@ -298,6 +318,9 @@ public class Block {
     // NOTE: Outdated, doesn't take angle into account
     public boolean Intersects(Vector2f point) {
         // Scale to rect ints
+        if(removed)
+            return false;
+        
         if(point.x >= Center.x - AbsExtent.x && point.x <= Center.x + AbsExtent.x ) // inside x coords
             if(point.y >= Center.y - AbsExtent.y && point.y <= Center.y + AbsExtent.y ) // inside y coords {
                 return true;

@@ -2,6 +2,7 @@ package cubetech.entities;
 
 import cubetech.common.Common;
 import cubetech.common.Helper;
+import cubetech.common.PlayerState;
 import cubetech.common.Trajectory;
 import cubetech.net.NetBuffer;
 import org.lwjgl.util.vector.Vector2f;
@@ -34,6 +35,7 @@ public class EntityState {
     public int modelindex = -1;
     
     // not used atm
+//    public int[] powerups = new int[PlayerState.NUM_POWERUPS];
     public int frame; 
     public Vector2f origin = new Vector2f();
     public Vector2f Angles = new Vector2f();
@@ -54,6 +56,7 @@ public class EntityState {
         solid = 0;
         otherEntityNum = 0;
         modelindex = -1;
+        
     }
 
     private boolean IsEqual(EntityState s) {

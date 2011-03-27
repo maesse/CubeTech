@@ -31,7 +31,9 @@ public class SoundManager {
   private boolean isMusicOn = false;
 
   private float EffectVolume = 0.2f;
-  private float MusicVolume = 0.0f;
+  private float MusicVolume = 0.5f;
+
+  public boolean playmusic = false;
 
   private HashMap<Integer, Vector4f> entityPositions = new HashMap<Integer, Vector4f>();
   Vector2f lastOrigin = new Vector2f();
@@ -79,7 +81,7 @@ public class SoundManager {
         if(silentTime <= 0) {
             StartQueuedMusic();
         }
-    } else if(currentSong != null && (!currentSong.isPlaying() || !store.isMusicPlaying())) {
+    } else if(playmusic && currentSong != null && (!currentSong.isPlaying() || !store.isMusicPlaying())) {
         PlayNextMusic();
     }
   }
@@ -126,18 +128,20 @@ public class SoundManager {
 
   // Shuffle the songlist
   public void ShuffleMusicList() {
-      String[] songlist = new String[] {"data/intro.ogg","data/spacey.ogg",
-      "data/coolsong.ogg", "data/coolsong.ogg","data/coolsong_2.ogg",
-      "data/drumnbass.ogg", "data/funkypatrol.ogg", "data/goa.ogg",
-      "data/noobstef.ogg","data/Beat.ogg","data/FixedHate.ogg",
-      "data/FreakyNation.ogg","data/HarmonicMan.ogg","data/Hellwiggah.ogg",
-      "data/Nicelyd.ogg","data/Niceness.ogg","data/Nyeste.ogg",
-      "data/TheDualist.ogg","data/Youneverknow.ogg"};
+      String[] songlist = new String[] {"data/HarmonicMan.ogg"};
+
+//      ,"data/spacey.ogg",
+//      "data/coolsong.ogg", "data/coolsong.ogg","data/coolsong_2.ogg",
+//      "data/drumnbass.ogg", "data/funkypatrol.ogg", "data/goa.ogg",
+//      "data/noobstef.ogg","data/Beat.ogg","data/FixedHate.ogg",
+//      "data/FreakyNation.ogg","data/HarmonicMan.ogg","data/Hellwiggah.ogg",
+//      "data/Nicelyd.ogg","data/Niceness.ogg","data/Nyeste.ogg",
+//      "data/TheDualist.ogg","data/Youneverknow.ogg"
 
       // Shuffle 100 times
-      for (int i= 0; i < 100; i++) {
-          int from = Ref.rnd.nextInt(songlist.length-1);
-          int to = Ref.rnd.nextInt(songlist.length-1);
+      for (int i= 0; i < 5; i++) {
+          int from = Ref.rnd.nextInt(songlist.length);
+          int to = Ref.rnd.nextInt(songlist.length);
 
           String temp = songlist[from];
           songlist[from] = songlist[to];
@@ -168,10 +172,17 @@ public class SoundManager {
             PlayNextMusic();
       }
       isMusicOn = enable;
+      playmusic = enable;
   }
 
   // Start the song that is waiting to be played
   private void StartQueuedMusic() {
+      if(currentSong == null) {
+          isMusicOn = true;
+          PlayNextMusic();
+          return;
+      }
+      
       currentSong.playAsMusic(1.0f, 1.0f, false);
   }
 
@@ -295,6 +306,7 @@ public class SoundManager {
     public void setEffectVolume(float EffectVolume) {
         this.EffectVolume = EffectVolume;
         store.setSoundVolume(EffectVolume);
+        store.setMusicVolume(EffectVolume * 0.5f);
     }
 
     public float getMusicVolume() {

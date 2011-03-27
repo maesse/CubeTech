@@ -206,8 +206,9 @@ public class CubeMaterial {
         return mat;
     }
 
-    private static Vector2f parseVector2f(String token) {
+    public static Vector2f parseVector2f(String token) {
         Vector2f vec = new Vector2f();
+        token = token.replace("\"", " ").trim();
         String[] tokens = token.split(":");
         if(tokens.length < 2) {
             Common.Log("CubeMaterial.parseVector2f(): Failed on " + token);

@@ -4,8 +4,10 @@ import cubetech.Block;
 import cubetech.common.CS;
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
+import cubetech.common.Commands.ExecType;
 import cubetech.common.Common;
 import cubetech.common.GItem;
+import cubetech.common.ICommand;
 import cubetech.entities.EntityType;
 import cubetech.entities.Func_Door;
 import cubetech.entities.IEntity;
@@ -21,31 +23,74 @@ import org.lwjgl.util.vector.Vector2f;
  * @author mads
  */
 public class Game {
-    public static final Vector2f PlayerMins = new Vector2f(-12,-12);
-    public static final Vector2f PlayerMaxs = new Vector2f(12,12);
+    public static final Vector2f PlayerMins = new Vector2f(-8,-12);
+    public static final Vector2f PlayerMaxs = new Vector2f(8,12);
     CVar sv_speed;
+    CVar sv_gravity;
+    CVar sv_jumpmsec;
+    CVar sv_jumpvel;
     CVar g_cheats;
     CVar g_gametype;
     CVar g_restarted;
     CVar g_editmode;
     CVar g_maxclients;
+    CVar sv_pullacceleration;
+    CVar sv_acceleration;
+    CVar sv_friction;
+    CVar sv_stopspeed;
+    CVar sv_stepheight;
+    CVar sv_movemode;
+    CVar g_killheight;
 
+    CVar sv_pull1;
+    CVar sv_pull2;
+    CVar sv_pull3;
+    CVar sv_pull4;
+    CVar sv_pull5;
+    CVar sv_pull6;
+
+    CVar sv_pullstep;
+//    CVar sv_doublejump;
+
+    public SpawnEntities spawnEntities;
     public Gentity[] g_entities;
     GameClient[] g_clients;
     public LevelLocal level;
     HashMap<String, IEntity> spawns = new HashMap<String, IEntity>();
 
     public Game() {
-        sv_speed = Ref.cvars.Get("sv_speed", "100", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
+        sv_speed = Ref.cvars.Get("sv_speed", "100", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         g_cheats = Ref.cvars.Get("g_cheats", "0", EnumSet.of(CVarFlags.NONE));
         g_gametype = Ref.cvars.Get("g_gametype", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.LATCH, CVarFlags.USER_INFO));
         g_restarted = Ref.cvars.Get("g_restarted", "0", EnumSet.of(CVarFlags.ROM));
         g_maxclients = Ref.cvars.Get("g_maxclients", "32", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.LATCH, CVarFlags.USER_INFO));
         g_editmode = Ref.cvars.Get("g_editmode", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
+        g_killheight = Ref.cvars.Get("g_killheight", "-1000", EnumSet.of(CVarFlags.NONE, CVarFlags.ARCHIVE));
+
+        sv_pull1 = Ref.cvars.Get("sv_pull1", "60", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_pull2 = Ref.cvars.Get("sv_pull2", "120", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_pull3 = Ref.cvars.Get("sv_pull3", "180", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_pull4 = Ref.cvars.Get("sv_pull4", "260", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_pull5 = Ref.cvars.Get("sv_pull5", "350", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_pull6 = Ref.cvars.Get("sv_pull6", "500", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_pullstep = Ref.cvars.Get("sv_pullstep", "0.65", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+
+        sv_movemode = Ref.cvars.Get("sv_movemode", "1", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
+        sv_gravity = Ref.cvars.Get("sv_gravity", "300", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_jumpmsec = Ref.cvars.Get("sv_jumpmsec", "250", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_jumpvel = Ref.cvars.Get("sv_jumpvel", "125", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_pullacceleration = Ref.cvars.Get("sv_pullacceleration", "80", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_acceleration = Ref.cvars.Get("sv_acceleration", "8", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_friction = Ref.cvars.Get("sv_friction", "4", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_stopspeed = Ref.cvars.Get("sv_stopspeed", "15", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_stepheight = Ref.cvars.Get("sv_stepheight", "4", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+//        sv_doublejump = Ref.cvars.Get("sv_doublejump", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
+
         IEntity ent = new Info_Player_Spawn();
         addEntityToSpawn(ent);
         ent = new Func_Door();
         addEntityToSpawn(ent);
+        spawnEntities = Ref.cm.cm.spawnEntities;
     }
 
     private void addEntityToSpawn(IEntity ent) {
@@ -55,6 +100,26 @@ public class Game {
     public void Init(int leveltime, int randSeed, boolean restart) {
         Common.Log("--- Game init ---");
         g_cheats = Ref.cvars.Get("g_cheats", "0", EnumSet.of(CVarFlags.NONE));
+        Ref.commands.AddCommand("start", new ICommand() {
+            public void RunCommand(String[] args) {
+                for (int i= 0; i < g_clients.length; i++) {
+                    if(g_clients[i].inuse && g_clients[i].ps != null) {
+                        g_clients[i].respawn();
+                        g_clients[i].startPull();
+                    }
+                }
+            }
+        });
+
+        Ref.commands.AddCommand("stop", new ICommand() {
+            public void RunCommand(String[] args) {
+                for (int i= 0; i < g_clients.length; i++) {
+                    if(g_clients[i].inuse && g_clients[i].ps != null) {
+                        g_clients[i].stopPull();
+                    }
+                }
+            }
+        });
 
         level = new LevelLocal();
         level.time = leveltime;
@@ -92,15 +157,20 @@ public class Game {
         level.num_entities = 64;
 
         WorldSpawn();
+
+        SpawnEntity spEnt = new SpawnEntity("item_boots", new Vector2f(150,50));
+        spawnEntities.AddEntity(spEnt);
+
+//        Gentity hp = Spawn();
+//        hp.s.origin.set(150,50);
+//        hp.classname = "item_boots";
+//        hp.s.pos.base.set(hp.s.origin);
+//        hp.r.currentOrigin.set(hp.s.origin);
+//
+//        if(!callSpawn(hp))
+//            hp.Free();
+
         Gentity hp = Spawn();
-        hp.classname = "item_health";
-        hp.s.pos.base.set(hp.s.origin);
-        hp.r.currentOrigin.set(hp.s.origin);
-
-        if(!callSpawn(hp))
-            hp.Free();
-
-        hp = Spawn();
         hp.classname = "info_player_spawn";
         hp.s.origin.set(100, 100);
         hp.s.pos.base.set(hp.s.origin);
@@ -108,6 +178,8 @@ public class Game {
 
         if(!callSpawn(hp))
             hp.Free();
+
+        spawnEntities.SpawnAll();
 
 //        Ref.cm.cm.ToSubModel(Ref.cm.cm.GetBlock(20));
 //        Ref.cm.cm.GetBlock(20).SetSize(new Vector2f(100,10));
@@ -206,6 +278,8 @@ public class Game {
         if(g_editmode.modified) {
             CheckEditMode();
         }
+
+
     }
 
     /**
@@ -339,6 +413,8 @@ public class Game {
             EnterEditMode();
     }
 
+    
+
     private void ExitEditMode() {
         if(!level.editmode)
             return;
@@ -354,6 +430,7 @@ public class Game {
 
         // Cache the changed map
         Ref.cm.SaveMap("custom");
+        spawnEntities.SpawnAll();
     }
 
     private void EnterEditMode() {
@@ -361,6 +438,7 @@ public class Game {
             return;
 
         Ref.cvars.Set2("mapname", "custom", true);
+        Ref.commands.ExecuteText(ExecType.NOW, "stop");
 
         level.editmode = true;
         // Notify all clients
@@ -370,6 +448,7 @@ public class Game {
 
             g_clients[i].PlaceInEditMode();
         }
+        spawnEntities.UnspawnAll();
     }
 
     
@@ -475,6 +554,19 @@ public class Game {
 //
 //
 //        }
+    }
+
+    void respawnAllItems() {
+        for (int i= 0; i < level.num_entities; i++) {
+            Gentity ent = g_entities[i];
+            if(!ent.inuse || ent.item == null)
+                continue;
+
+            //if(ent.think == Ref.common.items.FinishSpawningItem) {
+                // Finalize spawn
+                ent.think.think(ent);
+            //}
+        }
     }
 
 }

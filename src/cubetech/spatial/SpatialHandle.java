@@ -5,6 +5,9 @@
 
 package cubetech.spatial;
 
+
+import cubetech.Block;
+import cubetech.common.Common;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -55,7 +58,9 @@ public class SpatialHandle {
 //            System.err.println("SpatialHandle.Insert() overflow");
 //            return;
 //        }
-
+        if(cellMap.containsKey(cell.hashCode())) {
+            Common.LogDebug("SpatialHandle.Insert: Cell already contained");
+        }
         cellMap.put(cell.hashCode(), index);
 //        cellHash.add(cell.hashCode());
 //        Index.add(index);
@@ -78,7 +83,13 @@ public class SpatialHandle {
 //        return -1;
     }
 
+    @Override
+    public String toString() {
+        return "Handle("+((Block)object).Handle + ")";
+    }
+
     public void Remove(Cell cell) {
+        //Common.LogDebug("  -handle(" + ((Block)object).Handle + ").cell:" + cell);
         int hashcode = cell.hashCode();
         if(cellMap.remove(hashcode) == null) {
             System.err.println("SpatialHandle.Remove(): Already removed?");

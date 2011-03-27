@@ -24,6 +24,9 @@ public class MoveQuery {
     // results (out)
     //public float maxSpeed;
     // TODO: Add list for touched entities
+    public Vector2f groundPlane = null;
+    public boolean onGround;
+    public int blocked = 0; // 1 = step/wall, 2 = slope
     private ITrace traceImplementation;
     
 

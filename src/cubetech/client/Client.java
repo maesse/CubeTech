@@ -110,7 +110,7 @@ public class Client {
 //        }
 
 
-        name = Ref.cvars.Get("name", "UnknownCube", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        name = Ref.cvars.Get("name", "^3Running^4Man^0", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         rate = Ref.cvars.Get("rate", "25000", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         model = Ref.cvars.Get("model", "unknown", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         cl_updaterate = Ref.cvars.Get("cl_updaterate", "30", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));

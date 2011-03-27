@@ -183,7 +183,11 @@ public class CEntity {
 
         switch(event) {
             case Event.FOOTSTEP:
-                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.cgame.cgs.media.s_footStep, 1f);
+                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.cgame.cgs.media.s_footStep, 0.5f);
+                break;
+            case Event.STEP:
+                
+
                 break;
             case Event.ITEM_PICKUP:
                 int index = currentState.evtParams;
@@ -196,6 +200,15 @@ public class CEntity {
                 break;
             case Event.ITEM_RESPAWN:
                 Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.cgame.cgs.media.s_itemRespawn, 1.0f);
+                break;
+            case Event.DIED:
+                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/die.wav"), 1.0f);
+                break;
+            case Event.HIT_WALL:
+                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/ouch.wav"), 1.0f);
+                break;
+            case Event.JUMP:
+                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/hop.wav"), 1.0f);
                 break;
             default:
                 Common.LogDebug("Unknown event: " + event);
