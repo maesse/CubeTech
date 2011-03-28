@@ -440,7 +440,8 @@ public class GLRef {
         }
 
         // Create the display
-        Display.create(new PixelFormat(8, 8, 0, 0));
+        Display.create(new PixelFormat());
+        //Display.create(new PixelFormat(8, 8, 0, 0));
         checkError();
 
         // Set vsync
@@ -471,9 +472,7 @@ public class GLRef {
         Common.Log("OpenGL version: " + glGetString(GL_VERSION));
         Common.Log("VBO support detected (V: " + maxVertices + ") (I: " + maxIndices + ")");
         caps = GLContext.getCapabilities();
-        if(!CheckCaps())
-            Ref.common.Error(ErrorCode.FATAL, "Your grahics card is not supported");
-        doVaoWorkaround();
+        
         
         OnPostDisplayCreate();
     }
@@ -515,6 +514,10 @@ public class GLRef {
 
         if(isMac)
             shadersSupported = false;
+
+        if(!CheckCaps())
+            Ref.common.Error(ErrorCode.FATAL, "Your grahics card is not supported");
+        doVaoWorkaround();
         
         if(shadersSupported)
             loadShaders();
@@ -583,21 +586,23 @@ public class GLRef {
 
     private boolean CheckCaps() {
         boolean okay = true;
-        if(!caps.GL_ARB_vertex_buffer_object) {
-            okay = false;
-            Common.Log("ARB_Vertex_Buffer_Object not supported by your graphics card");
-        }
-        if(!caps.GL_ARB_vertex_shader) {
-            okay = false;
-            Common.Log("ARB_vertex_shader is not supported by your graphics card.");
-        }
-//        if(!caps.GL_ARB_geometry_shader4) {
-//            okay = false;
-//            System.out.println("ARB_Geometry_Shader4 not supported by your graphics card");
-//        }
-        if(!caps.GL_EXT_draw_range_elements) {
-            okay = false;
-            Common.Log("EXT_draw_range_elements not supported by your graphics card");
+        if(shadersSupported) {
+            if(!caps.GL_ARB_vertex_buffer_object) {
+                okay = false;
+                Common.Log("ARB_Vertex_Buffer_Object not supported by your graphics card");
+            }
+            if(!caps.GL_ARB_vertex_shader) {
+                okay = false;
+                Common.Log("ARB_vertex_shader is not supported by your graphics card.");
+            }
+    //        if(!caps.GL_ARB_geometry_shader4) {
+    //            okay = false;
+    //            System.out.println("ARB_Geometry_Shader4 not supported by your graphics card");
+    //        }
+            if(!caps.GL_EXT_draw_range_elements) {
+                okay = false;
+                Common.Log("EXT_draw_range_elements not supported by your graphics card");
+            }
         }
 //        caps.GL_ARB_draw_elements_base_vertex
 
