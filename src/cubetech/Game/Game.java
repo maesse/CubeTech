@@ -443,7 +443,7 @@ public class Game {
         level.editmode = true;
         // Notify all clients
         for (int i= 0; i < g_clients.length; i++) {
-            if(g_clients[i] != null || !g_clients[i].inuse)
+            if(g_clients[i] == null || !g_clients[i].inuse)
                 continue;
 
             g_clients[i].PlaceInEditMode();
