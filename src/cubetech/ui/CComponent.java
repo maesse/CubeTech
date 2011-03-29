@@ -16,9 +16,18 @@ public abstract class CComponent {
     private CContainer parent = null;
     private boolean mouseEnter = false;
     public Object tag = null;
+    private boolean visible = true;
 
     public abstract void Render(Vector2f parentPosition);
-    
+
+    public void setVisible(boolean val) {
+        visible = val;
+    }
+
+    public boolean isVisible() {
+        return visible;
+    }
+
     public void setPosition(Vector2f pos) {
         position.set(pos);
     }

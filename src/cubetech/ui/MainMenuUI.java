@@ -5,9 +5,11 @@ import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
+import cubetech.input.Input;
 import cubetech.input.MouseEvent;
 import cubetech.misc.Button;
 import cubetech.misc.Ref;
+import cubetech.net.ConnectState;
 import org.lwjgl.util.vector.Vector2f;
 
 /**
@@ -15,17 +17,9 @@ import org.lwjgl.util.vector.Vector2f;
  * @author mads
  */
 public class MainMenuUI implements IMenu {
-    Button newGame;
-    Button optionsButton;
-    Button serverButton;
-    Button exit;
-    Button contGame;
-
-    Vector2f menuStartPos = new Vector2f(0.75f, 0.55f);
-    float menuSpacing = 0.08f;
-    Vector2f menuSize = new Vector2f(0.2f, 0.07f);
     CubeTexture background;
 
+    CButton continueButton;
     CContainer cont = null;
 
     public MainMenuUI() {
@@ -33,12 +27,20 @@ public class MainMenuUI implements IMenu {
         background = Ref.ResMan.LoadTexture("data/rightmenubar.png");
 
         cont = new CContainer(new FlowLayout(false, true, true));
+                cont.addComponent(
+                continueButton = new CButton("Continue",buttonBg, Align.CENTER, 1.5f, new ButtonEvent() {
+            public void buttonPressed(CComponent button, MouseEvent evt) {
+                Ref.Input.SetKeyCatcher(Ref.Input.GetKeyCatcher() & ~Input.KEYCATCH_UI);
+            }
+        }));
+        continueButton.setVisible(false);
         cont.addComponent(new CButton("New Game",buttonBg, Align.CENTER, 1.5f, new ButtonEvent() {
             public void buttonPressed(CComponent button, MouseEvent evt) {
                 Ref.commands.ExecuteText(ExecType.NOW, "map data/themap16");
                 Ref.commands.ExecuteText(ExecType.NOW, "start");
             }
         }));
+        
 //        cont.addComponent(new CButton("Servers",buttonBg, Align.CENTER, 1.5f, new ButtonEvent() {
 //            public void buttonPressed(CComponent button, MouseEvent evt) {
 //                Ref.ui.SetActiveMenu(UI.MENU.SERVERS);
@@ -78,7 +80,7 @@ public class MainMenuUI implements IMenu {
     }
 
     public void Show() {
-        
+        continueButton.setVisible(Ref.client.state > ConnectState.DISCONNECTED);
     }
 
     public void GotMouseEvent(MouseEvent evt) {

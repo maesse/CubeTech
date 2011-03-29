@@ -129,6 +129,8 @@ public class CButton extends CContainer {
 
     @Override
     public void MouseEvent(MouseEvent evt) {
+        if(!isVisible())
+            return;
         if(isMouseEnter() && evt.Button == 0 || evt.Button == 1) {
             if(evt.Pressed) {
                 mouseDown = true;
@@ -152,6 +154,8 @@ public class CButton extends CContainer {
 
     @Override
     public void Render(Vector2f parentPosition) {
+        if(!isVisible())
+            return;
         if(mouseDown && !isMouseEnter())
             mouseDown = false;
         Vector2f renderpos = new Vector2f(parentPosition);
