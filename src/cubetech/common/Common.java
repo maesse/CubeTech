@@ -144,8 +144,17 @@ public class Common {
             System.out.println("[D] " + str);
     }
 
+    public static void LogDebug(String str, Object... args) {
+        if(Ref.common.isDeveloper())
+            System.out.println("[D] " + String.format(str, args));
+    }
+
     public static void Log(String str) {
         System.out.println(str);
+    }
+
+    public static void Log(String str, Object... args) {
+        System.out.println(String.format(str, args));
     }
 
     public static void RunBrowserURL(String str) {
