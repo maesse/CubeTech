@@ -78,6 +78,7 @@ public class Input {
         binds.BindKey("DOWN", "+back");
         binds.BindKey("LEFT", "+left");
         binds.BindKey("RIGHT", "+right");
+        binds.BindKey("F10", "console");
         binds.BindKey("TAB", "+scores");
         binds.BindKey("RETURN", "message");
         binds.BindKey("y", "message");
@@ -203,11 +204,10 @@ public class Input {
     }
 
     void UpdateUserInput() {
-//        playerInput.Up = IsKeyPressed(Keyboard.KEY_UP);
-//        playerInput.Down = IsKeyPressed(Keyboard.KEY_DOWN);
-//        playerInput.Left = IsKeyPressed(Keyboard.KEY_LEFT);
-//        playerInput.Right = IsKeyPressed(Keyboard.KEY_RIGHT);
-//        playerInput.Jump = IsKeyPressed(Keyboard.KEY_SPACE);
+//        if((GetKeyCatcher() & (KEYCATCH_CONSOLE | KEYCATCH_MESSAGE | KEYCATCH_UI)) > 0)
+//            return;
+
+        
         playerInput.Up = ((int)Math.ceil(in_forward.KeyState()) == 1)?true:false;
         playerInput.Down = ((int)Math.ceil(in_back.KeyState()) == 1)?true:false;
         playerInput.Left = ((int)Math.ceil(in_left.KeyState()) == 1)?true:false;
@@ -349,9 +349,11 @@ public class Input {
                 if(pressed) {
                     // Special case handling for escape
                     // Toggle console
-                    if((key == Keyboard.KEY_ESCAPE && IsKeyPressed(Keyboard.KEY_LSHIFT)) || key == Keyboard.KEY_F10) {
+                    String keybind = binds.getBindForKey(key);
+                    if((key == Keyboard.KEY_ESCAPE && IsKeyPressed(Keyboard.KEY_LSHIFT))
+                            || (keybind != null && keybind.equalsIgnoreCase("console"))) {
                         Ref.commands.ExecuteText(ExecType.NOW, "console");
-                        
+                        continue;
                     }
                     else if(key == Keyboard.KEY_ESCAPE) {
                         if((GetKeyCatcher() & KEYCATCH_CONSOLE) > 0) {
@@ -390,6 +392,7 @@ public class Input {
                     else if(key == Keyboard.KEY_RETURN && IsKeyPressed(Keyboard.KEY_LMENU)) {
                         int fs = Ref.cvars.Find("r_fullscreen").iValue + 1;
                         Ref.cvars.Set2("r_fullscreen", ""+ (fs&1), true);
+                        continue;
                     }
                     
 

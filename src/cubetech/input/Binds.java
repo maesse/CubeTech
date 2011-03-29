@@ -68,6 +68,12 @@ public class Binds implements KeyEventListener {
         binds.put(key, bind);
     }
 
+    public String getBindForKey(int key) {
+        if(binds.containsKey(key))
+            return binds.get(key);
+        return null;
+    }
+
     // Handle incomming keypresses from input system.
     public void ParseBinding(int key, boolean down, int time) {
         // Check if bound
@@ -171,6 +177,15 @@ public class Binds implements KeyEventListener {
 
             // Set bind
             String newCmd = Commands.ArgsFrom(args, 2);
+
+            if(newCmd.equalsIgnoreCase("console") && args[1].length() == 1) {
+                char c = args[1].charAt(0);
+                if(Character.isLetterOrDigit(c)) {
+                    Common.Log("console cannot be bound to a letter or digit key");
+                    return;
+                }
+            }
+            
             BindKey(key, newCmd);
         }
     }
