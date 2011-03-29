@@ -844,7 +844,12 @@ public class Client {
 
         cl.cmdNumber++;
         int cmdNum = cl.cmdNumber & 63;
-        cl.cmds[cmdNum] = Ref.Input.CreateCmd();
+        if(cl.cmdNumber > 1 &&
+                ((Ref.Input.GetKeyCatcher() & (Input.KEYCATCH_CONSOLE | Input.KEYCATCH_MESSAGE | Input.KEYCATCH_UI)) > 0)) {
+            cl.cmds[cmdNum] = cl.cmds[(cl.cmdNumber-1) & 63].Clone();
+        } else {
+            cl.cmds[cmdNum] = Ref.Input.CreateCmd();
+        }
         cl.cmds[cmdNum].serverTime = cl.serverTime;
     }
 

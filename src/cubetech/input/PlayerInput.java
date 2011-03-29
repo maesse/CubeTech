@@ -124,7 +124,7 @@ public class PlayerInput {
         buf.Write(MousePos);
     }
 
-    PlayerInput Clone() {
+    public PlayerInput Clone() {
         PlayerInput n = new PlayerInput();
         n.MousePos = new Vector2f();
         n.MousePos.x = MousePos.x;
