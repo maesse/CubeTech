@@ -559,7 +559,7 @@ public class Client {
             &&    state >= ConnectState.CONNECTED && realtime - clc.LastPacketTime > cl_timeout.fValue * 1000f) {
             if(++cl.timeoutCount > 5) {
                 Ref.common.Error(ErrorCode.DROP, "Server connection timed out.");
-                //Disconnect(true);
+//                Disconnect(true);
                 return;
             }
         } else

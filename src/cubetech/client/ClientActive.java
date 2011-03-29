@@ -79,8 +79,7 @@ public class ClientActive {
         // if we have gotten to this point, cl.snap is guaranteed to be valid
         if(!snap.valid)
         {
-            Common.Log("SetCGameGtime(): !snap.valid");
-            return;
+            Ref.common.Error(Common.ErrorCode.DROP, "SetCGameGtime(): !snap.valid");
         }
 
         // allow pause in single player
@@ -88,7 +87,7 @@ public class ClientActive {
             return; // paused
 
         if(snap.serverTime < oldFrameServerTime) {
-            Common.Log("SetCGameTime(): snap.servertime < oldFrameServerTime");
+            Ref.common.Error(Common.ErrorCode.DROP, "SetCGameTime(): snap.servertime < oldFrameServerTime");
             return;
         }
         oldFrameServerTime = snap.serverTime;

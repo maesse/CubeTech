@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import cubetech.ui.UI.MENU;
 import cubetech.common.Commands;
 import cubetech.common.Common;
 import java.util.ArrayList;
@@ -267,6 +268,10 @@ public class GLRef {
         if(screenHasFocus != Display.isActive()) {
             screenHasFocus = !screenHasFocus;
             Ref.cvars.Set2("com_unfocused", screenHasFocus?"0":"1", true);
+            if(Ref.common.developer.iValue == 0) {
+                if(!screenHasFocus)
+                    Ref.ui.SetActiveMenu(MENU.MAINMENU);
+            }
             if(!screenHasFocus && Ref.Input != null) {
                 // Clear keys when loosing focus..
                 Ref.Input.ClearKeys();

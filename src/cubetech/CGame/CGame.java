@@ -665,6 +665,12 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
         if(cg.showScores)
             DrawScoreboard();
+
+        if(Ref.common.cl_paused.iValue == 1) {
+            Vector2f pos = new Vector2f(Ref.glRef.GetResolution());
+            pos.scale(0.5f);
+            Ref.textMan.AddText(pos, "^3PAUSED", Align.CENTER, Type.HUD, 2,0);
+        }
     }
 
     private void DrawScoreboard() {

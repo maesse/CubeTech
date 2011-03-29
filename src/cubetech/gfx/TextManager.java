@@ -241,7 +241,7 @@ public class TextManager {
 //         maxSize.scale(2f);
 //        }
 
-        float xoffset = (pos.x * width);
+        float xoffset = (pos.x);
         ArrayList<AbstractMap.SimpleEntry<Integer,Integer>> linebreakList = new ArrayList<AbstractMap.SimpleEntry<Integer,Integer>>();
         Vector2f strSize = GetStringSize(text, maxSize, linebreakList, scale, type); // maxsize is relative to position
         switch(align) {
@@ -252,6 +252,7 @@ public class TextManager {
                xoffset -= linebreakList.get(0).getValue() + 5;
                break;
         }
+        xoffset *=  width;
 
         float currW = 0;
         int currH = 0;

@@ -85,8 +85,17 @@ public class Input {
     }
 
     public void SetKeyCatcher(int catcher) {
-        if(catcher != KeyCatcher)
-            ClearKeys();
+        if(catcher == KeyCatcher)
+            return;
+
+        ClearKeys();
+        // Pause/unpause when entering/exiting menu
+        if((KeyCatcher & KEYCATCH_UI) > 0
+                && (catcher & KEYCATCH_UI) == 0)
+            Ref.cvars.Set2("cl_paused", "0", true);
+        else if((KeyCatcher & KEYCATCH_UI) == 0
+                && (catcher & KEYCATCH_UI) > 0)
+            Ref.cvars.Set2("cl_paused", "1", true);
         KeyCatcher = catcher;
     }
 
