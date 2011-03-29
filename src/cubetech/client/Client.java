@@ -77,6 +77,7 @@ public class Client {
 
     int currentFPS;
 
+    // Server browser
     Ping[] cl_pinglist = new Ping[128];
     public ServerInfo[] cl_localServers = new ServerInfo[128];
     public int cl_nLocalServers = 0;

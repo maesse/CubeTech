@@ -266,6 +266,7 @@ public class GLRef {
         // Check if screen has lost focus
         if(screenHasFocus != Display.isActive()) {
             screenHasFocus = !screenHasFocus;
+            Ref.cvars.Set2("com_unfocused", screenHasFocus?"0":"1", true);
             if(!screenHasFocus && Ref.Input != null) {
                 // Clear keys when loosing focus..
                 Ref.Input.ClearKeys();
@@ -541,9 +542,9 @@ public class GLRef {
         return null;
     }
 
-    public boolean isScreenFocused() {
-        return screenHasFocus;
-    }
+//    public boolean isScreenFocused() {
+//        return screenHasFocus;
+//    }
 
     private ICommand Cmd_listmodes = new ICommand() {
       public void RunCommand(String[] args) {
