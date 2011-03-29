@@ -56,9 +56,9 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_smoothclients = Ref.cvars.Get("cg_smoothclients", "0", EnumSet.of(CVarFlags.TEMP));
     CVar cg_errorDecay = Ref.cvars.Get("cg_errorDecay", "100", EnumSet.of(CVarFlags.TEMP));
     CVar cg_viewsize = Ref.cvars.Get("cg_viewsize", "100", EnumSet.of(CVarFlags.TEMP));
-    CVar cg_fov = Ref.cvars.Get("cg_fov", "350", EnumSet.of(CVarFlags.TEMP));
-    CVar cg_chattime = Ref.cvars.Get("cg_chattime", "5000", EnumSet.of(CVarFlags.TEMP)); // show text for this long
-    CVar cg_chatfadetime = Ref.cvars.Get("cg_chatfadetime", "500", EnumSet.of(CVarFlags.TEMP)); // + this time for fading out
+    CVar cg_fov = Ref.cvars.Get("cg_fov", "350", EnumSet.of(CVarFlags.ARCHIVE));
+    CVar cg_chattime = Ref.cvars.Get("cg_chattime", "5000", EnumSet.of(CVarFlags.ARCHIVE)); // show text for this long
+    CVar cg_chatfadetime = Ref.cvars.Get("cg_chatfadetime", "500", EnumSet.of(CVarFlags.ARCHIVE)); // + this time for fading out
     CVar cg_drawSolid = Ref.cvars.Get("cg_drawSolid", "0", EnumSet.of(CVarFlags.NONE));
     CVar cg_editmode = Ref.cvars.Get("cg_editmode", "0", EnumSet.of(CVarFlags.ROM));
     CVar cg_depthnear = Ref.cvars.Get("cg_depthnear", "1", EnumSet.of(CVarFlags.ROM));
@@ -68,20 +68,20 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_drawbin = Ref.cvars.Get("cg_drawbin", "0", EnumSet.of(CVarFlags.NONE));
 
     // zoom to this fov
-    CVar camera_maxfov = Ref.cvars.Get("camera_maxfov", "1500", EnumSet.of(CVarFlags.TEMP));
+    CVar camera_maxfov = Ref.cvars.Get("camera_maxfov", "1500", EnumSet.of(CVarFlags.ARCHIVE));
     // at this speed
-    CVar camera_maxspeed = Ref.cvars.Get("camera_maxspeed", "600", EnumSet.of(CVarFlags.TEMP));
+    CVar camera_maxspeed = Ref.cvars.Get("camera_maxspeed", "600", EnumSet.of(CVarFlags.ARCHIVE));
 
     // allow for smooth zooming
-    CVar camera_zoomspeed = Ref.cvars.Get("camera_zoomspeed", "10", EnumSet.of(CVarFlags.TEMP));
+    CVar camera_zoomspeed = Ref.cvars.Get("camera_zoomspeed", "10", EnumSet.of(CVarFlags.ARCHIVE));
 
     // player centering
-    CVar camera_hplayerpos = Ref.cvars.Get("camera_hplayerpos", "0.3", EnumSet.of(CVarFlags.TEMP));
-    CVar camera_vplayerpos = Ref.cvars.Get("camera_vplayerpos", "0.5", EnumSet.of(CVarFlags.TEMP));
+    CVar camera_hplayerpos = Ref.cvars.Get("camera_hplayerpos", "0.3", EnumSet.of(CVarFlags.ARCHIVE));
+    CVar camera_vplayerpos = Ref.cvars.Get("camera_vplayerpos", "0.5", EnumSet.of(CVarFlags.ARCHIVE));
     
     // Move camera in vertical direction when vertical velocity > this
-    CVar camera_vsnapmin = Ref.cvars.Get("camera_vsnapmin", "140", EnumSet.of(CVarFlags.TEMP));
-    CVar camera_vsnapmax = Ref.cvars.Get("camera_vsnapmax", "300", EnumSet.of(CVarFlags.TEMP));
+    CVar camera_vsnapmin = Ref.cvars.Get("camera_vsnapmin", "140", EnumSet.of(CVarFlags.ARCHIVE));
+    CVar camera_vsnapmax = Ref.cvars.Get("camera_vsnapmax", "300", EnumSet.of(CVarFlags.ARCHIVE));
     
 
     CGameState cg;

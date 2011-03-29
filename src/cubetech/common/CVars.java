@@ -3,15 +3,11 @@ package cubetech.common;
 import cubetech.gfx.ResourceManager;
 import cubetech.misc.FinishedUpdatingListener;
 import cubetech.misc.Ref;
-import java.io.BufferedInputStream;
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  *
@@ -48,9 +44,24 @@ public class CVars {
         });
         Ref.commands.AddCommand("exec", cmd_Exec);
         Ref.commands.AddCommand("savecfg", cmd_save);
-        
+        Ref.commands.AddCommand("seta", cmd_Set);
     }
 
+    private ICommand cmd_Set = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(args.length < 3) {
+                Common.Log("usage: seta <cvar> <value>");
+                return;
+            }
+
+            CVar v = Set2(args[1], args[2], false);
+            if(v == null)
+                return;
+            if(!v.flags.contains(CVarFlags.ARCHIVE))
+                v.flags.add(CVarFlags.ARCHIVE);
+        }
+    };
+    
     private ICommand cmd_save = new ICommand() {
         public void RunCommand(String[] args) {
             Ref.common.WriteConfiguration(true);
@@ -64,14 +75,23 @@ public class CVars {
                 return;
             }
 
-            if(!ResourceManager.FileExists(args[1])) {
+            String file = args[1];
+            boolean found = ResourceManager.FileExists(file);
+            if(!found) {
+                if(!file.endsWith(".cfg")) {
+                    file = file + ".cfg";
+                    found = ResourceManager.FileExists(file);
+                }
+            }
+
+            if(!found) {
                 Common.Log(args[1] + " doesn't exist.");
                 return;
             }
             
             try {
                 StringBuilder str = new StringBuilder();
-                InputStreamReader rdr = new InputStreamReader (ResourceManager.OpenFileAsInputStream(args[1]));
+                InputStreamReader rdr = new InputStreamReader (ResourceManager.OpenFileAsInputStream(file));
                 int c;
                 while(( c = rdr.read()) != -1) {
                     str.append((char)c);
@@ -165,6 +185,8 @@ public class CVars {
         return true;
     }
 
+    // If the variable already exists, the value will not be set unless CVAR_ROM
+    // The flags will be or'ed in if the variable exists.
     public CVar Get(String name, String value, EnumSet<CVarFlags> flags) {
         if(name == null || name.length() == 0 || value == null) {
             Common.Log("CVar: Get w/ null arguments");
@@ -188,9 +210,8 @@ public class CVars {
                 var.flags.remove(CVarFlags.USER_CREATED);
                 var.resetString = value;
 
-                if(var.flags.contains(CVarFlags.ROM))
+                if(flags.contains(CVarFlags.ROM))
                     var.latchedString = value;
-
             }
             
             var.flags.addAll(flags);
@@ -198,6 +219,8 @@ public class CVars {
             // only allow one non-empty reset string without a warning
             if(var.resetString == null || var.resetString.length() == 0)
                 var.resetString = value;
+            else
+                Common.LogDebug("Warning: cvar \"%s\" given initial values: \"%s\" and \"%s\"", name, var.resetString, value);
 
             // if we have a latched string, take that value now
             if(var.latchedString != null && !var.latchedString.isEmpty()) {
@@ -424,7 +447,7 @@ public class CVars {
         for (CVar var : vars.values()) {
             if(!var.flags.contains(CVarFlags.ARCHIVE))
                 continue;
-
+            dst.append("seta ");
             dst.append(var.Name);
             dst.append(" \"");
             // Write latched string?

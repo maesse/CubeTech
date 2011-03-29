@@ -116,19 +116,19 @@ public class Client {
         cl_updaterate = Ref.cvars.Get("cl_updaterate", "30", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         cl_updaterate.Min = 15;
         cl_updaterate.Max = 115;
-        cl_timeout = Ref.cvars.Get("cl_timeout", "120", EnumSet.of(CVarFlags.NONE));
+        cl_timeout = Ref.cvars.Get("cl_timeout", "120", EnumSet.of(CVarFlags.ARCHIVE));
         cl_cmdrate = Ref.cvars.Get("cl_cmdrate", "101", EnumSet.of(CVarFlags.ARCHIVE));
-        cl_timenudge = Ref.cvars.Get("cl_timenudge", "0", EnumSet.of(CVarFlags.TEMP));
+        cl_timenudge = Ref.cvars.Get("cl_timenudge", "0", EnumSet.of(CVarFlags.ARCHIVE));
         cl_timenudge.Min = -30;
         cl_timenudge.Max = 30;
         cl_nodelta = Ref.cvars.Get("cl_nodelta", "0", EnumSet.of(CVarFlags.NONE));
-        cl_cmdbackup = Ref.cvars.Get("cl_cmdbackup", "1", EnumSet.of(CVarFlags.NONE));
+        cl_cmdbackup = Ref.cvars.Get("cl_cmdbackup", "1", EnumSet.of(CVarFlags.ARCHIVE));
         cl_cmdbackup.Min = 0;
         cl_cmdbackup.Max = 5;
-        cl_debugui = Ref.cvars.Get("cl_debugui", "0", EnumSet.of(CVarFlags.TEMP));
+        cl_debugui = Ref.cvars.Get("cl_debugui", "0", EnumSet.of(CVarFlags.ARCHIVE));
         cl_debugui.modified = false;
-        cl_showfps  = Ref.cvars.Get("cl_showfps", "1", EnumSet.of(CVarFlags.TEMP));
-        cl_netquality = Ref.cvars.Get("cl_netquality", "50", EnumSet.of(CVarFlags.TEMP)); // allow 50ms cgame delta
+        cl_showfps  = Ref.cvars.Get("cl_showfps", "1", EnumSet.of(CVarFlags.ARCHIVE));
+        cl_netquality = Ref.cvars.Get("cl_netquality", "50", EnumSet.of(CVarFlags.ARCHIVE)); // allow 50ms cgame delta
 
         Ref.commands.AddCommand("connect", new cmd_Connect());
         Ref.commands.AddCommand("disconnect", new cmd_Disconnect());
