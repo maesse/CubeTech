@@ -117,7 +117,7 @@ public class Server implements ITrace {
 
         int frameMsec = (int)(1000f / sv_fps.fValue * Ref.common.com_timescale.fValue);
         if(frameMsec < 1) {
-            Ref.cvars.Set2("com_timescale", ""+ sv_fps.fValue / 1000f, true);
+            Ref.cvars.Set2("timescale", ""+ sv_fps.fValue / 1000f, true);
             frameMsec = 1;
         }
 
