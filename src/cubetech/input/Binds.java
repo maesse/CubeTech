@@ -31,7 +31,14 @@ public class Binds implements KeyEventListener {
     public Binds(Input parent) {
         InitKeys();
         Ref.commands.AddCommand("bind", new Cmd_Bind());
+        Ref.commands.AddCommand("unbindall", cmd_unbindall);
     }
+
+    private ICommand cmd_unbindall = new ICommand() {
+        public void RunCommand(String[] args) {
+            binds.clear();
+        }
+    };
 
     
 
