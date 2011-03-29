@@ -284,7 +284,7 @@ public class Console implements KeyEventListener, LogEventListener {
 
     private int MaxVisibleLines() {
         int charHeight = (int) (Ref.textMan.GetCharHeight() * con_scale.fValue);
-        return Ref.glRef.currentMode.getHeight()/charHeight;
+        return (int)Ref.glRef.GetResolution().y/charHeight;
     }
 
     public void Render() {

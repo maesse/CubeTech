@@ -216,8 +216,8 @@ public class TextManager {
         Type type = queue.type;
         float scale = queue.scale;
 
-        float width = Ref.glRef.currentMode.getWidth();
-        float height = Ref.glRef.currentMode.getHeight();
+        float width = Ref.glRef.GetResolution().x;
+        float height = Ref.glRef.GetResolution().y;
 
 //        float aspect = height/width;
 //

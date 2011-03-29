@@ -47,6 +47,7 @@ public class CVars {
             }
         });
         Ref.commands.AddCommand("exec", cmd_Exec);
+        Ref.commands.AddCommand("savecfg", cmd_save);
         
     }
 

@@ -115,7 +115,7 @@ public class CubeText {
     }
 
     Vector2f Hags(float x, float y) {
-        return new Vector2f(x/Ref.glRef.currentMode.getWidth(), y/Ref.glRef.currentMode.getHeight());
+        return new Vector2f(x/Ref.glRef.GetResolution().x, y/Ref.glRef.GetResolution().x);
     }
 
     int DrawChaw(String map, boolean small, boolean whitespace) {

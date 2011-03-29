@@ -238,8 +238,8 @@ public class Input {
             delta.y += Mouse.getEventDY();
 
             // Set Position
-            float mousex = (float)Mouse.getEventX() / (float)Ref.glRef.currentMode.getWidth();
-            float mousey = (float)Mouse.getEventY() / (float)Ref.glRef.currentMode.getHeight();
+            float mousex = (float)Mouse.getEventX() / (float)Ref.glRef.GetResolution().x;
+            float mousey = (float)Mouse.getEventY() / (float)Ref.glRef.GetResolution().y;
             
             if(!Float.isInfinite(mousey) && !Float.isInfinite(mousex)) {
                 playerInput.MousePos.x = mousex;

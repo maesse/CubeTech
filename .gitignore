@@ -1,12 +1,10 @@
 
 *.class
- 
-#netbeans ignore personal stuff
+*.cfg
 nbproject/private/
 build
 dist
 *.log
-
 *~
 *.lock
 *.DS_Store

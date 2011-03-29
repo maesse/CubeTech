@@ -141,8 +141,7 @@ public class OptionsUI implements IMenu {
         // Resolution
         cont = new CContainer(new FlowLayout(true, true, false));
         cont.addComponent(new CLabel("Resolution: "));
-        DisplayMode dmode = Ref.glRef.currentMode;
-        CButton but = new CButton(String.format("%dx%d", dmode.getWidth(), dmode.getHeight()), null, Align.LEFT, 1, selectResolution);
+        CButton but = new CButton(String.format("%dx%d", (int)Ref.glRef.GetResolution().x, (int)Ref.glRef.GetResolution().y), null, Align.LEFT, 1, selectResolution);
         resolutionLabel = (CLabel)but.getComponent(0);
         cont.addComponent(but);
         cont.doLayout();

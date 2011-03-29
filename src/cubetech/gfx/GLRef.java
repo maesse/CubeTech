@@ -3,7 +3,6 @@ package cubetech.gfx;
 import cubetech.common.Commands;
 import cubetech.common.Common;
 import java.util.ArrayList;
-import java.util.AbstractMap.SimpleEntry;
 import java.net.URL;
 import java.applet.Applet;
 import java.util.HashMap;
@@ -14,7 +13,6 @@ import java.nio.ByteBuffer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.lwjgl.opengl.GL12;
-import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.ContextCapabilities;
@@ -24,64 +22,53 @@ import cubetech.common.ICommand;
 import cubetech.common.CVarFlags;
 import java.util.EnumSet;
 import cubetech.common.CVar;
-import cubetech.common.Commands.ExecType;
 import cubetech.common.Common.ErrorCode;
 import cubetech.misc.Ref;
 import java.awt.Canvas;
-import java.io.IOException;
 import java.net.MalformedURLException;
 import org.lwjgl.opengl.ARBVertexArrayObject;
 import org.lwjgl.opengl.ARBVertexBufferObject;
-import org.lwjgl.opengl.ContextAttribs;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.DisplayMode;
-import org.lwjgl.opengl.GL20;
 import static org.lwjgl.opengl.GL11.*;
 /**
  * Controls OpenGL
  * @author mads
  */
 public class GLRef {
-    public DisplayMode currentMode;
+    private static boolean initialized = false;
+    private static Vector2f MinimumResolution = new Vector2f(800,600);
 
+    private DisplayMode currentMode;
+    private boolean screenHasFocus = false;
     private DisplayMode[] availableModes;
     private DisplayMode desktopMode;
-    private ContextCapabilities caps = null;
-    private Canvas displayParent; // Canvas this glContext exists in.
-    private static boolean initialized = false;
 
-    public CVar r_vsync;
-    public CVar r_mode;
-    public CVar r_fullscreen;
-    public CVar r_refreshrate; // A hint for selecting modes
-    public CVar r_mindepth;
-    public CVar r_maxdepth;
-    public CVar r_toggleRes;
+    private CVar r_vsync;
+    private CVar r_mode;
+    private CVar r_fullscreen;
+    private CVar r_refreshrate; // A hint for selecting modes
+    private CVar r_toggleRes;
     private Vector2f resolution;
-    
-    boolean screenActive = false;
 
-    public Shader shader = null;
+    public Shader shader = null; // current shader
     public HashMap<String, Shader> shaders = new HashMap<String, Shader>();
 
     private boolean shadersSupported = true;
     private boolean isMac = false;
-
-    // VBO Buffer handling
-//    private static final int GLREF_MAX_BUFFERS = 100;
-    private IntBuffer intBuf = BufferUtils.createIntBuffer(1);
-    private IntBuffer intBuf16 = BufferUtils.createIntBuffer(16);
-//    private FloatBuffer dataBuffers[] = new FloatBuffer[GLREF_MAX_BUFFERS];
-//    private IntBuffer indiceBuffers[] = new IntBuffer[GLREF_MAX_BUFFERS];
-    private int floatBufferIndex = 0;
-    private int intBufferIndex = 0;
+    private ContextCapabilities caps = null;
 
     private int maxVertices = 4096;
     private int maxIndices = 4096;
+    
     private boolean isApplet = false;
     private Applet applet = null;
+    private Canvas displayParent;
 
-    
+    private IntBuffer intBuf = BufferUtils.createIntBuffer(1);
+    private IntBuffer intBuf16 = BufferUtils.createIntBuffer(16);
+    private HashMap<Integer, ByteBuffer> cachedBuffers
+            = new HashMap<Integer, ByteBuffer>();
 
     public enum BufferTarget {
         Vertex,
@@ -90,76 +77,158 @@ public class GLRef {
 
     public GLRef() {
         Init();
-//        for (int i= 0; i < dataBuffers.length; i++) {
-//            dataBuffers[i] = BufferUtils.createFloatBuffer(GL12.GL_MAX_ELEMENTS_VERTICES);
-//            indiceBuffers[i] = BufferUtils.createIntBuffer(GL12.GL_MAX_ELEMENTS_INDICES);
-//        }
     }
 
-//    public FloatBuffer GetNextFloatBuffer() {
-//        FloatBuffer buf = dataBuffers[floatBufferIndex++ % GLREF_MAX_BUFFERS];
-//        buf.clear();
-//        return buf;
-//    }
-//
-//    public IntBuffer GetNextIntBuffer() {
-//        return indiceBuffers[intBufferIndex++ % GLREF_MAX_BUFFERS];
-//    }
+    public void InitWindow(Canvas parent, Applet applet) throws Exception {
 
-    public Vector2f GetResolution() {
-        return resolution;
+        this.applet = applet;
+
+        availableModes = Display.getAvailableDisplayModes();
+
+        desktopMode = Display.getDesktopDisplayMode();
+
+        // Create the display
+        Display.create(new PixelFormat());
+        //Display.create(new PixelFormat(8, 8, 0, 0));
+        checkError();
+
+        Common.Log("Desktop displaymode: " + desktopMode);
+        displayParent = parent; // Save off canvas if there is one
+        SetResolution(r_mode.sValue);
+
+        if(parent == null) {
+            // If we are creating a new window, center it
+            Display.setLocation((int)(desktopMode.getWidth()/2f - currentMode.getWidth()/2f),
+                    (int)(desktopMode.getHeight()/2f - currentMode.getHeight()/2f));
+        } else {
+            Display.setParent(displayParent); // Applets use this
+
+            if(applet != null)
+                isApplet = true;
+        }
+
+        // Set vsync
+        try {
+            Display.setVSyncEnabled(r_vsync.iValue == 1);
+        } catch (Exception ex) {};
+
+        initialized = true;
+        // Get max vertices
+        intBuf16.position(0);
+        glGetInteger(GL12.GL_MAX_ELEMENTS_VERTICES, intBuf16);
+        checkError();
+        maxVertices = intBuf16.get(0);
+
+        // Get max indices
+        intBuf16.position(0);
+        glGetInteger(GL12.GL_MAX_ELEMENTS_INDICES, intBuf16);
+        checkError();
+        maxIndices = intBuf16.get(0);
+        String osName = System.getProperty("os.name");
+        isMac = osName.startsWith("Mac OS X");
+        String osVersion = System.getProperty("os.version");
+        String osArch = System.getProperty("os.arch");
+        String jvmVersion = System.getProperty("java.runtime.version");
+        Common.Log("Operating System: " + osName + " - " + osVersion + " (" + osArch + ")");
+        Common.Log("Java version: " + jvmVersion);
+        Common.Log("LWJGL version: " + Display.getVersion());
+        Common.Log("OpenGL version: " + glGetString(GL_VERSION));
+        Common.Log("VBO support detected (V: " + maxVertices + ") (I: " + maxIndices + ")");
+        caps = GLContext.getCapabilities();
+
+
+        OnPostDisplayCreate();
+    }
+
+    // Starts up stuff that was waiting for a display to be created
+    public void OnPostDisplayCreate() throws Exception {
+
+        currentMode = Display.getDisplayMode();
+        checkError();
+        resolution = new Vector2f(currentMode.getWidth(), currentMode.getHeight());
+
+        String v = glGetString(GL_VERSION);
+        String[] tokens = Commands.TokenizeString(v, true);
+        for (int i= 0; i < tokens.length; i++) {
+            String token = tokens[i];
+            if(!Character.isDigit(token.charAt(0)))
+                continue;
+            String subTokens[] = token.split("\\.");
+            if(subTokens.length < 2)
+                continue;
+            if(Character.isDigit(subTokens[0].charAt(0)) && subTokens[0].charAt(0) <= '1') {
+                shadersSupported = false;
+                Common.Log("WARNING: Your graphics card does not support shaders");
+                break;
+            }
+        }
+
+        if(isMac)
+            shadersSupported = false;
+
+        if(!CheckCaps()) {
+            //Ref.common.Error(ErrorCode.FATAL, "Your grahics card is not supported");
+            shadersSupported = false;
+        }
+        doVaoWorkaround();
+
+        if(shadersSupported)
+            loadShaders();
+
+        // Set default states
+        glEnable(GL_TEXTURE_2D);
+        glEnable(GL_BLEND);
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+        glDepthMask(true);
+        glDepthFunc(GL_LEQUAL);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glViewport(0, 0, currentMode.getWidth(), currentMode.getHeight());
+        checkError();
+
+
+
+
+        // Init systems waiting for opengl
+        if(Ref.textMan != null)
+            Ref.textMan.Init();
+
+        if(isApplet())
+            setAppletSize();
+
+        // There may be an error sitting in OpenGL.
+        // If it isn't cleared, it may trigger an exception later on.
+        checkError();
     }
 
     // Set up cvars
     private void Init() {
-        r_vsync = Ref.cvars.Get("r_vsync", "1", EnumSet.of(CVarFlags.NONE));
-        r_mode = Ref.cvars.Get("r_mode", "1024x768", EnumSet.of(CVarFlags.NONE));
-        r_fullscreen = Ref.cvars.Get("r_fullscreen", "0", EnumSet.of(CVarFlags.NONE));
-        r_refreshrate = Ref.cvars.Get("r_refreshrate", "60", EnumSet.of(CVarFlags.NONE));
-        r_mindepth = Ref.cvars.Get("r_mindepth", "0", EnumSet.of(CVarFlags.NONE));
-        r_maxdepth = Ref.cvars.Get("r_maxdepth", "1000", EnumSet.of(CVarFlags.NONE));
+        r_vsync = Ref.cvars.Get("r_vsync", "1", EnumSet.of(CVarFlags.ARCHIVE));
+        r_mode = Ref.cvars.Get("r_mode", "1024x768", EnumSet.of(CVarFlags.ARCHIVE));
+        r_fullscreen = Ref.cvars.Get("r_fullscreen", "0", EnumSet.of(CVarFlags.ARCHIVE));
+        r_refreshrate = Ref.cvars.Get("r_refreshrate", "60", EnumSet.of(CVarFlags.ARCHIVE));
         r_toggleRes = Ref.cvars.Get("r_toggleRes", "0", EnumSet.of(CVarFlags.NONE));
-        r_toggleRes.modified = false;
-        Ref.commands.AddCommand("listmodes", new Cmd_listmodes());
+        
+        Ref.commands.AddCommand("listmodes", Cmd_listmodes);
         
         // Don't set all these at the first frame, it is done during init
+        r_toggleRes.modified = false;
         r_vsync.modified = false;
         r_mode.modified = false;
         r_fullscreen.modified = false;
-    }
-
-    public boolean isInitalized() {
-        return initialized;
-    }
-
-    private class Cmd_listmodes implements ICommand {
-        public void RunCommand(String[] args) {
-            boolean skipUninteresting = true; // default to non-spammy mode
-            if(args.length > 1)
-                skipUninteresting = false;
-            for (int i= 0; i < availableModes.length; i++) {
-                if(skipUninteresting) {
-                    // Skip if BPP doesn't match
-                    if(availableModes[i].getBitsPerPixel() != desktopMode.getBitsPerPixel())
-                        continue;
-                    // Skip if refreshrate doesn't match
-                    if(availableModes[i].getFrequency() != desktopMode.getFrequency()
-                            && availableModes[i].getFrequency() != r_refreshrate.iValue)
-                        continue;
-                }
-                
-                System.out.println(availableModes[i]);
-            }
-        }
+        r_refreshrate.modified = false;
     }
 
     // Mainly for checking if cvars have changed
     public void Update() {
         if(r_toggleRes.modified) {
             if(r_toggleRes.iValue == 1) {
-                toggelResolution(true);
-            } else if(r_toggleRes.iValue == -1 && GetResolution().x > 800 && GetResolution().y > 600) {
-                toggelResolution(false);
+                toggleResolution(true);
+            } else if(r_toggleRes.iValue == -1 
+                    && GetResolution().x > MinimumResolution.x
+                    && GetResolution().y > MinimumResolution.y) {
+                toggleResolution(false);
             }
             
             Ref.cvars.Set2("r_toggleRes", "0", true);
@@ -169,15 +238,13 @@ public class GLRef {
         // Change VSync
         if(r_vsync.modified) {
             try {
-                
                 if (!Display.isCurrent()) {
                     Ref.common.Error(ErrorCode.FATAL, "Cannot change vsync; current thread is not the OpenGL thread");
                 }
                 Display.setVSyncEnabled(r_vsync.iValue == 1);
                 checkError();
             } catch (Exception ex) {
-                Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
-                //Ref.common.Error(ErrorCode.FATAL, "Cannot change vsync; cannot get current thread state");
+                Common.LogDebug(Common.getExceptionString(ex));
             }
 
             r_vsync.modified = false;
@@ -197,27 +264,13 @@ public class GLRef {
         }
 
         // Check if screen has lost focus
-        if(screenActive != Display.isActive()) {
-            screenActive = !screenActive;
-            if(!screenActive && Ref.Input != null) {
+        if(screenHasFocus != Display.isActive()) {
+            screenHasFocus = !screenHasFocus;
+            if(!screenHasFocus && Ref.Input != null) {
                 // Clear keys when loosing focus..
                 Ref.Input.ClearKeys();
             }
         }
-    }
-
-    public boolean isScreenFocused() {
-        return screenActive;
-    }
-
-    public boolean isApplet() {
-        return isApplet;
-    }
-
-    public Applet getApplet() {
-        if(isApplet())
-            return applet;
-        return null;
     }
 
     private void SetFullscreen(boolean fullscreen) {
@@ -247,21 +300,22 @@ public class GLRef {
             }
 
         } catch (Exception ex) {
-            Common.Log(ex.getMessage());
+            Common.Log(Common.getExceptionString(ex));
         }
     }
 
     public DisplayMode[] getNiceModes() {
         ArrayList<DisplayMode> modes = new ArrayList<DisplayMode>();
-        // Look through availableModes
+        // Look through available modes
         for (int i= 0; i < availableModes.length; i++) {
             DisplayMode validmode = availableModes[i];
 
             if(validmode.getBitsPerPixel() != desktopMode.getBitsPerPixel())
-                continue; // We wan't the same pixeldepth as the desktop mode
+                continue; // We want the same pixeldepth as the desktop mode
 
             if(validmode.getFrequency() != desktopMode.getFrequency()
-                    && validmode.getFrequency() != r_refreshrate.iValue && validmode.getFrequency() != 0)
+                    && validmode.getFrequency() != r_refreshrate.iValue
+                    && validmode.getFrequency() != 0)
                 continue; // We also want the same frequency
 
             modes.add(validmode);
@@ -280,8 +334,6 @@ public class GLRef {
             r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
             return; // not valid
         }
-
-        Ref.commands.ExecuteText(ExecType.NOW, "listmodes");
 
         if(Ref.Input != null)
             Ref.Input.ClearKeys();
@@ -358,17 +410,18 @@ public class GLRef {
             applet.setSize((int)GetResolution().x, (int)GetResolution().y);
             applet.getAppletContext().showDocument(new URL("javascript:doResize(" + (int)GetResolution().x + "," + (int)GetResolution().y + ")"));
         } catch (MalformedURLException ex) {
-
         }
     }
 
+    // Closes the context and window
     public void Destroy() {
         if(Display.isCreated())
             Display.destroy();
         initialized = false;
     }
 
-    private void toggelResolution(boolean increase) {
+    // Increases or decreases the resolution by one step
+    private void toggleResolution(boolean increase) {
         Vector2f current = GetResolution();
         float area = (int)current.x * (int)current.y;
         float bestArea = area;
@@ -414,145 +467,6 @@ public class GLRef {
             SetResolution(bestFit.getWidth()+"x"+bestFit.getHeight());
     }
 
-    public void InitWindow(Canvas parent, Applet applet) throws Exception {
-
-        this.applet = applet;
-
-        availableModes = Display.getAvailableDisplayModes();
-
-        desktopMode = Display.getDesktopDisplayMode();
-        
-        Common.Log("Desktop displaymode: " + desktopMode);
-        displayParent = parent; // Save off canvas if there is one
-        SetResolution(r_mode.sValue);
-        
-        if(parent == null) {
-            // If we are creating a new window, center it
-            Display.setLocation((int)(desktopMode.getWidth()/2f - currentMode.getWidth()/2f),
-                    (int)(desktopMode.getHeight()/2f - currentMode.getHeight()/2f));
-            
-            
-        } else {
-            Display.setParent(displayParent); // Applets use this
-            
-            if(applet != null)
-                isApplet = true;
-        }
-
-        // Create the display
-        Display.create(new PixelFormat());
-        //Display.create(new PixelFormat(8, 8, 0, 0));
-        checkError();
-
-        // Set vsync
-        try {
-            Display.setVSyncEnabled(r_vsync.iValue == 1);
-        } catch (Exception ex) {};
-        
-        initialized = true;
-        // Get max vertices
-        intBuf16.position(0);
-        glGetInteger(GL12.GL_MAX_ELEMENTS_VERTICES, intBuf16);
-        checkError();
-        maxVertices = intBuf16.get(0);
-
-        // Get max indices
-        intBuf16.position(0);
-        glGetInteger(GL12.GL_MAX_ELEMENTS_INDICES, intBuf16);
-        checkError();
-        maxIndices = intBuf16.get(0);
-        String osName = System.getProperty("os.name");
-        isMac = osName.startsWith("Mac OS X");
-        String osVersion = System.getProperty("os.version");
-        String osArch = System.getProperty("os.arch");
-        String jvmVersion = System.getProperty("java.runtime.version");
-        Common.Log("Operating System: " + osName + " - " + osVersion + " (" + osArch + ")");
-        Common.Log("Java version: " + jvmVersion);
-        Common.Log("LWJGL version: " + Display.getVersion());
-        Common.Log("OpenGL version: " + glGetString(GL_VERSION));
-        Common.Log("VBO support detected (V: " + maxVertices + ") (I: " + maxIndices + ")");
-        caps = GLContext.getCapabilities();
-        
-        
-        OnPostDisplayCreate();
-    }
-
-
-    // Some drivers mess up VBO's when there's no VAO's bound (even if not used)
-    private void doVaoWorkaround() {
-        if(!caps.GL_ARB_vertex_array_object)
-            return;
-
-        int index = ARBVertexArrayObject.glGenVertexArrays();
-        checkError();
-        ARBVertexArrayObject.glBindVertexArray(index);
-        checkError();
-    }
-
-    // Starts up stuff that was waiting for a display to be created
-    public void OnPostDisplayCreate() throws Exception {
-        
-        currentMode = Display.getDisplayMode();
-        checkError();
-        resolution = new Vector2f(currentMode.getWidth(), currentMode.getHeight());
-        
-        String v = glGetString(GL_VERSION);
-        String[] tokens = Commands.TokenizeString(v, true);
-        for (int i= 0; i < tokens.length; i++) {
-            String token = tokens[i];
-            if(!Character.isDigit(token.charAt(0)))
-                continue;
-            String subTokens[] = token.split("\\.");
-            if(subTokens.length < 2)
-                continue;
-            if(Character.isDigit(subTokens[0].charAt(0)) && subTokens[0].charAt(0) <= '1') {
-                shadersSupported = false;
-                Common.Log("WARNING: Your graphics card does not support shaders");
-                break;
-            }
-        }
-
-        if(isMac)
-            shadersSupported = false;
-
-        if(!CheckCaps())
-            Ref.common.Error(ErrorCode.FATAL, "Your grahics card is not supported");
-        doVaoWorkaround();
-        
-        if(shadersSupported)
-            loadShaders();
-        
-        // Set default states
-        glEnable(GL_TEXTURE_2D);
-        glEnable(GL_BLEND);
-        glEnable(GL_DEPTH_TEST);
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_BACK);
-        glDepthMask(true);
-        glDepthFunc(GL_LEQUAL);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glViewport(0, 0, currentMode.getWidth(), currentMode.getHeight());
-        checkError();
-        
-
-        
-
-        // Init systems waiting for opengl
-        if(Ref.textMan != null)
-            Ref.textMan.Init();
-
-        if(isApplet())
-            setAppletSize();
-
-        // There may be an error sitting in OpenGL.
-        // If it isn't cleared, it may trigger an exception later on.
-        checkError();
-    }
-
-    public boolean isShadersSupported() {
-        return shadersSupported;
-    }
-
     public static void checkError() {
         if(!initialized)
             return;
@@ -564,7 +478,6 @@ public class GLRef {
     public void setShader(String str) {
         shaders.get(str).Bind();
     }
-
 
     private void loadShaders() {
         try {
@@ -581,8 +494,6 @@ public class GLRef {
         }
 
     }
-
-    
 
     private boolean CheckCaps() {
         boolean okay = true;
@@ -604,9 +515,66 @@ public class GLRef {
                 Common.Log("EXT_draw_range_elements not supported by your graphics card");
             }
         }
-//        caps.GL_ARB_draw_elements_base_vertex
 
         return okay;
+    }
+
+    public boolean isShadersSupported() {
+        return shadersSupported;
+    }
+
+    public boolean isInitalized() {
+        return initialized;
+    }
+
+    public Vector2f GetResolution() {
+        return resolution;
+    }
+
+    public boolean isApplet() {
+        return isApplet;
+    }
+
+    public Applet getApplet() {
+        if(isApplet())
+            return applet;
+        return null;
+    }
+
+    public boolean isScreenFocused() {
+        return screenHasFocus;
+    }
+
+    private ICommand Cmd_listmodes = new ICommand() {
+      public void RunCommand(String[] args) {
+            boolean skipUninteresting = true; // default to non-spammy mode
+            if(args.length > 1)
+                skipUninteresting = false;
+            for (int i= 0; i < availableModes.length; i++) {
+                if(skipUninteresting) {
+                    // Skip if BPP doesn't match
+                    if(availableModes[i].getBitsPerPixel() != desktopMode.getBitsPerPixel())
+                        continue;
+                    // Skip if refreshrate doesn't match
+                    if(availableModes[i].getFrequency() != desktopMode.getFrequency()
+                            && availableModes[i].getFrequency() != r_refreshrate.iValue)
+                        continue;
+                }
+
+                System.out.println(availableModes[i]);
+            }
+        }
+    };
+
+    // Some drivers mess up VBO's when there's no VAO's bound (even if not used)
+    private void doVaoWorkaround() {
+        if(!caps.GL_ARB_vertex_array_object)
+            return;
+
+        int index = ARBVertexArrayObject.glGenVertexArrays();
+        checkError();
+        ARBVertexArrayObject.glBindVertexArray(index);
+        checkError();
     }
 
     public int createVBOid() {
@@ -615,7 +583,6 @@ public class GLRef {
         return intBuf.get(0);
     }
 
-    
     private int BufferTargetToOpenGL(BufferTarget value) {
         int t = ARBVertexBufferObject.GL_ARRAY_BUFFER_ARB;
         if(value == BufferTarget.Index)
@@ -623,8 +590,7 @@ public class GLRef {
         return t;
     }
 
-    HashMap<Integer, ByteBuffer> cachedBuffers
-            = new HashMap<Integer, ByteBuffer>();
+    
 
     // Size is in bytes
     public ByteBuffer mapVBO(BufferTarget target, int bufferId, int size) {
@@ -676,24 +642,5 @@ public class GLRef {
         ARBVertexBufferObject.glBufferDataARB(t, size, ARBVertexBufferObject.GL_DYNAMIC_DRAW_ARB);
         GLRef.checkError();
     }
-
-//    public void fillVBO(int bufferid, FloatBuffer data) {
-//        if(caps.GL_ARB_vertex_buffer_object) {
-//            data.limit();
-//            data.position(0);
-//            //data.flip();
-//            ARBVertexBufferObject.glBindBufferARB(ARBVertexBufferObject.GL_ARRAY_BUFFER_ARB, bufferid);
-//            ARBVertexBufferObject.glBufferDataARB(ARBVertexBufferObject.GL_ARRAY_BUFFER_ARB, data, ARBVertexBufferObject.GL_STATIC_DRAW_ARB);
-//        }
-//    }
-//
-//    public void fillVBOIndices(int bufferid, IntBuffer data) {
-//        if(caps.GL_ARB_vertex_buffer_object) {
-//            ARBVertexBufferObject.glBindBufferARB(ARBVertexBufferObject.GL_ELEMENT_ARRAY_BUFFER_ARB, bufferid);
-//            ARBVertexBufferObject.glBufferDataARB(ARBVertexBufferObject.GL_ELEMENT_ARRAY_BUFFER_ARB, data, ARBVertexBufferObject.GL_STATIC_DRAW_ARB);
-//        }
-//    }
-
-
 
 }
