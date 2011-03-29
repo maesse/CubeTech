@@ -84,7 +84,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar camera_vsnapmax = Ref.cvars.Get("camera_vsnapmax", "300", EnumSet.of(CVarFlags.ARCHIVE));
     
 
-    CGameState cg;
+    public CGameState cg;
     CGameStatic cgs;
 
     private ChatLine[] chatLines = new ChatLine[8];
@@ -587,12 +587,13 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         float speeds = Math.abs(cg.snap.ps.velocity.x);
         float maxspeed = 600;
         float frac = speeds / maxspeed;
-        spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        Vector2f size = new Vector2f(Ref.glRef.GetResolution().x * 0.75f, 64);
-        Vector2f position = new Vector2f(Ref.glRef.GetResolution().x/2f - size.x / 2f , Ref.glRef.GetResolution().y - size.y - 32 );
-        size.x *= frac;
-
-        spr.Set(position, size, Ref.ResMan.LoadTexture("data/energybar.png"), null, new Vector2f(1, 1));
+        if(cg_editmode.iValue == 0) {
+            spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            Vector2f size = new Vector2f(Ref.glRef.GetResolution().x * 0.75f, 64);
+            Vector2f position = new Vector2f(Ref.glRef.GetResolution().x/2f - size.x / 2f , Ref.glRef.GetResolution().y - size.y - 32 );
+            size.x *= frac;
+            spr.Set(position, size, Ref.ResMan.LoadTexture("data/energybar.png"), null, new Vector2f(1, 1));
+        }
         
 
         DrawChat();
@@ -658,10 +659,6 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                 mapEditor = new MapEditor();
             }
         }
-
-        
-
-
 
         if(cg.showScores)
             DrawScoreboard();

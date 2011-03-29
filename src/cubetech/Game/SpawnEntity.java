@@ -25,6 +25,7 @@ public class SpawnEntity {
         this.className = className;
         origin.set(position);
         editBlock = new Block(-1, new Vector2f(position.x - 6, position.y - 6), new Vector2f(12,12), false);
+        editBlock.setLayer(1000); // make sure entities are the first to be selected in the editor
         editBlock.spawnEntity = this;
         if(className.equalsIgnoreCase("item_boots"))
             editBlock.Material.setTexture(Ref.common.items.findItemByClassname(className).icon);

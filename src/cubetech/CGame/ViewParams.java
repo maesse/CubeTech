@@ -13,7 +13,7 @@ import org.lwjgl.util.vector.Vector2f;
  *
  * @author mads
  */
-class ViewParams {
+public class ViewParams {
     public Vector2f Origin  = new Vector2f();
     public int ViewportX;
     public int ViewportY;

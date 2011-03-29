@@ -34,6 +34,8 @@ import cubetech.ui.CSpinner;
 import cubetech.ui.FlowLayout;
 import cubetech.ui.StashItemUI;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -620,11 +622,11 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                 Vector2f rightCenter = new Vector2f(bCenter.x + axis[0].x * extent.x, bCenter.y + axis[0].y * extent.x);
                 Vector2f topCenter = new Vector2f(bCenter.x + axis[1].x * extent.y, bCenter.y + axis[1].y * extent.y);
 
-                if(nearVector(gameCoords, rightCenter, 1f)) {
+                if(nearVector(gameCoords, rightCenter, Ref.cgame.cg.refdef.FovX * 1f/220)) {
                     scale_top = false;
                     scale_dragging = true;
                     
-                } else if(nearVector(gameCoords, topCenter, 1f)) {
+                } else if(nearVector(gameCoords, topCenter, Ref.cgame.cg.refdef.FovX * 1f/220)) {
                     scale_top = true;
                     scale_dragging = true;
                 }
@@ -764,7 +766,15 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
     }
 
     // Select tool got a mouse event
-    
+    private Comparator<Block> blockSorter = new Comparator<Block>() {
+            public int compare(Block o1, Block o2) {
+                if(o1.getLayer() < o2.getLayer())
+                    return 1;
+                if(o1.getLayer() > o2.getLayer())
+                    return -1;
+                return 0;
+            }
+        };
     private void selectMouseEvent(MouseEvent evt) {
         Vector2f gameCoords = OrgCoordsToGameCoords(evt.Position);
 //        toolText.setText("Tool: Select");
@@ -808,6 +818,8 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                     select_queue.add(b);
             }
         }
+
+        Collections.sort(select_queue,blockSorter);
         
 
         if(select_queue.size() > 0) {
@@ -897,7 +909,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         if(color == null)
             color = defaultColor;
 
-        float lineWidth = 0.5f;
+        float lineWidth = Ref.cgame.cg.refdef.FovX * 0.5f/220;
         float halfLineWidth = lineWidth * 0.5f;
         
         Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
@@ -1018,7 +1030,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
 
 
                 spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
-                spr.Set(rightCenter.x, rightCenter.y, 1f, Ref.ResMan.LoadTexture("data/corner.png"));
+                spr.Set(rightCenter.x, rightCenter.y,Ref.cgame.cg.refdef.FovX * 1f/220, Ref.ResMan.LoadTexture("data/corner.png"));
                 spr.SetAngle(selectedBlock.getAngle());
                 spr.SetDepth(EDITOR_LAYER);
 
@@ -1028,7 +1040,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                 spr.SetDepth(EDITOR_LAYER);
                 spr.SetColor(0, 255, 0, 255);
                 spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
-                spr.Set(topCenter.x, topCenter.y, 1f, Ref.ResMan.LoadTexture("data/corner.png"));
+                spr.Set(topCenter.x, topCenter.y, Ref.cgame.cg.refdef.FovX * 1f/220, Ref.ResMan.LoadTexture("data/corner.png"));
                 spr.SetAngle(selectedBlock.getAngle());
                 spr.SetDepth(EDITOR_LAYER);
 //                spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
@@ -1479,8 +1491,6 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         }
         scrollPane.doLayout();
     }
-
-    
 
     private void renderGrid() {
         Vector2f lineSize = new Vector2f(Ref.cgame.cg.refdef.FovX / Ref.glRef.GetResolution().x,
