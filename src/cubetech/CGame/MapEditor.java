@@ -186,6 +186,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
             for (SpawnEntity spawnEntity : entities) {
                 Block b = spawnEntity.getBlock();
                 b.Render();
+                renderHighlightBlock(b.GetCenter(), b.getAbsExtent(), EDITOR_LAYER+1, (Color) Color.GREEN);
             }
         }
 
@@ -373,6 +374,11 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                     return;
                 }
 
+                if(selectedBlock.spawnEntity != null) {
+                    selectTool(Tool.SELECT); // Nothing selected
+                    return;
+                }
+
                 // Clear move
                 dragStart = null;
                 move_dragging = false;
@@ -391,6 +397,12 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                 break;
             case RESIZE:
                 if(selectedBlock == null) {
+                    selectTool(Tool.SELECT); // Nothing selected
+                    return;
+                }
+
+
+                if(selectedBlock.spawnEntity != null) {
                     selectTool(Tool.SELECT); // Nothing selected
                     return;
                 }
@@ -414,6 +426,11 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                 break;
             case ROTATE:
                 if(selectedBlock == null) {
+                    selectTool(Tool.SELECT); // Nothing selected
+                    return;
+                }
+
+                if(selectedBlock.spawnEntity != null) {
                     selectTool(Tool.SELECT); // Nothing selected
                     return;
                 }
@@ -868,7 +885,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         Helper.AddPointToBounds(selectedModel.maxs, selection_temp_mins, selection_temp_maxs);
 
         for (Block b: selectedModel.blocks) {
-            renderHighlightBlock(b.GetCenter(), b.getAbsExtent(), EDITOR_LAYER, null);
+            renderHighlightBlock(b.GetCenter(), b.getAbsExtent(), EDITOR_LAYER-1, null);
         }
 
        // Vector2f.sub(maxs, mins, tempAbsSize);
@@ -963,9 +980,10 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                 Helper.AddPointToBounds(point, selection_temp_mins, selection_temp_maxs);
 
                 // render block selection
-                renderHighlightBlock(blockCenter, blockAbsExtent, EDITOR_LAYER, null);
-
-                
+                Color col = null;
+                if(block.spawnEntity != null)
+                    col = (Color) Color.GREEN;
+                renderHighlightBlock(blockCenter, blockAbsExtent, EDITOR_LAYER, col);
             }
             Vector2f selectionSize = new Vector2f();
             Vector2f.sub(selection_temp_maxs, selection_temp_mins, selectionSize);
@@ -984,7 +1002,10 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
             Vector2f.sub(selectedBlock.GetCenter(), selectedBlock.getAbsExtent(), point);
             Helper.AddPointToBounds(point, selection_temp_mins, selection_temp_maxs);
 
-            renderHighlightBlock(selectedBlock.GetCenter(), selectedBlock.getAbsExtent(), EDITOR_LAYER, null);
+            Color col = null;
+            if(selectedBlock.spawnEntity != null)
+                col = (Color) Color.GREEN;
+            renderHighlightBlock(selectedBlock.GetCenter(), selectedBlock.getAbsExtent(), EDITOR_LAYER, col);
 
             bCenter.set(selectedBlock.GetCenter());
         }

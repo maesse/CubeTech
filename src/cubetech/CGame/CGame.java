@@ -141,6 +141,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         playerTexture = Ref.ResMan.LoadTexture("data/enemy1.png");
         commands.put("+scores", new Cmd_ScoresDown());
         commands.put("-scores", new Cmd_ScoresUp());
+        Ref.cvars.Set2("cg_editmode", "0", true);
 
         for (int i= 0; i < chatLines.length; i++) {
             chatLines[i] = new ChatLine();
