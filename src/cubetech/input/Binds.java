@@ -57,6 +57,10 @@ public class Binds implements KeyEventListener {
         BindKey(keyIndex, bind);
     }
 
+    public void UnbindKey(int key) {
+        binds.remove(key);
+    }
+
     public void BindKey(int key, String bind) {
         // Check if key exists
         if(KeyToString(key).equals("NONE")) {
@@ -185,7 +189,12 @@ public class Binds implements KeyEventListener {
                     return;
                 }
             }
-            
+
+            String cleaned = newCmd.replace('\"', ' ').trim();
+            if(cleaned.length() == 0) {
+                UnbindKey(key);
+            }
+
             BindKey(key, newCmd);
         }
     }
