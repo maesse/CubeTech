@@ -93,6 +93,7 @@ public class Move {
         Vector2f end = new Vector2f(query.ps.origin);
 
         Vector2f.sub(start, end, start);
+        start.y *= 0.5f; // don't let y velocity impact move animation too much
         float movelen = start.length() * totalMsec;
         query.ps.movetime += (int)movelen;
     }
@@ -401,13 +402,14 @@ public class Move {
            if(!TryStepMove(pm)) {
                pm.ps.origin.set(saved_org);
                pm.ps.velocity.set(saved_vel);
-               if(saved_vel.length() < 10f && org_velocity.length() > 10f)
+               if(Math.abs(saved_vel.x) < 10f && Math.abs(org_velocity.x) > 10f)
                 AddEvent(pm, Event.HIT_WALL, 0);
            } else {
                float heightDiff = pm.ps.origin.y - org_origin.y;
                AddEvent(pm, Event.STEP, (int)(heightDiff*100));
            }
-       }
+       } else if((pm.blocked & 1) ==  1 && Math.abs(pm.ps.velocity.x) < 10f && Math.abs(org_velocity.x) > 10f)
+                AddEvent(pm, Event.HIT_WALL, 0);
    }
 
     // try a series of up, forward, down moves
