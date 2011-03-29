@@ -1487,7 +1487,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                                         Ref.cgame.cg.refdef.FovY / Ref.glRef.GetResolution().y);
         
         Vector2f startPos = new Vector2f(Ref.cgame.cg.refdef.Origin);
-        int width = Ref.cgame.cg.refdef.FovX + gridSpacing * 2;
+        int width = (int)Ref.cgame.cg.refdef.FovX + gridSpacing * 2;
         int height = Ref.cgame.cg.refdef.FovY + gridSpacing * 2;
         startPos.x -= Ref.cgame.cg.refdef.FovX / 2f + gridSpacing;
         startPos.y -= Ref.cgame.cg.refdef.FovY / 2f + gridSpacing;

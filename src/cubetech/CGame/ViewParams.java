@@ -19,7 +19,7 @@ class ViewParams {
     public int ViewportY;
     public int ViewportWidth;
     public int ViewportHeight;
-    public int FovX;
+    public float FovX;
     public int FovY;
     public Matrix ProjectionMatrix;
     public Vector2f Angles = new Vector2f();
