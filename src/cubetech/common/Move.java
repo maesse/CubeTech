@@ -203,7 +203,8 @@ public class Move {
         if(query.ps.moveType == MoveType.NORMAL)
             UpdateStepSound(query);
 
-        if(movemode == 1 && query.ps.moveType == MoveType.NORMAL && query.ps.applyPull) {
+        if(query.ps.moveType == MoveType.NORMAL && 
+                ((movemode == 1 && query.ps.applyPull) || (movemode == 2))) {
             FrictionSpecial(query);
         }
 
@@ -331,7 +332,7 @@ public class Move {
        if(spd > pull6)
            actualaccel *= pullstep;
 
-       if(pm.ps.applyPull)
+       if((pm.ps.applyPull && movemode == 1) || (movemode == 2 && pm.cmd.Right))
            pm.ps.velocity.x += actualaccel * frametime;
 
        float speed2 = (float)Math.sqrt(pm.ps.velocity.x * pm.ps.velocity.x + pm.ps.velocity.y * pm.ps.velocity.y);
