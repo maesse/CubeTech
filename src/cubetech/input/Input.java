@@ -132,31 +132,16 @@ public class Input {
 
     void FireMouseEvent(MouseEvent evt) {
         Object[] listeners = null;
-        if((KeyCatcher & KEYCATCH_CONSOLE) > 0 && listenerListMouse.containsKey(KEYCATCH_CONSOLE)) {
-            listeners = listenerListMouse.get(KEYCATCH_CONSOLE).getListenerList();
+        if((KeyCatcher & KEYCATCH_CONSOLE) > 0) {
+            if(listenerListMouse.containsKey(KEYCATCH_CONSOLE))
+                listeners = listenerListMouse.get(KEYCATCH_CONSOLE).getListenerList();
         } else if((KeyCatcher & KEYCATCH_MESSAGE) > 0 && listenerListMouse.containsKey(KEYCATCH_MESSAGE)) {
             listeners = listenerListMouse.get(KEYCATCH_MESSAGE).getListenerList();
         } else if((KeyCatcher & KEYCATCH_UI) > 0 && listenerListMouse.containsKey(KEYCATCH_UI)) {
             listeners = listenerListMouse.get(KEYCATCH_UI).getListenerList();
         } else if((KeyCatcher & KEYCATCH_CGAME) > 0 && listenerListMouse.containsKey(KEYCATCH_CGAME)) {
             listeners = listenerListMouse.get(KEYCATCH_CGAME).getListenerList();
-        }  else {
-//            if(evt.Button != -1) {
-//                // Fire regular mouse button event
-//                String button = "MOUSE" + (evt.Button + 1);
-//                binds.ParseBinding(binds.StringToKey(button), evt.Pressed, Ref.client.realtime);
-//            }
-//
-//            // event can also contain mousewheel info
-//            // Wheeldelta don't have key-up events, so create it artificially
-//            if(evt.WheelDelta < 0) {
-//                binds.ParseBinding(binds.StringToKey("MWHEELDOWN"), true, Ref.client.realtime);
-//                mWheelDownTime = Ref.client.realtime;
-//            } else if(evt.WheelDelta > 0) {
-//                binds.ParseBinding(binds.StringToKey("MWHEELUP"), true, Ref.client.realtime);
-//                mWheelUpTime = Ref.client.realtime;
-//            }
-        }
+        } 
 
         if(listeners == null)
             return;
@@ -296,7 +281,6 @@ public class Input {
                 key.Time = Ref.client.realtime;
                 key.Name = buttonStr;
                 FireKeyEvent(new KeyEvent(key));
-                //binds.ParseBinding(binds.StringToKey(buttonStr), pressed, Ref.client.realtime);
             }
 
             // event can also contain mousewheel info
@@ -309,10 +293,8 @@ public class Input {
                 key.Time = Ref.client.realtime;
                 key.Name = "MWHEELDOWN";
                 FireKeyEvent(new KeyEvent(key));
-//                binds.ParseBinding(binds.StringToKey("MWHEELDOWN"), true, Ref.client.realtime);
                 mWheelDownTime = Ref.client.realtime;
             } else if(wheelDelta > 0) {
-                //String buttonStr = "MOUSE" + (button + 1);
                 int keyIndex = binds.StringToKey("MWHEELUP");
                 Key key = keys[keyIndex];
                 key.Changed = true;
@@ -320,7 +302,6 @@ public class Input {
                 key.Time = Ref.client.realtime;
                 key.Name = "MWHEELUP";
                 FireKeyEvent(new KeyEvent(key));
-//                binds.ParseBinding(binds.StringToKey("MWHEELUP"), true, Ref.client.realtime);
                 mWheelUpTime = Ref.client.realtime;
             }
         }
