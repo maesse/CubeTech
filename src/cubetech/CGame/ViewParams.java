@@ -106,7 +106,7 @@ class ViewParams {
                     maxChange = vleft - 0.1f;
             }
                 else
-                    maxChange = 0.9f - vleft;
+                    maxChange = 0.8f - vleft;
                 
                 if(maxChange > 1)
                     maxChange = 1;
