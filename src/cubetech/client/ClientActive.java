@@ -162,14 +162,16 @@ public class ClientActive {
             // if any of the frames between this and the previous snapshot
             // had to be extrapolated, nudge our sense of time back a little
             // the granularity of +1 / -2 is too high for timescale modified frametimes
-            if(extrapolatedSnapshot) {
-                extrapolatedSnapshot = false;
-                serverTimeDelta -= 1;
-               // System.out.println("Back");
-            } else if(deltaDelta > Ref.client.cl_netquality.iValue)
-            {
-                serverTimeDelta++;
-               // System.out.println("Forward");
+            if(Ref.common.com_timescale.iValue == 0 || Ref.common.com_timescale.iValue == 1) {
+                if(extrapolatedSnapshot) {
+                    extrapolatedSnapshot = false;
+                    serverTimeDelta -= 1;
+                   // System.out.println("Back");
+                } else if(deltaDelta > Ref.client.cl_netquality.iValue)
+                {
+                    serverTimeDelta++;
+                   // System.out.println("Forward");
+                }
             }
         }
     }

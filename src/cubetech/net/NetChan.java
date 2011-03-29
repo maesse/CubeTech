@@ -43,6 +43,15 @@ public class NetChan {
     public int unsentLenght;
     byte[] unsentBuffer = new byte[MSG_LEN];
 
+    public boolean isLocalhost() {
+        return (addr.getAddress().isLoopbackAddress());
+    }
+
+    public boolean isLAN() {
+        // todo: test
+        return (addr.getAddress().isAnyLocalAddress());
+    }
+
     public void TransmitNextFragment() {
         NetBuffer newbuf = NetBuffer.GetNetBuffer(true);
         newbuf.Write(outgoingSequence | FRAGMENT_BIT);

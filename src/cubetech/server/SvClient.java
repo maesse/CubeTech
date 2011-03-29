@@ -631,30 +631,38 @@ public class SvClient {
         Transmit(buf);
 
         // set nextSnapshotTime based on rate and requested number of updates
+        if(netchan.isLocalhost()) {
+            nextSnapshotTime = (int) (Ref.server.time + (1000f / Ref.server.sv_fps.iValue * Ref.common.com_timescale.fValue));
+            return;
+        }
+
+        // normal rate calculation
         int rateMsec = RateMsec(size);
-        if(rateMsec < snapshotMsec)  {
+        if(rateMsec < (int)(snapshotMsec * Ref.common.com_timescale.fValue))  {
             // never send more packets than this, no matter what the rate is at
-            rateMsec = snapshotMsec;
+            rateMsec = (int) (snapshotMsec * Ref.common.com_timescale.fValue);
             rateDelayed = false;
         } else
             rateDelayed = true;
 
-        nextSnapshotTime = Ref.server.time + rateMsec;
+        nextSnapshotTime = (int) (Ref.server.time + rateMsec * Ref.common.com_timescale.fValue);
 
         // don't pile up empty snapshots while connecting
         if(state != ClientState.ACTIVE) {
             // a gigantic connection message may have already put the nextSnapshotTime
             // more than a second away, so don't shorten it
             // do shorten if client is downloading
-            if(nextSnapshotTime < Ref.server.time)
-                nextSnapshotTime = Ref.server.time;
+            if(downloadName == null && nextSnapshotTime < Ref.server.time + 1000 * Ref.common.com_timescale.fValue)
+                nextSnapshotTime = (int) (Ref.server.time + 1000 * Ref.common.com_timescale.fValue);
         }
 
     }
 
     private int RateMsec(int bytes) {
         int headerSize = 48;
-        int rateMsec = (int)((float)(bytes + headerSize) * 1000f  / rate);
+        if(bytes > NetChan.FRAGMENT_SIZE)
+            bytes = NetChan.FRAGMENT_SIZE;
+        int rateMsec = (int)((float)(bytes + headerSize) * 1000f  / rate * Ref.common.com_timescale.fValue);
         return rateMsec;
     }
 

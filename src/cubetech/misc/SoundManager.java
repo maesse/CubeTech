@@ -191,7 +191,7 @@ public class SoundManager {
    * @param buffer Buffer index to play gotten from addSound
    */
   public void playEffect(Integer buffer, float volume) {
-      SoundMap.get(buffer).playAsSoundEffect(1.0f, volume, false);
+      SoundMap.get(buffer).playAsSoundEffect(Ref.common.com_timescale.fValue, volume, false);
   }
 
    public void playEntityEffect(int entityNum, int buffer, float volume) {

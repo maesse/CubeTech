@@ -880,6 +880,10 @@ public class Client {
         return false;
     }
 
+    public int ScaledMilliseconds() {
+        return (int) (Ref.common.Milliseconds() * Ref.common.com_timescale.fValue);
+    }
+
     /*
     ================
     CL_ParseSnapshot
