@@ -505,6 +505,8 @@ public class GameClient extends Gentity {
     }
 
     void PlaceInEditMode() {
+        if(ps.stats.Health <= 0)
+            ClientSpawn();
         ps.moveType = MoveType.NORMAL;
     }
 
