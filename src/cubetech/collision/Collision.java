@@ -115,7 +115,7 @@ public class Collision {
         Vector2f BExtent = block.GetExtents();
         Vector2f[] BAxis = block.GetAxis();
 
-        Vector2f hitaxis = derpAxis;
+        Vector2f hitaxis = null;
 
         float first = 0f;
         float last = 1f;
@@ -230,9 +230,9 @@ public class Collision {
         axisVel = Vector2f.dot(v, BAxis[1]);
 
         bextDot = BExtent.y;
-        float hags1 = Math.abs(Vector2f.dot(AAxis[0], BAxis[1]));
-        float hags2 = Math.abs(Vector2f.dot(AAxis[1], BAxis[1]));
-        aextDot = AExtent.x * hags1 + AExtent.y * hags2;
+        double hags1 = Math.abs(Vector2f.dot(AAxis[0], BAxis[1]));
+        double hags2 = Math.abs(Vector2f.dot(AAxis[1], BAxis[1]));
+        aextDot = (float) (AExtent.x * hags1 + AExtent.y * hags2);
 
         bDotPos = Vector2f.dot(BAxis[1], Bcenter);
         aDotPos = Vector2f.dot(BAxis[1], Acenter);
@@ -263,14 +263,14 @@ public class Collision {
         if(first > last)
             return;
 
-        if(first - EPSILON < res.frac) {
+        if(first - EPSILON < res.frac && hitaxis != null) {
             res.frac = first - EPSILON;
             if(res.frac < 0f)
                 res.frac = 0f;
             res.Hit = true;
             res.entitynum = Common.ENTITYNUM_WORLD;
             res.hitmask = Content.SOLID;
-            res.HitAxis = hitaxis;
+            res.HitAxis.set(hitaxis);
             res.startsolid = startsolid;
         }
     }
@@ -282,10 +282,12 @@ public class Collision {
         
         // Trace against blocks
         if((tracemask & Content.SOLID) == Content.SOLID) {
-            Vector2f v = new Vector2f(-dir.x, -dir.y);
+            Vector2f v = dir;
+            v.scale(-1.0f);
+            //Vector2f v = new Vector2f(-dir.x, -dir.y);
             res.frac = 1f;
 
-            SpatialQuery result = Ref.spatial.Query(pos.x-extent.x-(dir.x>0f?0:dir.x)-5, pos.y-extent.y-(dir.y>0f?0:dir.y)-5,pos.x+extent.x+(dir.x<0f?0:dir.x)+5, pos.y+extent.y+(dir.x<0f?0:dir.y)+5);
+            SpatialQuery result = Ref.spatial.Query(pos.x-extent.x+(dir.x>0f?0:dir.x)-5, pos.y-extent.y+(dir.y>0f?0:dir.y)-5,pos.x+extent.x+(dir.x<0f?0:dir.x)+5, pos.y+extent.y+(dir.x>0f?dir.y:0)+5);
             int queryNum = result.getQueryNum();
             Object object;
             while((object = result.ReadNext()) != null) {
@@ -301,9 +303,12 @@ public class Collision {
 
                 Test(pos, extent, v, block, res);
             }
+            v.scale(-1.0f);
 
             // Hit world
             if(res.Hit) {
+                //res.HitAxis = new Vector2f(res.HitAxis);
+//                res.HitAxis.normalise();
                 float lenght = (float) Math.sqrt(res.HitAxis.x * res.HitAxis.x + res.HitAxis.y * res.HitAxis.y);
                 if(lenght != 0f) {
                     res.HitAxis.x /= lenght;

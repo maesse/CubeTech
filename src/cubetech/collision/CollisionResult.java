@@ -29,7 +29,7 @@ public class CollisionResult {
         this.Start = new Vector2f(start.x, start.y);
         this.Delta = new Vector2f(delta.x, delta.y);
         this.Extent = new Vector2f(extent.x, extent.y);
-        HitAxis = new Vector2f();
+        HitAxis.set(0,0);
         
     }
 }

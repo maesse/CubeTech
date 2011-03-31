@@ -796,13 +796,14 @@ public class Server implements ITrace {
     }
 
 
+    Vector2f boxmins = new Vector2f(), boxmaxs = new Vector2f();
+    Vector2f delta = new Vector2f();
     public CollisionResult Trace(Vector2f start, Vector2f end, Vector2f mins, Vector2f maxs, int tracemask, int passEntityNum) {
         if(mins == null)
             mins = new Vector2f();
         if(maxs == null)
             maxs = new Vector2f();
 
-        Vector2f delta = new Vector2f();
         Vector2f.sub(end, start, delta);
         // clip to world
         CollisionResult worldResult = Ref.collision.TestPosition(start, delta, maxs, tracemask);
@@ -810,7 +811,7 @@ public class Server implements ITrace {
             return worldResult; // Blocked instantl by world
 
 //            // create the bounding box of the entire move
-            Vector2f boxmins = new Vector2f(), boxmaxs = new Vector2f();
+            
             for (int i= 0; i < 2; i++) {
                 if(Helper.VectorGet(end, i) > Helper.VectorGet(start, i)) {
                     Helper.VectorSet(boxmins, i, Helper.VectorGet(start, i) + Helper.VectorGet(mins, i) - 1);
