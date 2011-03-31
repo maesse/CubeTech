@@ -138,7 +138,7 @@ public class Move {
                 wishdir.y -= 1f;
         }
 
-        query.onGround = isOnGround(query);
+        isOnGround(query);
         if(query.onGround && query.ps.powerups[0] > 0 && !query.ps.jumpDown)
             query.ps.canDoubleJump = true;
 
@@ -146,10 +146,10 @@ public class Move {
         if(wishdir.length() != 0f) {
             wishdir.normalise();
 
-            if(query.onGround && (query.groundPlane.x != 0f && query.groundPlane.y != 0f)) {
+            if(query.onGround) {
                 // project wishdir along ground normal
                 float xloss = wishdir.x;
-                ClipVelocity(wishdir, wishdir, query.groundPlane, 1.001f, query);
+                ClipVelocity(wishdir, wishdir, query.groundNormal, 1.001f, query);
                 query.blocked = 0;
                 xloss -= wishdir.x;
                 wishdir.scale(speed * (1+(xloss)));
@@ -190,6 +190,7 @@ public class Move {
                     Jump(query);
                     query.ps.canDoubleJump = query.ps.powerups[0] > 0;
                     query.ps.jumpDown = true;
+                    query.onGround = false;
                 }
                 
             }
@@ -235,11 +236,27 @@ public class Move {
         Vector2f end = new Vector2f(pm.ps.origin);
         end.y -= 1f;
         CollisionResult trace = pm.Trace(pm.ps.origin, end, Game.PlayerMins, Game.PlayerMaxs, pm.tracemask, pm.ps.clientNum);
-        if(trace.frac < 1f) {
-            pm.groundPlane = trace.HitAxis;
-            return true;
+        if(trace.frac == 1f)
+        {
+            pm.onGround = false;
+            return false;
         }
-        return false;
+
+        pm.groundNormal = trace.HitAxis;
+        pm.onGround = true;
+
+        // check if getting thrown off the ground
+        if(pm.ps.velocity.y > 0 && Vector2f.dot(pm.ps.velocity, pm.groundNormal) > 10) {
+            Common.LogDebug("Kickoff");
+            pm.onGround = false;
+            return false;
+        }
+
+        // slopes that are too steep will not be considered onground
+        
+
+        
+        return true;
     }
 
     static void Friction(MoveQuery pm) {
@@ -350,11 +367,21 @@ public class Move {
            pm.ps.origin.y += pm.ps.velocity.y * frametime;
            return;
        }
-       
+
        org_origin.x = pm.ps.origin.x;
         org_origin.y = pm.ps.origin.y;
         org_velocity.x = pm.ps.velocity.x;
         org_velocity.y = pm.ps.velocity.y;
+
+       // Slide velocity along groundplane
+       if(pm.onGround) {
+//           float len = pm.ps.velocity.length();
+           ClipVelocity(pm.ps.velocity, pm.ps.velocity, pm.groundNormal, 1.001f, pm);
+//           pm.ps.velocity.normalise();
+//           pm.ps.velocity.scale(len);
+       }
+       
+       
 
 
        pm.blocked = 0;
@@ -376,21 +403,26 @@ public class Move {
            tries++;
            if(res.frac != 1f) {
 
-               if((res.HitAxis.x == 0f && res.HitAxis.y == 0f) ) {
-                   // Stuck
-                   pm.ps.velocity.set(0,0);
-                   pm.ps.origin.set(org_origin);
-                   int test = 2;
-                   return;
-               }
+//               if((res.HitAxis.x == 0f && res.HitAxis.y == 0f) ) {
+//                   // Stuck
+//                   pm.ps.velocity.set(0,0);
+//                   pm.ps.origin.set(org_origin);
+//                   int test = 2;
+//                   return;
+//               }
+               Vector2f moveDir = new Vector2f(pm.ps.velocity);
+               moveDir.normalise();
                // Clip velocity and try to move the remaining bit               
                ClipVelocity(pm.ps.velocity, pm.ps.velocity, res.HitAxis, 1.001f, pm);
 
+               Vector2f moveDir2 = new Vector2f(pm.ps.velocity);
+               moveDir2.normalise();
+               int test = 2;
                // Blocked
            }
-       } while( timeLeft > 0.0f && tries < 5);
+       } while( timeLeft > 0.0f && tries < 2);
 
-       if((pm.blocked & 1) == 1 && (pm.onGround || org_velocity.y > 0.1f)) {
+       if((pm.blocked & 1) == 1 && (pm.onGround || org_velocity.y > 0.1f)) { //
            // Store normal move results
            Vector2f saved_org = new Vector2f(pm.ps.origin);
            Vector2f saved_vel = new Vector2f(pm.ps.velocity);
