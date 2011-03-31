@@ -53,6 +53,7 @@ public class SpatialHandle {
         this.ymaxcell = ymax;
     }
 
+    // Map this cell -> object index relationship
     public void Insert(Cell cell, int index) {
 //        if(offset >= MAX_CELL_HANDLES){
 //            System.err.println("SpatialHandle.Insert() overflow");

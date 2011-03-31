@@ -1,12 +1,6 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.spatial;
 
 import cubetech.Block;
-import cubetech.common.Common;
 import java.util.ArrayList;
 
 /**
@@ -24,10 +18,17 @@ public class Bin {
         this.cell = cell;
     }
 
+    // Returns the index the object was inserted into
     public int Insert(Object object) {
 //        System.out.println("Bin: Insert");
+//        for (int i= 0; i < Offset; i++) {
+//            if(Data[i] == object) {
+//                int test = 2;
+//            }
+//        }
         Data[Offset] = object;
-        return Offset++;
+        Offset++;
+        return Offset-1;
     }
 
     public void GetData(SpatialQuery query) {
@@ -71,6 +72,7 @@ public class Bin {
         if(index == Offset-1) {
 //            Common.LogDebug("  -bin: " + toString() + " (tail)");
             Offset--;
+            Data[Offset] = null;
             return;
         }
 
@@ -80,5 +82,6 @@ public class Bin {
         Data[index] = Data[Offset-1];
         ((Block)Data[index]).SpatialHandleChanged(cell, index);
         Offset--;
+        Data[Offset] = null;
     }
 }

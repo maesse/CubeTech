@@ -45,7 +45,9 @@ public class Cell {
     @Override
     public int hashCode() {
         //int extra = (y < 0 ? 1 : 0) | (x < 0 ? 2 : 0);
-        long hags = ((x & 0xffff) << 12 ) | (y & 0xfff) | ((y < 0 ? 1 : 0) | (x < 0 ? 2 : 0) << 28);
+        int neg = y<0?1:0;
+        neg |= x<0?2:0;
+        long hags = ((x & 0xffff) << 12 ) | (y & 0xfff) | (neg << 28);
         
         return (int)hags;
     }
