@@ -118,7 +118,7 @@ public class Common {
             System.out.println("Fatal crash: " + exString);
 
             if(Ref.glRef != null && Ref.glRef.isApplet())
-                RunBrowserURL("javascript:alert(\"CubeTech suffered a fatal crash :(\\r\\nCrashlog: " + exString + "\")");
+                RunBrowserURL("javascript:handleError(\"CubeTech suffered a fatal crash :(\\r\\nCrashlog: " + exString + "\")");
             else
                 JOptionPane.showMessageDialog(parentDisplay, "CubeTech suffered a fatal crash :(\nCrashlog: " + exString, "Fatal Crash", JOptionPane.ERROR_MESSAGE);
 
@@ -286,7 +286,7 @@ public class Common {
                 Ref.glRef.Destroy();
             
             if(Ref.glRef != null && Ref.glRef.isApplet())
-                RunBrowserURL("javascript:alert(\"CubeTech suffered a fatal crash :(\\r\\nCrashlog: " + str + "\")");
+                RunBrowserURL("javascript:handleError(\"CubeTech suffered a fatal crash :(\\r\\nCrashlog: " + str + "\")");
             else {
                 JOptionPane.showMessageDialog(null, "CubeTech suffered a fatal crash :(\nCrashlog: " + str, "Fatal Crash", JOptionPane.ERROR_MESSAGE);
             }
