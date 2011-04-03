@@ -62,6 +62,95 @@ public class Collision {
     private int submodel = 0;
     private Vector2f submodelOrigin = null;
 
+    private boolean TestPosition(Vector2f pos, Vector2f extent, Block testBlock) {
+        Vector2f bCenter = testBlock.GetCenter();
+        Vector2f bAbsExtent = testBlock.getAbsExtent();
+        
+        // Start off with an Abs test
+        if(!TestAABBAABB(pos.x - extent.x, pos.y - extent.y, pos.x + extent.x, pos.y + extent.y,
+                bCenter.x - bAbsExtent.x, bCenter.y - bAbsExtent.y, bCenter.x + bAbsExtent.x, bCenter.y + bAbsExtent.y))
+            return false;
+
+        if(testBlock.getAngle() == 0f) {
+            // Block is not rotated, which means the AABB-AABB test was good enough
+            return true;
+        }
+
+        // Do a precise test
+        return TestRotatedPosition(pos, extent, testBlock);
+    }
+
+    // Does a full plane separation test
+    private boolean TestRotatedPosition(Vector2f center, Vector2f Extent, Block block) {
+        Vector2f Acenter = center;
+        Vector2f AExtent = Extent;
+
+        Vector2f Bcenter = block.GetCenter();
+        Vector2f BExtent = block.GetExtents();
+        Vector2f[] BAxis = block.GetAxis();
+
+        // A -  X Axis
+        float bextDot = BExtent.x * Math.abs(BAxis[0].x) + BExtent.y * Math.abs(BAxis[1].x);
+        float aextDot = AExtent.x;
+
+        float bDotPos = Bcenter.x;
+        float aDotPos = Acenter.x;
+
+        float bmin = bDotPos-bextDot;
+        float bmax = bDotPos+bextDot;
+        float amax = aDotPos+aextDot;
+        float amin = aDotPos-aextDot;
+
+        if(bmin >= amax  + EPSILON || bmax  + EPSILON <= amin)
+            return false;
+
+        // A - Y Axis
+        bextDot = BExtent.x * Math.abs(BAxis[0].y) + BExtent.y * Math.abs(BAxis[1].y);
+        aextDot = AExtent.y;
+        bDotPos = Bcenter.y;
+        aDotPos = Acenter.y;
+
+        bmin = bDotPos-bextDot;
+        bmax = bDotPos+bextDot;
+        amax = aDotPos+aextDot;
+        amin = aDotPos-aextDot;
+
+        if(bmin >= amax  + EPSILON || bmax  + EPSILON <= amin)
+            return false;
+
+
+        // Test BAxis[0]
+        bextDot = BExtent.x;
+        aextDot = AExtent.x * Math.abs(Vector2f.dot(AAxis[0], BAxis[0])) + AExtent.y * Math.abs(Vector2f.dot(AAxis[1], BAxis[0]));
+        bDotPos = Vector2f.dot(BAxis[0], Bcenter);
+        aDotPos = Vector2f.dot(BAxis[0], Acenter);
+
+        bmin = bDotPos-bextDot;
+        bmax = bDotPos+bextDot;
+        amax = aDotPos+aextDot;
+        amin = aDotPos-aextDot;
+        if(bmin >= amax  + EPSILON || bmax  + EPSILON <= amin)
+            return false;
+
+        // B - Y Axis
+        bextDot = BExtent.y;
+        double hags1 = Math.abs(Vector2f.dot(AAxis[0], BAxis[1]));
+        double hags2 = Math.abs(Vector2f.dot(AAxis[1], BAxis[1]));
+        aextDot = (float) (AExtent.x * hags1 + AExtent.y * hags2);
+
+        bDotPos = Vector2f.dot(BAxis[1], Bcenter);
+        aDotPos = Vector2f.dot(BAxis[1], Acenter);
+
+        bmin = bDotPos-bextDot;
+        bmax = bDotPos+bextDot;
+        amax = aDotPos+aextDot;
+        amin = aDotPos-aextDot;
+        if(bmin >= amax  + EPSILON || bmax  + EPSILON <= amin)
+            return false;
+
+        return true; // collision
+    }
+
     public CollisionResult TransformedBoxTrace(Vector2f startin, Vector2f end, Vector2f mins, Vector2f maxs, int tracemask) {
         Vector2f extent = new Vector2f();
         Vector2f.sub(maxs, mins, extent);
@@ -79,25 +168,44 @@ public class Collision {
         CollisionResult res = GetNext();
         res.Reset(start, dir, extent);
 
-        if(boxTrace)
-            Test(start, extent, dir, tempCollisionBox, res);
-        else {
+        boolean cheapTest = dir.length() == 0;
+
+        if(boxTrace) {
+            if(cheapTest)
+            {
+                if(TestPosition(start, extent, tempCollisionBox)) {
+                    // Collided
+                    res.frac = 0f;
+                    res.Hit = true;
+                    res.HitAxis.set(0,0);
+                    res.hitmask = Content.SOLID; // unknown hitmask
+                    res.startsolid = true;
+                }
+            } else
+                Test(start, extent, dir, tempCollisionBox, res);
+        } else {
             // Trace a group of boxes
             // Get bounds
             BlockModel model = Ref.cm.cm.getModel(submodel);
             model.moveTo(submodelOrigin);
 
-            // position - originToCenter = centerBounds -> position movement vector
-//            Vector2f centerToPosition = new Vector2f();
-//            Vector2f.sub(submodelOrigin, model.center, centerToPosition);
 
             for (Block block : model.blocks) {
-//                Vector2f newposition = new Vector2f();
-//                Vector2f.add(block.getPosition(), centerToPosition, newposition);
-//                block.SetPosition(newposition);
                 if(!block.Collidable)
                     continue;
-                Test(start, extent, dir, block, res);
+
+                if(cheapTest) {
+                    if(TestPosition(start, extent, block)) {
+                        // hit block
+                        res.frac = 0f;
+                        res.Hit = true;
+                        res.HitAxis.set(0,0);
+                        res.hitmask = Content.SOLID;
+                        res.startsolid = true;
+                    }
+                } else
+                    Test(start, extent, dir, block, res);
+                
                 if(res.frac == 0f)
                     break;
             }
@@ -108,6 +216,8 @@ public class Collision {
 
     Vector2f derpAxis = new Vector2f();
     void Test(Vector2f center, Vector2f Extent, Vector2f v, Block block, CollisionResult res) {
+
+
         Vector2f Acenter = center;
         Vector2f AExtent = Extent;
         
@@ -276,15 +386,18 @@ public class Collision {
     }
 
     // True if collision occured
-    public CollisionResult TestPosition(Vector2f pos, Vector2f dir, Vector2f extent, int tracemask) {
+    public CollisionResult TestMovement(Vector2f pos, Vector2f dir, Vector2f extent, int tracemask) {
         CollisionResult res = GetNext();
         res.Reset(pos, dir, extent);
+
+        // Do the cheap tests if we're not trying to move
+        boolean stationary = dir.length() == 0;
         
         // Trace against blocks
         if((tracemask & Content.SOLID) == Content.SOLID) {
             Vector2f v = dir;
-            v.scale(-1.0f);
-            //Vector2f v = new Vector2f(-dir.x, -dir.y);
+            v.scale(-1.0f); // uhh.. yeah.. we're moving the block instead of the player
+                            // cant remeber why. Probably not any good reason.
             res.frac = 1f;
 
             SpatialQuery result = Ref.spatial.Query(pos.x-extent.x+(dir.x>0f?0:dir.x)-5, pos.y-extent.y+(dir.y>0f?0:dir.y)-5,pos.x+extent.x+(dir.x<0f?0:dir.x)+5, pos.y+extent.y+(dir.x>0f?dir.y:0)+5);
@@ -292,69 +405,42 @@ public class Collision {
             Object object;
             while((object = result.ReadNext()) != null) {
                 if(object.getClass() != Block.class)
-                    continue;
+                    continue; // Todo: Make everything Blocks. Will save a bit of casting and typechecking
+
                 Block block = (Block)object;
                 if(block.LastQueryNum == queryNum)
                     continue; // duplicate
                 block.LastQueryNum = queryNum;
 
+                // Ignore non-collidables and block belonging to BlockModels
                 if(block.CustomVal != 0 || !block.Collidable)
                     continue;
 
-                Test(pos, extent, v, block, res);
+                // Cheap test?
+                if(stationary) {
+                    if(TestPosition(pos, extent, block)) {
+                        // blocked
+                        res.frac = 0f;
+                        res.startsolid = true;
+                        res.hitmask = Content.SOLID; // hit world
+                        res.HitAxis.set(0,0);
+                        res.Hit = true;
+                        break; // no reason to keep testing
+                    }
+                } else // Test with velocity
+                    Test(pos, extent, v, block, res);
             }
+            
+            // Revert dir to original value
             v.scale(-1.0f);
 
             // Hit world
-            if(res.Hit) {
-                //res.HitAxis = new Vector2f(res.HitAxis);
+            if(res.Hit && res.HitAxis != null) {
+                // FIX: Shouldn't be necesarry
 //                res.HitAxis.normalise();
-                float lenght = (float) Math.sqrt(res.HitAxis.x * res.HitAxis.x + res.HitAxis.y * res.HitAxis.y);
-                if(lenght != 0f) {
-                    res.HitAxis.x /= lenght;
-                    res.HitAxis.y /= lenght;
-                }
-
-                return res;
             }
-
         }
         
-//        // Trace against player
-//        if((tracemask & MASK_PLAYER) == MASK_PLAYER) {
-//            Vector2f ppos = Ref.world.player.position;
-//            Vector2f pextent = new Vector2f(Ref.world.player.extent.x, Ref.world.player.extent.y);
-//
-//            pextent.x += extent.x;
-//            pextent.y += extent.y;
-//            if(pos.x >= ppos.x - pextent.x && pos.x <= ppos.x + pextent.x)
-//                if(pos.y >= ppos.y - pextent.y && pos.y <= ppos.y + pextent.y) {
-//                    res.frac = 0f;
-//                    res.Hit = true;
-//                    res.entitynum = Common.ENTITYNUM_NONE;
-//                    res.hitmask = MASK_PLAYER;
-//                }
-//        }
-//
-//        // Trace against entities
-//        for (int i= 0; i < Ref.world.Entities.size(); i++) {
-//            Entity ent = Ref.world.Entities.get(i);
-//
-//            int type = ent.GetType();
-//            if((type & tracemask) == 0)
-//                continue;
-//
-//            Vector2f entPos = ent.GetPosition();
-//            Vector2f entSize = ent.GetSize();
-//
-//            if(pos.x >= entPos.x - entSize.x && pos.x <= entPos.x + entSize.x)
-//                if(pos.y >= entPos.y - entSize.y && pos.y <= entPos.y + entSize.y) {
-//                    res.frac = 0f;
-//                    res.Hit = true;
-//                    res.hitObject = ent;
-//                    res.hitmask = ent.GetType();
-//                }
-//        }
         return res;
     }
 

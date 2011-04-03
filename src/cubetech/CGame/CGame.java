@@ -247,7 +247,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         if(cg_drawbin.iValue != 1) {
             RenderScene(cg.refdef);
             AddPacketEntities();
-            DebugDraw();
+            DrawEntities();
             Draw2D();
 
         } else {
@@ -343,7 +343,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         spr.SetDepth(PLAYER_LAYER - 200);
     }
 
-    private void DebugDraw() {
+    private void DrawEntities() {
         if(cg_drawentities.iValue == 0 || Ref.game == null || Ref.game.g_entities == null)
             return;
 
@@ -1091,7 +1091,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Vector2f delta = new Vector2f();
         Vector2f.sub(end, start, delta);
         // clip to world
-        CollisionResult worldResult = Ref.collision.TestPosition(start, delta, maxs, tracemask);
+        CollisionResult worldResult = Ref.collision.TestMovement(start, delta, maxs, tracemask);
         if(worldResult.frac == 0.0f) {
             return worldResult; // Blocked instantl by world
         }
