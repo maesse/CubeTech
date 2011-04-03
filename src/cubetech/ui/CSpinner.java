@@ -2,6 +2,8 @@ package cubetech.ui;
 
 import cubetech.gfx.TextManager.Align;
 import cubetech.input.MouseEvent;
+import cubetech.misc.Ref;
+import org.lwjgl.input.Keyboard;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector4f;
 
@@ -93,34 +95,37 @@ public class CSpinner extends CContainer {
                     if(state == 3)
                     {
                         // Top button clicked
-                        pressUpButton();
+                        pressUpButton(1);
                         state = 1;
                     } else if(state == 4) {
                         // Bottom button clicked
-                        pressDownButton();
+                        pressDownButton(1);
                         state = 2;
                     }
     //                setSelected(!selected);
                 }
             } else if(evt.WheelDelta != 0) {
+                int count = Ref.Input.IsKeyPressed(Keyboard.KEY_LSHIFT)?10:1;
                 if(evt.WheelDelta > 0)
-                    pressUpButton();
+                    pressUpButton(count);
                 else if(evt.WheelDelta < 0)
-                    pressDownButton();
+                    pressDownButton(count);
             }
         }
         else if(!isMouseEnter())
             state = 0;
     }
 
-    public void pressUpButton() {
-        label.setText(""+(++value));
+    public void pressUpButton(int num) {
+        value += num;
+        label.setText(""+(value));
         if(eventHook != null)
             eventHook.buttonPressed(this, null);
     }
 
-    public void pressDownButton() {
-        label.setText(""+(--value));
+    public void pressDownButton(int num) {
+        value -= num;
+        label.setText(""+(value));
         if(eventHook != null)
             eventHook.buttonPressed(this, null);
     }
