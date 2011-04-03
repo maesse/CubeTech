@@ -268,9 +268,9 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
             selectBlock(null);
         
         if(((selectedBlock != null) || selectedBlocks.size() > 1))
-            setMiscCont(true, false, null, false, false);
+            setMiscCont(true, false, null, false);
         else
-            setMiscCont(false, false, null, true, true);
+            setMiscCont(false, false, null, true);
     }
 
     private void selectBlock(Block b) {
@@ -290,9 +290,9 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         }
 
         if(doMultiselect && ((selectedBlock == null && select_model && b != null) || selectedBlocks.size() > 1))
-            setMiscCont(true, true, b, false, false);
+            setMiscCont(true, true, b, false);
         else
-            setMiscCont(false, true, b, false, true);
+            setMiscCont(false, true, b, false);
         selectedBlock = b;
         updateUIBlock(b);
 
@@ -323,8 +323,6 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
             revertTool = null;
         this.tool = tool;
         toolText.setText("Tool: " + tool.toString());
-
-        
 
         switch(tool) {
             case MOVE:
@@ -1391,7 +1389,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
 
     CContainer miscCont = null;
 
-    private void setMiscCont(boolean group, boolean collidable, Block b, boolean ungroup, boolean toEntity) {
+    private void setMiscCont(boolean group, boolean collidable, Block b, boolean ungroup) {
         miscCont.removeComponents();
         miscCont.setSize2(new Vector2f(10,10));
 
@@ -1410,13 +1408,6 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
 
             
         }
-//        if(toEntity || true) {
-//            miscCont.addComponent(new CButton("Entity", null, Align.CENTER, 0.8f, new ButtonEvent() {
-//                public void buttonPressed(CComponent button, MouseEvent evt) {
-//                    openEntityPopupMenu(OrgCoordsToPixelCoords(Ref.Input.playerInput.MousePos));
-//                }
-//            }));
-//        }
         if(collidable && b != null) {
             CCheckbox collide = new CCheckbox("Collidable", new ButtonEvent() {
                 public void buttonPressed(CComponent button, MouseEvent evt) {
@@ -1445,7 +1436,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
             selectedModel.removeBlock(block);
         }
         selectModel(null);
-        setMiscCont(false, false, null, false, false);
+        setMiscCont(false, false, null, false);
     }
 
     private void openEntityPopupMenu(Vector2f position) {
