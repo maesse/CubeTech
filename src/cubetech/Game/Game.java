@@ -11,6 +11,7 @@ import cubetech.common.ICommand;
 import cubetech.entities.EntityType;
 import cubetech.entities.Func_Door;
 import cubetech.entities.IEntity;
+import cubetech.entities.Info_Player_Goal;
 import cubetech.entities.SharedEntity;
 import cubetech.entities.Info_Player_Spawn;
 import cubetech.misc.Ref;
@@ -86,10 +87,12 @@ public class Game {
         sv_stepheight = Ref.cvars.Get("sv_stepheight", "4", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
 //        sv_doublejump = Ref.cvars.Get("sv_doublejump", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
 
+        // Add entities to spawn list. All entities that's not items should be added here
         IEntity ent = new Info_Player_Spawn();
         addEntityToSpawn(ent);
         ent = new Func_Door();
         addEntityToSpawn(ent);
+        addEntityToSpawn(new Info_Player_Goal());
         spawnEntities = Ref.cm.cm.spawnEntities;
     }
 
@@ -158,8 +161,8 @@ public class Game {
 
         WorldSpawn();
 
-        SpawnEntity spEnt = new SpawnEntity("item_boots", new Vector2f(150,50));
-        spawnEntities.AddEntity(spEnt);
+//        SpawnEntity spEnt = new SpawnEntity("item_boots", new Vector2f(150,50));
+//        spawnEntities.AddEntity(spEnt);
 
 //        Gentity hp = Spawn();
 //        hp.s.origin.set(150,50);
@@ -170,14 +173,19 @@ public class Game {
 //        if(!callSpawn(hp))
 //            hp.Free();
 
-        Gentity hp = Spawn();
-        hp.classname = "info_player_spawn";
-        hp.s.origin.set(100, 100);
-        hp.s.pos.base.set(hp.s.origin);
-        hp.r.currentOrigin.set(hp.s.origin);
+        SpawnEntity spEnt = new SpawnEntity("info_player_spawn", new Vector2f(150,100));
+        spawnEntities.AddEntity(spEnt);
+        spEnt = new SpawnEntity("info_player_goal", new Vector2f(500,100));
+        spawnEntities.AddEntity(spEnt);
 
-        if(!callSpawn(hp))
-            hp.Free();
+//        Gentity hp = Spawn();
+//        hp.classname = "info_player_spawn";
+//        hp.s.origin.set(100, 100);
+//        hp.s.pos.base.set(hp.s.origin);
+//        hp.r.currentOrigin.set(hp.s.origin);
+//
+//        if(!callSpawn(hp))
+//            hp.Free();
 
         spawnEntities.SpawnAll();
 
@@ -451,7 +459,10 @@ public class Game {
         spawnEntities.UnspawnAll();
     }
 
-    
+    public IEntity findSpawnEntityFromClassName(String classname) {
+        IEntity ent = spawns.get(classname);
+        return ent;
+    }
 
     // Find the spawn function for the entity and calls it,
     // returns false if not found

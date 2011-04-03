@@ -18,4 +18,5 @@ public class Event {
     public static final int HIT_WALL = 6;
     public static final int DIED = 7;
     public static final int JUMP = 8;
+    public static final int GOAL = 9;
 }

@@ -59,6 +59,7 @@ public class GameClient extends Gentity {
                 case Event.STEP:
                 case Event.DIED:
                 case Event.HIT_WALL:
+                case Event.GOAL:
                 case Event.JUMP:
                     break;
 
@@ -377,6 +378,20 @@ public class GameClient extends Gentity {
         ps.AddPredictableEvent(Event.DIED, 0);
         ps.velocity.set(0,0);
         ps.stats.Health = 0;
+    }
+
+    public boolean isDead() {
+        return ps.stats.Health <= 0;
+    }
+
+    public void reachedGoal(Gentity goal) {
+        if(isDead())
+            return;
+        
+        stopPull();
+        ps.stats.Health = 0;
+        ps.velocity.set(0,0);
+        ps.AddPredictableEvent(Event.GOAL, 0);
     }
 
     public void stopPull() {

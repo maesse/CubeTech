@@ -177,6 +177,7 @@ public class CEntity {
         int event = currentState.evt & ~Common.EV_EVENT_BITS;
 
         if(event == 0) {
+            // Can happen when a player has respawned
             Common.LogDebug("Zero event");
             return;
         }
@@ -203,6 +204,9 @@ public class CEntity {
                 break;
             case Event.DIED:
                 Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/die.wav"), 1.0f);
+                break;
+            case Event.GOAL:
+                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/ouch.wav"), 1.0f);
                 break;
             case Event.HIT_WALL:
                 Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/ouch.wav"), 1.0f);
