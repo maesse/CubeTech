@@ -149,7 +149,7 @@ public class Move {
             if(query.onGround) {
                 // project wishdir along ground normal
                 float xloss = wishdir.x;
-                ClipVelocity(wishdir, wishdir, query.groundNormal, 1.001f, query);
+                ClipVelocity(wishdir, wishdir, query.groundNormal, 1.000f, query);
                 query.blocked = 0;
                 xloss -= wishdir.x;
                 wishdir.scale(speed * (1+(xloss)));
@@ -303,78 +303,75 @@ public class Move {
    }
 
     static void WalkMove(Vector2f wishdir, MoveQuery pm) {
-       // normalize
-       float wishspeed = (float)Math.sqrt(wishdir.x * wishdir.x + wishdir.y * wishdir.y);
-       if(wishspeed > 0) {
+        // normalize
+        float wishspeed = (float)Math.sqrt(wishdir.x * wishdir.x + wishdir.y * wishdir.y);
+        if(wishspeed > 0) {
            wishdir.x /= wishspeed;
            wishdir.y /= wishspeed;
-       }
-       int maxspeed = speed;
-       if(wishspeed > maxspeed)
-       {
+        }
+        int maxspeed = speed;
+        if(wishspeed > maxspeed)
+        {
            wishdir.x *= (maxspeed/wishspeed);
            wishdir.y *= (maxspeed/wishspeed);
            wishspeed = maxspeed;
-       }
+        }
 
-       float currentSpeed = Vector2f.dot(pm.ps.velocity, wishdir);
-       float addSpeed = wishspeed  - currentSpeed;
-       if(addSpeed > 0f)
-       {
+        float currentSpeed = Vector2f.dot(pm.ps.velocity, wishdir);
+        float addSpeed = wishspeed  - currentSpeed;
+        if(addSpeed > 0f)
+        {
            float accelspeed = accel * frametime * wishspeed;
            if(accelspeed > addSpeed)
                accelspeed = addSpeed;
 
            pm.ps.velocity.x += accelspeed * wishdir.x;
            pm.ps.velocity.y += accelspeed * wishdir.y;
-       }
+        }
 
-       float spd = Math.abs(pm.ps.velocity.x);
-       float actualaccel = pullacceleration;
-       
-       if(spd > pull1)
+        float spd = Math.abs(pm.ps.velocity.x);
+        float actualaccel = pullacceleration;
+
+        if(spd > pull1)
            actualaccel *= pullstep;
-       if(spd > pull2)
+        if(spd > pull2)
            actualaccel *= pullstep;
-       if(spd > pull3)
+        if(spd > pull3)
            actualaccel *= pullstep;
-       if(spd > pull4)
+        if(spd > pull4)
            actualaccel *= pullstep;
-       if(spd > pull5)
+        if(spd > pull5)
            actualaccel *= pullstep;
-       if(spd > pull6)
+        if(spd > pull6)
            actualaccel *= pullstep;
 
-       if((pm.ps.applyPull && movemode == 1) || (movemode == 2 && pm.cmd.Right))
+        if((pm.ps.applyPull && movemode == 1) || (movemode == 2 && pm.cmd.Right))
            pm.ps.velocity.x += actualaccel * frametime;
 
-       float speed2 = (float)Math.sqrt(pm.ps.velocity.x * pm.ps.velocity.x + pm.ps.velocity.y * pm.ps.velocity.y);
-       if(speed2 < 1f)
-       {
+        float speed2 = (float)Math.sqrt(pm.ps.velocity.x * pm.ps.velocity.x + pm.ps.velocity.y * pm.ps.velocity.y);
+        if(speed2 < 1f)
+        {
            pm.ps.velocity.x = 0f;
            pm.ps.velocity.y = 0f;
            return;
-       }
+        }
 
-       // If noclipping, just apply the velocity and be done with it
-       if(pm.ps.moveType == MoveType.NOCLIP || pm.ps.moveType == MoveType.EDITMODE) {
+        // If noclipping, just apply the velocity and be done with it
+        if(pm.ps.moveType == MoveType.NOCLIP || pm.ps.moveType == MoveType.EDITMODE) {
            pm.ps.origin.x += pm.ps.velocity.x * frametime;
            pm.ps.origin.y += pm.ps.velocity.y * frametime;
            return;
-       }
+        }
 
-       org_origin.x = pm.ps.origin.x;
+        org_origin.x = pm.ps.origin.x;
         org_origin.y = pm.ps.origin.y;
         org_velocity.x = pm.ps.velocity.x;
         org_velocity.y = pm.ps.velocity.y;
 
-       // Slide velocity along groundplane
-       if(pm.onGround) {
-//           float len = pm.ps.velocity.length();
-           ClipVelocity(pm.ps.velocity, pm.ps.velocity, pm.groundNormal, 1.001f, pm);
-//           pm.ps.velocity.normalise();
-//           pm.ps.velocity.scale(len);
-       }
+        // Slide velocity along groundplane
+        if(pm.onGround) {
+           ClipVelocity(pm.ps.velocity, pm.ps.velocity, pm.groundNormal, 1.00f, pm);
+        }
        
        
 
@@ -398,17 +395,17 @@ public class Move {
            tries++;
            if(res.frac != 1f) {
 
-//               if((res.HitAxis.x == 0f && res.HitAxis.y == 0f) ) {
-//                   // Stuck
-//                   pm.ps.velocity.set(0,0);
-//                   pm.ps.origin.set(org_origin);
-//                   int test = 2;
-//                   return;
-//               }
+               if((res.HitAxis.x == 0f && res.HitAxis.y == 0f) ) {
+                   // Stuck
+                   pm.ps.velocity.set(0,0);
+                   pm.ps.origin.set(org_origin);
+                   Common.LogDebug("Stuck");
+                   return;
+               }
                Vector2f moveDir = new Vector2f(pm.ps.velocity);
                moveDir.normalise();
                // Clip velocity and try to move the remaining bit               
-               ClipVelocity(pm.ps.velocity, pm.ps.velocity, res.HitAxis, 1.001f, pm);
+               ClipVelocity(pm.ps.velocity, pm.ps.velocity, res.HitAxis, 1.00f, pm);
 
                Vector2f moveDir2 = new Vector2f(pm.ps.velocity);
                moveDir2.normalise();
