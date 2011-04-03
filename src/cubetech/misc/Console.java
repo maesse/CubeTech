@@ -49,7 +49,23 @@ public class Console implements KeyEventListener, LogEventListener {
         con_cmdprefix = Ref.cvars.Get("con_cmdprefix", "] ", EnumSet.of(CVarFlags.NONE));
         con_scale = Ref.cvars.Get("con_scale", "1", EnumSet.of(CVarFlags.NONE));
         Ref.commands.AddCommand("console", cmd_console);
+        Ref.commands.AddCommand("echo", cmd_echo);
     }
+
+    private ICommand cmd_echo = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(args.length == 1) {
+                Common.Log("usage: echo \"text\"");
+                return;
+            }
+            String arg = Commands.ArgsFrom(args,1);
+            
+            if(Ref.cgame == null)
+                Common.Log(arg);
+            else
+                Ref.cgame.Print(arg);
+        }
+    };
 
     private ICommand cmd_console = new ICommand() {
         public void RunCommand(String[] args) {
