@@ -806,7 +806,7 @@ public class Server implements ITrace {
 
         Vector2f.sub(end, start, delta);
         // clip to world
-        CollisionResult worldResult = Ref.collision.TestPosition(start, delta, maxs, tracemask);
+        CollisionResult worldResult = Ref.collision.TestMovement(start, delta, maxs, tracemask);
         if(worldResult.frac == 0.0f)
             return worldResult; // Blocked instantl by world
 
@@ -832,22 +832,18 @@ public class Server implements ITrace {
 
     public boolean EntityContact(Vector2f mins, Vector2f maxs, SharedEntity gEnt) {
         // check for exact collision
-        Vector2f origin = gEnt.r.currentOrigin;
-        Vector2f angles = gEnt.r.currentAngles;
+        Vector2f origin = new Vector2f(gEnt.r.currentOrigin);
+        // TODO: Take account for angles
 
-        Vector2f delta = new Vector2f();
-        Vector2f.sub(gEnt.r.maxs, gEnt.r.mins, delta);
-        delta.scale(0.5f);
-        Vector2f.sub(gEnt.r.maxs, delta, origin);
+        Vector2f halfSize = new Vector2f();
+        Vector2f.sub(gEnt.r.maxs, gEnt.r.mins, halfSize);
+        halfSize.scale(0.5f);
+//        Vector2f.sub(gEnt.r.maxs, delta, origin);
 
-        Ref.collision.SetBoxModel(delta, origin);
+        Ref.collision.SetBoxModel(halfSize, origin);
         CollisionResult res = Ref.collision.TransformedBoxTrace(new Vector2f(), null, mins, maxs, -1);
-        if(res.frac != 1.0f) {
-//            System.out.println("EntityContact: hit!");
-            return true;
-        }
-        // TODO: FIXFIXFIX
-        return false;
+
+        return res.startsolid;
     }
 
     private void ClipMoveToEntities(CollisionResult clip, Vector2f start, Vector2f end, Vector2f mins, Vector2f maxs,
