@@ -394,7 +394,7 @@ public class CVars {
             if(var.isInteger) {
                 if(valf != (int)valf) {
                     if(warn)
-                        System.out.print("WARNING: cvar " + var.Name + " must be an integer");
+                        Common.Log("WARNING: cvar " + var.Name + " must be an integer");
 
                     valf = (int)valf;
                     changed = true;
@@ -402,7 +402,7 @@ public class CVars {
             }
         } catch (NumberFormatException e) {
             if(warn)
-                System.out.print("WARNING: cvar " + var.Name + " must be numeric");
+                Common.Log("WARNING: cvar " + var.Name + " must be numeric");
             
             valf = Float.parseFloat(var.resetString);
             changed = true;
@@ -411,11 +411,11 @@ public class CVars {
         if(valf < var.Min) {
             if(warn) {
                 if(changed)
-                    System.out.print(" and is");
+                    Common.Log(" and is");
                 else
-                    System.out.print("WARNING: cvar " + var.Name);
+                    Common.Log("WARNING: cvar " + var.Name);
 
-                System.out.print(" out of range (min " + var.Min + ")");
+                Common.Log(" out of range (min " + var.Min + ")");
             }
             valf = var.Min;
             changed = true;
@@ -423,11 +423,11 @@ public class CVars {
         else if(valf > var.Max) {
             if(warn) {
                 if(changed)
-                    System.out.print(" and is");
+                    Common.Log(" and is");
                 else
-                    System.out.print("WARNING: cvar " + var.Name);
+                    Common.Log("WARNING: cvar " + var.Name);
 
-                System.out.print(" out of range (max " + var.Max + ")");
+                Common.Log(" out of range (max " + var.Max + ")");
             }
             valf = var.Max;
             changed = true;
