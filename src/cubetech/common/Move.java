@@ -157,16 +157,6 @@ public class Move {
                 wishdir.scale(speed);
         }
 
-
-//        float len = (float)Math.sqrt(wishdir.x * wishdir.x + wishdir.y * wishdir.y);
-//        if(len != 0f) {
-//            wishdir.x /= len;
-//            wishdir.y /= len;
-//        }
-        
-
-        
-
         boolean ignoreGravity = false;
         if(query.cmd.Up && !query.onGround && query.ps.moveType == MoveType.NORMAL && query.ps.jumpTime > 0) {
             ignoreGravity = true;
@@ -233,6 +223,11 @@ public class Move {
     }
 
     static boolean isOnGround(MoveQuery pm) {
+        if(pm.ps.moveType == MoveType.EDITMODE)
+        {
+            pm.onGround = false;
+            return false;
+        }
         Vector2f end = new Vector2f(pm.ps.origin);
         end.y -= 1f;
         CollisionResult trace = pm.Trace(pm.ps.origin, end, Game.PlayerMins, Game.PlayerMaxs, pm.tracemask, pm.ps.clientNum);
