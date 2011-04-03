@@ -6,6 +6,7 @@ import cubetech.collision.BlockModel;
 
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
+import cubetech.common.GItem;
 import cubetech.common.Helper;
 import cubetech.gfx.CubeMaterial;
 
@@ -1132,14 +1133,25 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         entityCont.setResizeToChildren(Direction.NONE);
         CScrollPane entityScrollCont = new CScrollPane(Direction.VERTICAL);
         CContainer entityList = new CContainer(new FlowLayout(false, false, true));
-        entityList.addComponent(new CButton("item_boots", null, Align.LEFT, 0.5f, new ButtonEvent() {
+
+        ButtonEvent spawnEntityEvent = new ButtonEvent() {
             public void buttonPressed(CComponent button, MouseEvent evt) {
-                SpawnEntity ent = new SpawnEntity("item_boots", Ref.cgame.cg.refdef.Origin);
+                SpawnEntity ent = new SpawnEntity(((CButton)button).getText(), Ref.cgame.cg.refdef.Origin);
                 Ref.game.spawnEntities.AddEntity(ent);
                 entities = Ref.game.spawnEntities.getList();
                 selectBlock(null);
             }
-        }));
+        };
+
+        for (int i= 0; i < Ref.common.items.getItemCount(); i++) {
+            GItem item = Ref.common.items.getItem(i);
+            entityList.addComponent(new CButton(item.classname, null, Align.LEFT, 0.5f, spawnEntityEvent));
+        }
+        for (String string : Ref.game.spawns.keySet()) {
+            entityList.addComponent(new CButton(string, null, Align.LEFT, 0.5f, spawnEntityEvent));
+        }
+
+        
 //        for (int i = 0; i < 10; i++) {
 //
 //        }

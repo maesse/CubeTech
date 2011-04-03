@@ -74,4 +74,8 @@ public final class CLabel extends CComponent {
         Ref.textMan.AddText(renderposition, str, Align.LEFT, null, getSize(), Type.HUD, Scale);
     }
 
+    public String getText() {
+        return str;
+    }
+
 }

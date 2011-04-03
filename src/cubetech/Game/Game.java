@@ -57,7 +57,7 @@ public class Game {
     public Gentity[] g_entities;
     GameClient[] g_clients;
     public LevelLocal level;
-    HashMap<String, IEntity> spawns = new HashMap<String, IEntity>();
+    public HashMap<String, IEntity> spawns = new HashMap<String, IEntity>();
 
     public Game() {
         sv_speed = Ref.cvars.Get("sv_speed", "100", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));

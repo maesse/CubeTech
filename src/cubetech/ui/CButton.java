@@ -127,6 +127,15 @@ public class CButton extends CContainer {
         doLayout();
     }
 
+    public String getText() {
+        return label.getText();
+    }
+
+    public void setText(String text) {
+        label.setText(text);
+        doLayout();
+    }
+
     @Override
     public void MouseEvent(MouseEvent evt) {
         if(!isVisible())
