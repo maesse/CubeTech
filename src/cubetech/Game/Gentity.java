@@ -77,7 +77,6 @@ public class Gentity {
         r.Clear();
 
         inuse = false;
-//        client = null;
         eventTime = 0;
         freeAfterEvent = false;
         unlinkAfterEvent = false;
@@ -102,6 +101,9 @@ public class Gentity {
         health = 0;
         target = null;
         physicsBounce = 0;
+
+        if(isClient())
+            getClient().Clear();
     }
 
     public void SetOrigin(Vector2f org) {
@@ -123,7 +125,9 @@ public class Gentity {
     }
 
     void Free() {
-        // TODO: Ref.server.UnlinkEntity(this);
+        if(r.linked) {
+            Unlink();
+        }
         if(neverfree)
             return;
 
@@ -142,10 +146,16 @@ public class Gentity {
         Ref.server.UnlinkEntity(shEnt);
     }
 
+    /**
+     * @return true if this entity is an GameClient
+     */
     public boolean isClient() {
         return this instanceof GameClient;
     }
-    
+
+    /**
+     * @return the assigned GameClient, or null if not a client.
+     */
     public GameClient getClient() {
         if(isClient())
             return (GameClient)this;
