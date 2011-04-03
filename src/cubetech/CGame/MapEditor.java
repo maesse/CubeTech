@@ -6,6 +6,7 @@ import cubetech.collision.BlockModel;
 
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
+import cubetech.common.Commands.ExecType;
 import cubetech.common.GItem;
 import cubetech.common.Helper;
 import cubetech.gfx.CubeMaterial;
@@ -53,6 +54,8 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
     public static final int EDITOR_LAYER = -10;
     CContainer sidepanel;
     CContainer menupanel;
+
+    private boolean showStash = true;
 
     // Stash
     CContainer stashpanel;
@@ -167,7 +170,8 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         sidepanel.Render(new Vector2f());
         menupanel.Render(new Vector2f());
 
-        stashpanel.Render(new Vector2f());
+        if(showStash)
+            stashpanel.Render(new Vector2f());
 
         if(mat_show)
             matSelect.Render(new Vector2f());
@@ -220,14 +224,10 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
     private void updateUIBlock(Block b) {
         if(b != null) {
             currentTexture.setMaterial(b.Material);
-//            currentTexture.setTex(b.Texture);
-//            currentTexture.setTexoffset(b.TexOffset);
-//            currentTexture.setTexsize(b.TexSize);
             Vector2f center = b.GetCenter();
-            centerLabel.setText("Center:     \nx: "+center.x+"\ny: " + center.y + "\nz: " + b.getLayer());
-            extentLabel.setText("Extent:     \nx: " + b.GetExtents().x + "\ny: " + b.GetExtents().y + "\nH: " + b.Handle);
+            centerLabel.setText("Center:     \nx: "+center.x+"\ny: " + center.y + "\nz: " + -b.getLayer() + "\nAngl: " + b.getAngle());
+            extentLabel.setText("Extent:     \nhw: " + b.GetExtents().x + "\nhh: " + b.GetExtents().y + "\nHdl.: " + b.Handle);
         } else {
-//            currentTexture.setTex(Ref.ResMan.getWhiteTexture());
             centerLabel.setText("Center:     \nx: N/A\ny: N/A\nz: N/A");
             extentLabel.setText("Extent:     \nx: N/A\ny: N/A");
         }
@@ -237,13 +237,8 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         if(Ref.Input.IsKeyPressed(Keyboard.KEY_LSHIFT)) {
             if(!selectedBlocks.isEmpty()) {
                 selectedBlocks.remove(b);
-//                for (Block block : selectedBlocks) {
-//                    if(b == block) {
-//                        selectedBlocks.remove(b);
-//                        break;
-//                    }
-//                }
             }
+            
             if(selectedBlock == b) {
                 if(selectedBlocks.size() < 1)
                 {
@@ -257,8 +252,6 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
             }
         }
     }
-
-    
 
     private void selectModel(BlockModel model) {
         selectedModel = model;
@@ -358,14 +351,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                     moveCont.doLayout();
                 }
                 
-                CCheckbox xbox = new CCheckbox("Snap to grid", new ButtonEvent() {
-                    public void buttonPressed(CComponent button, MouseEvent evt) {
-                        snapToGrid = ((CCheckbox)button).isSelected();
-                    }
-                });
-                xbox.setSelected(snapToGrid);
-                    
-                toolContainer.addComponent(xbox);
+                
                 toolContainer.doLayout();
                 toolContainer.doLayout();
                 break;
@@ -385,14 +371,14 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                 move_dragging = false;
 
                 addToolContainer();
-                xbox = new CCheckbox("Snap to grid", new ButtonEvent() {
-                    public void buttonPressed(CComponent button, MouseEvent evt) {
-                        snapToGrid = ((CCheckbox)button).isSelected();
-                    }
-                });
-                xbox.setSelected(snapToGrid);
-
-                toolContainer.addComponent(xbox);
+//                xbox = new CCheckbox("Snap to grid", new ButtonEvent() {
+//                    public void buttonPressed(CComponent button, MouseEvent evt) {
+//                        snapToGrid = ((CCheckbox)button).isSelected();
+//                    }
+//                });
+//                xbox.setSelected(snapToGrid);
+//
+//                toolContainer.addComponent(xbox);
                 toolContainer.doLayout();
                 toolContainer.doLayout();
                 break;
@@ -413,14 +399,14 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                 scale_dragging = false;
                 
                 addToolContainer();
-                xbox = new CCheckbox("Snap to grid", new ButtonEvent() {
-                    public void buttonPressed(CComponent button, MouseEvent evt) {
-                        snapToGrid = ((CCheckbox)button).isSelected();
-                    }
-                });
-                xbox.setSelected(snapToGrid);
-
-                toolContainer.addComponent(xbox);
+//                xbox = new CCheckbox("Snap to grid", new ButtonEvent() {
+//                    public void buttonPressed(CComponent button, MouseEvent evt) {
+//                        snapToGrid = ((CCheckbox)button).isSelected();
+//                    }
+//                });
+//                xbox.setSelected(snapToGrid);
+//
+//                toolContainer.addComponent(xbox);
                 toolContainer.doLayout();
                 toolContainer.doLayout();
 
@@ -1151,10 +1137,6 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
             entityList.addComponent(new CButton(string, null, Align.LEFT, 0.5f, spawnEntityEvent));
         }
 
-        
-//        for (int i = 0; i < 10; i++) {
-//
-//        }
         entityList.doLayout();
         entityScrollCont.addComponent(entityList);
         entityScrollCont.setSize2(entityCont.getInternalSize());
@@ -1201,14 +1183,32 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                 selectTool(Tool.ROTATE);
             }
         }));
-        menupanel.addComponent(new CButton(Ref.ResMan.LoadTexture("data/edit_texedit.png"), new Vector2f(32,32),new ButtonEvent() {
+//        menupanel.addComponent(new CButton(Ref.ResMan.LoadTexture("data/edit_texedit.png"), new Vector2f(32,32),new ButtonEvent() {
+//            public void buttonPressed(CComponent button, MouseEvent evt) {
+//                selectTool(Tool.TEXMOVE);
+//            }
+//        }));
+        menupanel.addComponent(new CButton(Ref.ResMan.LoadTexture("data/edit_addblock.png"), new Vector2f(32,32), new ButtonEvent() {
             public void buttonPressed(CComponent button, MouseEvent evt) {
-                selectTool(Tool.TEXMOVE);
+                //selectTool(Tool.NEWBLOCK);
+                // Create a new empty block
+                Ref.commands.ExecuteText(ExecType.NOW, "block add");
             }
         }));
-        menupanel.addComponent(new CButton(Ref.ResMan.LoadTexture("data/edit_new.png"), new Vector2f(32,32), new ButtonEvent() {
+        menupanel.addComponent(new CButton(Ref.ResMan.LoadTexture("data/edit_addent.png"), new Vector2f(32,32), new ButtonEvent() {
             public void buttonPressed(CComponent button, MouseEvent evt) {
-                selectTool(Tool.NEWBLOCK);
+                //selectTool(Tool.NEWBLOCK);
+                // Create a new empty block
+                //Ref.commands.ExecuteText(ExecType.NOW, "block add");
+                openEntityPopupMenu(OrgCoordsToPixelCoords(Ref.Input.playerInput.MousePos));
+            }
+        }));
+        menupanel.addComponent(new CButton(Ref.ResMan.LoadTexture("data/edit_stash.png"), new Vector2f(32,32), new ButtonEvent() {
+            public void buttonPressed(CComponent button, MouseEvent evt) {
+                //selectTool(Tool.NEWBLOCK);
+                // Create a new empty block
+                //Ref.commands.ExecuteText(ExecType.NOW, "block add");
+                showStash = !showStash;
             }
         }));
         menupanel.doLayout();
@@ -1267,10 +1267,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         posCont.addComponent(extentLabel);
         posCont.doLayout();
         blockCont.addComponent(posCont);
-        miscCont = new CContainer(new FlowLayout(true, true, false));
         
-        miscCont.doLayout();
-        blockCont.addComponent(miscCont);
         CContainer gridCont = new CContainer(new FlowLayout(true, true, false));
         gridBox = new CCheckbox("Grid: 16u  ");
         gridBox.setMargin(0, 0, 5, 0);
@@ -1305,6 +1302,15 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         });
         showEnts.setSelected(Ref.cgame.cg_drawentities.iValue==1?true:false);
         blockCont.addComponent(showEnts);
+        
+        CCheckbox xbox = new CCheckbox("Snap to grid", new ButtonEvent() {
+            public void buttonPressed(CComponent button, MouseEvent evt) {
+                snapToGrid = ((CCheckbox)button).isSelected();
+            }
+        });
+        xbox.setSelected(snapToGrid);
+        blockCont.addComponent(xbox);
+        
 
         // Top layer
         CContainer layerCont = new CContainer(new FlowLayout(true, true, false));
@@ -1327,6 +1333,21 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         }));
         layerCont2.doLayout();
         blockCont.addComponent(layerCont2);
+
+        CContainer layerCont3 = new CContainer(new FlowLayout(true, true, false));
+        layerCont3.addComponent(new CLabel("FOV:", Align.LEFT, 0.8f));
+        layerCont3.addComponent(new CSpinner(Ref.cvars.Find("cg_fov").iValue, new ButtonEvent() {
+            public void buttonPressed(CComponent button, MouseEvent evt) {
+                Ref.cvars.Set2("cg_fov", ""+((CSpinner)button).getValue(), true);
+            }
+        }));
+        layerCont3.doLayout();
+        blockCont.addComponent(layerCont3);
+
+        miscCont = new CContainer(new FlowLayout(true, true, false));
+
+        miscCont.doLayout();
+        blockCont.addComponent(miscCont);
 
         toolContainer = new CContainer(new FlowLayout(false, true, false));
         
@@ -1389,13 +1410,13 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
 
             
         }
-        if(toEntity || true) {
-            miscCont.addComponent(new CButton("Entity", null, Align.CENTER, 0.8f, new ButtonEvent() {
-                public void buttonPressed(CComponent button, MouseEvent evt) {
-                    openEntityPopupMenu(OrgCoordsToPixelCoords(Ref.Input.playerInput.MousePos));
-                }
-            }));
-        }
+//        if(toEntity || true) {
+//            miscCont.addComponent(new CButton("Entity", null, Align.CENTER, 0.8f, new ButtonEvent() {
+//                public void buttonPressed(CComponent button, MouseEvent evt) {
+//                    openEntityPopupMenu(OrgCoordsToPixelCoords(Ref.Input.playerInput.MousePos));
+//                }
+//            }));
+//        }
         if(collidable && b != null) {
             CCheckbox collide = new CCheckbox("Collidable", new ButtonEvent() {
                 public void buttonPressed(CComponent button, MouseEvent evt) {
@@ -1676,7 +1697,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                     }  else {
                         position = stashpanel.getPosition();
                         size = stashpanel.getLayoutSize();
-                        if(absCoords.x >= position.x && absCoords.x < position.x + size.x &&
+                        if(showStash && absCoords.x >= position.x && absCoords.x < position.x + size.x &&
                             absCoords.y >= position.y && absCoords.y < position.y + size.y) {
                             stashpanel.MouseEvent(evt);
                         } else if(mat_show) {
