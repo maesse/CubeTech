@@ -29,6 +29,7 @@ public class SoundManager {
   private int currentSongIndex = -1; // current song index in playlist
   private int silentTime = 0; // counts down before starting a new track
   private boolean isMusicOn = false;
+  private boolean soundOk = false;
 
   private float EffectVolume = 0.2f;
   private float MusicVolume = 0.5f;
@@ -50,6 +51,9 @@ public class SoundManager {
   // Handles delay between songs and pumps the audiosystem,
   // necessary when using streamed reading
   public void Update(int msec) {
+      if(!soundOk)
+          return;
+      
       if(volume.modified) {
          volume.modified = false;
          setEffectVolume(volume.fValue);
@@ -87,6 +91,8 @@ public class SoundManager {
   }
 
   public void SetEntityPosition(int entityNum, Vector2f position, Vector2f velocity) {
+      if(!soundOk)
+          return;
       Vector4f pos = entityPositions.get(entityNum);
       if(pos != null)
           pos.set(position.x, position.y, velocity.x, velocity.y);
@@ -97,6 +103,8 @@ public class SoundManager {
 
   
   public void Respatialize(Vector2f origin, Vector2f velocity) {
+      if(!soundOk)
+          return;
       if(Helper.Equals(origin, lastOrigin))
           return;
       lastOrigin.set(origin);
@@ -105,6 +113,8 @@ public class SoundManager {
 
   // Setup the next song and set a delay before starting it
   public void PlayNextMusic() {
+      if(!soundOk)
+          return;
       // Increment playlist index
       currentSongIndex++;
       if(currentSongIndex >= playlist.size()) {
@@ -156,6 +166,8 @@ public class SoundManager {
 
   // Start or stop background music
   public void PlayBackgroundMusic(boolean enable) {
+      if(!soundOk)
+          return;
       if(isMusicOn == enable)
           return;
 
@@ -177,6 +189,8 @@ public class SoundManager {
 
   // Start the song that is waiting to be played
   private void StartQueuedMusic() {
+      if(!soundOk)
+          return;
       if(currentSong == null) {
           isMusicOn = true;
           PlayNextMusic();
@@ -191,10 +205,14 @@ public class SoundManager {
    * @param buffer Buffer index to play gotten from addSound
    */
   public void playEffect(Integer buffer, float volume) {
+      if(!soundOk)
+          return;
       SoundMap.get(buffer).playAsSoundEffect(Ref.common.com_timescale.fValue, volume, false);
   }
 
    public void playEntityEffect(int entityNum, int buffer, float volume) {
+       if(!soundOk)
+          return;
        // If sound is comming from the current player, just play it as a local sound
        if(entityNum == Ref.cgame.GetCurrentPlayerEntityNum()) {
            playEffect(buffer, volume);
@@ -220,12 +238,13 @@ public class SoundManager {
    */
     public void initialize(int channels) {
         store = SoundStore.get();
-        store.init();
         store.setSoundsOn(true);
         store.setSoundVolume(EffectVolume);
         store.setMusicVolume(MusicVolume);
 
         store.setMaxSources(channels);
+        store.init();
+        soundOk = store.soundWorks();
         
     }
 
@@ -236,6 +255,8 @@ public class SoundManager {
    * @return index into SoundManagers buffer list
    */
     public int AddWavSound(String path) {
+        if(!soundOk)
+          return 0;
         // Check cache
         
         Integer handle = Knownsounds.get(path);
@@ -261,8 +282,8 @@ public class SoundManager {
     }
 
     public Audio PlayOGGMusic(String name, float startTime, boolean loop, boolean startPlaying) {
-        if(!store.soundWorks())
-            return null;
+        if(!soundOk)
+          return null;
         Audio newsound = null;
         Integer handle = Knownsounds.get(name);
         

@@ -81,7 +81,7 @@ public class Common {
         lasttime = Milliseconds();
         // Set up cvars
         maxfps = Ref.cvars.Get("maxfps", "100", EnumSet.of(CVarFlags.ARCHIVE));
-        developer = Ref.cvars.Get("developer", "0", EnumSet.of(CVarFlags.ARCHIVE));
+        developer = Ref.cvars.Get("developer", "1", EnumSet.of(CVarFlags.ARCHIVE));
         cl_running = Ref.cvars.Get("cl_running", "0", EnumSet.of(CVarFlags.ROM));
         sv_running = Ref.cvars.Get("sv_running", "0", EnumSet.of(CVarFlags.ROM));
         cl_paused = Ref.cvars.Get("cl_paused", "0", EnumSet.of(CVarFlags.ROM));
@@ -105,10 +105,17 @@ public class Common {
     }
 
     // Where the program starts
-    public static void Startup(Canvas parentDisplay, Applet applet) {
+    public static void Startup(Canvas parentDisplay, Applet applet, String[] args) {
         // Init
         try {
-            Ref.InitRef();
+            boolean noSound = false;
+            if(args != null && args.length > 0) {
+                for (String string : args) {
+                    if(string.equalsIgnoreCase("-nosound"))
+                        noSound = true;
+                }
+            }
+            Ref.InitRef(applet != null,noSound);
 
             Ref.glRef.InitWindow(parentDisplay, applet);
             Ref.Input.Init(); // Initialize mouse and keyboard

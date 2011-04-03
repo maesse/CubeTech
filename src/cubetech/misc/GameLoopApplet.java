@@ -16,7 +16,7 @@ public class GameLoopApplet extends Thread {
     @Override
     public void run() {
         System.err.println("GameLoopApplet Running");
-        Common.Startup(displayParent, applet);
+        Common.Startup(displayParent, applet,null);
     }
 
 }

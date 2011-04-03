@@ -51,11 +51,11 @@ public class Ref {
     public static ClipMap cm;
 
     // Initializes classes that there need to be only one off
-    public static void InitRef() throws Exception {
+    public static void InitRef(boolean isApplet, boolean noSound) throws Exception {
         // Set default platform look and feel
         UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         
-        Log.Init(); // Re-route System.out through the Log system
+        Log.Init(isApplet); // Re-route System.out through the Log system
         Ref.SpriteMan = new SpriteManager(); // sprite factory/manager/renderer
         Ref.ResMan = new ResourceManager(); // Loads and caches textures
         
@@ -69,7 +69,8 @@ public class Ref {
         Ref.net = new Net(); // init network, creates sockets for client and server
         Ref.collision = new Collision();
         Ref.soundMan = new SoundManager(); // loads, manages and plays sounds
-        Ref.soundMan.initialize(12); // Init 12 channels
+        if(!noSound)
+            Ref.soundMan.initialize(12); // Init 12 channels
         Ref.spatial = new Spatial(); // spatial query subsystem
 //        Ref.StateMan = new StateManager(); // old game system
         Ref.glRef = new GLRef(); // OpenGL/Window manager
