@@ -2,6 +2,7 @@ package cubetech.Game;
 
 import cubetech.Block;
 import cubetech.common.Common;
+import cubetech.entities.IEntity;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector2f;
 
@@ -12,12 +13,9 @@ import org.lwjgl.util.vector.Vector2f;
 public class SpawnEntity {
     public String className;
     public Vector2f origin = new Vector2f();
-
     private boolean spawned = false;
     private Gentity ent = null;
-
     private Block editBlock = null;
-
 
     public SpawnEntity(String className, Vector2f position) {
         if(className == null || className.isEmpty())
@@ -27,8 +25,15 @@ public class SpawnEntity {
         editBlock = new Block(-1, new Vector2f(position.x - 6, position.y - 6), new Vector2f(12,12), false);
         editBlock.setLayer(-20); // make sure entities are the first to be selected in the editor
         editBlock.spawnEntity = this;
-        if(className.equalsIgnoreCase("item_boots"))
+        if(className.startsWith("item"))
             editBlock.Material.setTexture(Ref.common.items.findItemByClassname(className).icon);
+        else {
+            IEntity sent = Ref.game.findSpawnEntityFromClassName(className);
+            if(sent != null)
+                editBlock.Material.setTexture(sent.getIcon());
+            else
+                editBlock.Material.setTexture(Ref.ResMan.LoadTexture("data/tile.png"));
+        }
     }
 
     public Block getBlock() {

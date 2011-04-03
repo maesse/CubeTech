@@ -8,6 +8,7 @@ import cubetech.common.IBlockedMethod;
 import cubetech.common.IThinkMethod;
 import cubetech.common.ITouchMethod;
 import cubetech.entities.Mover.MoverState;
+import cubetech.gfx.CubeTexture;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector2f;
 
@@ -49,6 +50,10 @@ public class Func_Door implements IEntity {
 
         ent.nextthink = Ref.game.level.time + 100; // TODO FIX
         ent.think = Think_SpawnNewDoorTrigger;
+    }
+
+    public CubeTexture getIcon() {
+        return Ref.ResMan.LoadTexture("data/tool_mover.png");
     }
 
     public static IThinkMethod Think_SpawnNewDoorTrigger = new IThinkMethod() {
