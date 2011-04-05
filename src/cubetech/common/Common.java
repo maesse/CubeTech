@@ -109,17 +109,30 @@ public class Common {
         // Init
         try {
             boolean noSound = false;
-            if(args != null && args.length > 0) {
-                for (String string : args) {
-                    if(string.equalsIgnoreCase("-nosound"))
+            boolean lowGraphics = false;
+            String config = null;
+
+            if(args != null) {
+                for (int i= 0; i < args.length; i++) {
+                    String s = args[i];
+                    if(s.equalsIgnoreCase("-nosound"))
                         noSound = true;
+                    else if(s.equalsIgnoreCase("-lowgfx"))
+                        lowGraphics = true;
+                    else if(s.equalsIgnoreCase("-cfg") && i+1 < args.length) {
+                        config = args[i+1];
+                    }
                 }
             }
+            
             Ref.InitRef(applet != null,noSound);
 
-            Ref.glRef.InitWindow(parentDisplay, applet);
+            Ref.glRef.InitWindow(parentDisplay, applet, lowGraphics);
             Ref.Input.Init(); // Initialize mouse and keyboard
             Ref.common.Init();
+
+            if(config != null)
+                Ref.commands.ExecuteText(Commands.ExecType.INSERT, "exec " + config);
         } catch (Exception ex) {
             String exString = getExceptionString(ex);
             System.out.println("Fatal crash: " + exString);

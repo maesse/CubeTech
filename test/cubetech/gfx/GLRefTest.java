@@ -35,7 +35,7 @@ public class GLRefTest {
         Ref.glRef = new GLRef();
 
         try {
-            Ref.glRef.InitWindow(null, null);
+            Ref.glRef.InitWindow(null, null, true);
         } catch (Exception ex) {
             Logger.getLogger(GLRefTest.class.getName()).log(Level.SEVERE, null, ex);
             fail(ex.getMessage());

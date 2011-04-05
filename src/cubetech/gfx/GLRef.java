@@ -80,18 +80,15 @@ public class GLRef {
         Init();
     }
 
-    public void InitWindow(Canvas parent, Applet applet) throws Exception {
+    public void InitWindow(Canvas parent, Applet applet, boolean lowGraphics) throws Exception {
 
         this.applet = applet;
 
         availableModes = Display.getAvailableDisplayModes();
-
+        shadersSupported = !lowGraphics;
         desktopMode = Display.getDesktopDisplayMode();
 
-        // Create the display
-        Display.create(new PixelFormat());
-        //Display.create(new PixelFormat(8, 8, 0, 0));
-        checkError();
+        
 
         Common.Log("Desktop displaymode: " + desktopMode);
         displayParent = parent; // Save off canvas if there is one
@@ -99,14 +96,18 @@ public class GLRef {
 
         if(parent == null) {
             // If we are creating a new window, center it
-            Display.setLocation((int)(desktopMode.getWidth()/2f - currentMode.getWidth()/2f),
-                    (int)(desktopMode.getHeight()/2f - currentMode.getHeight()/2f));
+            Display.setLocation(-1,-1);
         } else {
             Display.setParent(displayParent); // Applets use this
 
             if(applet != null)
                 isApplet = true;
         }
+
+        // Create the display
+        Display.create(new PixelFormat());
+        //Display.create(new PixelFormat(8, 8, 0, 0));
+        checkError();
 
         // Set vsync
         try {
@@ -147,6 +148,8 @@ public class GLRef {
         currentMode = Display.getDisplayMode();
         checkError();
         resolution = new Vector2f(currentMode.getWidth(), currentMode.getHeight());
+
+        
 
         String v = glGetString(GL_VERSION);
         String[] tokens = Commands.TokenizeString(v, true);
@@ -574,6 +577,9 @@ public class GLRef {
 
     // Some drivers mess up VBO's when there's no VAO's bound (even if not used)
     private void doVaoWorkaround() {
+        if(!shadersSupported)
+            return;
+        
         if(!caps.GL_ARB_vertex_array_object)
             return;
 
