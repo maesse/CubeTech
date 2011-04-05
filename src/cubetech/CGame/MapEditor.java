@@ -1195,18 +1195,17 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         }));
         menupanel.addComponent(new CButton(Ref.ResMan.LoadTexture("data/edit_addent.png"), new Vector2f(32,32), new ButtonEvent() {
             public void buttonPressed(CComponent button, MouseEvent evt) {
-                //selectTool(Tool.NEWBLOCK);
-                // Create a new empty block
-                //Ref.commands.ExecuteText(ExecType.NOW, "block add");
                 openEntityPopupMenu(OrgCoordsToPixelCoords(Ref.Input.playerInput.MousePos));
             }
         }));
         menupanel.addComponent(new CButton(Ref.ResMan.LoadTexture("data/edit_stash.png"), new Vector2f(32,32), new ButtonEvent() {
             public void buttonPressed(CComponent button, MouseEvent evt) {
-                //selectTool(Tool.NEWBLOCK);
-                // Create a new empty block
-                //Ref.commands.ExecuteText(ExecType.NOW, "block add");
                 showStash = !showStash;
+            }
+        }));
+        menupanel.addComponent(new CButton(Ref.ResMan.LoadTexture("data/edit_game.png"), new Vector2f(32,32), new ButtonEvent() {
+            public void buttonPressed(CComponent button, MouseEvent evt) {
+                Ref.commands.ExecuteText(ExecType.INSERT, "start");
             }
         }));
         menupanel.doLayout();
