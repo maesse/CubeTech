@@ -115,12 +115,12 @@ public class Move {
         if(query.ps.moveType == MoveType.DEAD)
             return; // Dead players can't move
 
-        
+        boolean noclip = query.ps.moveType == MoveType.NOCLIP || query.ps.moveType == MoveType.EDITMODE;
         
         // Direction player wants to move
         Vector2f wishdir = new Vector2f();
         // Handle horizontal wish direction
-        if(!query.ps.applyPull ) {
+        if(!query.ps.applyPull || noclip) {
             if(query.cmd.Left)
                 wishdir.x -= 1f;
             if(query.cmd.Right)
@@ -144,7 +144,8 @@ public class Move {
 
 //        float len = wishdir.length();
         if(wishdir.length() != 0f) {
-            wishdir.normalise();
+
+            Helper.Normalize(wishdir);
 
             if(query.onGround) {
                 // project wishdir along ground normal
@@ -154,7 +155,7 @@ public class Move {
                 xloss -= wishdir.x;
                 wishdir.scale(speed * (1+(xloss)));
             } else
-                wishdir.scale(speed);
+                wishdir.scale(speed * (noclip?2:1));
         }
 
         boolean ignoreGravity = false;
@@ -223,7 +224,7 @@ public class Move {
     }
 
     static boolean isOnGround(MoveQuery pm) {
-        if(pm.ps.moveType == MoveType.EDITMODE)
+        if(pm.ps.moveType == MoveType.EDITMODE || pm.ps.moveType == MoveType.NOCLIP)
         {
             pm.onGround = false;
             return false;
@@ -321,7 +322,8 @@ public class Move {
         float addSpeed = wishspeed  - currentSpeed;
         if(addSpeed > 0f)
         {
-           float accelspeed = accel * frametime * wishspeed;
+           float acc = (pm.ps.moveType == MoveType.EDITMODE || pm.ps.moveType == MoveType.NOCLIP)? accel * 2 : accel;
+           float accelspeed = acc * frametime * wishspeed;
            if(accelspeed > addSpeed)
                accelspeed = addSpeed;
 
@@ -345,7 +347,8 @@ public class Move {
         if(spd > pull6)
            actualaccel *= pullstep;
 
-        if((pm.ps.applyPull && movemode == 1) || (movemode == 2 && pm.cmd.Right))
+        if(((pm.ps.applyPull && movemode == 1) || (movemode == 2 && pm.cmd.Right))
+                && pm.ps.moveType == MoveType.NORMAL)
            pm.ps.velocity.x += actualaccel * frametime;
 
         float speed2 = (float)Math.sqrt(pm.ps.velocity.x * pm.ps.velocity.x + pm.ps.velocity.y * pm.ps.velocity.y);
@@ -402,14 +405,14 @@ public class Move {
                    Common.LogDebug("Stuck");
                    return;
                }
-               Vector2f moveDir = new Vector2f(pm.ps.velocity);
-               moveDir.normalise();
+//               Vector2f moveDir = new Vector2f(pm.ps.velocity);
+//               Helper.Normalize(moveDir);
                // Clip velocity and try to move the remaining bit               
                ClipVelocity(pm.ps.velocity, pm.ps.velocity, res.HitAxis, 1.00f, pm);
 
-               Vector2f moveDir2 = new Vector2f(pm.ps.velocity);
-               moveDir2.normalise();
-               int test = 2;
+//               Vector2f moveDir2 = new Vector2f(pm.ps.velocity);
+//               Helper.Normalize(moveDir2);
+//               int test = 2;
                // Blocked
            }
        } while( timeLeft > 0.0f && tries < 2);
@@ -480,9 +483,9 @@ public class Move {
         // Normalize the normal :)
 
         
-        float len = in.length();
-        Vector2f result = new Vector2f(normal);
-        result.normalise();
+        //float len = in.length();
+        Vector2f result = normal;//new Vector2f(normal);
+        //Helper.Normalize(result);
 
         if(result.x > 0.9 || result.x < -0.9)
             pm.blocked = 1; // step/wall
