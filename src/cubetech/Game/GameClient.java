@@ -6,6 +6,8 @@ import cubetech.common.Commands;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Content;
+import cubetech.common.GItem;
+import cubetech.common.ICommand;
 import cubetech.common.Info;
 import cubetech.common.Move;
 import cubetech.common.Move.MoveType;
@@ -38,6 +40,10 @@ public class GameClient extends Gentity {
     public int inactivityTime; // for kicking afk players
     public int respawnTime;
     private int timeResidual;
+
+    private GameClient thisIsSilly = this;
+
+    public boolean noclip;
 
     /*
     ================
@@ -92,20 +98,108 @@ public class GameClient extends Gentity {
             str.append(String.format(" %d %d %d", i, ping, (Ref.game.level.time - cl.pers.JoinTime)/60000));
         }
 
-        Ref.server.GameSendServerCommand(s.ClientNum, String.format("scores %d %s", nClients, str));
+        SendServerCommand(String.format("scores %d %s", nClients, str));
+    }
+
+    public void SendServerCommand(String str) {
+        Ref.server.GameSendServerCommand(s.ClientNum, str);
     }
 
     // Handle incomming commands from the client
     public void Client_Command(String[] tokens) {
         String cmd = tokens[0].toLowerCase();
-        if(cmd.equalsIgnoreCase("say"))
+        if(cmd.equals("say"))
             cmd_Say(tokens, false);
-        else if(cmd.equalsIgnoreCase("score"))
+        else if(cmd.equals("score"))
             cmd_Score();
-        else if(cmd.equalsIgnoreCase("block")) {
+        else if(cmd.equals("block")) {
             cmd_Block(tokens);
-        }
+        } else if(cmd.equals("give")) {
+            cmd_Give.RunCommand(tokens);
+        } else if(cmd.equals("noclip")) {
+            cmd_NoClip.RunCommand(tokens);
+        } else if(cmd.equals("kill")) {
+            cmd_Kill.RunCommand(tokens);
+        } else
+            SendServerCommand("print \"unknown command " + cmd + "\"");
     }
+    
+    private ICommand cmd_Give = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(!Ref.game.CheatsOk(thisIsSilly))
+                return;
+
+            String name = Commands.Args(args).toLowerCase().trim();
+            boolean giveall = name.equals("all");
+
+            if(giveall || name.equals("health")) {
+                setHealth(ps.stats.MaxHealth);
+                if(!giveall) return;
+            }
+
+            // Get a specific item for the player
+            if(!giveall) {
+                GItem item = Ref.common.items.findItemByClassname(name);
+                if(item == null)
+                    return;
+
+                Gentity ent = Ref.game.Spawn();
+                ent.s.origin.set(r.currentOrigin);
+                ent.classname = item.classname;
+                Ref.game.spawnItem(ent, item);
+                Ref.common.items.FinishSpawningItem.think(ent);
+                Ref.common.items.TouchItem.touch(ent, thisIsSilly);
+                if(ent.inuse)
+                    ent.Free();
+            }
+        }
+    };
+    
+    private ICommand cmd_NoClip = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(!Ref.game.CheatsOk(thisIsSilly))
+                return;
+
+            String msg;
+            if(noclip)
+                msg = "noclip OFF";
+            else
+                msg = "noclip ON";
+            noclip = !noclip;
+
+            SendServerCommand("print \""+msg+"\"");
+        }
+    };
+
+    // May kill the player
+    public void setHealth(int health) {
+//        if(isDead()) {
+//            Common.LogDebug("GameClient.setHealth: Can't set health while dead");
+//            return;
+//        }
+
+        ps.stats.Health = health;
+        if(health <= 0)
+            Die();
+    }
+
+    public int getHealth() {
+        return ps.stats.Health;
+    }
+
+    public int getMaxHealth() {
+        return ps.stats.MaxHealth;
+    }
+
+    private ICommand cmd_Kill = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(isDead())
+                return;
+
+            setHealth(-999);
+        }
+    };
+
 
     private void cmd_Score() {
         ScoreboardMessage();
@@ -238,8 +332,7 @@ public class GameClient extends Gentity {
         ClipMask = Content.PLAYERCLIP | Content.BODY;
         ps.clientNum = index;
 
-        ps.stats.Health = ps.stats.MaxHealth;
-
+        setHealth(getMaxHealth());
 
         // Set spawn
         Gentity spawnPoint = selectSpawnPoint(ps.origin);
@@ -305,9 +398,11 @@ public class GameClient extends Gentity {
             msec = 200;
 
         ps.moveType = MoveType.NORMAL;
-        if(Ref.game.level.editmode)
+        if(noclip)
+            ps.moveType = MoveType.NOCLIP;
+        else if(Ref.game.level.editmode)
             ps.moveType = MoveType.EDITMODE;
-        else if(ps.stats.Health <= 0)
+        else if(isDead())
             ps.moveType = MoveType.DEAD;
 
 //        if(ps.moveType == MoveType.NORMAL)
@@ -343,7 +438,8 @@ public class GameClient extends Gentity {
 
         // link entity now, after any personal teleporters have been used
         Link();
-        TouchTriggers();
+        if(!noclip)
+            TouchTriggers();
 
         // NOTE: now copy the exact origin over otherwise clients can be snapped into solid
         r.currentOrigin.x = ps.origin.x;
@@ -354,7 +450,7 @@ public class GameClient extends Gentity {
             eventTime = Ref.game.level.time;
 
         // Check for respawning
-        if(ps.stats.Health <= 0) {
+        if(isDead()) {
             if(cmd.Mouse1)
                 respawn();
         }
@@ -377,7 +473,8 @@ public class GameClient extends Gentity {
         stopPull();
         ps.AddPredictableEvent(Event.DIED, 0);
         ps.velocity.set(0,0);
-        ps.stats.Health = 0;
+        if(!isDead())
+            ps.stats.Health = 0;
     }
 
     public boolean isDead() {
@@ -389,7 +486,7 @@ public class GameClient extends Gentity {
             return;
         
         stopPull();
-        ps.stats.Health = 0;
+        ps.stats.Health = 0; // set health to 0 to get the respawn menu up
         ps.velocity.set(0,0);
         ps.AddPredictableEvent(Event.GOAL, 0);
     }
@@ -405,10 +502,10 @@ public class GameClient extends Gentity {
         while(timeResidual >= 1000) {
             timeResidual -= 1000;
 
-            if(ps.stats.Health > ps.stats.MaxHealth)
+            if(getHealth() > getMaxHealth())
                 ps.stats.Health--;
 
-            if(ps.stats.Health > 0)
+            if(!isDead())
                 ps.maptime += 1;
 
             for (int i= 0; i < ps.powerups.length; i++) {
@@ -422,7 +519,7 @@ public class GameClient extends Gentity {
 
     private void TouchTriggers() {
         // dead clients don't activate triggers!
-        if(ps.stats.Health <= 0)
+        if(isDead())
             return;
 
         Vector2f range = new Vector2f(40,40);
@@ -520,7 +617,7 @@ public class GameClient extends Gentity {
     }
 
     void PlaceInEditMode() {
-        if(ps.stats.Health <= 0)
+        if(isDead())
             ClientSpawn();
         ps.moveType = MoveType.NORMAL;
     }
