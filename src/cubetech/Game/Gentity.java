@@ -57,9 +57,10 @@ public class Gentity {
     public GItem item;
 
     // Used by some entities
-    public int health;
+//    public int health;
     public int speed;
     public int count;
+    
     
     // timing
     public int wait;
@@ -98,7 +99,7 @@ public class Gentity {
         mover = null;
         count = 0;
         speed = 0;
-        health = 0;
+//        health = 0;
         target = null;
         physicsBounce = 0;
 
