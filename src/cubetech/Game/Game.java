@@ -60,7 +60,7 @@ public class Game {
     public HashMap<String, IEntity> spawns = new HashMap<String, IEntity>();
 
     public Game() {
-        sv_speed = Ref.cvars.Get("sv_speed", "100", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_speed = Ref.cvars.Get("sv_speed", "200", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         g_cheats = Ref.cvars.Get("g_cheats", "0", EnumSet.of(CVarFlags.NONE));
         g_gametype = Ref.cvars.Get("g_gametype", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.LATCH, CVarFlags.USER_INFO));
         g_restarted = Ref.cvars.Get("g_restarted", "0", EnumSet.of(CVarFlags.ROM));
@@ -107,8 +107,9 @@ public class Game {
             public void RunCommand(String[] args) {
                 for (int i= 0; i < g_clients.length; i++) {
                     if(g_clients[i].inuse && g_clients[i].ps != null) {
+                        Ref.cvars.Set2("g_editmode", "0", true);
+                        CheckEditMode();
                         g_clients[i].respawn();
-                        g_clients[i].startPull();
                     }
                 }
             }
@@ -501,6 +502,7 @@ public class Game {
      */
     void spawnItem(Gentity ent, GItem item) {
         ent.item = item;
+
         // some movers spawn on the second frame, so delay item
 	// spawns until the third frame so they can ride trains
         ent.nextthink = level.time + 100 * 2; // fix 100 = frametime
@@ -565,6 +567,19 @@ public class Game {
 //
 //
 //        }
+    }
+
+    public boolean CheatsOk(GameClient gc) {
+        if(g_cheats.iValue != 1) {
+            gc.SendServerCommand("print \"Cheats are not enabled on this server.\"");
+            return false;
+        }
+
+        if(gc.isDead()) {
+            gc.SendServerCommand("print \"You must be alive to use this command.\"");
+            return false;
+        }
+        return true;
     }
 
     void respawnAllItems() {
