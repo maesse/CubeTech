@@ -75,7 +75,12 @@ public final class Commands {
         });
 
     }
-    
+
+    /**
+     * NOW: Instant execute, dont add to buffer
+     * INSERT: Adds command text immediately after the current command
+     * APPEND: Append to end of command buffer, doesn't add \n
+     */
     public enum ExecType {
         NOW, // Instant execute, dont add to buffer
         INSERT, // Adds command text immediately after the current command

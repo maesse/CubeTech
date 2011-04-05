@@ -154,11 +154,11 @@ public class ItemList {
         return 10;
     }
 
-    private ITouchMethod TouchItem = new ITouchMethod() {
+    public ITouchMethod TouchItem = new ITouchMethod() {
         public void touch(Gentity self, Gentity other) {
             if(!other.isClient())
                 return;
-            if(other.getClient().ps.stats.Health <= 0)
+            if(other.getClient().isDead())
                 return; // dead people cant pickup
 
             if(!Ref.common.items.canItemBeGrabbed(self.s, other.getClient().ps))
