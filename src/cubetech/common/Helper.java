@@ -33,6 +33,16 @@ public class Helper {
         return -1;
     }
 
+    public static float Normalize(Vector2f v) {
+        double len = Math.sqrt(v.x * v.x + v.y * v.y);
+        if(len == 0)
+            return 0;
+
+        v.x /= len;
+        v.y /= len;
+        return (float)len;
+    }
+
     public static void AddPointToBounds(Vector2f v, Vector2f mins, Vector2f maxs) {
         if(v.x < mins.x)
             mins.x = v.x;

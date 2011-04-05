@@ -290,10 +290,10 @@ public class Block {
         Angle = angle;
         Axis[0].x = (float) Math.cos(angle);
         Axis[0].y = (float) Math.sin(angle);
-        Axis[0].normalise();
+        Helper.Normalize(Axis[0]);
         Axis[1].x = (float) Math.cos(angle+Math.PI/2f);
         Axis[1].y = (float) Math.sin(angle+Math.PI/2f);
-        Axis[1].normalise();
+        Helper.Normalize(Axis[1]);
         UpdateSpatial();
     }
 

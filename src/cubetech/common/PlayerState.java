@@ -86,7 +86,7 @@ public class PlayerState {
         if(viewangles.x == 0 && viewangles.y == 0)
             viewangles.set(1, 0); // can't have zero-lenght view vectors, can we now?
 
-        viewangles.normalise();
+        Helper.Normalize(viewangles);
     }
 
     public PlayerState Clone(PlayerState ps) {

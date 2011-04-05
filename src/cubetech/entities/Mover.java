@@ -69,8 +69,7 @@ public class Mover {
         // calculate time to reach second position from speed
         Vector2f move = new Vector2f();
         Vector2f.sub(pos2, pos1, move);
-        float len = move.length();
-        move.normalise();
+        float len = Helper.Normalize(move);
 
         if(ent.speed == 0)
             ent.speed = 100;
