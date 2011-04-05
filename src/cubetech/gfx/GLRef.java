@@ -132,7 +132,7 @@ public class GLRef {
         String osArch = System.getProperty("os.arch");
         String jvmVersion = System.getProperty("java.runtime.version");
         Common.Log("Operating System: " + osName + " - " + osVersion + " (" + osArch + ")");
-        Common.Log("Java version: " + jvmVersion);
+        Common.Log("Java version: " + jvmVersion + " :: " + System.getProperty("java.vm.name") + " v: " + System.getProperty("java.vm.version"));
         Common.Log("LWJGL version: " + Display.getVersion());
         Common.Log("OpenGL version: " + glGetString(GL_VERSION));
         Common.Log("VBO support detected (V: " + maxVertices + ") (I: " + maxIndices + ")");
