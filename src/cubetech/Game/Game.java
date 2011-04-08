@@ -176,8 +176,8 @@ public class Game {
 
         SpawnEntity spEnt = new SpawnEntity("info_player_spawn", new Vector2f(150,100));
         spawnEntities.AddEntity(spEnt);
-        spEnt = new SpawnEntity("info_player_goal", new Vector2f(500,100));
-        spawnEntities.AddEntity(spEnt);
+//        spEnt = new SpawnEntity("info_player_goal", new Vector2f(500,100));
+//        spawnEntities.AddEntity(spEnt);
 
 //        Gentity hp = Spawn();
 //        hp.classname = "info_player_spawn";
