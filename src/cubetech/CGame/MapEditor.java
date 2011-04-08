@@ -14,6 +14,7 @@ import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.ResourceManager;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
+import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
 import cubetech.input.Input;
 import cubetech.input.Key;
@@ -129,6 +130,9 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
     ArrayList<SpawnEntity> entities = null;
     boolean showEntities = false;
 
+    AnimationEditor animEditor = null;
+    boolean inAnimEditor = false;
+
     enum Tool {
         SELECT,
         RESIZE,
@@ -167,6 +171,13 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
     }
 
     public void Render() {
+        if(inAnimEditor) {
+            if(animEditor != null)
+                animEditor.Render();
+            else
+                inAnimEditor = false;
+            return;
+        }
         sidepanel.Render(new Vector2f());
         menupanel.Render(new Vector2f());
 
@@ -206,6 +217,22 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
 
         if(gridBox.isSelected())
             renderGrid();
+
+        Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, 0.0f), "^3Edit Mode", Align.CENTER, Type.HUD);
+    }
+
+    public void showAnimator() {
+        if(animEditor == null)
+            animEditor = new AnimationEditor(this);
+        inAnimEditor = true;
+    }
+
+    public void hideAnimator() {
+        inAnimEditor = false;
+    }
+
+    public boolean isShowingAnimator() {
+        return inAnimEditor && animEditor != null;
     }
 
     private boolean isMultiSelecting() {
@@ -1203,6 +1230,11 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                 showStash = !showStash;
             }
         }));
+        menupanel.addComponent(new CButton(Ref.ResMan.LoadTexture("data/edit_toanim.png"), new Vector2f(32,32), new ButtonEvent() {
+            public void buttonPressed(CComponent button, MouseEvent evt) {
+                showAnimator();
+            }
+        }));
         menupanel.addComponent(new CButton(Ref.ResMan.LoadTexture("data/edit_game.png"), new Vector2f(32,32), new ButtonEvent() {
             public void buttonPressed(CComponent button, MouseEvent evt) {
                 Ref.commands.ExecuteText(ExecType.INSERT, "start");
@@ -1536,15 +1568,17 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         scrollPane.doLayout();
     }
 
-    private void renderGrid() {
+    public void renderGrid() {
         Vector2f lineSize = new Vector2f(Ref.cgame.cg.refdef.FovX / Ref.glRef.GetResolution().x,
                                         Ref.cgame.cg.refdef.FovY / Ref.glRef.GetResolution().y);
+
+        lineSize.scale(1.075f);
         
         Vector2f startPos = new Vector2f(Ref.cgame.cg.refdef.Origin);
         int width = (int)Ref.cgame.cg.refdef.FovX + gridSpacing * 2;
         int height = Ref.cgame.cg.refdef.FovY + gridSpacing * 2;
-        startPos.x -= Ref.cgame.cg.refdef.FovX / 2f + gridSpacing;
-        startPos.y -= Ref.cgame.cg.refdef.FovY / 2f + gridSpacing;
+        startPos.x -= Ref.cgame.cg.refdef.w / 2f + gridSpacing;
+        startPos.y -= Ref.cgame.cg.refdef.h / 2f + gridSpacing;
         
         applyGrid(startPos);
         
@@ -1554,9 +1588,11 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         for (int i= 0; i < nLines; i++) {
             Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             Vector2f position = new Vector2f(startPos);
-            position.y += gridSpacing * i - lineSize.y * 0.5f;
+            position.y += gridSpacing * i;
+            boolean highlight = (position.y < 1f && position.y > -1f);
+            position.y -= lineSize.y * 0.5f; // center line
             spr.Set(position, size, Ref.ResMan.getWhiteTexture(), null, null);
-            spr.SetColor(200, 200, 200, 150);
+            spr.SetColor(200, 200, 200, highlight?255:100);
             spr.SetDepth(EDITOR_LAYER);
         }
         nLines = width / gridSpacing;
@@ -1564,9 +1600,11 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         for (int i= 0; i < nLines; i++) {
             Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
             Vector2f position = new Vector2f(startPos);
-            position.x += gridSpacing * i - lineSize.x * 0.5f;
+            position.x += gridSpacing * i;
+            boolean highlight = (position.x < 1f && position.x > -1f);
+            position.x -= lineSize.x * 0.5f;
             spr.Set(position, size, Ref.ResMan.getWhiteTexture(), null, null);
-            spr.SetColor(200, 200, 200, 150);
+            spr.SetColor(200, 200, 200, highlight?255:100);
             spr.SetDepth(EDITOR_LAYER);
         }
         
@@ -1596,6 +1634,10 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
 
 
     public void KeyPressed(KeyEvent evt) {
+        if(inAnimEditor && animEditor != null) {
+            animEditor.KeyPressed(evt);
+            return;
+        }
         // TODO: Allow tool to get input
 
         Key k = (Key) evt.getSource();
@@ -1652,6 +1694,11 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
     }
 
     public void GotMouseEvent(MouseEvent evt) {
+        if(inAnimEditor && animEditor != null) {
+            animEditor.GotMouseEvent(evt);
+            return;
+        }
+
         // From 0-1 to 0-resolution space
         Vector2f absCoords = new Vector2f(Ref.glRef.GetResolution());
         Vector2f orgCoords = new Vector2f(evt.Position);
@@ -1706,14 +1753,14 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
         
     }
 
-    private Vector2f OrgCoordsToPixelCoords(Vector2f pos) {
+    public Vector2f OrgCoordsToPixelCoords(Vector2f pos) {
         Vector2f result = new Vector2f(Ref.glRef.GetResolution());
         result.x = result.x * (pos.x);
         result.y = result.y * (1f-pos.y);
         return result;
     }
 
-    private Vector2f OrgCoordsToGameCoords(Vector2f pos) {
+    public Vector2f OrgCoordsToGameCoords(Vector2f pos) {
         Vector2f result = new Vector2f(Ref.cgame.cg.refdef.Origin);
         result.x += Ref.cgame.cg.refdef.FovX * (pos.x - 0.5f);
         result.y += Ref.cgame.cg.refdef.FovY * (pos.y - 0.5f);
