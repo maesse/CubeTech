@@ -45,6 +45,8 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import javax.swing.ImageIcon;
+import org.lwjgl.opengl.ARBTextureRectangle;
+import org.lwjgl.opengl.EXTTextureRectangle;
 
 import static org.lwjgl.opengl.GL11.*;
 
@@ -313,6 +315,8 @@ public final class ResourceManager {
             glTexParameteri(target, GL_TEXTURE_MIN_FILTER, minFilter);
             glTexParameteri(target, GL_TEXTURE_MAG_FILTER, magFilter);
         }
+
+
 
         // produce a texture from the byte buffer
         glTexImage2D(target,
@@ -627,6 +631,25 @@ public final class ResourceManager {
         }
         buf.position(0);
         return new AbstractMap.SimpleEntry<NetBuffer, Integer>(NetBuffer.CreateCustom(buf), checksum);
+    }
+
+    public int CreateEmptyTexture(int width, int height) {
+        int textureId = createTextureID();
+        glBindTexture(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, textureId);
+        glTexParameteri(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        ByteBuffer buf = ByteBuffer.allocateDirect(width*height*4);
+        buf.order(ByteOrder.nativeOrder());
+        for (int i= 0; i < width*height; i++) {
+            buf.put((byte)125);
+            buf.put((byte)0);
+            buf.put((byte)255);
+            buf.put((byte)255);
+        }
+        buf.flip();
+        glTexImage2D(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf);
+
+        return textureId;
     }
 
     

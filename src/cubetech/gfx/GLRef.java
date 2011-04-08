@@ -1,5 +1,9 @@
 package cubetech.gfx;
 
+import org.lwjgl.opengl.ARBShaderObjects;
+import org.lwjgl.util.Color;
+import org.lwjgl.opengl.EXTFramebufferObject;
+import org.lwjgl.opengl.GL13;
 import cubetech.ui.UI.MENU;
 import cubetech.common.Commands;
 import cubetech.common.Common;
@@ -27,11 +31,13 @@ import cubetech.common.Common.ErrorCode;
 import cubetech.misc.Ref;
 import java.awt.Canvas;
 import java.net.MalformedURLException;
+import org.lwjgl.opengl.ARBTextureRectangle;
 import org.lwjgl.opengl.ARBVertexArrayObject;
 import org.lwjgl.opengl.ARBVertexBufferObject;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.DisplayMode;
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL20.*;
 /**
  * Controls OpenGL
  * @author mads
@@ -70,6 +76,9 @@ public class GLRef {
     private IntBuffer intBuf16 = BufferUtils.createIntBuffer(16);
     private HashMap<Integer, ByteBuffer> cachedBuffers
             = new HashMap<Integer, ByteBuffer>();
+
+    public boolean fboSupported = false;
+    
 
     public enum BufferTarget {
         Vertex,
@@ -191,7 +200,7 @@ public class GLRef {
         glViewport(0, 0, currentMode.getWidth(), currentMode.getHeight());
         checkError();
 
-
+        InitFBO();
 
 
         // Init systems waiting for opengl
@@ -204,6 +213,169 @@ public class GLRef {
         // There may be an error sitting in OpenGL.
         // If it isn't cleared, it may trigger an exception later on.
         checkError();
+    }
+
+    private int fboId = 0;
+    private int fboColorId = 0;
+
+    private void InitFBO() {
+        if(!fboSupported)
+            return;
+
+        IntBuffer buffer = ByteBuffer.allocateDirect(1*4).order(ByteOrder.nativeOrder()).asIntBuffer(); // allocate a 1 int byte buffer
+        EXTFramebufferObject.glGenFramebuffersEXT( buffer ); // generate
+        fboId = buffer.get();
+
+        checkError();
+        if(fboId == 0) {
+            fboSupported = false;
+            Common.Log("Could not create FBO - got zero index back from OpenGL");
+            return;
+        }
+
+        // Create the texture
+        fboColorId = Ref.ResMan.CreateEmptyTexture((int)GetResolution().x, (int)GetResolution().y);
+        Ref.ResMan.CreateEmptyTexture((int)GetResolution().x, (int)GetResolution().y);
+        EXTFramebufferObject.glBindFramebufferEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, fboId );
+        EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, EXTFramebufferObject.GL_COLOR_ATTACHMENT0_EXT,
+                ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, fboColorId, 0);
+        glBindTexture(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, 0);
+        
+//        checkError();
+
+        // Check for error
+        int framebuffer = EXTFramebufferObject.glCheckFramebufferStatusEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT );
+        switch ( framebuffer ) {
+            case EXTFramebufferObject.GL_FRAMEBUFFER_COMPLETE_EXT:
+                    break;
+            case EXTFramebufferObject.GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT_EXT:
+                    throw new RuntimeException( "FrameBuffer: " + fboId
+                                    + ", has caused a GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT_EXT exception" );
+            case EXTFramebufferObject.GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT_EXT:
+                    throw new RuntimeException( "FrameBuffer: " + fboId
+                                    + ", has caused a GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT_EXT exception" );
+            case EXTFramebufferObject.GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS_EXT:
+                    throw new RuntimeException( "FrameBuffer: " + fboId
+                                    + ", has caused a GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS_EXT exception" );
+            case EXTFramebufferObject.GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER_EXT:
+                    throw new RuntimeException( "FrameBuffer: " + fboId
+                                    + ", has caused a GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER_EXT exception" );
+            case EXTFramebufferObject.GL_FRAMEBUFFER_INCOMPLETE_FORMATS_EXT:
+                    throw new RuntimeException( "FrameBuffer: " + fboId
+                                    + ", has caused a GL_FRAMEBUFFER_INCOMPLETE_FORMATS_EXT exception" );
+            case EXTFramebufferObject.GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER_EXT:
+                    throw new RuntimeException( "FrameBuffer: " + fboId
+                                    + ", has caused a GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER_EXT exception" );
+            default:
+                    throw new RuntimeException( "Unexpected reply from glCheckFramebufferStatusEXT: " + framebuffer );
+        }
+
+        
+    }
+
+    public void BindFBO() {
+        if(!fboSupported)
+            return;
+        
+        
+        EXTFramebufferObject.glBindFramebufferEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, fboId);
+
+    }
+
+    public void UnbindFBO() {
+        if(!fboSupported)
+            return;
+
+        
+        EXTFramebufferObject.glBindFramebufferEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, 0);
+        
+    }
+
+    public Shader getShader(String str) {
+        return shaders.get(str);
+    }
+
+    public void BlitFBO() {
+        if(!fboSupported)
+            return;
+
+        if(Ref.cgame == null || Ref.cgame.sunPositionOnScreen == null)
+            return;
+
+        setShader("scatter");
+
+        int SunPosition_uniform = ARBShaderObjects.glGetUniformLocationARB(getShader("scatter").getShaderId(), "lightPositionOnScreen");
+        glUniform2f(SunPosition_uniform, Ref.cgame.sunPositionOnScreen.x, Ref.cgame.sunPositionOnScreen.y);
+        
+        
+        glPushAttrib(GL_VIEWPORT_BIT);
+        glViewport(0, 0, (int)GetResolution().x, (int)GetResolution().y);
+        
+        CubeTexture.Unbind();
+        
+        glDisable(GL_TEXTURE_2D);
+        glEnable(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB);
+        glBindTexture(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, fboColorId);
+//        glBindTexture(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, fboColorId);
+        
+        Vector2f TexOffset = new Vector2f(0, 0);
+        Vector2f TexSize = new Vector2f(GetResolution());
+        Vector2f Extent = new Vector2f(GetResolution().x, GetResolution().y);
+//        Extent.scale(0.5f);
+        float depth = 0;
+        Color color = (Color) Color.WHITE;
+//        color.setAlpha((byte)127);
+
+         glBegin( GL_QUADS);
+        {
+            if(Ref.glRef.isShadersSupported()) {
+                // Fancy pants shaders
+                 glVertexAttrib2f(2, TexOffset.x, TexOffset.y);
+                 glVertexAttrib2f(3, 0,0);
+                 glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                 glVertexAttrib3f(0, 0, 0, depth);
+
+                 glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y);
+                 glVertexAttrib2f(3, 1,0);
+                 glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                 glVertexAttrib3f(0, Extent.x, 0, depth);
+
+                 glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
+                 glVertexAttrib2f(3, 1,1);
+                 glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                 glVertexAttrib3f(0, Extent.x, Extent.y, depth);
+
+                 glVertexAttrib2f(2, TexOffset.x, TexOffset.y+TexSize.y);
+                 glVertexAttrib2f(3, 0,1);
+                 glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                 glVertexAttrib3f(0, 0, Extent.y, depth);
+            } else {
+                // Good ol' fixed function
+                 glTexCoord2f(TexOffset.x, TexOffset.y);
+                 glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                 glVertex3f( 0, 0, depth);
+
+                 glTexCoord2f(TexOffset.x+TexSize.x, TexOffset.y);
+                 glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                 glVertex3f( Extent.x, 0, depth);
+
+                 glTexCoord2f(TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
+                 glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                 glVertex3f( Extent.x, Extent.y, depth);
+
+                 glTexCoord2f(TexOffset.x, TexOffset.y+TexSize.y);
+                 glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                 glVertex3f( 0, Extent.y, depth);
+            }
+
+        }
+         glEnd();
+
+        glPopAttrib();
+        glBindTexture(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, 0);
+        glDisable(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB);
+        glEnable(GL_TEXTURE_2D);
+        setShader("sprite");
     }
 
     // Set up cvars
@@ -485,18 +657,19 @@ public class GLRef {
     }
 
     public void setShader(String str) {
-        shaders.get(str).Bind();
+        Shader s = shaders.get(str);
+        shader = s;
+        s.Bind();
     }
 
     private void loadShaders() {
         try {
-            
-            shader = new Shader("gfx/sprite");
-            shaders.put("sprite", shader);
-            shader.Bind();
-//            shaders.put("litobject", new Shader("gfx/litobject"));
-//
-//            Light.test();
+            shaders.put("sprite", new Shader("gfx/sprite"));
+            shaders.put("imgspace", new Shader("gfx/imgspace"));
+            shaders.put("scatter", new Shader("gfx/scatter"));
+            shaders.put("blackshader", new Shader("gfx/blackshader"));
+
+            setShader("sprite");
         } catch (Exception ex) {
             Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
             Ref.common.Error(ErrorCode.FATAL, "Failed to load graphics shaders\n" + Common.getExceptionString(ex));
@@ -523,6 +696,16 @@ public class GLRef {
                 okay = false;
                 Common.Log("EXT_draw_range_elements not supported by your graphics card");
             }
+
+            if(!caps.GL_EXT_framebuffer_object) {
+                fboSupported = false;
+                Common.Log("EXT_framebuffer_object not supported by your graphics card");
+            } else if(!caps.GL_EXT_texture_rectangle) {
+                fboSupported = false;
+                Common.Log("GL_EXT_texture_rectangle not supported by your graphics card");
+            } else if(okay)
+                fboSupported = true;
+
         }
 
         return okay;

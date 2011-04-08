@@ -13,6 +13,7 @@ import org.lwjgl.opengl.ARBShaderObjects;
 import org.lwjgl.opengl.ARBVertexShader;
 import org.lwjgl.opengl.ARBGeometryShader4;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 
 /**
@@ -28,9 +29,15 @@ public class Shader {
 
     // GLSL Shader variable positions
     private int uniform_texture = 0;
+    private int uniform_normalTexture = 0;
     private int attr_position = 0;
     private int attr_coords = 0;
+    private int attr_coords2 = 0;
     private int attr_color = 0;
+
+    public int getShaderId() {
+        return shaderId;
+    }
 
     public Shader(String name) throws Exception {
         if(!Ref.glRef.isInitalized())
@@ -66,6 +73,7 @@ public class Shader {
             GL20.glBindAttribLocation(shaderId, 0, "v_position");
             GL20.glBindAttribLocation(shaderId, 1, "v_color");
             GL20.glBindAttribLocation(shaderId, 2, "v_coords");
+            GL20.glBindAttribLocation(shaderId, 3, "v_coords2");
             GLRef.checkError();
             
             ARBShaderObjects.glLinkProgramARB(shaderId);
@@ -78,8 +86,10 @@ public class Shader {
             throw new Exception("Shader assembly failed.");
         GLRef.checkError();
         uniform_texture = ARBShaderObjects.glGetUniformLocationARB(shaderId, "tex");
+        uniform_normalTexture = ARBShaderObjects.glGetUniformLocationARB(shaderId, "normalmap");
         attr_position = GL20.glGetAttribLocation(shaderId, "v_position");
         attr_coords = GL20.glGetAttribLocation(shaderId, "v_coords");
+        attr_coords2 = GL20.glGetAttribLocation(shaderId, "v_coords2");
         attr_color = GL20.glGetAttribLocation(shaderId, "v_color");
         GLRef.checkError();
     }
@@ -87,6 +97,15 @@ public class Shader {
     public void Bind() {
         ARBShaderObjects.glUseProgramObjectARB(shaderId);
         ARBShaderObjects.glUniform1iARB(uniform_texture, 0); // Bind TEXTURE0 to "tex"
+        if(uniform_normalTexture != 0) {
+            ARBShaderObjects.glUniform1iARB(uniform_normalTexture, 1); // Bind TEXTURE0 to "tex"
+            GL13.glActiveTexture(GL13.GL_TEXTURE1);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, Ref.ResMan.LoadTexture("data/water_normal2.jpg").GetID());
+            GLRef.checkError();
+            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        }
+//        else
+//            ARBShaderObjects.glUniform1iARB(uniform_normalTexture, 1); // Bind TEXTURE0 to "tex"
         GLRef.checkError();
     }
 

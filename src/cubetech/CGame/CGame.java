@@ -40,6 +40,8 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL20;
 import org.lwjgl.util.Color;
 
 import org.lwjgl.util.vector.Vector2f;
@@ -200,6 +202,74 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Ref.Input.AddMouseEventListener(this, Input.KEYCATCH_CGAME);
     }
 
+    public Vector2f sunPositionOnScreen = new Vector2f();
+    public Color sunColor = (Color) Color.WHITE;
+    public void DrawSun() {
+        Ref.ResMan.LoadTexture("data/particle.png").Bind();
+
+        float yfrac = cg.refdef.Origin.y / Ref.cvars.Find("g_killheight").fValue;
+        if(yfrac < -1f)
+            yfrac = -1f;
+        if(yfrac > 1)
+            yfrac = 1f;
+
+        float xfrac = cg.refdef.Origin.x / 5000f;
+
+//        Vector2f texSize = new Vector2f(1, 0.8f);
+//        Vector2f texoffset = new Vector2f(0+xfrac,0.1f + yfrac * -0.1f);
+
+//        spr.Set(new Vector2f(cg.refdef.Origin.x + cg.refdef.xmin, cg.refdef.Origin.y + cg.refdef.ymin),
+//                new Vector2f(cg.refdef.w, cg.refdef.h), Ref.ResMan.LoadTexture("data/background_1.png"), texoffset, texSize);
+//        spr.SetDepth(PLAYER_LAYER - 200);
+
+//        yfrac *= -1f;
+    
+//
+        Vector2f position = new Vector2f(cg.refdef.Origin.x + cg.refdef.xmin + cg.refdef.w * 0.2f
+                ,cg.refdef.Origin.y + cg.refdef.ymin + cg.refdef.h * 0.9f + cg.refdef.h* yfrac * 0.1f);
+
+        sunPositionOnScreen.set(Ref.glRef.GetResolution());
+        sunPositionOnScreen.x *= 0.2f;
+        sunPositionOnScreen.y *= 0.9f + 0.1f * yfrac;
+        Vector2f TexOffset = new Vector2f();
+        Vector2f TexSize = new Vector2f(1,1);
+        Color color = sunColor;
+        //color.set((byte)182, (byte)126, (byte)91, (byte)30); // sunrise / sunset
+        //color.set((byte)192, (byte)191, (byte)173, (byte)30); // noon
+        color.set((byte)189, (byte)190, (byte)192, (byte)30); // cloud/haze
+        //color.set((byte)174, (byte)183, (byte)190, (byte)30); // overcast
+        float scale = cg.refdef.w / cg.refdef.h;
+        Vector2f Extent = new Vector2f(0.05f * cg.refdef.w,0.05f *cg.refdef.h * scale);
+//        position.x += Extent.x * 0.5f;
+//        position.y += Extent.y * 0.5f;
+        float depth = -100;
+
+        GL11.glPushMatrix();
+        GL11.glTranslatef(position.x, position.y, 0);
+        
+        GL11.glBegin(GL11.GL_QUADS);
+        {
+            GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y);
+            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL20.glVertexAttrib3f(0, -Extent.x, -Extent.y, depth);
+
+            GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y);
+            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL20.glVertexAttrib3f(0, Extent.x, -Extent.y, depth);
+
+            GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
+            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL20.glVertexAttrib3f(0, Extent.x, Extent.y, depth);
+
+            GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y+TexSize.y);
+            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL20.glVertexAttrib3f(0, -Extent.x, Extent.y, depth);
+        }
+        GL11.glEnd();
+
+        GL11.glPopMatrix();
+    }
+
     public void DrawActiveFrame(int serverTime) {
         // UpdateCVars
         cg.time = serverTime;
@@ -228,6 +298,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
         CalcViewValues();
 
+
         Ref.soundMan.Respatialize(cg.refdef.Origin, cg.predictedPlayerState.velocity);
         
 //        AddLocalEntities();
@@ -239,15 +310,20 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg.oldTime = cg.time;
 
         // Time to do some drawing
-        RenderBackground();
+//        RenderBackground();
         if(cg_editmode.iValue == 0) {
             RenderClouds();
+        } else {
+            if(mapEditor.isShowingAnimator())
+                mapEditor.animEditor.SetView();
         }
         
         if(cg_drawbin.iValue != 1) {
-            RenderScene(cg.refdef);
-            AddPacketEntities();
-            DrawEntities();
+            if(cg_editmode.iValue == 0 || !mapEditor.isShowingAnimator()) {
+                RenderScene(cg.refdef);
+                AddPacketEntities();
+                DrawEntities();
+            }
             Draw2D();
 
         } else {
@@ -324,7 +400,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
     
 
-    private void RenderBackground() {
+    public void RenderBackground() {
         Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
 
         float yfrac = cg.refdef.Origin.y / Ref.cvars.Find("g_killheight").fValue;
@@ -394,6 +470,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
     private void CalcViewValues() {
         speed = (float) (speed * 0.8 + cg.predictedPlayerState.velocity.length() * 0.2f);
+        if(cg.refdef == null)
         cg.refdef = new ViewParams();
         cg.refdef.CalcVRect();
 
@@ -582,7 +659,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         // Render mapeditor if in editmode
         if(cg_editmode.iValue == 1) {
             mapEditor.Render();
-            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, 0.0f), "^3Edit Mode", Align.CENTER, Type.HUD);
+            
         }
 
         float speeds = Math.abs(cg.snap.ps.velocity.x);

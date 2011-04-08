@@ -34,7 +34,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector4f;
 
 /**
  *
@@ -650,6 +652,12 @@ public class Client {
         EndFrame();
     }
 
+    private boolean RenderingCGame() {
+        if(state == ConnectState.ACTIVE && Ref.cvars.Find("cg_editmode").iValue == 0)
+            return true;
+        return false;
+    }
+
     private void ParseGameState(NetBuffer buf) {
         Ref.Console.Close();
 
@@ -1088,16 +1096,52 @@ public class Client {
 //        return;
 //        }
         // Render normal sprites
-        Ref.SpriteMan.DrawNormal();
+        
+        Ref.glRef.BindFBO();
+        
+        Vector4f skyColor = new Vector4f(0, 0.01f, 0.03f, 1);
+        if(RenderingCGame()) {
+            Color col = Ref.cgame.sunColor;
+            skyColor.set(col.getRedByte(), col.getGreenByte(), col.getBlueByte(), col.getAlphaByte());
 
+            skyColor.scale(2f/255f);
+            skyColor.x += 1;
+            skyColor.y += 1;
+            float skyFromSunFrac = 0.01f;
+
+            skyColor.scale(skyFromSunFrac);
+            skyColor.w = 1f;
+        }
+        GL11.glClearColor(skyColor.x, skyColor.y, skyColor.z, skyColor.w);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glDisable(GL11.GL_DEPTH_TEST);
+        GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
+        if(RenderingCGame())
+            Ref.cgame.DrawSun();
+        Ref.glRef.setShader("blackshader");
+        GL11.glClearColor(0, 0.0f, 0f, 0);
+        Ref.SpriteMan.DrawNormal();
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_DEPTH_TEST);
+        Ref.glRef.UnbindFBO();
+        Ref.glRef.setShader("sprite");
+        if(RenderingCGame())
+            Ref.cgame.RenderBackground();
+        Ref.SpriteMan.DrawNormal();
+       
         // Set HUD render projection
         GL11.glViewport(0, 0, (int)Ref.glRef.GetResolution().x, (int)Ref.glRef.GetResolution().y);
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glLoadIdentity();
         //GL11.glOrtho(0, 1,1, 0, 1,-1000);
         GL11.glOrtho(0, (int)Ref.glRef.GetResolution().x, 0, (int)Ref.glRef.GetResolution().y, 1,-1000);
+        GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE);
+
+         Ref.glRef.BlitFBO();
+         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glLoadIdentity();
+        
 //        Ref.textMan.Render();
         Ref.SpriteMan.DrawHUD();
         Ref.SpriteMan.Reset();
@@ -1109,6 +1153,10 @@ public class Client {
 //        Ref.textMan.Render();
         Ref.SpriteMan.DrawHUD();
         Ref.textMan.Render(); // Draw remaining text - shouldn't be any
+
+        
+        
+        
         // Display frame
 //        Display.sync(60);
         Display.update();
