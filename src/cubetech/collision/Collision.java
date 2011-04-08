@@ -17,6 +17,23 @@ public class Collision {
 
 
     static final int RESULT_BUFFER_SIZE = 256;
+
+    /**
+     * Returns true on collision
+     * @param Position The point to test
+     * @param x x-min
+     * @param y y-min
+     * @param x0 x-max
+     * @param y0 y-max
+     * @return
+     */
+    public static boolean TestPointAABB(Vector2f Position, float x, float y, float x0, float y0) {
+        return (Position.x >= x && Position.x <= x0
+                && Position.y >= y && Position.y <= y0);
+    }
+
+    
+    
     private CollisionResult[] resultBuffer = new CollisionResult[RESULT_BUFFER_SIZE];
     private int BufferOffset = 0;
     Vector2f AAxis[] = new Vector2f[2];
@@ -453,6 +470,19 @@ public class Collision {
             return false;
 
         return true;
+    }
+
+    /**
+     * Tests if the distance between two points are whithin the radius
+     * @param p1
+     * @param p2
+     * @param radius
+     * @return true on collision
+     */
+    public static boolean TestPointPointRadius(Vector2f p1, Vector2f p2, float radius) {
+        Vector2f delta = new Vector2f();
+        Vector2f.sub(p1, p2, delta);
+        return radius*radius >= delta.lengthSquared();
     }
 
 

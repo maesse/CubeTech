@@ -43,6 +43,16 @@ public class Helper {
         return (float)len;
     }
 
+    public static Vector2f CreateVector(float angle, float lenght, Vector2f dest) {
+        if(dest == null)
+            dest = new Vector2f();
+
+        dest.x = (float)Math.cos(angle);
+        dest.y = (float)Math.sin(angle);
+        dest.scale(lenght);
+        return dest;
+    }
+
     public static void AddPointToBounds(Vector2f v, Vector2f mins, Vector2f maxs) {
         if(v.x < mins.x)
             mins.x = v.x;
