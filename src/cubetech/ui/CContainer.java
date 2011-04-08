@@ -205,5 +205,11 @@ public class CContainer extends CComponent {
         this.background = background;
     }
 
-    
+    @Override
+    public boolean containsPoint(Vector2f point) {
+        Vector2f position = getPosition();
+        Vector2f size = getLayoutSize();
+        return (point.x >= position.x && point.x < position.x + size.x
+                && point.y >= position.y && point.y < position.y + size.y );
+    }
 }

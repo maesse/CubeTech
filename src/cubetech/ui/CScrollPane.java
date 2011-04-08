@@ -1,5 +1,6 @@
 package cubetech.ui;
 
+import cubetech.collision.Collision;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
@@ -16,13 +17,20 @@ import org.lwjgl.util.vector.Vector4f;
 public class CScrollPane extends CContainer {
     private boolean vert = true;
     private boolean hori = true;
-    float scollbarHeight = 50;
+    float scrollbarSize = 50;
     private float vertPositon = 0f;
+    boolean mouseOverVertical = false;
+    boolean mouseDown = false;
+
+    private float horiPosition = 0f;
+    private boolean mouseOverHorizontal = false;
     CubeTexture slider;
+    CubeTexture vslider;
 
     public CScrollPane(Direction dir) {
         super(new FlowLayout(false, false, true));
         slider = Ref.ResMan.LoadTexture("data/slider.png");
+        vslider = Ref.ResMan.LoadTexture("data/vslider.png");
         setResizeToChildren(dir);
         vert = true;
         hori = true;
@@ -31,15 +39,14 @@ public class CScrollPane extends CContainer {
             hori = false;
         }
         else if(dir == Direction.HORIZONTAL) {
-            setInternalMargin(new Vector4f(0, 0, 0, 32));
+            setInternalMargin(new Vector4f(0, 0, 0, 20));
             vert = false;
         }
         else if(dir == Direction.BOTH)
-            setInternalMargin(new Vector4f(0, 0, 32, 32));
+            setInternalMargin(new Vector4f(0, 0, 20, 20));
     }
 
-    boolean mouseOverVertical = false;
-    boolean mouseDown = false;
+    
 
     @Override
     public void onMouseExit() {
@@ -49,7 +56,7 @@ public class CScrollPane extends CContainer {
     @Override
     public void MouseEvent(MouseEvent evt) {
         // Check against scrollbar
-        float scollableHeight = getSize().y - scollbarHeight;
+        float scollableHeight = getSize().y - scrollbarSize;
         Vector2f componentSize = getComponent(0).getSize();
         if(getComponentCount() > 1)
             throw new RuntimeException("DERRRPPPhh only one child component per scrollpane!");
@@ -59,34 +66,56 @@ public class CScrollPane extends CContainer {
         if(!isMouseEnter())
             mouseDown = false;
 
-        float maxScroll = componentSize.y - viewSize.y;
-        if(maxScroll < 0)
-            maxScroll = 0;
-        float scollFrac = vertPositon / maxScroll;
-        if(maxScroll == 0)
-            scollFrac = 0f;
-//        System.out.println(evt.Position);
+        // Figure out how much can be scrolled
+        Vector2f vertOverflow = new Vector2f(componentSize.x - viewSize.x,componentSize.y - viewSize.y);
+        if(vertOverflow.x < 0)
+            vertOverflow.x = 0;
+        if(vertOverflow.y < 0)
+            vertOverflow.y = 0;
+        
         Vector2f intPos = getInternalPosition();
-        Vector2f sliderPosition = new Vector2f( intPos.x + getSize().x  - getInternalMargin().z,
-                     (getInternalPosition().y    ));
-        if(evt.Position.x >= sliderPosition.x && evt.Position.x <= sliderPosition.x + getInternalMargin().z &&
-                evt.Position.y >= sliderPosition.y && evt.Position.y <= sliderPosition.y + getSize().y) {
-            mouseOverVertical = true;
-            if(mouseDown) {
-                
-                // Scroll to button press
-                float sliderClickFrac = (evt.Position.y - (getPosition().y  + getMargin().y)) - 25; // in pixels
-                if(sliderClickFrac < 0)
-                    sliderClickFrac = 0;
-//                System.out.println(""+sliderClickFrac + " / " + getSize().y + " - max: " + maxScroll);
-                sliderClickFrac /= getSize().y - scollbarHeight; // now fraction
-                vertPositon = maxScroll * sliderClickFrac;  // back to pixel
-            }
-        } else
-            mouseOverVertical = false;
+        Vector2f intSize = getInternalSize();
+        if(vert) {
+            // Check slider bounds
+            Vector2f sliderPosition = new Vector2f( intPos.x + intSize.x, intPos.y);
+            Vector2f sliderEnd = new Vector2f(getPosition().x + getSize().x, getPosition().y + getSize().y);
+            if(Collision.TestPointAABB(evt.Position, sliderPosition.x, sliderPosition.y, sliderEnd.x, sliderEnd.y)) {
+                mouseOverVertical = true;
+                if(mouseDown) {
+                    // Scroll to button press
+                    float sliderClickFrac = (evt.Position.y - intPos.y) - scrollbarSize/2; // in pixels
+                    if(sliderClickFrac < 0)
+                        sliderClickFrac = 0;
+    //                System.out.println(""+sliderClickFrac + " / " + getSize().y + " - max: " + maxScroll);
+                    sliderClickFrac /= intSize.y - scrollbarSize; // now fraction
+                    vertPositon = vertOverflow.y * sliderClickFrac;  // back to pixel
+                }
+            } else
+                mouseOverVertical = false;
+        }
+
+        if(hori) {
+            // Check slider bounds
+            Vector2f sliderPosition = new Vector2f( intPos.x , intPos.y+ intSize.y);
+            Vector2f sliderEnd = new Vector2f(getPosition().x + getSize().x, getPosition().y + getSize().y);
+            if(Collision.TestPointAABB(evt.Position, sliderPosition.x, sliderPosition.y, sliderEnd.x, sliderEnd.y)) {
+                mouseOverHorizontal = true;
+                if(mouseDown) {
+                    // Scroll to button press
+                    float sliderClickFrac = (evt.Position.x - intPos.x) - scrollbarSize/2; // in pixels
+                    if(sliderClickFrac < 0)
+                        sliderClickFrac = 0;
+    //                System.out.println(""+sliderClickFrac + " / " + getSize().y + " - max: " + maxScroll);
+                    sliderClickFrac /= intSize.x - scrollbarSize; // now fraction
+                    horiPosition = vertOverflow.x * sliderClickFrac;  // back to pixel
+                }
+            } else
+                mouseOverHorizontal = false;
+        }
 
         Vector2f relative = new Vector2f(evt.Position);
         relative.y += vertPositon ;
+        relative.x += horiPosition ;
         if(containsPoint(evt.Position)) {
             if(!isMouseEnter())
                 MouseEnter();
@@ -97,6 +126,7 @@ public class CScrollPane extends CContainer {
             relativePosition.x -= getInternalPosition().x;
             relativePosition.y -= getInternalPosition().y;
             relativePosition.y += vertPositon;
+            relativePosition.x += vertPositon;
             for (int i= 0; i < getComponentCount(); i++) {
                 CComponent comp = getComponent(i);
                 boolean hit = comp.containsPoint(relativePosition);
@@ -129,7 +159,7 @@ public class CScrollPane extends CContainer {
         if(getBackground() != null) {
             Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
             spr.Set(new Vector2f(renderpos.x, Ref.glRef.GetResolution().y - (renderpos.y + getSize().y)), getSize(), getBackground(), null, null);
-            spr.SetColor(255,255,255,20);
+            spr.SetColor(255,255,255,255);
         }
 
         Vector2f absPos = new Vector2f(renderpos);
@@ -142,15 +172,20 @@ public class CScrollPane extends CContainer {
         Vector2f componentSize = getComponent(0).getSize();
         Vector2f viewSize = getInternalSize();
 
-        float maxScroll = componentSize.y - viewSize.y;
-        if(maxScroll < 0)
-            maxScroll = 0;
-        if(vertPositon > maxScroll)
-            vertPositon = maxScroll;
+        Vector2f maxScroll = new Vector2f(componentSize.x - viewSize.x,componentSize.y - viewSize.y);
+        if(maxScroll.y < 0)
+            maxScroll.y = 0;
+        if(maxScroll.x < 0)
+            maxScroll.x = 0;
+        if(vertPositon > maxScroll.y)
+            vertPositon = maxScroll.y;
+        if(horiPosition > maxScroll.x)
+            horiPosition = maxScroll.x;
         
         Ref.SpriteMan.GetSprite(Type.HUD).SetSpecial(GL11.GL_SCISSOR_BOX, (int)(renderpos.x + childrenPosition.x), (int)Ref.glRef.GetResolution().y - (int)(renderpos.y + viewSize.y + childrenPosition.y), (int)(viewSize.x), (int)(viewSize.y));
         Ref.SpriteMan.GetSprite(Type.HUD).SetSpecial(GL11.GL_SCISSOR_TEST, true);
         renderpos.y -= vertPositon;
+        renderpos.x -= horiPosition;
         for (int i= 0; i < getComponentCount(); i++) {
             getComponent(i).Render(renderpos);
         }
@@ -162,18 +197,39 @@ public class CScrollPane extends CContainer {
             spr.SetColor(9, 10, 12, 255);
             spr = Ref.SpriteMan.GetSprite(Type.HUD);
             
-            float scollableHeight = getSize().y - scollbarHeight;
-            float scollFrac = vertPositon / maxScroll;
-            if(maxScroll == 0)
+            float scollableHeight = getSize().y - scrollbarSize;
+            float scollFrac = vertPositon / maxScroll.y;
+            if(maxScroll.y <= 0)
                 scollFrac = 0f;
             Vector2f sliderPosition = new Vector2f(absPos.x + getSize().x - getInternalMargin().z ,
-                    Ref.glRef.GetResolution().y - (getPosition().y + parentPosition.y + getMargin().y + scollbarHeight + scollableHeight * scollFrac));
-            spr.Set(sliderPosition, new Vector2f(getInternalMargin().z, scollbarHeight), slider, null, null);
+                    Ref.glRef.GetResolution().y - (getPosition().y + parentPosition.y + getMargin().y + scrollbarSize + scollableHeight * scollFrac));
+            spr.Set(sliderPosition, new Vector2f(getInternalMargin().z, scrollbarSize), slider, null, null);
             if(mouseOverVertical && isMouseEnter())
                 spr.SetColor(180, 180, 180, 255);
             else
-                spr.SetColor(100, 100, 100, 255);
+                spr.SetColor(120, 120, 120, 255);
         
+        }
+
+        if(hori) {
+            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            spr.Set(new Vector2f( (getPosition().x + parentPosition.x + getMargin().x + scrollbarSize/2),
+                    Ref.glRef.GetResolution().y - (absPos.y + getInternalSize().y + getInternalMargin().w/2f + 3)),
+                    new Vector2f(getSize().x - scrollbarSize,6), null, null, null);
+            spr.SetColor(9, 10, 12, 255);
+            spr = Ref.SpriteMan.GetSprite(Type.HUD);
+
+            float scollableHeight = getSize().x - scrollbarSize;
+            float scollFrac = horiPosition / maxScroll.x;
+            if(maxScroll.x <= 0)
+                scollFrac = 0f;
+            Vector2f sliderPosition = new Vector2f((getPosition().x + parentPosition.x + getMargin().x + scollableHeight * scollFrac) ,
+                    Ref.glRef.GetResolution().y - (absPos.y + getSize().y + getInternalMargin().y));
+            spr.Set(sliderPosition, new Vector2f(scrollbarSize,getInternalMargin().w), vslider, null, null);
+            if(mouseOverHorizontal && isMouseEnter())
+                spr.SetColor(180, 180, 180, 255);
+            else
+                spr.SetColor(120, 120, 120, 255);
         }
     }
 }
