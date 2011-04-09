@@ -157,7 +157,7 @@ public class Console implements KeyEventListener, LogEventListener {
                 break;
             case Keyboard.KEY_TAB:
                 nConsecutiveTabs++;
-                if(nConsecutiveTabs == 2) {
+                if(nConsecutiveTabs >= 1) {
                     nConsecutiveTabs = 0;
                     TabCompletion();
                 }
@@ -204,11 +204,19 @@ public class Console implements KeyEventListener, LogEventListener {
                 // Else sort and print to console
                 Collections.sort(list);
                 StringBuilder buf = new StringBuilder();
+                String common = null;
                 for (String str : list) {
                     buf.append(str);
+
+                    if(common != null)
+                        common = ReduceToCommon(common, str);
+                    else
+                        common = str;
                     buf.append("  ");
                 }
                 Common.Log(buf.toString());
+
+                cmdLine = common;
             }
             return;
         }
@@ -223,6 +231,29 @@ public class Console implements KeyEventListener, LogEventListener {
             }
         }
         
+    }
+
+    /**
+     * Takes two strings that are different, and returns a new string
+     * containing the characters that are equal,
+     * @param source
+     * @param test
+     * @return
+     */
+    private static String ReduceToCommon(String source, String test) {
+        int max = source.length();
+        if(test.length() < max)
+            max = test.length();
+
+        StringBuilder bldr = new StringBuilder();
+        for (int i= 0; i < max; i++) {
+            char a = source.charAt(i);
+            char b = test.charAt(i);
+            if(a != b)
+                break;
+            bldr.append(a);
+        }
+        return bldr.toString();
     }
 
     // Scrolls the command log.
