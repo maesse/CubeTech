@@ -166,7 +166,7 @@ public class Sprite {
 
         Texture = null;
         Center.set(center.x, center.y);
-        Extent.set(len/2f, thickness);
+        Extent.set(len/2f, thickness * 0.5f);
         color.set(255, 255, 255, 255);
         TexOffset.set(0, 0);
         TexSize.set(1, 1);
