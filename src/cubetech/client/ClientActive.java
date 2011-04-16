@@ -112,7 +112,7 @@ public class ClientActive {
 
         // note if we are almost past the latest frame (without timeNudge),
         // so we will try and adjust back a bit when the next snapshot arrives
-        if(Ref.client.realtime + serverTimeDelta >= snap.serverTime )
+        if(Ref.client.realtime + serverTimeDelta >= snap.serverTime - 5 )
             extrapolatedSnapshot = true;
 
         // if we have gotten new snapshots, drift serverTimeDelta
@@ -165,11 +165,11 @@ public class ClientActive {
                 if(extrapolatedSnapshot) {
                     extrapolatedSnapshot = false;
                     serverTimeDelta -= 1;
-                   // System.out.println("Back");
+//                    System.out.println("Back");
                 } else if(deltaDelta > Ref.client.cl_netquality.iValue)
                 {
                     serverTimeDelta++;
-                   // System.out.println("Forward");
+//                    System.out.println("Forward");
                 }
             }
         }

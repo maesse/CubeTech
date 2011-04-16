@@ -202,10 +202,6 @@ public class Client {
         updateListener = null;
     }
 
-    // ServerInfoAccessors
-    
-
-    
 
     public void Frame(int msec) {
         if(Ref.common.cl_running.iValue == 0)
@@ -468,8 +464,6 @@ public class Client {
 
         Common.LogDebug("Unknown OOB packet from " + packet.endpoitn.toString());
     }
-    
-    
 
     public void ForwardCommandToServer(String str, String[] tokens) {
         String cmd = tokens[0];
@@ -646,8 +640,8 @@ public class Client {
 
 //        Ref.StateMan.RunFrame((int)frametime);
 
-            if((Ref.Input.GetKeyCatcher() & Input.KEYCATCH_UI) > 0)
-                Ref.ui.Update(realtime);
+        if((Ref.Input.GetKeyCatcher() & Input.KEYCATCH_UI) > 0)
+            Ref.ui.Update(realtime);
 
         EndFrame();
     }
@@ -975,6 +969,13 @@ public class Client {
         // copy to the current good spot
         cl.snap = newsnap;
         cl.snap.ping = 999;
+        for (int i= 0; i < 32; i++) {
+            int packNum = (clc.netchan.outgoingSequence - 1 - i) & 31;
+            if(cl.snap.ps.commandTime >= cl.outPackets[packNum].servertime) {
+                cl.snap.ping = realtime - cl.outPackets[packNum].realtime;
+                break;
+            }
+        }
 
         // save the frame off in the backup array for later delta comparisons
         cl.snapshots[cl.snap.messagenum & 31] = cl.snap;
@@ -1101,7 +1102,7 @@ public class Client {
         
         Vector4f skyColor = new Vector4f(0, 0.01f, 0.03f, 1);
         if(RenderingCGame()) {
-            Color col = Ref.cgame.sunColor;
+            Color col = Ref.cgame.cgr.sunColor;
             skyColor.set(col.getRedByte(), col.getGreenByte(), col.getBlueByte(), col.getAlphaByte());
 
             skyColor.scale(2f/255f);
@@ -1117,7 +1118,7 @@ public class Client {
         GL11.glDisable(GL11.GL_DEPTH_TEST);
         GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
         if(RenderingCGame())
-            Ref.cgame.DrawSun();
+            Ref.cgame.cgr.DrawSun();
         Ref.glRef.setShader("blackshader");
         GL11.glClearColor(0, 0.0f, 0f, 0);
         Ref.SpriteMan.DrawNormal();
@@ -1126,7 +1127,7 @@ public class Client {
         Ref.glRef.UnbindFBO();
         Ref.glRef.setShader("sprite");
         if(RenderingCGame())
-            Ref.cgame.RenderBackground();
+            Ref.cgame.cgr.RenderBackground();
         Ref.SpriteMan.DrawNormal();
        
         // Set HUD render projection

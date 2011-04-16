@@ -2,58 +2,31 @@ package cubetech.CGame;
 
 import cubetech.Block;
 import cubetech.Game.Game;
-import cubetech.Game.Gentity;
 import cubetech.collision.BlockModel;
 import cubetech.collision.ClipmapException;
 import cubetech.collision.CollisionResult;
-import cubetech.common.CS;
-import cubetech.common.CVar;
-import cubetech.common.CVarFlags;
-import cubetech.common.Commands;
-import cubetech.common.Common;
-import cubetech.common.Content;
-import cubetech.common.GItem;
-import cubetech.common.Helper;
-import cubetech.common.ICommand;
-import cubetech.common.ITrace;
-import cubetech.common.Move.MoveType;
-import cubetech.common.PlayerState;
-import cubetech.entities.EntityFlags;
+import cubetech.common.*;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
-import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
 import cubetech.gfx.SpriteManager.Type;
-import cubetech.gfx.TextManager.Align;
-import cubetech.input.Input;
-import cubetech.input.KeyEvent;
-import cubetech.input.KeyEventListener;
-import cubetech.input.MouseEvent;
-import cubetech.input.MouseEventListener;
+import cubetech.input.*;
 import cubetech.misc.Ref;
 import cubetech.spatial.Bin;
 import cubetech.spatial.SpatialQuery;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL20;
-import org.lwjgl.util.Color;
-
 import org.lwjgl.util.vector.Vector2f;
-import org.lwjgl.util.vector.Vector3f;
-import org.lwjgl.util.vector.Vector4f;
 
 /**
  *
  * @author mads
  */
 public class CGame implements ITrace, KeyEventListener, MouseEventListener {
-    private static final int PLAYER_LAYER = -20;
+    public static final int PLAYER_LAYER = -20;
     CVar cg_nopredict = Ref.cvars.Get("cg_nopredict", "0", EnumSet.of(CVarFlags.TEMP));
     CVar cg_smoothclients = Ref.cvars.Get("cg_smoothclients", "0", EnumSet.of(CVarFlags.TEMP));
     CVar cg_errorDecay = Ref.cvars.Get("cg_errorDecay", "100", EnumSet.of(CVarFlags.TEMP));
@@ -88,9 +61,11 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
     public CGameState cg;
     CGameStatic cgs;
+    public CGameRender cgr;
+    public LagOMeter lag;
 
-    private ChatLine[] chatLines = new ChatLine[8];
-    private int chatIndex = 0;
+    ChatLine[] chatLines = new ChatLine[8];
+    int chatIndex = 0;
     public CEntity[] cg_entities;
     public int cg_numSolidEntities;
     public int cg_numTriggerEntities;
@@ -98,29 +73,11 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     public CEntity[] cg_triggerEntities = new CEntity[256];
     private HashMap<String, ICommand> commands = new HashMap<String, ICommand>();
     CubeTexture playerTexture;
-    private MapEditor mapEditor = null;
+    MapEditor mapEditor = null;
     public float speed;
     public float lastFov = cg_fov.fValue;
     public float lastVleft = camera_vplayerpos.fValue;
 
-    private CubeMaterial c_head;
-    private CubeMaterial c_arm;
-    private CubeMaterial c_body;
-    private CubeMaterial c_legs;
-
-//    private ColladaModel cm = ColladaModel.load("data/Dice.dae");
-
-    Cloud[] clouds = new Cloud[16];
-
-    private void RenderClouds() {
-        float time = Ref.client.frametime/1000f;
-        for (int i= 0; i < clouds.length; i++) {
-            if(clouds[i].isOutOfView(cg.refdef.xmin + cg.refdef.Origin.x, cg.refdef.Origin.y))
-                clouds[i].position(new Vector2f(cg.refdef.xmax + cg.refdef.Origin.x, cg.refdef.Origin.y));
-
-            clouds[i].Render(time);
-        }
-    }
 
     /**
     *=================
@@ -131,15 +88,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     *=================
     **/
     public void Init(int serverMessageSequence, int serverCommandSequence, int ClientNum) {
-        try {
-            c_head = CubeMaterial.Load("data/c_head.mat", true);
-            c_arm = CubeMaterial.Load("data/c_arm.mat", true);
-            c_legs = CubeMaterial.Load("data/c_legs.mat", true);
-            c_body = CubeMaterial.Load("data/c_body.mat", true);
-        } catch (Exception ex) {
-            Logger.getLogger(CGame.class.getName()).log(Level.SEVERE, null, ex);
-        }
-
+        cgr = new CGameRender(this);
+        lag = new LagOMeter();
         playerTexture = Ref.ResMan.LoadTexture("data/enemy1.png");
         commands.put("+scores", new Cmd_ScoresDown());
         commands.put("-scores", new Cmd_ScoresUp());
@@ -147,10 +97,6 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
         for (int i= 0; i < chatLines.length; i++) {
             chatLines[i] = new ChatLine();
-        }
-
-        for (int i= 0; i < clouds.length; i++) {
-            clouds[i] = new Cloud(new Vector2f());
         }
 
         // Clear everything
@@ -202,81 +148,13 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Ref.Input.AddMouseEventListener(this, Input.KEYCATCH_CGAME);
     }
 
-    public Vector2f sunPositionOnScreen = new Vector2f();
-    public Color sunColor = (Color) Color.WHITE;
-    public void DrawSun() {
-        Ref.ResMan.LoadTexture("data/particle.png").Bind();
-
-        float yfrac = cg.refdef.Origin.y / Ref.cvars.Find("g_killheight").fValue;
-        if(yfrac < -1f)
-            yfrac = -1f;
-        if(yfrac > 1)
-            yfrac = 1f;
-
-        float xfrac = cg.refdef.Origin.x / 5000f;
-
-//        Vector2f texSize = new Vector2f(1, 0.8f);
-//        Vector2f texoffset = new Vector2f(0+xfrac,0.1f + yfrac * -0.1f);
-
-//        spr.Set(new Vector2f(cg.refdef.Origin.x + cg.refdef.xmin, cg.refdef.Origin.y + cg.refdef.ymin),
-//                new Vector2f(cg.refdef.w, cg.refdef.h), Ref.ResMan.LoadTexture("data/background_1.png"), texoffset, texSize);
-//        spr.SetDepth(PLAYER_LAYER - 200);
-
-//        yfrac *= -1f;
-    
-//
-        Vector2f position = new Vector2f(cg.refdef.Origin.x + cg.refdef.xmin + cg.refdef.w * 0.2f
-                ,cg.refdef.Origin.y + cg.refdef.ymin + cg.refdef.h * 0.9f + cg.refdef.h* yfrac * 0.1f);
-
-        sunPositionOnScreen.set(Ref.glRef.GetResolution());
-        sunPositionOnScreen.x *= 0.2f;
-        sunPositionOnScreen.y *= 0.9f + 0.1f * yfrac;
-        Vector2f TexOffset = new Vector2f();
-        Vector2f TexSize = new Vector2f(1,1);
-        Color color = sunColor;
-        //color.set((byte)182, (byte)126, (byte)91, (byte)30); // sunrise / sunset
-        //color.set((byte)192, (byte)191, (byte)173, (byte)30); // noon
-        color.set((byte)189, (byte)190, (byte)192, (byte)30); // cloud/haze
-        //color.set((byte)174, (byte)183, (byte)190, (byte)30); // overcast
-        float scale = cg.refdef.w / cg.refdef.h;
-        Vector2f Extent = new Vector2f(0.05f * cg.refdef.w,0.05f *cg.refdef.h * scale);
-//        position.x += Extent.x * 0.5f;
-//        position.y += Extent.y * 0.5f;
-        float depth = -100;
-
-        GL11.glPushMatrix();
-        GL11.glTranslatef(position.x, position.y, 0);
-        
-        GL11.glBegin(GL11.GL_QUADS);
-        {
-            GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y);
-            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(0, -Extent.x, -Extent.y, depth);
-
-            GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y);
-            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(0, Extent.x, -Extent.y, depth);
-
-            GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
-            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(0, Extent.x, Extent.y, depth);
-
-            GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y+TexSize.y);
-            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(0, -Extent.x, Extent.y, depth);
-        }
-        GL11.glEnd();
-
-        GL11.glPopMatrix();
-    }
-
     public void DrawActiveFrame(int serverTime) {
         // UpdateCVars
         cg.time = serverTime;
         // if we are only updating the screen as a loading
 	// pacifier, don't even try to read snapshots
         if(!cg.infoScreenText.isEmpty()) {
-            DrawInformation();
+            cgr.DrawInformation();
             return;
         }
 
@@ -287,99 +165,48 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 	// we can draw is the information screen
         if(cg.snap == null || (cg.snap.snapFlags & cubetech.client.CLSnapshot.SF_NOT_ACTIVE) > 0)
         {
-            DrawInformation();
+            cgr.DrawInformation();
             return;
         }
 
         // this counter will be bumped for every valid scene we generate
         cg.clientframe++;
-
         cg.PredictPlayerState();
 
         CalcViewValues();
-
-
         Ref.soundMan.Respatialize(cg.refdef.Origin, cg.predictedPlayerState.velocity);
-        
 //        AddLocalEntities();
-//
+        
 //        cg.refdef.time = cg.time;
         cg.frametime = cg.time - cg.oldTime;
         if(cg.frametime < 0)
             cg.frametime = 0;
         cg.oldTime = cg.time;
+        lag.AddFrameInfo();
 
         // Time to do some drawing
-//        RenderBackground();
-        if(cg_editmode.iValue == 0) {
-            RenderClouds();
-        } else {
-            if(mapEditor.isShowingAnimator())
-                mapEditor.animEditor.SetView();
+        if(cg_editmode.iValue == 0)
+            cgr.RenderClouds();
+        else if(mapEditor.isShowingAnimator())  
+            mapEditor.animEditor.SetView(); // Let mapeditor override viewparams
+
+        if(cg_drawbin.iValue == 1) {
+            cgr.DrawBin();
+            return;
         }
-        
-        if(cg_drawbin.iValue != 1) {
-            if(cg_editmode.iValue == 0 || !mapEditor.isShowingAnimator()) {
-                RenderScene(cg.refdef);
-                AddPacketEntities();
-                DrawEntities();
-            }
-            Draw2D();
 
-        } else {
-            ArrayList<Bin> bins = Ref.spatial.getBins(cg.refdef.Origin.x + Game.PlayerMins.x, cg.refdef.Origin.y + Game.PlayerMins.y, cg.refdef.Origin.x + Game.PlayerMaxs.x, cg.refdef.Origin.y + Game.PlayerMaxs.y);
-            ArrayList<Block> blocks = new ArrayList<Block>();
-            for (int i= 0; i < bins.size(); i++) {
-                Bin bin = bins.get(i);
-                bin.getBlocks(blocks);
-            }
-
-            for (Block block : blocks) {
-//                if(block.LastQueryNum == queryNum)
-//                    continue; // duplicate
-//                block.LastQueryNum = queryNum;
-
-    //            if(!BlockVisible(block))
-    //                continue;
-
-                int layer = block.getLayer();
-
-                block.Render();
-            }
-
-//            int queryNum = result.getQueryNum();
-//            Object object;
-//
-//            int near = -cg_depthnear.iValue, far = -cg_depthfar.iValue;
-//
-//            if(Ref.cvars.Find("cg_editmode").iValue == 1) {
-//                near = -Ref.cvars.Find("edit_nearlayer").iValue;
-//                far = -Ref.cvars.Find("edit_farlayer").iValue;
-//            }
-//
-//            while((object = result.ReadNext()) != null) {
-//                if(object.getClass() != Block.class)
-//                    continue;
-//                Block block = (Block)object;
-//                if(block.LastQueryNum == queryNum)
-//                    continue; // duplicate
-//                block.LastQueryNum = queryNum;
-//
-//    //            if(!BlockVisible(block))
-//    //                continue;
-//
-//                int layer = block.getLayer();
-//
-//                if(layer > near || layer < far)
-//                    continue;
-//                block.Render();
-//            }
+        if(cg_editmode.iValue == 0 || !mapEditor.isShowingAnimator()) {
+            // Normal render
+            cgr.RenderScene(cg.refdef);
+            AddPacketEntities();
+            cgr.DrawEntities();
         }
-//        cm.render(new Vector3f(0,0,-30));
+        // UI
+        cgr.Draw2D();
     }
 
-    private float getPullAccel() {
-
+    float getPullAccel() {
+        try {
         float pullstep = Ref.cvars.Find("sv_pullstep").fValue;
         float accel = Ref.cvars.Find("sv_pullacceleration").fValue;
         float spd = Math.abs(cg.predictedPlayerState.velocity.x);
@@ -396,75 +223,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         if(spd > Ref.cvars.Find("sv_pull6").fValue)
             accel *= pullstep;
         return accel;
-    }
-
-    
-
-    public void RenderBackground() {
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-
-        float yfrac = cg.refdef.Origin.y / Ref.cvars.Find("g_killheight").fValue;
-        if(yfrac < -1f)
-            yfrac = -1f;
-        if(yfrac > 1)
-            yfrac = 1f;
-
-        float xfrac = cg.refdef.Origin.x / 5000f;
-
-        Vector2f texSize = new Vector2f(1, 0.8f);
-        Vector2f texoffset = new Vector2f(0+xfrac,0.1f + yfrac * -0.1f);
-
-        spr.Set(new Vector2f(cg.refdef.Origin.x + cg.refdef.xmin, cg.refdef.Origin.y + cg.refdef.ymin),
-                new Vector2f(cg.refdef.w, cg.refdef.h), Ref.ResMan.LoadTexture("data/background_1.png"), texoffset, texSize);
-        spr.SetDepth(PLAYER_LAYER - 200);
-    }
-
-    private void DrawEntities() {
-        if(cg_drawentities.iValue == 0 || Ref.game == null || Ref.game.g_entities == null)
-            return;
-
-        for (int i= 0; i < Ref.game.level.num_entities; i++) {
-            Gentity ent = Ref.game.g_entities[i];
-            if(!ent.inuse || ent.s.eType == EntityType.PLAYER)
-                continue; // ignore players and unused entities
-
-            if(!ent.r.linked)
-                continue;
-
-            Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-            Vector2f size = new Vector2f();
-            Vector2f.sub(ent.r.absmax, ent.r.absmin, size);
-
-            // Figure out what texture to display
-            CubeTexture tex = null;
-            switch(ent.s.eType) {
-                case EntityType.ITEM:
-                    tex = Ref.ResMan.LoadTexture("data/tool_item.png");
-                    break;
-                case EntityType.MOVER:
-                    tex = Ref.ResMan.LoadTexture("data/tool_mover.png");
-                    break;
-                case EntityType.TRIGGER:
-                    tex = Ref.ResMan.LoadTexture("data/tool_trigger.png");
-                    break;
-            }
-
-            // Unclaimed by the switch, but has a trigger.
-            if(tex == null && (ent.r.contents & Content.TRIGGER) == Content.TRIGGER)
-                tex = Ref.ResMan.LoadTexture("data/tool_trigger.png");
-
-            if(tex == null)
-                Ref.ResMan.getWhiteTexture();
-            
-            spr.Set(ent.r.absmin, size, tex, null, null);
-            spr.SetDepth(MapEditor.EDITOR_LAYER-1);
-            spr.SetColor(0, 255, 255, 127);
-            
-            Vector2f center = new Vector2f(ent.r.absmin);
-            size.scale(0.5f);
-            Vector2f.add(center, size, center);
-
-            MapEditor.renderHighlightBlock(center, size, MapEditor.EDITOR_LAYER-1, (Color) Color.GREEN);
+        } catch(NullPointerException ex) {
+            return 10;
         }
     }
 
@@ -487,313 +247,6 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         }
 
         cg.refdef.SetupProjection();
-    }
-
-    private void RenderScene(ViewParams refdef) {
-        SpatialQuery result = Ref.spatial.Query(refdef.Origin.x - refdef.FovX, refdef.Origin.y - refdef.FovY, refdef.Origin.x + refdef.FovX, refdef.Origin.y + refdef.FovY);
-        int queryNum = result.getQueryNum();
-        Object object;
-        
-        int near = -cg_depthnear.iValue, far = -cg_depthfar.iValue;
-
-        if(Ref.cvars.Find("cg_editmode").iValue == 1) {
-            near = -Ref.cvars.Find("edit_nearlayer").iValue;
-            far = -Ref.cvars.Find("edit_farlayer").iValue;
-        }
-
-        while((object = result.ReadNext()) != null) {
-            if(object.getClass() != Block.class)
-                continue;
-            Block block = (Block)object;
-            if(block.LastQueryNum == queryNum)
-                continue; // duplicate
-            block.LastQueryNum = queryNum;
-
-//            if(!BlockVisible(block))
-//                continue;
-
-            int layer = block.getLayer();
-
-            if(layer > near || layer < far)
-                continue;
-            block.Render();
-        }
-    }
-
-    private void AddCEntity(CEntity cent) {
-        // event-only entities will have been dealt with already
-        if(cent.currentState.eType >= EntityType.EVENTS)
-            return;
-
-        // calculate the current origin
-        cent.CalcLerpPosition();
-        cent.Effects();
-        switch(cent.currentState.eType) {
-            case EntityType.PLAYER:
-                Player(cent);
-                break;
-            case EntityType.ITEM:
-                Item(cent);
-                break;
-            case EntityType.MOVER:
-                Mover(cent);
-                break;
-        }
-    }
-
-    private void Mover(CEntity cent) {
-//        cent.currentState.solid
-//        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-//        Vector2f size = new Vector2f(40, 8);
-//
-//        spr.Set(new Vector2f(cent.lerpOrigin.x - size.x/2f, cent.lerpOrigin.y - size.y/2f), size, null, null,null);
-//        spr.SetDepth(PLAYER_LAYER);
-
-        RenderModel(cent.currentState.modelindex, cent.lerpOrigin, PLAYER_LAYER);
-    }
-
-    private void RenderModel(int index, Vector2f position, int layer) {
-        index = Ref.cm.cm.InlineModel(index);
-
-        // Get bounds
-        BlockModel model = Ref.cm.cm.getModel(index);
-        model.moveTo(position);
-    }
-
-    private void Item(CEntity cent) {
-        EntityState es = cent.currentState;
-        if(es.modelindex >= Ref.common.items.getItemCount())
-            Ref.common.Error(Common.ErrorCode.DROP, "Bad item index " + es.modelindex + " on entity.");
-
-        // if set to invisible, skip
-        if(es.modelindex < 0 || (es.eFlags & EntityFlags.NODRAW) > 0) {
-            return;
-        }
-
-
-        float bounce = 0;
-
-        GItem item = Ref.common.items.getItem(es.modelindex);
-        if(item.type == GItem.Type.POWERUP)
-            bounce = (float) Math.sin(cg.time/400f) * 2f;
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-        spr.Set(cent.lerpOrigin.x, cent.lerpOrigin.y + bounce, GItem.ITEM_RADIUS, item.icon);
-        spr.SetDepth(PLAYER_LAYER-1);
-        if(item.type == GItem.Type.HEALTH)
-            spr.SetAngle(cg.autoAngle);
-        
-    }
-
-    // Render a player
-    private void Player(CEntity cent) {
-//        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-//        spr.Set(new Vector2f(cent.lerpOrigin.x + Game.PlayerMins.x, cent.lerpOrigin.y + Game.PlayerMins.y), new Vector2f(Game.PlayerMaxs.x - Game.PlayerMins.x, Game.PlayerMaxs.y - Game.PlayerMins.y), null, null, null);
-//
-//        spr.SetAngle((float) (Math.atan2(cent.lerpAngles.y, cent.lerpAngles.x) + Math.PI / 2f));
-
-//        float alpha = 0.5f;
-//        if(cent.interpolate)
-//            alpha = 0.75f;
-
-//        spr.SetDepth(PLAYER_LAYER);
-
-        int time = cent.currentState.time;
-
-
-        float px = cent.lerpOrigin.x;
-        float py = cent.lerpOrigin.y;
-        Vector2f bodysize = new Vector2f(15,30);
-        float bodyBias = 3f;
-
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-        Vector2f armSize = new Vector2f(20,20);
-        spr.Set(new Vector2f(px - armSize.x * 0.5f + 3, py - armSize.y * 0.5f + bodyBias + bodysize.y*0.10f ),
-                armSize, c_arm.getTexture(), c_arm.getTextureOffset(), c_arm.getTextureSize());
-        spr.SetAngle((float) (Math.sin((time+1000) / 100f) * 0.5f) - 0.6f);
-        spr.SetDepth(PLAYER_LAYER);
-
-        // body
-        spr = Ref.SpriteMan.GetSprite(Type.GAME);
-        
-        spr.Set(new Vector2f(px - bodysize.x * 0.5f, py - bodysize.y * 0.5f + bodyBias),
-                bodysize, c_body.getTexture(), c_body.getTextureOffset(), c_body.getTextureSize());
-        spr.SetDepth(PLAYER_LAYER);
-
-        // head
-        spr = Ref.SpriteMan.GetSprite(Type.GAME);
-        Vector2f headsize = new Vector2f(12,12);
-        Vector2f headoffset = new Vector2f(2,-2);
-        spr.Set(new Vector2f(px - headsize.x * 0.5f + headoffset.x, py - headsize.y * 0.5f + bodyBias + headoffset.y + bodysize.y * 0.5f),
-                headsize, c_head.getTexture(), c_head.getTextureOffset(), c_head.getTextureSize());
-        spr.SetDepth(PLAYER_LAYER);
-
-        if(cent.currentState.ClientNum != Ref.client.cl.snap.ps.clientNum)
-            spr.SetColor(255, 30, 30, (int)(255));
-
-        // legs
-        spr = Ref.SpriteMan.GetSprite(Type.GAME);
-        Vector2f legsSize = new Vector2f(20,20);
-        spr.Set(new Vector2f(px - legsSize.x * 0.5f, py - legsSize.y * 0.5f + Game.PlayerMins.y + bodyBias),
-                legsSize, c_legs.getTexture(), c_legs.getTextureOffset(), c_legs.getTextureSize());
-        spr.SetAngle(-time/100f);
-        spr.SetDepth(PLAYER_LAYER);
-
-        // arms
-        spr = Ref.SpriteMan.GetSprite(Type.GAME);
-        
-        spr.Set(new Vector2f(px - armSize.x * 0.5f + 4, py - armSize.y * 0.5f + bodyBias + bodysize.y*0.10f ),
-                armSize, c_arm.getTexture(), c_arm.getTextureOffset(), c_arm.getTextureSize());
-        spr.SetAngle((float) (Math.sin(time / 100f) * 0.5f) - 0.6f);
-        spr.SetDepth(PLAYER_LAYER);
-
-
-        
-
-//        Ref.textMan.AddText(new Vector2f(cent.lerpOrigin.x, cent.lerpOrigin.y+Game.PlayerMaxs.y), "" + cgs.clientinfo[cent.currentState.ClientNum].name, Align.CENTER, Type.GAME, 1, PLAYER_LAYER+1);
-    }
-
-    private void Draw2D() {
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(), Ref.glRef.GetResolution(), Ref.ResMan.LoadTexture("data/hags.png"), null, null);
-
-        // Render mapeditor if in editmode
-        if(cg_editmode.iValue == 1) {
-            mapEditor.Render();
-            
-        }
-
-        float speeds = Math.abs(cg.snap.ps.velocity.x);
-        float maxspeed = 600;
-        float frac = speeds / maxspeed;
-        if(cg_editmode.iValue == 0) {
-            spr = Ref.SpriteMan.GetSprite(Type.HUD);
-            Vector2f size = new Vector2f(Ref.glRef.GetResolution().x * 0.75f, 64);
-            Vector2f position = new Vector2f(Ref.glRef.GetResolution().x/2f - size.x / 2f , Ref.glRef.GetResolution().y - size.y - 32 );
-            size.x *= frac;
-            spr.Set(position, size, Ref.ResMan.LoadTexture("data/energybar.png"), null, new Vector2f(1, 1));
-        }
-        
-
-        DrawChat();
-
-
-
-        if(Ref.common.isDeveloper()) {
-            Ref.textMan.AddText(new Vector2f(0, 0), "Position: " + cg.refdef.Origin, Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()), "Velocity: " + cg.predictedPlayerState.velocity, Align.LEFT, Type.HUD);
-            //Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Ping: " + Ref.cgame.cg.snap.ps.ping, Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Pull accel: " + getPullAccel(), Align.LEFT, Type.HUD);
-
-        }
-        
-        Ref.textMan.AddText(new Vector2f(0, 0), "Time: " + cg.snap.ps.maptime, Align.LEFT, Type.HUD);
-//        Ref.textMan.AddText(new Vector2f(0, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()), "HP: " + Ref.cgame.cg.snap.ps.stats.Health, Align.LEFT, Type.HUD);
-//        Ref.textMan.AddText(new Vector2f(0, 0.75f), "Interp: " + Ref.cgame.cg.frameInterpolation, Align.LEFT, Type.HUD);
-
-        if(cg.predictedPlayerState.stats.Health <= 0) {
-            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y /2f  - Ref.textMan.GetCharHeight()*2), "^5You are dead", Align.CENTER, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y/2f  - Ref.textMan.GetCharHeight()), "Click mouse to spawn", Align.CENTER, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y/2f), "ESC for menu", Align.CENTER, Type.HUD);
-        }
-
-        // Draw powerups
-        PlayerState ps = cg.snap.ps;
-        for (int i= 0; i < PlayerState.NUM_POWERUPS; i++) {
-            if(ps.powerups[i] <= 0)
-                continue;
-
-            int ms = ps.powerups[i];
-            int sec = ms / 1000;
-
-            
-            GItem item = Ref.common.items.findItemByClassname("item_boots");
-            if(item == null) {
-                Common.LogDebug("CGame.Draw2D: Can't find item " + i);
-                continue;
-            }
-            spr = Ref.SpriteMan.GetSprite(Type.HUD);
-            Vector2f res = Ref.glRef.GetResolution();
-            float radius = 32;
-            spr.Set(res.x - radius * 2, res.y - ( res.y * 0.7f + i * radius * 2) , radius, item.icon);
-            Ref.textMan.AddText(new Vector2f(res.x - radius * 2 , res.y * 0.7f + i * radius * 2 +5), ""+sec, Align.CENTER, Type.HUD);
-        }
-
-        // Handle changes from server
-        if(cg.snap.ps.moveType == MoveType.EDITMODE && cg_editmode.iValue == 0) {
-            // Turn on editmode
-            Ref.cvars.Set2("cg_editmode", "1", true);
-        } else if(cg.snap.ps.moveType != MoveType.EDITMODE && cg_editmode.iValue == 1) {
-            // Turn off editmode
-            Ref.cvars.Set2("cg_editmode", "0", true);
-        }
-
-        // Handle changes to cvar
-        if(cg_editmode.modified) {
-            cg_editmode.modified = false;
-            if(cg_editmode.iValue == 0) {
-                Ref.Input.SetKeyCatcher(Ref.Input.GetKeyCatcher() & ~Input.KEYCATCH_CGAME);
-                mapEditor = null;
-            } else {
-                mapEditor = new MapEditor();
-            }
-        }
-
-        if(cg.showScores)
-            DrawScoreboard();
-
-        if(Ref.common.cl_paused.iValue == 1) {
-            Vector2f pos = new Vector2f(Ref.glRef.GetResolution());
-            pos.scale(0.5f);
-            Ref.textMan.AddText(pos, "^3PAUSED", Align.CENTER, Type.HUD, 2,0);
-        }
-    }
-
-    private void DrawScoreboard() {
-        // Request update if scoreboard info is too old
-        if(cg.scoresRequestTime + 2000 < cg.time) {
-            cg.scoresRequestTime = cg.time;
-            Ref.client.AddReliableCommand("score", false);
-        }
-
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(0.1f, 0.1f), new Vector2f(0.8f, 0.8f), null, null, null);
-        spr.SetColor(0, 0, 0, 127);
-        float yOffset = 100;
-        float lineHeight = Ref.textMan.GetCharHeight();
-        for (int i= 0; i < cg.scores.length; i++) {
-            Score score = cg.scores[i];
-            
-
-            DrawClientScore(yOffset - lineHeight * i, score);
-        }
-    }
-
-    private void DrawClientScore(float yOffset, Score score) {
-        if(score.client < 0 || score.client >= cgs.clientinfo.length) {
-            Ref.cgame.Print("DrawClientScore: Invalid ci index: " + score.client);
-            return;
-        }
-        
-        ClientInfo ci = cgs.clientinfo[score.client];
-
-        if(ci == null || ci.name == null) {
-            int test = 2;
-        }
-
-        if(score.client == cg.snap.ps.clientNum) {
-            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-            spr.Set(new Vector2f(0.1f, yOffset-0.01f), new Vector2f(0.8f, 0.07f), null, null, null);
-            spr.SetColor(255,255,255,80);
-            // Highlight self
-            // TODO: Sprite bg
-        }
-
-        String extra = "";
-        if(score.ping == -1)
-            extra = "(Connecting...)";
-        Vector2f res = Ref.glRef.GetResolution();
-        Ref.textMan.AddText(new Vector2f(0.1f * res.x, yOffset), String.format("%s%s", ci.name, extra), Align.LEFT, Type.HUD);
-        Ref.textMan.AddText(new Vector2f(0.9f * res.y, yOffset), String.format("ping:%d time:%d", score.ping, score.time), Align.RIGHT, Type.HUD);
     }
 
     // Handle command from console
@@ -852,7 +305,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         // generate and add the entity from the playerstate
         PlayerState ps = cg.predictedPlayerState;
         ps.ToEntityState(cg.predictedPlayerEntity.currentState, false);
-        AddCEntity(cg.predictedPlayerEntity);
+        cgr.AddCEntity(cg.predictedPlayerEntity);
 
         // lerp the non-predicted value for lightning gun origins
         cg_entities[cg.snap.ps.clientNum].CalcLerpPosition();
@@ -860,7 +313,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         // add each entity sent over by the server
         for (int i= 0; i < cg.snap.numEntities; i++) {
             CEntity cent = cg_entities[cg.snap.entities[i].ClientNum];
-            AddCEntity(cent);
+            cgr.AddCEntity(cent);
         }
 
         // Draw bounding boxes for solid entities
@@ -957,37 +410,10 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             mapEditor.GotMouseEvent(evt);
     }
 
-    private class ChatLine {
+    class ChatLine {
         public String str = "";
         //public String from;
         public int time;
-    }
-
-    private void DrawChat() {
-        int time = Ref.client.realtime;
-        int lineIndex = 1;
-        float lineHeight = Ref.textMan.GetCharHeight();
-        for (int i= 0; i < chatLines.length; i++) {
-            ChatLine line = chatLines[(chatIndex+7-i) % 8];
-            if(time - line.time > cg_chattime.iValue + cg_chatfadetime.iValue)
-                continue;
-
-            Color color = new Color(255,255,255,255);
-
-            if(time - line.time >= cg_chattime.iValue) {
-                color.setAlpha((int)((1-((time - line.time - cg_chattime.iValue)/cg_chatfadetime.fValue))*255));
-            }
-
-            float height = Ref.textMan.AddText(new Vector2f(10, Ref.glRef.GetResolution().y - (200 + lineHeight * lineIndex)), line.str, Align.LEFT, color, null, Type.HUD,1).y;
-            //height /= Ref.textMan.GetCharHeight();
-
-            lineIndex ++;
-        }
-
-        // Draw message field if active
-        if(Ref.client.message.isChatMessageUp()) {
-            Ref.client.message.getCurrentMessage().Render();
-        }
     }
 
     // When set to a non-empty string, CGame wont run, only display the text
@@ -998,19 +424,11 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Ref.client.UpdateScreen();
     }
 
-    private void DrawInformation() {
-        if(!cg.infoScreenText.isEmpty())
-            Ref.textMan.AddText(new Vector2f(0.5f*Ref.glRef.GetResolution().x, Ref.glRef.GetResolution().y-20), String.format("Loading... %s", cg.infoScreenText), Align.CENTER, Type.HUD);
-        else
-            Ref.textMan.AddText(new Vector2f(0.5f*Ref.glRef.GetResolution().x, Ref.glRef.GetResolution().y-20), "Awaiting snapshot", Align.CENTER, Type.HUD);
-    }
-
     public void Shutdown() {
         Common.Log("--- CGAME SHUTDOWN ---");
         Ref.Input.RemoveKeyEventListener(this, Input.KEYCATCH_CGAME);
         Ref.Input.RemoveMouseEventListener(this, Input.KEYCATCH_CGAME);
     }
-
 
 
     /*

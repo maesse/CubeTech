@@ -299,13 +299,13 @@ public class GLRef {
         if(!fboSupported)
             return;
 
-        if(Ref.cgame == null || Ref.cgame.sunPositionOnScreen == null)
+        if(Ref.cgame == null || Ref.cgame.cgr.sunPositionOnScreen == null)
             return;
 
         setShader("scatter");
 
         int SunPosition_uniform = ARBShaderObjects.glGetUniformLocationARB(getShader("scatter").getShaderId(), "lightPositionOnScreen");
-        glUniform2f(SunPosition_uniform, Ref.cgame.sunPositionOnScreen.x, Ref.cgame.sunPositionOnScreen.y);
+        glUniform2f(SunPosition_uniform, Ref.cgame.cgr.sunPositionOnScreen.x, Ref.cgame.cgr.sunPositionOnScreen.y);
         
         
         glPushAttrib(GL_VIEWPORT_BIT);
