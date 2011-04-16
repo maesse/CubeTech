@@ -21,6 +21,7 @@ public class CContainer extends CComponent {
     private Vector4f internalMargin = new Vector4f(); // margin on the insize of the container
     private CubeTexture background = null;
     private boolean inLayout = false;
+    public int border = 0;
 
     public void removeComponents() {
         for (CComponent cComponent : components) {
@@ -87,11 +88,32 @@ public class CContainer extends CComponent {
         renderpos.x += intPos.x;
         renderpos.y += intPos.y;
 
+        if(border > 0) {
+            
+            Vector2f topleft = new Vector2f(renderpos.x, Ref.glRef.GetResolution().y - (renderpos.y + getSize().y));
+            Vector2f botright = new Vector2f(renderpos.x + getSize().x+1, Ref.glRef.GetResolution().y - (renderpos.y));
+            
+            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            spr.setLine(new Vector2f(topleft), new Vector2f(topleft.x, botright.y), border);
+            spr.SetColor(0,0,0,255);
+            spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            spr.setLine(new Vector2f(topleft), new Vector2f(botright.x, topleft.y), border);
+            spr.SetColor(0,0,0,255);
+            spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            spr.setLine(new Vector2f(botright), new Vector2f(botright.x, topleft.y), border);
+            spr.SetColor(0,0,0,255);
+            spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            spr.setLine(new Vector2f(botright), new Vector2f(topleft.x, botright.y), border);
+            spr.SetColor(0,0,0,255);
+        }
+
         if(background != null) {
             Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
             spr.Set(new Vector2f(renderpos.x, Ref.glRef.GetResolution().y - (renderpos.y + getSize().y)), getSize(), background, null, null);
             spr.SetColor(255,255,255,255);
         }
+
+        RenderImplementation(renderpos);
 
         renderpos.x += internalMargin.x ;
         renderpos.y += internalMargin.y ;
@@ -99,6 +121,10 @@ public class CContainer extends CComponent {
         for (int i= 0; i < components.size(); i++) {
             components.get(i).Render(renderpos);
         }
+    }
+
+    public void RenderImplementation(Vector2f pos) {
+        
     }
 
     public ILayoutManager getLayout() {

@@ -126,7 +126,7 @@ public class CScrollPane extends CContainer {
             relativePosition.x -= getInternalPosition().x;
             relativePosition.y -= getInternalPosition().y;
             relativePosition.y += vertPositon;
-            relativePosition.x += vertPositon;
+            relativePosition.x += horiPosition;
             for (int i= 0; i < getComponentCount(); i++) {
                 CComponent comp = getComponent(i);
                 boolean hit = comp.containsPoint(relativePosition);

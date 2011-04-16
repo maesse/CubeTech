@@ -5,6 +5,7 @@ import cubetech.common.Common.ErrorCode;
 import cubetech.common.Helper;
 import cubetech.misc.Ref;
 import java.util.ArrayList;
+import java.util.Iterator;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.util.Color;
@@ -21,17 +22,31 @@ public class Bone {
     private float lenght = 10;
 
     private Bone parent = null; // root bones don't have any parent
-    private KeyFrame animation = null;
 
     public boolean selected = false;
 
-    public Bone(float angle, float lenght) {
+    private int boneId = -1;
+
+    Bone(int boneid, float angle, float lenght) {
         this.angle = angle;
         this.lenght = lenght;
+        boneId = boneid;
     }
 
-    public Bone() {
-        
+    Bone(int boneid) {
+        boneId = boneid;
+    }
+
+    public Iterator<Bone> GetChildBonesIterator() {
+        return childBones.iterator();
+    }
+
+    public void setAngle(float ang) {
+        angle = ang;
+    }
+
+    public void setLenght(float len) {
+        lenght = len;
     }
 
     /**
@@ -308,5 +323,17 @@ public class Bone {
 
         }
         GL11.glEnd();
+    }
+
+    public float getAngle() {
+        return angle;
+    }
+
+    public float getLenght() {
+        return lenght;
+    }
+
+    public int getId() {
+        return boneId;
     }
 }

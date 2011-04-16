@@ -23,6 +23,11 @@ public class CButton extends CContainer {
     boolean mouseDown = false;
 
     CubeMaterial normalBackground = null;
+
+    public boolean isToggleButton = false;
+    public boolean Toggled = false;
+    public CubeTexture toggledTexture = null;
+    private CubeTexture imgTexture = null;
     
     public CButton(String buttonText) {
         super(new FlowLayout(false, true, true));
@@ -41,6 +46,11 @@ public class CButton extends CContainer {
         init(buttonText, align,2);
     }
 
+    public CButton(String text, float scale) {
+        super(new FlowLayout(false, true, true));
+        init(text, Align.LEFT,scale);
+    }
+
     public CButton(String buttonText, CubeTexture tex, Align align, float scale) {
         super(new FlowLayout(false, true, true));
         this.tex = tex;
@@ -57,6 +67,7 @@ public class CButton extends CContainer {
     public CButton(CubeTexture tex, Vector2f imageSize) {
         setMargin(8, 8, 8, 8);
         CImage img = new CImage(tex);
+        imgTexture = tex;
         img.setSize(imageSize);
         addComponent(img);
         try {
@@ -71,6 +82,7 @@ public class CButton extends CContainer {
     public CButton(CubeTexture tex, Vector2f imageSize, ButtonEvent evt) {
         setMargin(8, 8, 8, 8);
         CImage img = new CImage(tex);
+        imgTexture = tex;
         img.setSize(imageSize);
         this.eventHook = evt;
         addComponent(img);
@@ -86,6 +98,7 @@ public class CButton extends CContainer {
     public CButton(CubeTexture tex) {
         setMargin(8, 8, 8, 8);
         CImage img = new CImage(tex);
+        imgTexture = tex;
         addComponent(img);
         try {
             normalBackground = CubeMaterial.Load("data/buttons.mat", true);
@@ -111,6 +124,12 @@ public class CButton extends CContainer {
         }
 
         doLayout();
+    }
+
+    public CButton(String text, float scale, ButtonEvent et) {
+        super(new FlowLayout(false, true, true));
+        init(text, Align.LEFT,scale);
+        this.eventHook = et;
     }
 
     private void init(String buttonText, Align align,float scale) {
@@ -146,6 +165,8 @@ public class CButton extends CContainer {
             } else if(mouseDown) {
                 if(eventHook != null)
                     eventHook.buttonPressed(this, evt);
+                if(isToggleButton)
+                    Toggled = !Toggled;
                 mouseDown = false;
             }
         }
@@ -176,6 +197,14 @@ public class CButton extends CContainer {
         Vector2f siz = getSize();
         Vector4f marg = getInternalMargin();
         frame = isMouseEnter()?mouseDown?2:1:0;
+        if(isToggleButton && Toggled) {
+            frame = 2;
+            
+        }
+        if(imgTexture != null && isToggleButton && toggledTexture != null) {
+            CImage img = (CImage)getComponent(0);
+            img.setTex(Toggled?toggledTexture:imgTexture);
+        }
 //        if(tex != null) {
 //        Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
 //        spr.Set(new Vector2f(renderpos.x, Ref.glRef.GetResolution().y - renderpos.y - siz.y),
@@ -186,8 +215,8 @@ public class CButton extends CContainer {
         }
 //        spr.SetColor(255, 255, 255, 255);
         Vector4f ma = getMargin();
-        renderpos.x += marg.x + ma.x + (mouseDown?1:0);
-        renderpos.y += marg.y + ma.y + (mouseDown?1:0);
+        renderpos.x += marg.x + ma.x + (frame==2?1:0);
+        renderpos.y += marg.y + ma.y + (frame==2?1:0);
         // Render all the children
         for (int i= 0; i < getComponentCount(); i++) {
             getComponent(i).Render(renderpos);

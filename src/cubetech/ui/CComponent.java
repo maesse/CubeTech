@@ -13,7 +13,7 @@ public abstract class CComponent {
     private Vector2f size = new Vector2f();
     // x = x, y=y, z=rx, w=by
     private Vector4f margin = new Vector4f(); // this gets added to the size
-    private CContainer parent = null;
+    CContainer parent = null;
     private boolean mouseEnter = false;
     public Object tag = null;
     private boolean visible = true;

@@ -1,7 +1,11 @@
 package cubetech.CGame;
 
 import cubetech.gfx.AniModel;
+import cubetech.gfx.Animation;
 import cubetech.gfx.Bone;
+import cubetech.gfx.CubeTexture;
+import cubetech.gfx.KeyFrame;
+import cubetech.gfx.KeyFrameBone;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
 import cubetech.gfx.SpriteManager.Type;
@@ -12,13 +16,7 @@ import cubetech.input.KeyEventListener;
 import cubetech.input.MouseEvent;
 import cubetech.input.MouseEventListener;
 import cubetech.misc.Ref;
-import cubetech.ui.ButtonEvent;
-import cubetech.ui.CButton;
-import cubetech.ui.CComponent;
-import cubetech.ui.CContainer;
-import cubetech.ui.CLabel;
-import cubetech.ui.CScrollPane;
-import cubetech.ui.FlowLayout;
+import cubetech.ui.*;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.Color;
@@ -32,12 +30,24 @@ import org.lwjgl.util.vector.Vector2f;
 public class AnimationEditor implements KeyEventListener, MouseEventListener {
     MapEditor mapEditor;
     CContainer menupanel;
+
+    // timeline, etc..
     CScrollPane animateScroll;
+    boolean showAnimateScroll = true;
+    float scrollHeight = 0f;
+
+    // Menu above timeline
     CContainer animateMenu;
+    CButton toggleAnimateScrollButton;
+
+    // Popup-menus
+    CContainer popup = null;
+    CContainer animationListMenu;
+
 
     int FovX = 120;
 
-    AniModel model = new AniModel();
+    public AniModel model = new AniModel();
 
     enum SelectType {
         BONE
@@ -68,42 +78,143 @@ public class AnimationEditor implements KeyEventListener, MouseEventListener {
         }
     };
 
+    ButtonEvent recordSnapshotEvent = new ButtonEvent() {
+        public void buttonPressed(CComponent button, MouseEvent evt) {
+            KeyFrameBone snapshot = model.TakeSnapshot();
+            Animation currAnim = model.GetCurrentAnimation();
+            currAnim.InsertFrame(snapshot);
+        }
+    };
+
+    ButtonEvent openAnimationSelection = new ButtonEvent() {
+        public void buttonPressed(CComponent button, MouseEvent evt) {
+            
+            setPopup(createAnimationList(), mapEditor.OrgCoordsToPixelCoords(Ref.Input.playerInput.MousePos));
+        }
+    };
+
+    ButtonEvent seekToNextKeyframe = new ButtonEvent() {
+        public void buttonPressed(CComponent button, MouseEvent evt) {
+            int time = model.GetCurrentAnimation().getTime();
+            KeyFrame frame = model.GetCurrentAnimation().LocateKeyframe(time);
+            if(frame != null && frame.next != null) {
+                model.AnimateToTime(frame.next.time);
+            }
+        }
+    };
+
+    ButtonEvent seekToPrevKeyframe = new ButtonEvent() {
+        public void buttonPressed(CComponent button, MouseEvent evt) {
+            int time = model.GetCurrentAnimation().getTime()-1;
+            KeyFrame frame = model.GetCurrentAnimation().LocateKeyframe(time);
+            if(frame != null) {
+                model.AnimateToTime(frame.time);
+            }
+        }
+    };
+
+    ButtonEvent toggleAnimationScrollEvent = new ButtonEvent() {
+        public void buttonPressed(CComponent button, MouseEvent evt) {
+           toggleAnimationScroll();
+        }
+    };
+
+    private void toggleAnimationScroll() {
+        showAnimateScroll = !showAnimateScroll;
+
+        // Set texture on togglebutton
+        CubeTexture tex = null;
+        if(showAnimateScroll)
+            tex = Ref.ResMan.LoadTexture("data/arrow.png");
+        else
+            tex = Ref.ResMan.LoadTexture("data/uparrow.png");
+        ((CImage)(toggleAnimateScrollButton).getComponent(0)).setTex(tex);
+
+        // Toggle animateScroll visibility
+        if(showAnimateScroll) {
+            scrollHeight = animateScroll.getSize().y;
+            animateMenu.getPosition().y = Ref.glRef.GetResolution().y - animateMenu.getSize().y - scrollHeight;
+        } else {
+            animateMenu.getPosition().y = Ref.glRef.GetResolution().y - animateMenu.getSize().y;
+            scrollHeight = 0;
+        }
+    }
+
     private void initUI() {
         // Menu
         menupanel = new CContainer(new FlowLayout(true, true, false));
         menupanel.setBackground(Ref.ResMan.LoadTexture("data/topmenubar.png"));
         menupanel.setSize(new Vector2f(512, 64));
         menupanel.addComponent(new CButton(Ref.ResMan.LoadTexture("data/edit_game.png"), new Vector2f(32,32), exitAnimationEditor));
-
         menupanel.doLayout();
 
-        animateMenu = new CContainer(new FlowLayout(true, true, false));
+        CButton but = null;
+
+        // Menu on top of scroll
+        animateMenu = new CContainer(new FlowLayout(true, true, true));
         animateMenu.setBackground(Ref.ResMan.LoadTexture("data/topmenubar.png"));
         animateMenu.setSize(new Vector2f(256, 45));
-        animateMenu.addComponent(new CButton(Ref.ResMan.LoadTexture("data/arrow.png"), new Vector2f(24,24), exitAnimationEditor));
+        animateMenu.addComponent(toggleAnimateScrollButton = new CButton(Ref.ResMan.LoadTexture("data/arrow.png"), new Vector2f(24,24), toggleAnimationScrollEvent));
+        animateMenu.addComponent(new CButton(Ref.ResMan.LoadTexture("data/control_start.png"), new Vector2f(24,24), seekToPrevKeyframe));
+        animateMenu.addComponent(but = new CButton(Ref.ResMan.LoadTexture("data/control_play.png"), new Vector2f(24,24)));
+        but.isToggleButton = true;
+        but.toggledTexture = Ref.ResMan.LoadTexture("data/control_stop.png");
+        animateMenu.addComponent(new CButton(Ref.ResMan.LoadTexture("data/control_end.png"), new Vector2f(24,24), seekToNextKeyframe));
+        animateMenu.addComponent(but = new CButton(Ref.ResMan.LoadTexture("data/lock_open.png"), new Vector2f(24,24)));
+        but.isToggleButton = true;
+        but.toggledTexture = Ref.ResMan.LoadTexture("data/lock.png");
+        animateMenu.addComponent(new CButton(Ref.ResMan.LoadTexture("data/edit_record.png"), new Vector2f(24,24),recordSnapshotEvent));
+        String animName = model.GetCurrentAnimation().getName();
+        animateMenu.addComponent(new CButton(animName,0.5f, openAnimationSelection));
         Vector2f res = Ref.glRef.GetResolution();
-        animateMenu.setPosition(new Vector2f(res.x/2f - 128, res.y - 45 - 140));
+        animateMenu.setPosition(new Vector2f(res.x/2f - 128, res.y - 45 - 100));
         animateMenu.doLayout();
 
+        // Scroll
         animateScroll = new CScrollPane(CContainer.Direction.HORIZONTAL);
         animateScroll.setResizeToChildren(CContainer.Direction.NONE);
         animateScroll.setBackground(Ref.ResMan.LoadTexture("data/rightmenubar.png"));
-        
-        CContainer animCont = new CContainer(new FlowLayout(true, false, true));
-        animCont.setBackground(Ref.ResMan.LoadTexture("data/rightmenubar.png"));
-        for (int i = 0; i < 10; i++) {
-            animCont.addComponent(new CLabel("Hello thar"));
-        }
-        
-
-        animCont.setResizeToChildren(CContainer.Direction.HORIZONTAL);
-        animCont.setSize2(new Vector2f(0,120));
-        animCont.doLayout();
-        
-        animateScroll.addComponent(animCont);
-        animateScroll.setPosition(new Vector2f(0, Ref.glRef.GetResolution().y - 140));
-        animateScroll.setSize2(new Vector2f(Ref.glRef.GetResolution().x, 140));
+        CTimeline animTimeline = new CTimeline(80, this);
+        animateScroll.setSize2(new Vector2f(Ref.glRef.GetResolution().x, 100));
+        animateScroll.addComponent(animTimeline);
+        animateScroll.setPosition(new Vector2f(0, Ref.glRef.GetResolution().y - 100));
+        scrollHeight = 100;
         animateScroll.doLayout();
+
+        
+    }
+
+    private CContainer createAnimationList() {
+        // Animation selection popup ui
+        animationListMenu = new CContainer(new FlowLayout(false, true, true));
+        animationListMenu.setBackground(Ref.ResMan.LoadTexture("data/rightmenubar.png"));
+        animationListMenu.addComponent(new CLabel("Select Animation:", Align.LEFT, 0.75f));
+
+        for (String string : model.GetAnimationNames()) {
+            animationListMenu.addComponent(new CButton(string, 0.5f));
+        }
+        animationListMenu.addComponent(new CPanel(new Vector2f(5, 5)));
+        animationListMenu.addComponent(new CButton("^3+ Add new",null, Align.CENTER, 0.6f));
+        animationListMenu.doLayout();
+
+        return animationListMenu;
+    }
+
+    private void setPopup(CContainer cont, Vector2f position) {
+        if(cont != null) {
+            Vector2f res = Ref.glRef.GetResolution();
+            Vector2f popupSize = cont.getLayoutSize();
+            Vector2f finalpos = new Vector2f(position);
+            if(position.x + popupSize.x > res.x) {
+                finalpos.x = res.x - popupSize.x;
+            }
+            if (position.y + popupSize.y > res.y) {
+                finalpos.y = res.y - popupSize.y;
+            }
+            cont.setPosition(finalpos);
+            cont.border = 2;
+        }
+        popup = cont;
     }
 
     public void SetView() {
@@ -132,9 +243,13 @@ public class AnimationEditor implements KeyEventListener, MouseEventListener {
     public void Render() {
         Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x - 40, 0.0f), "^3Animation Editor", Align.RIGHT, Type.HUD);
 
+        // UI
         menupanel.Render(new Vector2f());
         animateMenu.Render(new Vector2f());
-        animateScroll.Render(new Vector2f());
+        if(showAnimateScroll)
+            animateScroll.Render(new Vector2f());
+        if(popup != null)
+            popup.Render(new Vector2f());
 
         mapEditor.renderGrid();
 
@@ -148,7 +263,7 @@ public class AnimationEditor implements KeyEventListener, MouseEventListener {
     private void RenderInformation() {
         // Draw cursor position
         Vector2f mouseCoords = mapEditor.OrgCoordsToGameCoords(lastMouseCoords);
-        Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()),
+        Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight() - scrollHeight),
                 "Cursor: [" + (int)mouseCoords.x + "," + (int)mouseCoords.y + "]", Align.RIGHT, (Color) Color.GREY, null, Type.HUD, 1);
 
         // Draw grid scale
@@ -156,13 +271,13 @@ public class AnimationEditor implements KeyEventListener, MouseEventListener {
         float lineThickness = 3;
         float width = mapEditor.gridSpacing * scale;
         // Add text
-        Vector2f size = Ref.textMan.AddText(new Vector2f(3,Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()),
+        Vector2f size = Ref.textMan.AddText(new Vector2f(3,Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight() - scrollHeight),
                 (int)mapEditor.gridSpacing + "u", Align.LEFT, null, null, Type.HUD,1 );
 
         Vector2f position = new Vector2f(size);
         position.x += 4;
         position.y *= 0.5f;
-        position.y -= lineThickness * 0.5f;
+        position.y -= lineThickness * 0.5f - scrollHeight;
 
         Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
         spr.Set(position, new Vector2f(width, lineThickness), Ref.ResMan.getWhiteTexture(), null, null);
@@ -221,24 +336,30 @@ public class AnimationEditor implements KeyEventListener, MouseEventListener {
         Vector2f gameCoords = mapEditor.OrgCoordsToGameCoords(evt.Position); // Game-space
 
         lastMouseCoords.set(evt.Position);
-        if(evt.WheelDelta != 0 && Ref.Input.IsKeyPressed(Keyboard.KEY_LSHIFT)) {
-            FovX += evt.WheelDelta * -10;
-            if(FovX < 1)
-                FovX = 1;
-            return;
-        }
+        
         
         evt.Position = absCoords; // UI's use MouseEvent's, so just set pixel coords
 
-        if(menupanel.containsPoint(absCoords))
+        if(popup != null && popup.containsPoint(absCoords)) {
+            popup.MouseEvent(evt);
+        } else if(popup != null && evt.Button == 0 && evt.Pressed) {
+            popup = null;
+        } else if(menupanel.containsPoint(absCoords))
             menupanel.MouseEvent(evt);
-        else if(animateScroll.containsPoint(absCoords)) {
+        else if(animateScroll.containsPoint(absCoords) && showAnimateScroll) {
             animateScroll.MouseEvent(evt);
         } else if(animateMenu.containsPoint(absCoords)) {
             animateMenu.MouseEvent(evt);
         }
         else {
-
+            // Handle zoom
+            if(evt.WheelDelta != 0 && Ref.Input.IsKeyPressed(Keyboard.KEY_LSHIFT)) {
+                FovX += evt.WheelDelta * -10;
+                if(FovX < 1)
+                    FovX = 1;
+                return;
+            }
+            
             // Currently moveing a bone around
             if(action == Action.MOVEBONE || action == Action.MOVEBONE2) {
                 select_bone.SetBoneEndPoint(gameCoords, action == Action.MOVEBONE);
@@ -262,7 +383,7 @@ public class AnimationEditor implements KeyEventListener, MouseEventListener {
                     if(isSelected && select_type == SelectType.BONE) {
                         if(select_bone.TraceAgainstEnd(gameCoords, Ref.cgame.cg.refdef.w/100f)) {
                             // Create a new bone, and start moving it
-                            Bone bone = new Bone();
+                            Bone bone = model.CreateBone();
                             select_bone.AttachBone(bone);
                             SelectBone(bone);
                             action = Action.MOVEBONE;
