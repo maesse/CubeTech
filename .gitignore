@@ -1,4 +1,5 @@
 
+logs/
 *.class
 *.cfg
 nbproject/private/
