@@ -97,7 +97,9 @@ public class CGameState {
     void ProcessSnapshots() {
         // see what the latest snapshot the client system has is
         SimpleEntry<Integer, Integer> entry = Ref.client.GetCurrentSnapshotNumber();
+        
         latestSnapshotTime = entry.getValue();
+        
         int n = entry.getKey();
         if(n != latestSnapshotNum) {
             if(n < latestSnapshotNum) {
@@ -322,7 +324,7 @@ public class CGameState {
 
             // if it succeeded, return
             if(r) {
-                // TODO: AddLagometerSnapshotInfo(dest);
+                Ref.cgame.lag.AddSnapshotInfo(dest);
                 return dest;
             }
 
@@ -332,7 +334,7 @@ public class CGameState {
             // buffer in the client system.
 
             // record as a dropped packet
-            // TODO: AddLagometerSnapshotInfo(null);
+            Ref.cgame.lag.AddSnapshotInfo(null);
 
             // If there are additional snapshots, continue trying to
             // read them.
