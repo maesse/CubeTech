@@ -40,7 +40,7 @@ import org.lwjgl.util.vector.Vector2f;
  */
 public class SvClient {
     private static final int MAX_DOWNLOAD_WINDOW = 8;
-    private static final int MAX_DOWNLOAD_BLKSIZE = 1024*2;
+    private static final int MAX_DOWNLOAD_BLKSIZE = 2400;
 
 
     public enum ClientState {
@@ -264,8 +264,7 @@ public class SvClient {
     public void SendClientSnapshot() {
         BuildClientSnapshot();
 
-        NetBuffer msg = NetBuffer.GetNetBuffer(false);
-        msg.allowOverflow = true;
+        NetBuffer msg = NetBuffer.GetNetBuffer(false, true);
         // let the client know which reliable clientCommands we have received
         msg.Write(lastClientCommand);
         // (re)send any reliable server commands
@@ -581,7 +580,7 @@ public class SvClient {
         // gamestate message was not just sent, forcing a retransmit
         gamestateMessageNum = netchan.outgoingSequence;
 
-        NetBuffer buf = NetBuffer.GetNetBuffer(false);
+        NetBuffer buf = NetBuffer.GetNetBuffer(false, false);
         // NOTE, MRE: all server->client messages now acknowledge
         // let the client know which reliable clientCommands we have received
         buf.Write(lastClientCommand);
@@ -659,6 +658,8 @@ public class SvClient {
     }
 
     private int RateMsec(int bytes) {
+        if(netchan.isLocalhost())
+            return 0;
         int headerSize = 48;
         if(bytes > NetChan.FRAGMENT_SIZE)
             bytes = NetChan.FRAGMENT_SIZE;
@@ -684,7 +685,7 @@ public class SvClient {
         if(!netchan.unsentFragments) {
             // the last fragment was transmitted, check wether we have queued messages
             if(netchan_queue.peek() != null) {
-//                System.out.println("Popping queued message");
+//                Common.LogDebug("Popping queued message: %d left", netchan_queue.size());
                 netchan.Transmit(netchan_queue.poll());
             }
         }
@@ -863,9 +864,9 @@ public class SvClient {
                     errorMessage = "File not found.";
                 }
             }
-            downloadSize = download.GetBuffer().limit();
+            
 
-            if(downloadSize <= 0 || errorMessage != null) {
+            if(download == null || download.GetBuffer().limit() <= 0 || errorMessage != null) {
                 msg.Write(SVC.OPS_DOWNLOAD);
                 msg.Write(0); // first chunk
                 msg.Write(-1); // error size
@@ -875,7 +876,9 @@ public class SvClient {
                 return;
             }
 
-            Common.LogDebug("Beginnign download of " + downloadName);
+            downloadSize = download.GetBuffer().limit();
+
+            Common.LogDebug("[Server] Starting file-upload: " + downloadName);
             downloadCurrentBlock = downloadCount = downloadXmitBlock = downloadClientBlock = 0;
             downloadEOF = false;
         }

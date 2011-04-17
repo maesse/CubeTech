@@ -53,7 +53,7 @@ public class NetChan {
     }
 
     public void TransmitNextFragment() {
-        NetBuffer newbuf = NetBuffer.GetNetBuffer(true);
+        NetBuffer newbuf = NetBuffer.GetNetBuffer(true, false);
         newbuf.Write(outgoingSequence | FRAGMENT_BIT);
 
         if(source == NetSource.CLIENT)
@@ -114,7 +114,7 @@ public class NetChan {
             return;
         }
 
-        NetBuffer newbuf = NetBuffer.GetNetBuffer(true);
+        NetBuffer newbuf = NetBuffer.GetNetBuffer(true, false);
         newbuf.Write(outgoingSequence);
         outgoingSequence++;
 
@@ -210,7 +210,7 @@ public class NetChan {
             }
 
             // copy the full message over the partial fragment
-            packet.buf = NetBuffer.GetNetBuffer(false);
+            packet.buf = NetBuffer.GetNetBuffer(false, true);
             ByteBuffer buf = packet.buf.GetBuffer();
             buf.position(0);
             buf.putInt(seq);

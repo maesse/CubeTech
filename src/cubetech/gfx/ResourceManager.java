@@ -55,6 +55,8 @@ import static org.lwjgl.opengl.GL11.*;
  * @author mads
  */
 public final class ResourceManager {
+
+    
     HashMap<String, Resource> Ressources = new HashMap<String, Resource>();
     ArrayList<String> unloaded = new ArrayList<String>();
     private ColorModel glAlphaColorModel;
@@ -562,6 +564,16 @@ public final class ResourceManager {
         writer.write(str);
         writer.flush();
         writer.close();
+    }
+
+    public static boolean CreatePath(String string) {
+        File path = new File(CubeMaterial.getPath(string));
+        if(path.isDirectory())
+            return true;
+        try {
+            return path.mkdirs();
+        } catch(Exception ex) {}
+        return false;
     }
 
     public static void SaveInputStreamToFile(InputStream str, String dst) throws IOException {

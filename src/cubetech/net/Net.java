@@ -102,7 +102,7 @@ public final class Net {
     }
 
     public void SendOutOfBandPacket(NetChan.NetSource source, InetSocketAddress dest, String data) {
-        NetBuffer buf = NetBuffer.GetNetBuffer(false);
+        NetBuffer buf = NetBuffer.GetNetBuffer(false, false);
         // OOB packets need this
         buf.Write(OOB_MAGIC);
         buf.Write(data);
@@ -159,7 +159,7 @@ public final class Net {
         
         try {
             // Recieve Server
-            NetBuffer dest = NetBuffer.GetNetBuffer(false);
+            NetBuffer dest = NetBuffer.GetNetBuffer(false, false);
             ByteBuffer destBuf = dest.GetBuffer();
             InetSocketAddress addr;
             // While we got packets..
@@ -179,7 +179,7 @@ public final class Net {
                     packets.add(packet);
                 }
                 // Read next
-                dest = NetBuffer.GetNetBuffer(false);
+                dest = NetBuffer.GetNetBuffer(false, false);
                 destBuf = dest.GetBuffer();
             }
 
@@ -200,7 +200,7 @@ public final class Net {
                     packets.add(packet);
                 }
                 // Read next
-                dest = NetBuffer.GetNetBuffer(false);
+                dest = NetBuffer.GetNetBuffer(false, false);
                 destBuf = dest.GetBuffer();
             }
             

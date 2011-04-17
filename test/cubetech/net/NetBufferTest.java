@@ -48,7 +48,7 @@ public class NetBufferTest {
     public void testWrite_int() {
         int value = rnd.nextInt();
         System.out.println("Writing " + value);
-        NetBuffer instance = NetBuffer.GetNetBuffer(false);
+        NetBuffer instance = NetBuffer.GetNetBuffer(false, false);
         instance.Write(value);
         instance.Flip();
         int outval = instance.ReadInt();
@@ -62,7 +62,7 @@ public class NetBufferTest {
     public void testWrite_float() {
         float value = rnd.nextFloat()*(rnd.nextFloat()+1);
         System.out.println("Writing " + value);
-        NetBuffer instance = NetBuffer.GetNetBuffer(false);
+        NetBuffer instance = NetBuffer.GetNetBuffer(false, false);
         instance.Write(value);
         instance.Flip();
         float outval = instance.ReadFloat();
@@ -80,7 +80,7 @@ public class NetBufferTest {
             str += (char)((int)'a' + rnd.nextInt(25));
         }
         System.out.println("Writing " + str);
-        NetBuffer instance = NetBuffer.GetNetBuffer(false);
+        NetBuffer instance = NetBuffer.GetNetBuffer(false, false);
         instance.Write(str);
         instance.Flip();
         String outval = instance.ReadString();
@@ -98,7 +98,7 @@ public class NetBufferTest {
             str += (char)((int)'a' + rnd.nextInt(25));
         }
         System.out.println("Writing " + str);
-        NetBuffer instance = NetBuffer.GetNetBuffer(false);
+        NetBuffer instance = NetBuffer.GetNetBuffer(false, false);
         instance.Write(str);
 
         float value = rnd.nextFloat()*(rnd.nextFloat()+1);

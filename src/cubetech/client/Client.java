@@ -5,6 +5,7 @@ import cubetech.CGame.Snapshot;
 import cubetech.common.*;
 import cubetech.common.Common.ErrorCode;
 import cubetech.entities.EntityState;
+import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.ResourceManager;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
@@ -138,6 +139,7 @@ public class Client {
         Ref.commands.AddCommand("cmd", new cmd_Cmd());
         Ref.commands.AddCommand("localservers", new cmd_LocalServers());
         Ref.commands.AddCommand("internetservers", new cmd_InternetServers());
+        Ref.commands.AddCommand("downloadfile",cmd_downloadfile);
 
         Ref.cvars.Set2("cl_running", "1", true);
 
@@ -344,7 +346,8 @@ public class Client {
                     ParseSnapshot(packet.buf);
                     break;
                 case SVC.OPS_DOWNLOAD:
-                    ParseDownload(packet.buf);
+                    if(!ParseDownload(packet.buf))
+                        return;
                     break;
                 default:
                     Common.Log("Illegable server message.");
@@ -763,7 +766,7 @@ public class Client {
     */
     PlayerInput nullstate = new PlayerInput();
     public void WritePacket() {
-        NetBuffer msg = NetBuffer.GetNetBuffer(false); // Netchan will add the magic
+        NetBuffer msg = NetBuffer.GetNetBuffer(false, false); // Netchan will add the magic
 
         // write the current serverId so the server
         // can tell if this is from the current gameState
@@ -1392,6 +1395,8 @@ public class Client {
     }
 
     private void DownloadsComplete() {
+        if(state == ConnectState.ACTIVE)
+            return;
         // notify server that we are done downloading
         if(clc.downloadRestart) {
             clc.downloadRestart = false;
@@ -1454,11 +1459,12 @@ public class Client {
         AddReliableCommand("download " + file, false);
     }
 
-    private void ParseDownload(NetBuffer buf) {
+    // Returns true of everything was parsed Ok.
+    private boolean ParseDownload(NetBuffer buf) {
         if(clc.downloadName == null) {
             Common.Log("Recieving unrequested download");
             AddReliableCommand("stopdl", false);
-            return;
+            return false;
         }
 
         int block = buf.ReadInt();
@@ -1469,15 +1475,24 @@ public class Client {
             // size -1 is an errormessage
             if(clc.downloadSize < 0)
             {
+                if(state == ConnectState.ACTIVE) {
+                    // Don't drop when already fully connected
+                    Common.Log("Could not download file (%s): %s", clc.downloadName, buf.ReadString());
+                    clc.downloadName = null;
+                    clc.download = null;
+                    clc.downloadCount = 0;
+                    NextDownload();
+                    return true;
+                }
                 Ref.common.Error(ErrorCode.DROP, buf.ReadString());
-                return;
+                return true;
             }
         }
 
         int size = buf.ReadInt();
         if(size < 0) {
             Ref.common.Error(ErrorCode.DROP, "ParseDownload: Invalid block " + block + ", got " + size);
-            return;
+            return false;
         }
 
         byte[] data = new byte[size];
@@ -1485,7 +1500,7 @@ public class Client {
 
         if(clc.downloadBlock != block) {
             Common.Log("ParseDownload: Expected block " + clc.downloadBlock + ", got " + block);
-            return;
+            return false;
         }
 
         // open the file if not opened yet
@@ -1513,16 +1528,22 @@ public class Client {
                         clc.mapdata = NetBuffer.CreateCustom(clc.download);
                     } else
                     {
-                        FileChannel chan = new FileOutputStream(clc.downloadName, false).getChannel();
+                        // Save file
+                        if(!ResourceManager.CreatePath("downloads/"+clc.downloadName)) {
+                            Common.Log("Cannot create destination folder: "+CubeMaterial.getPath("downloads/"+clc.downloadName));
+                            clc.downloadName = CubeMaterial.stripPath(clc.downloadName);
+                            Common.Log("Saving as: " + "downloads/" + clc.downloadName);
+                        }
+                        FileChannel chan = new FileOutputStream("downloads/"+clc.downloadName, false).getChannel();
                         clc.download.limit(clc.download.position());
                         clc.download.flip();
                         chan.write(clc.download);
                         chan.close();
+                        
                     }
                 } catch (IOException ex) {
-                    Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+                    Common.Log(Common.getExceptionString(ex));
                 }
-
 
                 clc.download = null;
             }
@@ -1537,7 +1558,21 @@ public class Client {
 
             NextDownload();
         }
+        return true;
     }
+
+    private ICommand cmd_downloadfile = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(args.length > 1) {
+                clc.downloadList.add(args[1]);
+                
+                if(clc.downloadName == null)
+                    NextDownload();
+            }
+            else
+                Common.Log("usage: downloadfile <filename> - queues the file for retrieval");
+        }
+    };
 
     // Console commands
     private class cmd_Connect implements ICommand {

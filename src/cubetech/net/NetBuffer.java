@@ -10,26 +10,35 @@ import org.lwjgl.util.vector.Vector2f;
  * @author mads
  */
 public class NetBuffer {
-    final static int BUFFER_SIZE = 16384; // Allocate 1400 bytes
+    final static int BIG_BUFFER_SIZE = 16384; // Allocate 1400 bytes
+    final static int BUFFER_SIZE = 1400; // Allocate 1400 bytes
     final static int POOL_SIZE = 128;
     static NetBuffer[] BufferPool = new NetBuffer[POOL_SIZE]; // Circular buffer
+    static NetBuffer[] BigBufferPool = new NetBuffer[POOL_SIZE]; // Circular buffer
     static int PoolIndex = 0;
+    static int BigPoolIndex = 0;
     static boolean poolInit = false; // false untill first GetNetBuffer
-    public boolean allowOverflow = false; 
 
+    public boolean allowOverflow = false; 
     private ByteBuffer buffer = null;
 
-    public static NetBuffer GetNetBuffer(boolean writeMagicHeader) {
+    public static NetBuffer GetNetBuffer(boolean writeMagicHeader, boolean allowOverflow) {
         // Init pool the first time
         if(!poolInit) {
             for (int i = 0; i < POOL_SIZE; i++) {
                 BufferPool[i] = new NetBuffer(BUFFER_SIZE);
+                BigBufferPool[i] = new NetBuffer(BIG_BUFFER_SIZE);
             }
             poolInit = true;
         }
 
-        NetBuffer buf = BufferPool[PoolIndex++ % POOL_SIZE];
+        NetBuffer buf;
+        if(allowOverflow)
+            buf = BigBufferPool[BigPoolIndex++ % POOL_SIZE];
+        else 
+            buf = BufferPool[PoolIndex++ % POOL_SIZE];
         buf.Clear();
+        buf.allowOverflow = allowOverflow;
         if(writeMagicHeader)
             buf.Write(Net.MAGIC_NUMBER);
         return buf;
@@ -172,7 +181,8 @@ public class NetBuffer {
     public void Write(String str) {
         byte[] strData = str.getBytes();
         buffer.putInt(strData.length);
-        buffer.put(strData);
+        if(strData.length > 0)
+            buffer.put(strData);
     }
 
     public String ReadString() {
@@ -181,6 +191,8 @@ public class NetBuffer {
             Common.LogDebug("NetBuffer.ReadString(): Invalid lenght: " + lenght);
             return null;
         }
+        if(lenght == 0)
+            return "";
         byte[] strData = new byte[lenght];
         buffer.get(strData);
         String str = new String(strData);
