@@ -73,6 +73,16 @@ public class CMap {
         
     }
 
+    public CMap(NetBuffer buffer) throws ClipmapException {
+        Ref.spatial.Clear();
+        if(!LoadHeader(buffer))
+            throw new ClipmapException("CMap: Failed to verify header.");
+        if(version > 1)
+            LoadEntities(buffer);
+        LoadTextures(buffer);
+        LoadBlocks(buffer);
+    }
+
 //    public void SubModelChange(Block b, int newModel) {
 //        if(b.CustomVal > 0)
 //        {
@@ -112,12 +122,7 @@ public class CMap {
 
     
 
-    public CMap(NetBuffer buffer) throws ClipmapException {
-        if(!LoadHeader(buffer))
-            throw new ClipmapException("CMap: Failed to verify header.");
-        LoadTextures(buffer);
-        LoadBlocks(buffer);
-    }
+    
 
     // Returns true if header was accepted
     private boolean LoadHeader(NetBuffer buf) {
