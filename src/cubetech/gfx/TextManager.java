@@ -53,9 +53,9 @@ public class TextManager {
     public static final int COLOR_BLUE = 4;
     public static final int COLOR_YELLOW = 5;
 
-    Color color_black = new Color(0, 0, 0, 255);
+    Color color_black = new Color(13, 13, 13, 255);
     Color color_white = new Color(255, 255, 255, 255);
-    Color color_red = new Color(230, 0, 3, 1);
+    Color color_red = new Color(230, 0, 3, 255);
     Color color_green = new Color(79, 172, 36, 255);
     Color color_blue = new Color(0, 70, 155, 255);
     Color color_yellow = new Color(255, 237, 0, 255);
