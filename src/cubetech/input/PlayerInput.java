@@ -1,5 +1,6 @@
 package cubetech.input;
 
+import cubetech.common.Helper;
 import cubetech.net.NetBuffer;
 import org.lwjgl.util.vector.Vector2f;
 
@@ -28,24 +29,42 @@ public class PlayerInput {
         PlayerInput dest = new PlayerInput();
         dest.serverTime = buf.ReadInt();
         if(buf.ReadBool()) { // Got new data
-            dest.Up = buf.ReadBool();
-            dest.Down = buf.ReadBool();
-            dest.Left = buf.ReadBool();
-            dest.Right = buf.ReadBool();
-            dest.Jump = buf.ReadBool();
-            dest.Mouse1Diff = buf.ReadBool();
-            if(dest.Mouse1Diff)
-                dest.Mouse1 = buf.ReadBool();
-            dest.Mouse2Diff = buf.ReadBool();
-            if(dest.Mouse2Diff)
-                dest.Mouse2 = buf.ReadBool();
-            dest.Mouse3Diff = buf.ReadBool();
-            if(dest.Mouse3Diff)
-                dest.Mouse3 = buf.ReadBool();
-            boolean hasWheel = buf.ReadBool();
+            int hags = buf.ReadInt();
+            int index = 0;
+            dest.Up = getBit(hags,index++);
+            dest.Down = getBit(hags,index++);
+            dest.Left = getBit(hags,index++);
+            dest.Right = getBit(hags,index++);
+            dest.Jump = getBit(hags,index++);
+            dest.Mouse1Diff = getBit(hags,index++);
+            dest.Mouse1 = getBit(hags,index++);
+            dest.Mouse2Diff = getBit(hags,index++);
+            dest.Mouse2 = getBit(hags,index++);
+            dest.Mouse3Diff = getBit(hags,index++);
+            dest.Mouse3 = getBit(hags,index++);
+            boolean hasWheel = getBit(hags,index++);
+            boolean sameVec = getBit(hags,index++);
+//            dest.Up = buf.ReadBool();
+//            dest.Down = buf.ReadBool();
+//            dest.Left = buf.ReadBool();
+//            dest.Right = buf.ReadBool();
+//            dest.Jump = buf.ReadBool();
+//            dest.Mouse1Diff = buf.ReadBool();
+//            if(dest.Mouse1Diff)
+//                dest.Mouse1 = buf.ReadBool();
+//            dest.Mouse2Diff = buf.ReadBool();
+//            if(dest.Mouse2Diff)
+//                dest.Mouse2 = buf.ReadBool();
+//            dest.Mouse3Diff = buf.ReadBool();
+//            if(dest.Mouse3Diff)
+//                dest.Mouse3 = buf.ReadBool();
+//            boolean hasWheel = buf.ReadBool();
             if(hasWheel)
                 dest.WheelDelta = buf.ReadInt();
-            dest.MousePos = buf.ReadVector();
+            if(!sameVec)
+                dest.MousePos = buf.ReadVector();
+            else
+                dest.MousePos.set(oldcmd.MousePos);
         } else { // unchanged
             dest.Up = oldcmd.Up;
             dest.Down = oldcmd.Down;
@@ -71,57 +90,95 @@ public class PlayerInput {
             return false;
 
 //        return false;
-
-        return (o.hashCode() == this.hashCode());
+        int oCode = o.hashCode();
+        int thisCode = this.hashCode();
+        return (oCode == thisCode );
     }
 
     @Override
     public int hashCode() {
-        int hash = 5;
-        hash = 37 * hash + (this.MousePos != null ? this.MousePos.hashCode() : 0);
-        hash = 37 * hash + (this.MouseDelta != null ? this.MouseDelta.hashCode() : 0);
-        hash = 37 * hash + this.serverTime;
-        hash = 37 * hash + this.WheelDelta;
-        hash = 37 * hash + (this.Mouse1 ? 1 : 0);
-        hash = 37 * hash + (this.Mouse1Diff ? 1 : 0);
-        hash = 37 * hash + (this.Mouse2 ? 1 : 0);
-        hash = 37 * hash + (this.Mouse2Diff ? 1 : 0);
-        hash = 37 * hash + (this.Mouse3 ? 1 : 0);
-        hash = 37 * hash + (this.Mouse3Diff ? 1 : 0);
-        hash = 37 * hash + (this.Up ? 1 : 0);
-        hash = 37 * hash + (this.Down ? 1 : 0);
-        hash = 37 * hash + (this.Left ? 1 : 0);
-        hash = 37 * hash + (this.Right ? 1 : 0);
-        hash = 37 * hash + (this.Jump ? 1 : 0);
+        int hash = 7;
+        hash = 41 * hash + this.WheelDelta;
+        hash = 41 * hash + (this.Mouse1 ? 1 : 0);
+        hash = 41 * hash + (this.Mouse1Diff ? 1 : 0);
+        hash = 41 * hash + (this.Mouse2 ? 1 : 0);
+        hash = 41 * hash + (this.Mouse2Diff ? 1 : 0);
+        hash = 41 * hash + (this.Mouse3 ? 1 : 0);
+        hash = 41 * hash + (this.Mouse3Diff ? 1 : 0);
+        hash = 41 * hash + (this.Up ? 1 : 0);
+        hash = 41 * hash + (this.Down ? 1 : 0);
+        hash = 41 * hash + (this.Left ? 1 : 0);
+        hash = 41 * hash + (this.Right ? 1 : 0);
+        hash = 41 * hash + (this.Jump ? 1 : 0);
         return hash;
     }
 
+
+
+    private static int setBit(int val, int index, boolean value) {
+        if(!value)
+            return val;
+
+        if(index >= 31) throw new RuntimeException("PlayerInput.setBit: overflow on bit " + index);
+
+        return val | (1<<index);
+    }
+
+    private static boolean getBit(int val, int index) {
+        return (val & (1<<index)) != 0;
+    }
+
     public void WriteDeltaUserCmd(NetBuffer buf, PlayerInput from) {
+
         buf.Write(serverTime);
-        if(this.equals(from)) {
+        
+        if(this.equals(from)
+                && Helper.Equals(MousePos, from.MousePos)
+                && Helper.Equals(MouseDelta, from.MouseDelta)) {
             buf.Write(false); // no change
             return;
         }
+        
+        buf.Write(true); // Got change
 
-        buf.Write(true);
-        buf.Write(Up);
-        buf.Write(Down);
-        buf.Write(Left);
-        buf.Write(Right);
-        buf.Write(Jump);
-        buf.Write(Mouse1Diff);
-        if(Mouse1Diff)
-            buf.Write(Mouse1);
-        buf.Write(Mouse1Diff);
-        if(Mouse1Diff)
-            buf.Write(Mouse1);
-        buf.Write(Mouse1Diff);
-        if(Mouse1Diff)
-            buf.Write(Mouse1);
-        buf.Write(WheelDelta != 0);
+        int hags = 0;
+        int index = 0;
+        hags = setBit(hags, index++, Up);
+        hags = setBit(hags, index++, Down);
+        hags = setBit(hags, index++, Left);
+        hags = setBit(hags, index++, Right);
+        hags = setBit(hags, index++, Jump);
+        hags = setBit(hags, index++, Mouse1Diff);
+        hags = setBit(hags, index++, Mouse1);
+        hags = setBit(hags, index++, Mouse2Diff);
+        hags = setBit(hags, index++, Mouse2);
+        hags = setBit(hags, index++, Mouse3Diff);
+        hags = setBit(hags, index++, Mouse3);
+        hags = setBit(hags, index++, WheelDelta != 0);
+        boolean sameVec = Helper.Equals(MousePos, from.MousePos);
+        hags = setBit(hags, index++, sameVec);
+
+//        buf.Write(Up);
+//        buf.Write(Down);
+//        buf.Write(Left);
+//        buf.Write(Right);
+//        buf.Write(Jump);
+//        buf.Write(Mouse1Diff);
+//        if(Mouse1Diff)
+//            buf.Write(Mouse1);
+//        buf.Write(Mouse2Diff);
+//        if(Mouse2Diff)
+//            buf.Write(Mouse2);
+//        buf.Write(Mouse3Diff);
+//        if(Mouse3Diff)
+//            buf.Write(Mouse3);
+//        buf.Write(WheelDelta != 0);
+        buf.Write(hags);
         if(WheelDelta != 0)
             buf.Write(WheelDelta);
-        buf.Write(MousePos);
+
+        if(!sameVec)
+            buf.Write(MousePos);
     }
 
     public PlayerInput Clone() {

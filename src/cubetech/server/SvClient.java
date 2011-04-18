@@ -116,7 +116,7 @@ public class SvClient {
         else
             deltaMessage = -1;
 
-        int cmdCount = buf.ReadInt();
+        int cmdCount = buf.ReadByte();
         if(cmdCount < 1) {
             Common.LogDebug(name + ": UserMove cmdCount < 1");
             return;
@@ -749,9 +749,9 @@ public class SvClient {
         }
 
         // read optional clientCommand strings
-        int cmd;
+        byte cmd;
         do {
-            cmd = buf.ReadInt();
+            cmd = buf.ReadByte();
 
             if(cmd == CLC.OPS_EOF)
                 break;
