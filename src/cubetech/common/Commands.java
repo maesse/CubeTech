@@ -6,9 +6,12 @@
 package cubetech.common;
 
 import cubetech.misc.Ref;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 /**
  *
  * @author mads
@@ -249,12 +252,18 @@ public final class Commands {
             if(i < tokens.length-1)
                 str.append(' ');
         }
-        return str.toString();
+        return str.toString().trim();
     }
 
     // Takes a string and splits it up
     public static String[] TokenizeString(String str, boolean ignoreQuotes) {
-        byte[] data = str.getBytes();
+//        byte[] data;
+//        try {
+//            data = str.getBytes("UTF-8");
+//        } catch (UnsupportedEncodingException ex) {
+//            Ref.common.Error(Common.ErrorCode.FATAL, "Current JVM does not support UTF-8: " + Common.getExceptionString(ex));
+//            return null;
+//        }
         
         String text_out = "";
 
@@ -271,9 +280,11 @@ public final class Commands {
                 return tempTokens.toArray(dst);
             }
             text_out = "";
+            
             while(true) {
                 // skip whitespace
-                while(offset < len && data[offset] <= ' ')
+                char c = 0;
+                while(offset < len && ((Character.isWhitespace(c = str.charAt(offset)) && c != '\n') || Character.isIdentifierIgnorable(c)))
                     offset++;
 
                 if(offset >= len)
@@ -283,14 +294,14 @@ public final class Commands {
                 }
 
                 // skip // comments
-                if(data[offset] == '/' && data[offset+1] == '/') {
+                if(c == '/' && offset < len-1 && str.charAt(offset+1) == '/') {
                     String[] dst = new String[tempTokens.size()];
                     return tempTokens.toArray(dst);
                 }
 
                 // skip /* */ comments
-                if(data[offset] == '/' && data[offset+1] == '*') {
-                    while(offset < len && (data[offset] != '*' || data[offset]+1 != '/'))
+                if(c == '/' && offset < len-1 && str.charAt(offset+1) == '*') {
+                    while(offset < len-1 && ((c = str.charAt(offset)) != '*' || str.charAt(offset+1) != '/'))
                         offset++;
                     if(offset >= len)
                     {
@@ -302,11 +313,15 @@ public final class Commands {
                     break;
             }
 
+            char c = str.charAt(offset);
+
             // Handle quoted string
-            if(!ignoreQuotes && data[offset] == '"') {
+            if(!ignoreQuotes && c == '"') {
                 offset++;
-                while(offset < len && data[offset] != '"')
-                    text_out += (char)data[offset++];
+                while(offset < len && (c = str.charAt(offset)) != '"') {
+                    text_out += c;
+                    offset++;
+                }
                 tempTokens.add(text_out);
 
                 if(offset >= len) {
@@ -318,17 +333,17 @@ public final class Commands {
                 continue;
             }
 
-            while(offset < len && data[offset] > ' ') {
-                if(!ignoreQuotes && data[offset] == '"')
+            while(offset < len &&  !Character.isIdentifierIgnorable((c = str.charAt(offset))) && (!Character.isWhitespace(c) || c == '\n')) {
+                if(!ignoreQuotes && c == '"')
                     break;
 
-                if(data[offset] == '/' && data[offset+1] == '/')
+                if(c == '/' && offset < len-1 && str.charAt(offset+1) == '/')
                     break;
 
-                if(data[offset] == '/' && data[offset+1] == '*')
+                if(c == '/' && offset < len-1 && str.charAt(offset+1) == '*')
                     break;
 
-                text_out += (char)data[offset];
+                text_out += c;
                 offset++;
             }
 
