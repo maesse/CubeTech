@@ -2,7 +2,11 @@ package cubetech.net;
 
 import cubetech.common.Common;
 import cubetech.common.Helper;
+import cubetech.misc.Ref;
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.lwjgl.util.vector.Vector2f;
 
 /**
@@ -79,6 +83,10 @@ public class NetBuffer {
 
     public void Write(int value) {
         buffer.putInt(value);
+    }
+
+    public void Write(byte b) {
+        buffer.put(b);
     }
 
     public void WriteByte(int value) {
@@ -170,8 +178,10 @@ public class NetBuffer {
         buffer.putFloat(value);
     }
 
+    private static byte ONE = 1; // lulz
+    private static byte ZERO = 0;
     public void Write(boolean value) {
-        buffer.put(value?(byte)1:(byte)0);
+        buffer.put(value?ONE:ZERO);
     }
 
     public boolean ReadBool() {
@@ -179,24 +189,35 @@ public class NetBuffer {
     }
 
     public void Write(String str) {
-        byte[] strData = str.getBytes();
-        buffer.putInt(strData.length);
-        if(strData.length > 0)
-            buffer.put(strData);
+        try {
+            byte[] strData = str.getBytes("UTF-8");
+            buffer.putInt(strData.length);
+            if (strData.length > 0) {
+                buffer.put(strData);
+            }
+        } catch (UnsupportedEncodingException ex) {
+            Ref.common.Error(Common.ErrorCode.FATAL, "Current JVM does not support UTF-8: " + Common.getExceptionString(ex));
+        }
     }
 
     public String ReadString() {
-        int lenght = buffer.getInt();
-        if(lenght < 0 ||lenght >= 1024) {
-            Common.LogDebug("NetBuffer.ReadString(): Invalid lenght: " + lenght);
-            return null;
-        }
-        if(lenght == 0)
+        try {
+            int lenght = buffer.getInt();
+            if (lenght < 0 || lenght >= 1024) {
+                Common.LogDebug("NetBuffer.ReadString(): Invalid lenght: " + lenght);
+                return null;
+            }
+            if (lenght == 0) {
+                return "";
+            }
+            byte[] strData = new byte[lenght];
+            buffer.get(strData);
+            String str = new String(strData, "UTF-8");
+            return str;
+        } catch (UnsupportedEncodingException ex) {
+            Ref.common.Error(Common.ErrorCode.FATAL, "Current JVM does not support UTF-8: " + Common.getExceptionString(ex));
             return "";
-        byte[] strData = new byte[lenght];
-        buffer.get(strData);
-        String str = new String(strData);
-        return str;
+        }
     }
 
     public float ReadFloat() {

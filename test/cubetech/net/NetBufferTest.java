@@ -79,6 +79,7 @@ public class NetBufferTest {
         for (int i= 0; i < lenght; i++) {
             str += (char)((int)'a' + rnd.nextInt(25));
         }
+        str += "æøå";
         System.out.println("Writing " + str);
         NetBuffer instance = NetBuffer.GetNetBuffer(false, false);
         instance.Write(str);
