@@ -5,6 +5,7 @@
 
 package cubetech.gfx;
 
+import cubetech.common.Common;
 import cubetech.misc.Ref;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -19,6 +20,8 @@ import java.util.Collection;
 import java.util.LinkedList;
 import java.util.Queue;
 import cubetech.gfx.SpriteManager.Type;
+import java.text.Normalizer;
+import java.text.Normalizer.Form;
 
 
 import java.util.logging.Level;
@@ -166,8 +169,6 @@ public class TextManager {
             if(charIndex.y >= cellcount.y)
                 charIndex.y = cellcount.y -1;
 
-            
-
             charIndex.x *= charsize.x;
             charIndex.y *= charsize.y;
 
@@ -256,17 +257,10 @@ public class TextManager {
 
         float currW = 0;
         int currH = 0;
-        byte[] dat = null;
-        try {
-            dat = text.getBytes("US-ASCII");
-        } catch (UnsupportedEncodingException ex) {
-            Logger.getLogger(TextManager.class.getName()).log(Level.SEVERE, null, ex);
-            dat = text.getBytes();
-        }
-
+        
         int nlIndex = 0;
         int nextLinebreak = (linebreakList.size()<(nlIndex))?9999999:linebreakList.get(nlIndex++).getKey();
-        for (int i = 0; i < dat.length; i++) {
+        for (int i = 0; i < text.length(); i++) {
             // Time for a linebreak
             if(i >= nextLinebreak) {
                 currW = 0; // \r
@@ -289,26 +283,31 @@ public class TextManager {
                 continue;
             }
 
-            if(dat[i] == 32) { // whitespace
+            char c = text.charAt(i);
+
+            if(Character.isWhitespace(c) && c != '\n') { // whitespace
                 currW += charsize.x*0.35f;
                 continue;
             }
 
             // ignore newlines, we already know where they are
-            if(dat[i] == '\r' || dat[i] == '\n')
+            if(c == '\r' || c == '\n')
                 continue;
 
             // Handle color
-            if(dat.length > i + 1 && dat[i] == '^' && dat[i+1] >= '0' && dat[i+1] <= '9')
+            if(text.length() > i + 1 && c == '^' && Character.isDigit(text.charAt(i+1)))
             {
-                Color newcolor = GetColor(dat[i+1]-'0');
+                Color newcolor = GetColor(Character.getNumericValue(text.charAt(i+1)));
                 // Keep alpha
+                int a = color.getAlpha();
                 color.setColor(newcolor);
+                color.setAlpha(a);
                 i++;
                 continue;
             }
 
-            int letter = dat[i] - startChar;
+            int derpa = (int)c;
+            int letter = derpa - startChar;
             if((letter >= letters.length) || letter < 0)
             {
                 //System.err.println("Unknown letter: " + letter);
@@ -387,6 +386,10 @@ public class TextManager {
         return GetStringSize(text, maxSize,null, scale, type);
     }
 
+    public static String RemoveDiatricalMarks(String str) {
+        return Normalizer.normalize(str, Form.NFD).replaceAll("\\p{InCombiningDiacriticalMarks}+","");
+    }
+
     // will fill the newlineIndex with character index where the line should be split
     public Vector2f GetStringSize(String str, Vector2f maxSize,
             Collection<AbstractMap.SimpleEntry<Integer,Integer>> newlineIndexes, float scale, Type type) {
@@ -395,42 +398,40 @@ public class TextManager {
         int w = 0;
         int lines = 1;
         // Get the bytes, because that's what the charactermap is using
-        byte[] bytes;
-        try {
-            bytes = str.getBytes("US-ASCII");
-        } catch (UnsupportedEncodingException ex) {
-            Logger.getLogger(TextManager.class.getName()).log(Level.SEVERE, null, ex);
-            bytes = str.getBytes();
-        }
+//        str = RemoveDiatricalMarks(str);
         
         int lastwhitespace = 0;
         int wordWidth = 0;
         Vector2f result = new Vector2f();
-        for (int i= 0; i < bytes.length; i++) {
-            if(bytes[i] == 32) { // whitespace
+        for (int i= 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            if(Character.isWhitespace(c) && c != '\n') { // whitespace
                 wordWidth = (int)(charsize.x * 0.35f * scale);
                 lastwhitespace = i;
                 w += wordWidth;
                 continue;
             }
+
             // Don't count colors, as they gets stripped from the string when rendered
-            if(bytes.length > i + 1 && bytes[i] == '^' && bytes[i+1] >= '0' && bytes[i+1] <= '9')
+            if(str.length() > i + 1 && c == '^' && Character.isDigit(str.charAt(i+1)))
             {
                 i++;
                 continue;
             }
 
-            if(bytes[i] == '\r')
+
+
+            if(c == '\r')
                 continue;
 
-            if(bytes[i] == '\n') {
+            if(c == '\n' || c == Character.LINE_SEPARATOR) {
                 if(w-wordWidth == 0)
                     wordWidth = 0; // word covers whole line
                 
                 if(newlineIndexes != null)
                         newlineIndexes.add(new AbstractMap.SimpleEntry<Integer, Integer>(i, w-wordWidth+9));
                 result.x = Math.max(result.x, w);
-                if(i != bytes.length-1)
+                if(i != str.length()-1)
                     lines++;
                 w = 0;
                 lastwhitespace = i;
@@ -439,13 +440,16 @@ public class TextManager {
 
             // Check is it's a known character
             // TODO: Shuld still add some to width, if not known
-            int c = bytes[i]-startChar;
-            if(c<0 ||c >= charSizes.length)
+            if(Character.isIdentifierIgnorable(c))
+                continue;
+            
+            int charAscii = (int)c-startChar;
+            if(charAscii<0 ||charAscii >= charSizes.length)
                 continue;
 
             // Add in character width
-            w += (int)(charSizes[c].x * scale);
-            wordWidth += (int)(charSizes[c].x * scale);
+            w += (int)(charSizes[charAscii].x * scale);
+            wordWidth += (int)(charSizes[charAscii].x * scale);
             if(w > maxSize.x + 9) {
                 if(lastwhitespace != 0) {
                     // Wrap word
@@ -460,7 +464,7 @@ public class TextManager {
                     w = 0;
                 }
                 wordWidth = 0;
-                if(i != bytes.length-1)
+                if(i != str.length()-1)
                     lines++;
                 
                 lastwhitespace = 0;
