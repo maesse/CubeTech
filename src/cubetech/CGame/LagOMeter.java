@@ -42,22 +42,22 @@ public class LagOMeter {
             snapshotCount++;
             return;
         }
-
+        
         snapshotSamples[snapshotCount % SAMPLES] = snap.ping;
         snapshotFlags[snapshotCount % SAMPLES] = snap.snapFlags;
         snapshotCount++;
     }
 
     public void Draw() {
-        if(cg_lagometer.iValue == 0)
+        if(cg_lagometer.iValue == 0 && Ref.net.net_graph.iValue <= 1)
             return;
 
-        float width = 500;
-        float height = 300;
-        float split = 0.4f;
+        float width = 250;
+        float height = 200;
+        float split = 0.5f;
 
         float maxRange = 300;
-        float maxPing = 500;
+        float maxPing = 300;
 
         float interpHeight = height * split;
         float pingHeight = height * (1f-split);

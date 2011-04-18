@@ -66,6 +66,7 @@ public class CGameRender {
             clouds[i] = new Cloud(new Vector2f());
         }
     }
+    
 
     //
     // CMap
@@ -175,7 +176,7 @@ public class CGameRender {
         Vector2f armSize = new Vector2f(20,20);
         spr.Set(new Vector2f(px - armSize.x * 0.5f + 3, py - armSize.y * 0.5f + bodyBias + bodysize.y*0.10f ),
                 armSize, c_arm.getTexture(), c_arm.getTextureOffset(), c_arm.getTextureSize());
-        spr.SetAngle((float) (Math.sin((time+1000) / 100f) * 0.5f) - 0.6f);
+        spr.SetAngle((float) (Math.sin(((time)+1000) / 100f) * 0.5f) - 0.6f);
         spr.SetDepth(CGame.PLAYER_LAYER);
 
         // body
@@ -267,6 +268,10 @@ public class CGameRender {
             //Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Ping: " + Ref.cgame.cg.snap.ps.ping, Align.LEFT, Type.HUD);
             Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Pull accel: " + game.getPullAccel(), Align.LEFT, Type.HUD);
 
+        }
+
+        if(Ref.net.net_graph.iValue > 0) {
+            DrawNetGraph();
         }
 
         Ref.textMan.AddText(new Vector2f(0, 0), "Time: " + game.cg.snap.ps.maptime, Align.LEFT, Type.HUD);
@@ -411,6 +416,35 @@ public class CGameRender {
             Ref.textMan.AddText(new Vector2f(0.5f*Ref.glRef.GetResolution().x, Ref.glRef.GetResolution().y-20), String.format("Loading... %s", game.cg.infoScreenText), Align.CENTER, Type.HUD);
         else
             Ref.textMan.AddText(new Vector2f(0.5f*Ref.glRef.GetResolution().x, Ref.glRef.GetResolution().y-20), "Awaiting snapshot", Align.CENTER, Type.HUD);
+    }
+
+    void DrawNetGraph() {
+        if(Ref.net.net_graph.iValue > 1)
+            game.lag.Draw();
+
+        int ping = Ref.cgame.cg.snap.ps.ping;
+        int fps = Ref.client.currentFPS;
+
+        int in = Ref.net.clLastBytesIn;
+        int out = Ref.net.clLastBytesOut;
+        int inAvgBytes = Ref.net.clAvgBytesIn;
+        int outAvgBytes = Ref.net.clAvgBytesOut;
+        int inRate = Ref.net.clAvgPacketsIn;
+        int outRate = Ref.net.clAvgPacketsOut;
+
+        int loss = 0; // Lost snapshot %
+        int choke = 0; // Percentage of packets rate-delayed
+
+        String graph_text = String.format(
+                  "fps:%4d  ping: %d ms\n"
+                + "in :%4d  %.2f k/s  %d/s\n"
+                + "out:%4d  %.2f k/s  %d/s\n"
+                + "loss:%3d  choke: %d",
+                fps, ping, in, inAvgBytes/1024f, inRate, out, outAvgBytes/1024f, outRate, loss, choke);
+
+        Vector2f size = Ref.textMan.GetStringSize(graph_text, null, null, 1.0f, Type.HUD);
+//        Common.Log(graph_text);
+        Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x - size.x, Ref.glRef.GetResolution().y-size.y), graph_text, Align.LEFT, Type.HUD);
     }
 
 
