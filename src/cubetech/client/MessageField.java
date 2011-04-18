@@ -44,17 +44,17 @@ public class MessageField implements KeyEventListener {
         if(this == Ref.client.message.chatField)
             extraHax = "say: "; // hot-wire chat capability
         boolean cardi = isActive() && (int)(Ref.client.realtime / 250f)%2 == 1;
-        String str = extraHax + buffer.toString() + (cardi?"_":"");
+        String str = extraHax + buffer.toString() + (cardi?"_":" ");
         float bgwidth = 300;
         Vector2f maxSize = Ref.glRef.GetResolution();
-        maxSize = new Vector2f(maxSize.x -  position.x, maxSize.y);
+        maxSize = new Vector2f(maxSize.x -  position.x - 50, maxSize.y);
         Vector2f size = Ref.textMan.GetStringSize(str, maxSize, null,1, Type.HUD);
         bgwidth = size.x ;
         float bgheight = size.y ;
         Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(position.x, Ref.glRef.GetResolution().y - (position.y)), new Vector2f(bgwidth, bgheight), null, null, null);
+        spr.Set(new Vector2f(position.x,  (position.y -size.y)), new Vector2f(bgwidth, bgheight), null, null, null);
         spr.SetColor(0, 0, 0, 80);
-        Ref.textMan.AddText(new Vector2f(position.x, Ref.glRef.GetResolution().y - position.y), str, Align.LEFT, null, maxSize, Type.GAME.HUD, 1);
+        Ref.textMan.AddText(new Vector2f(position.x, Ref.glRef.GetResolution().y - position.y ), str, Align.LEFT, null, maxSize, Type.GAME.HUD, 1);
     }
 
     public void KeyPressed(KeyEvent evt) {
