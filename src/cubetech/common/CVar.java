@@ -5,6 +5,7 @@
 
 package cubetech.common;
 
+import cubetech.misc.Ref;
 import java.util.EnumSet;
 
 /**
@@ -37,5 +38,17 @@ public class CVar {
         System.out.println("");
         if(latchedString != null)
             System.out.println(" latched: " + latchedString);
+    }
+
+    public void set(String string) {
+        Ref.cvars.Set2(Name, string, true);
+    }
+
+    /**
+     * Converts this cvars iValue to a boolean.
+     * Everything except 0 is true.
+     */
+    public boolean isTrue() {
+        return iValue != 0;
     }
 }
