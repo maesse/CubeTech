@@ -43,7 +43,9 @@ public class Input {
     private int mWheelUpTime = 0;
     private int mWheelDownTime = 0;
 
-    
+    private int backSpaceTime = 0;
+    private int backSpaceGracePeriod = 200;
+    private int backSpaceRepeat = 30;
 
     public Input() {
         binds = new Binds(this);
@@ -175,6 +177,17 @@ public class Input {
         MouseUpdate();
         KeyboardUpdate();
         UpdateUserInput();
+
+        if(Keyboard.isKeyDown(Keyboard.KEY_BACK)) {
+            if(backSpaceTime == 0)
+                backSpaceTime = Ref.client.realtime + backSpaceGracePeriod;
+            else if(Ref.client.realtime > backSpaceTime) {
+                backSpaceTime = Ref.client.realtime + backSpaceRepeat;
+                // Send keydown-event
+                FireKeyEvent(new KeyEvent(GetKey(Keyboard.KEY_BACK)));
+            }
+        } else
+            backSpaceTime = 0;
 
         // Send mwheel keyUp events if it's time
         if(mWheelDownTime != 0 && Ref.client.realtime - mWheelDownTime > 50) {
