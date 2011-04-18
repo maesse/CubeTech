@@ -44,6 +44,7 @@ public final class Net {
 
     // incomming/outgoing Stats
     public int clAvgBytesIn, clAvgPacketsIn;
+    public int clLastBytesIn, clLastBytesOut;
     public int clAvgBytesOut, clAvgPacketsOut;
     public int svAvgBytesIn, svAvgPacketsIn;
     public int svAvgBytesOut, svAvgPacketsOut;
@@ -56,6 +57,7 @@ public final class Net {
 
     public CVar net_svport = Ref.cvars.Get("net_svport", ""+DEFAULT_PORT, EnumSet.of(CVarFlags.TEMP));
     public CVar net_clport = Ref.cvars.Get("net_clport", "", EnumSet.of(CVarFlags.TEMP));
+    public CVar net_graph = Ref.cvars.Get("net_graph", "0", EnumSet.of(CVarFlags.ARCHIVE));
     boolean netInited = false; // Set to true when net finishes initializing
     // Queued outgoing packets
     public Queue<Packet> packets = new LinkedList<Packet>();
@@ -117,12 +119,15 @@ public final class Net {
         try {
             if(source == NetChan.NetSource.CLIENT) {
                 tclAvgBytesOut += size;
+                clLastBytesOut = size;
                 tclAvgPacketsOut++;
-                cliChannel.send(buf, dest);
+                if(cliChannel.send(buf, dest) == 0)
+                    Common.LogDebug("Net.Client: Outgoing packet queued by JVM/OS");
             } else {
                 tsvAvgBytesOut += size;
                 tsvAvgPacketsOut++;
-                srvChannel.send(buf, dest);
+                if(srvChannel.send(buf, dest) == 0)
+                    Common.LogDebug("Net.Server: Outgoing packet queued by JVM/OS");
             }
         } catch (IOException ex) {
             Logger.getLogger(Net.class.getName()).log(Level.SEVERE, null, ex);
@@ -188,6 +193,7 @@ public final class Net {
                 destBuf.flip();
                 int size = destBuf.limit();
                 tclAvgBytesIn += size;
+                clLastBytesIn = size;
                 tclAvgPacketsIn++;
                 // Check if it's a packet we know
                 int magic = destBuf.getInt();
