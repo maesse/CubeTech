@@ -94,7 +94,7 @@ public class Move {
 
         Vector2f.sub(start, end, start);
         start.y *= 0.5f; // don't let y velocity impact move animation too much
-        float movelen = start.length() * totalMsec;
+        float movelen = start.length() * 15;
         query.ps.movetime += (int)movelen;
     }
 
@@ -212,6 +212,13 @@ public class Move {
 
         WalkMove(wishdir, query);
 
+        boolean wasOnGround = query.onGround;
+        isOnGround(query);
+        if(!wasOnGround && query.onGround) {
+            // Landed on the ground
+            
+        }
+
         if(!query.onGround && query.ps.moveType == MoveType.NORMAL && !ignoreGravity) {
             query.ps.velocity.y -= gravity * frametime * 0.5f;
         }
@@ -220,7 +227,10 @@ public class Move {
     static void Jump(MoveQuery pm) {
         pm.ps.jumpTime = jumpmsec;
         pm.ps.velocity.y = jumpvel;
+        if(pm.onGround)
+            AddEvent(pm, Event.FOOTSTEP, 0);
         AddEvent(pm, Event.JUMP, 0);
+        
     }
 
     static boolean isOnGround(MoveQuery pm) {
@@ -242,7 +252,7 @@ public class Move {
         pm.onGround = true;
 
         // check if getting thrown off the ground
-        if(pm.ps.velocity.y > 0 && Vector2f.dot(pm.ps.velocity, pm.groundNormal) > 10) {
+        if(Vector2f.dot(pm.ps.velocity, pm.groundNormal) > 100) {
             Common.LogDebug("Kickoff");
             pm.onGround = false;
             return false;
@@ -278,7 +288,6 @@ public class Move {
        pm.ps.velocity.x *= newspeed;
        pm.ps.velocity.y *= newspeed;
    }
-
     
     static void FrictionSpecial(MoveQuery pm) {
         if(!pm.cmd.Left)
@@ -382,6 +391,7 @@ public class Move {
        pm.blocked = 0;
        int tries = 0;
        CollisionResult res = null;
+       boolean hit = false;
        float timeLeft = frametime;
        do {
 
@@ -398,6 +408,7 @@ public class Move {
            tries++;
            if(res.frac != 1f) {
 
+                
                if((res.HitAxis.x == 0f && res.HitAxis.y == 0f) ) {
                    // Stuck
                    pm.ps.velocity.set(0,0);
@@ -409,13 +420,14 @@ public class Move {
 //               Helper.Normalize(moveDir);
                // Clip velocity and try to move the remaining bit               
                ClipVelocity(pm.ps.velocity, pm.ps.velocity, res.HitAxis, 1.00f, pm);
-
+               if((pm.blocked & 2) != 0)
+                hit = true;
 //               Vector2f moveDir2 = new Vector2f(pm.ps.velocity);
 //               Helper.Normalize(moveDir2);
 //               int test = 2;
                // Blocked
            }
-       } while( timeLeft > 0.0f && tries < 2);
+       } while( timeLeft > 0.0f && tries < 3);
 
        if((pm.blocked & 1) == 1 && (pm.onGround || org_velocity.y > 0.1f)) { //
            // Store normal move results
@@ -437,6 +449,13 @@ public class Move {
            }
        } else if((pm.blocked & 1) ==  1 && Math.abs(pm.ps.velocity.x) < 10f && Math.abs(org_velocity.x) > 10f)
                 AddEvent(pm, Event.HIT_WALL, 0);
+       if(hit && !pm.onGround) {
+           //isOnGround(pm);
+           //if(pm.onGround) {
+               pm.ps.stepTime = 0;
+               UpdateStepSound(pm);
+           //}
+       }
    }
 
     // try a series of up, forward, down moves
@@ -488,9 +507,9 @@ public class Move {
         //Helper.Normalize(result);
 
         if(result.x > 0.9 || result.x < -0.9)
-            pm.blocked = 1; // step/wall
+            pm.blocked |= 1; // step/wall
         if(result.x < 0.5 && result.x > -0.5f)
-            pm.blocked = 2; // floor
+            pm.blocked |= 2; // floor
         
         float dot = Vector2f.dot(result, in) * overbounce;
         float change = result.x * dot;
@@ -509,13 +528,17 @@ public class Move {
     }
 
     private static void UpdateStepSound(MoveQuery pm) {
-        if(pm.ps.stepTime > 0)
+        if(pm.onGround)
+                pm.ps.stepTime -= (int)(Math.abs(pm.ps.velocity.x)*frametime*200);
+
+        if(pm.ps.stepTime > 0) {
             return; // not time yet
+        }
 
-        float speed = pm.ps.velocity.length();
+//        float speed = pm.ps.velocity.length();
 
-        if(speed > 70f && pm.onGround) {
-            pm.ps.stepTime = 300;
+        if(pm.onGround) {
+            pm.ps.stepTime = 6000;
             AddEvent(pm, Event.FOOTSTEP, 0);
         }
     }
@@ -525,7 +548,7 @@ public class Move {
     }
 
     private static void DropTimers(MoveQuery pm) {
-        pm.ps.stepTime -= msec;
+//        pm.ps.stepTime -= msec;
         pm.ps.jumpTime -= msec;
         if(pm.ps.stepTime < 0)
             pm.ps.stepTime = 0;
