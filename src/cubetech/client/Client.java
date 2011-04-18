@@ -53,6 +53,7 @@ public class Client {
     CVar cl_timenudge;
     CVar cl_debugui;
     CVar cl_showfps;
+    CVar r_sky;
     public CVar cl_netquality; // 0, less lag more jitter - ~50-100, more lag, less time jitter
     public CVar cl_nodelta;
     public CVar cl_cmdbackup;
@@ -78,7 +79,7 @@ public class Client {
     int lastFpsUpdateTime = 0;
     int nFrames = 0;
 
-    int currentFPS;
+    public int currentFPS;
 
     // Server browser
     Ping[] cl_pinglist = new Ping[128];
@@ -122,6 +123,8 @@ public class Client {
         cl_updaterate.Max = 115;
         cl_timeout = Ref.cvars.Get("cl_timeout", "120", EnumSet.of(CVarFlags.ARCHIVE));
         cl_cmdrate = Ref.cvars.Get("cl_cmdrate", "101", EnumSet.of(CVarFlags.ARCHIVE));
+        cl_cmdrate.Min = 20;
+        cl_cmdrate.Max = 115;
         cl_timenudge = Ref.cvars.Get("cl_timenudge", "0", EnumSet.of(CVarFlags.ARCHIVE));
         cl_timenudge.Min = -30;
         cl_timenudge.Max = 30;
@@ -131,7 +134,8 @@ public class Client {
         cl_cmdbackup.Max = 5;
         cl_debugui = Ref.cvars.Get("cl_debugui", "0", EnumSet.of(CVarFlags.ARCHIVE));
         cl_debugui.modified = false;
-        cl_showfps  = Ref.cvars.Get("cl_showfps", "1", EnumSet.of(CVarFlags.ARCHIVE));
+        cl_showfps  = Ref.cvars.Get("cl_showfps", "0", EnumSet.of(CVarFlags.ARCHIVE));
+        r_sky  = Ref.cvars.Get("r_sky", "1", EnumSet.of(CVarFlags.ARCHIVE));
         cl_netquality = Ref.cvars.Get("cl_netquality", "50", EnumSet.of(CVarFlags.ARCHIVE)); // allow 50ms cgame delta
 
         Ref.commands.AddCommand("connect", new cmd_Connect());
@@ -788,6 +792,12 @@ public class Client {
 //            System.out.println("Sending: " + clc.reliableCommands[i & 63]);
         }
 
+        // Ensure valid cmdbackup settings
+        if(cl_cmdbackup.iValue < 0)
+            cl_cmdbackup.set("1");
+        else if(cl_cmdbackup.iValue > 5)
+            cl_cmdbackup.set("5");
+
         // we want to send all the usercmds that were generated in the last
         // few packet, so even if a couple packets are dropped in a row,
         // all the cmds will make it to the server
@@ -796,7 +806,7 @@ public class Client {
         if(count > 32)
         {
             count = 32;
-            Common.Log("WritePacket: Can't send more than 32 usercommands pr frame");
+            Common.LogDebug("WritePacket: Can't send more than 32 usercommands pr frame");
         }
 
         PlayerInput old = nullstate;
@@ -810,7 +820,7 @@ public class Client {
                 msg.Write(CLC.OPS_MOVE);
 
             // write the command count
-            msg.Write(count);
+            msg.WriteByte(count);
 
             // write all the commands, including the predicted command
             for (int i= 0; i < count; i++) {
@@ -1100,37 +1110,40 @@ public class Client {
 //        return;
 //        }
         // Render normal sprites
-        
-        Ref.glRef.BindFBO();
-        
-        Vector4f skyColor = new Vector4f(0, 0.01f, 0.03f, 1);
-        if(RenderingCGame()) {
-            Color col = Ref.cgame.cgr.sunColor;
-            skyColor.set(col.getRedByte(), col.getGreenByte(), col.getBlueByte(), col.getAlphaByte());
+        if(r_sky.isTrue()) {
+            Ref.glRef.BindFBO();
 
-            skyColor.scale(2f/255f);
-            skyColor.x += 1;
-            skyColor.y += 1;
-            float skyFromSunFrac = 0.01f;
+            Vector4f skyColor = new Vector4f(0, 0.01f, 0.03f, 1);
+            if(RenderingCGame()) {
+                Color col = Ref.cgame.cgr.sunColor;
+                skyColor.set(col.getRedByte(), col.getGreenByte(), col.getBlueByte(), col.getAlphaByte());
 
-            skyColor.scale(skyFromSunFrac);
-            skyColor.w = 1f;
-        }
-        GL11.glClearColor(skyColor.x, skyColor.y, skyColor.z, skyColor.w);
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
-        if(RenderingCGame())
-            Ref.cgame.cgr.DrawSun();
-        Ref.glRef.setShader("blackshader");
-        GL11.glClearColor(0, 0.0f, 0f, 0);
-        Ref.SpriteMan.DrawNormal();
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_DEPTH_TEST);
-        Ref.glRef.UnbindFBO();
-        Ref.glRef.setShader("sprite");
-        if(RenderingCGame())
+                skyColor.scale(2f/255f);
+                skyColor.x += 1;
+                skyColor.y += 1;
+                float skyFromSunFrac = 0.01f;
+
+                skyColor.scale(skyFromSunFrac);
+                skyColor.w = 1f;
+            }
+            GL11.glClearColor(skyColor.x, skyColor.y, skyColor.z, skyColor.w);
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
+            if(RenderingCGame())
+                Ref.cgame.cgr.DrawSun();
+            Ref.glRef.setShader("blackshader");
+            GL11.glClearColor(0, 0.0f, 0f, 0);
+            Ref.SpriteMan.DrawNormal();
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            Ref.glRef.UnbindFBO();
+            Ref.glRef.setShader("sprite");
+            if(RenderingCGame())
+                Ref.cgame.cgr.RenderBackground();
+        } else {
             Ref.cgame.cgr.RenderBackground();
+        }
         Ref.SpriteMan.DrawNormal();
        
         // Set HUD render projection
@@ -1139,10 +1152,12 @@ public class Client {
         GL11.glLoadIdentity();
         //GL11.glOrtho(0, 1,1, 0, 1,-1000);
         GL11.glOrtho(0, (int)Ref.glRef.GetResolution().x, 0, (int)Ref.glRef.GetResolution().y, 1,-1000);
-        GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE);
 
-         Ref.glRef.BlitFBO();
-         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        if(r_sky.isTrue()) {
+            GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE);
+            Ref.glRef.BlitFBO();
+        }
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glLoadIdentity();
         
