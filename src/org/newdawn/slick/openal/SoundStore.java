@@ -473,11 +473,11 @@ public class SoundStore {
         return -1;
     }
 
-    public void UpdateListener(float x, float y, float vx, float vy) {
+    public void UpdateListener(float x, float y, float z, float vx, float vy, float vz) {
         FloatBuffer listenerVel = BufferUtils.createFloatBuffer(3).put(
-                        new float[] { vx, vy, 0.0f });
+                        new float[] { vx, vy, vz});
         FloatBuffer listenerPos = BufferUtils.createFloatBuffer(3).put(
-                        new float[] { x, y, 0.0f });
+                        new float[] { x, y, z });
         listenerPos.flip();
         listenerVel.flip();
         AL10.alListener(AL10.AL_POSITION, listenerPos);

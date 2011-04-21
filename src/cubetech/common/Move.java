@@ -3,9 +3,12 @@ package cubetech.common;
 import cubetech.Game.Game;
 import cubetech.collision.CollisionResult;
 import cubetech.entities.Event;
+import cubetech.input.Input;
+import cubetech.input.PlayerInput;
 import cubetech.misc.Ref;
 
-import org.lwjgl.util.vector.Vector2f;
+
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -33,8 +36,8 @@ public class Move {
     private static int pull6 = 600;
     private static float pullstep = 0.75f;
 
-    private static Vector2f org_origin = new Vector2f();
-    private static Vector2f org_velocity = new Vector2f();
+    private static Vector3f org_origin = new Vector3f();
+    private static Vector3f org_velocity = new Vector3f();
 
     private static int msec;
     private static float frametime;
@@ -79,7 +82,7 @@ public class Move {
             
         }
 
-        Vector2f start = new Vector2f(query.ps.origin);
+        Vector3f start = new Vector3f(query.ps.origin);
         // chop the move up if it is too long, to prevent framerate
 	// dependent behavior
         int totalMsec = finaltime - query.ps.commandTime;
@@ -90,9 +93,9 @@ public class Move {
             query.cmd.serverTime = query.ps.commandTime + stepMsec;
             MoveSingle(query);
         }
-        Vector2f end = new Vector2f(query.ps.origin);
+        Vector3f end = new Vector3f(query.ps.origin);
 
-        Vector2f.sub(start, end, start);
+        Vector3f.sub(start, end, start);
         start.y *= 0.5f; // don't let y velocity impact move animation too much
         float movelen = start.length() * 15;
         query.ps.movetime += (int)movelen;
@@ -118,7 +121,7 @@ public class Move {
         boolean noclip = query.ps.moveType == MoveType.NOCLIP || query.ps.moveType == MoveType.EDITMODE;
         
         // Direction player wants to move
-        Vector2f wishdir = new Vector2f();
+        Vector3f wishdir = new Vector3f();
         // Handle horizontal wish direction
         if(!query.ps.applyPull || noclip) {
             if(query.cmd.Left)
@@ -224,6 +227,8 @@ public class Move {
         }
     }
 
+    
+
     static void Jump(MoveQuery pm) {
         pm.ps.jumpTime = jumpmsec;
         pm.ps.velocity.y = jumpvel;
@@ -239,7 +244,7 @@ public class Move {
             pm.onGround = false;
             return false;
         }
-        Vector2f end = new Vector2f(pm.ps.origin);
+        Vector3f end = new Vector3f(pm.ps.origin);
         end.y -= 1f;
         CollisionResult trace = pm.Trace(pm.ps.origin, end, Game.PlayerMins, Game.PlayerMaxs, pm.tracemask, pm.ps.clientNum);
         if(trace.frac == 1f)
@@ -248,11 +253,11 @@ public class Move {
             return false;
         }
 
-        pm.groundNormal = trace.HitAxis;
+        pm.groundNormal = new Vector3f(trace.HitAxis.x, trace.HitAxis.y,0);
         pm.onGround = true;
 
         // check if getting thrown off the ground
-        if(Vector2f.dot(pm.ps.velocity, pm.groundNormal) > 100) {
+        if(Vector3f.dot(pm.ps.velocity, pm.groundNormal) > 100) {
             Common.LogDebug("Kickoff");
             pm.onGround = false;
             return false;
@@ -312,7 +317,7 @@ public class Move {
 //       pm.ps.velocity.y *= newspeed;
    }
 
-    static void WalkMove(Vector2f wishdir, MoveQuery pm) {
+    static void WalkMove(Vector3f wishdir, MoveQuery pm) {
         // normalize
         float wishspeed = (float)Math.sqrt(wishdir.x * wishdir.x + wishdir.y * wishdir.y);
         if(wishspeed > 0) {
@@ -327,7 +332,7 @@ public class Move {
            wishspeed = maxspeed;
         }
 
-        float currentSpeed = Vector2f.dot(pm.ps.velocity, wishdir);
+        float currentSpeed = Vector3f.dot(pm.ps.velocity, wishdir);
         float addSpeed = wishspeed  - currentSpeed;
         if(addSpeed > 0f)
         {
@@ -398,7 +403,7 @@ public class Move {
            float destx = pm.ps.origin.x + pm.ps.velocity.x * timeLeft;
            float desty = pm.ps.origin.y + pm.ps.velocity.y * timeLeft;
 
-           res = pm.Trace(pm.ps.origin, new Vector2f(destx, desty), Game.PlayerMins, Game.PlayerMaxs, pm.tracemask, pm.ps.clientNum);
+           res = pm.Trace(pm.ps.origin, new Vector3f(destx, desty,0), Game.PlayerMins, Game.PlayerMaxs, pm.tracemask, pm.ps.clientNum);
 
            // Move up
            pm.ps.origin.x += pm.ps.velocity.x * timeLeft * res.frac;
@@ -419,7 +424,7 @@ public class Move {
 //               Vector2f moveDir = new Vector2f(pm.ps.velocity);
 //               Helper.Normalize(moveDir);
                // Clip velocity and try to move the remaining bit               
-               ClipVelocity(pm.ps.velocity, pm.ps.velocity, res.HitAxis, 1.00f, pm);
+               ClipVelocity(pm.ps.velocity, pm.ps.velocity, new Vector3f(res.HitAxis.x, res.HitAxis.y, 0), 1.00f, pm);
                if((pm.blocked & 2) != 0)
                 hit = true;
 //               Vector2f moveDir2 = new Vector2f(pm.ps.velocity);
@@ -431,8 +436,8 @@ public class Move {
 
        if((pm.blocked & 1) == 1 && (pm.onGround || org_velocity.y > 0.1f)) { //
            // Store normal move results
-           Vector2f saved_org = new Vector2f(pm.ps.origin);
-           Vector2f saved_vel = new Vector2f(pm.ps.velocity);
+           Vector3f saved_org = new Vector3f(pm.ps.origin);
+           Vector3f saved_vel = new Vector3f(pm.ps.velocity);
 
            // Revert to pre-walkmove
            pm.ps.origin.set(org_origin);
@@ -461,7 +466,7 @@ public class Move {
     // try a series of up, forward, down moves
    private static boolean TryStepMove(MoveQuery pm) {
        // Up
-       Vector2f up = new Vector2f(pm.ps.origin);
+       Vector3f up = new Vector3f(pm.ps.origin);
        up.y += stepheight;
        CollisionResult res = pm.Trace(pm.ps.origin, up, Game.PlayerMins, Game.PlayerMaxs, pm.tracemask, pm.ps.clientNum);
        if(res.frac != 1f) {
@@ -472,7 +477,7 @@ public class Move {
        pm.ps.origin.y += stepheight;
        up.set(pm.ps.velocity);
        up.scale(frametime);
-       Vector2f.add(pm.ps.origin, up, up);
+       Vector3f.add(pm.ps.origin, up, up);
 
        res = pm.Trace(pm.ps.origin, up, Game.PlayerMins, Game.PlayerMaxs, pm.tracemask, pm.ps.clientNum);
        if(res.frac != 1f) {
@@ -482,7 +487,7 @@ public class Move {
        // Press down
        up.set(pm.ps.velocity);
        up.scale(frametime);
-       Vector2f.add(pm.ps.origin, up, pm.ps.origin);
+       Vector3f.add(pm.ps.origin, up, pm.ps.origin);
        up.set(pm.ps.origin);
        up.y -= stepheight;
        res = pm.Trace(pm.ps.origin, up, Game.PlayerMins, Game.PlayerMaxs, pm.tracemask, pm.ps.clientNum);
@@ -498,12 +503,12 @@ public class Move {
     
 
     // result = in - 2*n (n*in);
-    private static void ClipVelocity(Vector2f in, Vector2f out, Vector2f normal, float overbounce, MoveQuery pm) {
+    private static void ClipVelocity(Vector3f in, Vector3f out, Vector3f normal, float overbounce, MoveQuery pm) {
         // Normalize the normal :)
 
         
         //float len = in.length();
-        Vector2f result = normal;//new Vector2f(normal);
+        Vector3f result = normal;//new Vector2f(normal);
         //Helper.Normalize(result);
 
         if(result.x > 0.9 || result.x < -0.9)
@@ -511,7 +516,7 @@ public class Move {
         if(result.x < 0.5 && result.x > -0.5f)
             pm.blocked |= 2; // floor
         
-        float dot = Vector2f.dot(result, in) * overbounce;
+        float dot = Vector3f.dot(result, in) * overbounce;
         float change = result.x * dot;
         out.x = in.x - change;
         change = result.y * dot;

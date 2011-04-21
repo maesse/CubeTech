@@ -110,6 +110,16 @@ public class HelperTest {
         assertEquals(src.y, dst.y, 0.0);
     }
 
+    @Test
+    public void testAngle2Short() {
+        for (int i= 0; i < 360; i++) {
+            int val =Helper.Angle2Short(i);
+            float ang = Helper.Short2Angle(val);
+            assertEquals((float)i, ang, 0.0055f);
+        }
+        
+    }
+
     /**
      * Test of VectorMA method, of class Helper.
      */

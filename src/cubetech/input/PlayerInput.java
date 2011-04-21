@@ -9,8 +9,12 @@ import org.lwjgl.util.vector.Vector2f;
  * @author mads
  */
 public class PlayerInput {
-    public Vector2f MousePos = new Vector2f(0.5f,0.5f);
-    public Vector2f MouseDelta = new Vector2f();
+    // not sent
+    public int[] MouseDelta = new int[2];
+
+    // this is transmitted
+    public Vector2f MousePos = new Vector2f(0.5f,0.5f); // no need to send this one
+    public int[] angles = new int[3]; // can be reduced to 3 shorts
     public int serverTime;
     public int WheelDelta;
     public boolean Mouse1;
@@ -44,28 +48,19 @@ public class PlayerInput {
             dest.Mouse3 = getBit(hags,index++);
             boolean hasWheel = getBit(hags,index++);
             boolean sameVec = getBit(hags,index++);
-//            dest.Up = buf.ReadBool();
-//            dest.Down = buf.ReadBool();
-//            dest.Left = buf.ReadBool();
-//            dest.Right = buf.ReadBool();
-//            dest.Jump = buf.ReadBool();
-//            dest.Mouse1Diff = buf.ReadBool();
-//            if(dest.Mouse1Diff)
-//                dest.Mouse1 = buf.ReadBool();
-//            dest.Mouse2Diff = buf.ReadBool();
-//            if(dest.Mouse2Diff)
-//                dest.Mouse2 = buf.ReadBool();
-//            dest.Mouse3Diff = buf.ReadBool();
-//            if(dest.Mouse3Diff)
-//                dest.Mouse3 = buf.ReadBool();
-//            boolean hasWheel = buf.ReadBool();
+
             if(hasWheel)
                 dest.WheelDelta = buf.ReadInt();
             if(!sameVec)
                 dest.MousePos = buf.ReadVector();
             else
                 dest.MousePos.set(oldcmd.MousePos);
+
+            dest.angles[0] = buf.ReadInt();
+            dest.angles[1] = buf.ReadInt();
+            dest.angles[2] = buf.ReadInt();
         } else { // unchanged
+
             dest.Up = oldcmd.Up;
             dest.Down = oldcmd.Down;
             dest.Left = oldcmd.Left;
@@ -79,6 +74,7 @@ public class PlayerInput {
             dest.Mouse3 = oldcmd.Mouse3;
             dest.WheelDelta = oldcmd.WheelDelta;
             dest.MousePos = oldcmd.MousePos;
+            System.arraycopy(oldcmd.angles, 0, dest.angles, 0, oldcmd.angles.length);
         }
 
         return dest;
@@ -134,7 +130,8 @@ public class PlayerInput {
         
         if(this.equals(from)
                 && Helper.Equals(MousePos, from.MousePos)
-                && Helper.Equals(MouseDelta, from.MouseDelta)) {
+                && MouseDelta[0] == from.MouseDelta[0] && MouseDelta[1] == from.MouseDelta[1]
+                && angles[0] == from.angles[0] && angles[1] == from.angles[1] && angles[2] == from.angles[2]) {
             buf.Write(false); // no change
             return;
         }
@@ -158,27 +155,16 @@ public class PlayerInput {
         boolean sameVec = Helper.Equals(MousePos, from.MousePos);
         hags = setBit(hags, index++, sameVec);
 
-//        buf.Write(Up);
-//        buf.Write(Down);
-//        buf.Write(Left);
-//        buf.Write(Right);
-//        buf.Write(Jump);
-//        buf.Write(Mouse1Diff);
-//        if(Mouse1Diff)
-//            buf.Write(Mouse1);
-//        buf.Write(Mouse2Diff);
-//        if(Mouse2Diff)
-//            buf.Write(Mouse2);
-//        buf.Write(Mouse3Diff);
-//        if(Mouse3Diff)
-//            buf.Write(Mouse3);
-//        buf.Write(WheelDelta != 0);
         buf.Write(hags);
         if(WheelDelta != 0)
             buf.Write(WheelDelta);
 
         if(!sameVec)
             buf.Write(MousePos);
+
+        buf.Write(angles[0]);
+        buf.Write(angles[1]);
+        buf.Write(angles[2]);
     }
 
     public PlayerInput Clone() {
@@ -186,9 +172,9 @@ public class PlayerInput {
         n.MousePos = new Vector2f();
         n.MousePos.x = MousePos.x;
         n.MousePos.y = MousePos.y;
-        n.MouseDelta = new Vector2f();
-        n.MouseDelta.x = MouseDelta.x;
-        n.MouseDelta.y = MouseDelta.y;
+        n.MouseDelta[0] = MouseDelta[0];
+        n.MouseDelta[1] = MouseDelta[1];
+        System.arraycopy(angles, 0, n.angles, 0, angles.length);
         n.serverTime = serverTime;
         n.WheelDelta = WheelDelta;
         n.Mouse1 = Mouse1;

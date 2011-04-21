@@ -5,6 +5,7 @@ import cubetech.common.Common;
 import cubetech.entities.IEntity;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -12,7 +13,7 @@ import org.lwjgl.util.vector.Vector2f;
  */
 public class SpawnEntity {
     public String className;
-    public Vector2f origin = new Vector2f();
+    public Vector3f origin = new Vector3f();
     private boolean spawned = false;
     private Gentity ent = null;
     private Block editBlock = null;
@@ -21,7 +22,7 @@ public class SpawnEntity {
         if(className == null || className.isEmpty())
             Ref.common.Error(Common.ErrorCode.FATAL, "SpawnEntity(): className == null");
         this.className = className;
-        origin.set(position);
+        origin.set(position.x, position.y, 0);
         editBlock = new Block(-1, new Vector2f(position.x - 6, position.y - 6), new Vector2f(12,12), false);
         editBlock.setLayer(-20); // make sure entities are the first to be selected in the editor
         editBlock.spawnEntity = this;
@@ -52,7 +53,8 @@ public class SpawnEntity {
         if(spawned) {
             Common.LogDebug("SpawnEntity.Spawn(): WARNING Is already spawned.");
         }
-        origin.set(editBlock.GetCenter());
+        Vector2f bCent = editBlock.GetCenter();
+        origin.set(bCent.x, bCent.y, 0);
         ent = Ref.game.Spawn();
         ent.s.origin.set(origin);
         ent.classname = className;

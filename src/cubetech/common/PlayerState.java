@@ -5,11 +5,13 @@ import cubetech.common.Move.MoveType;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
+import cubetech.input.Input;
 import cubetech.input.PlayerInput;
 import cubetech.misc.Ref;
 import cubetech.net.NetBuffer;
 import cubetech.server.SvFlags;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -18,7 +20,7 @@ import org.lwjgl.util.vector.Vector2f;
 public class PlayerState {
     public int clientNum;
     public int commandTime;
-    public int[] delta_angles = new int[2];
+    public int[] delta_angles = new int[3];
     public int eFlags = EntityFlags.NONE;
     public int entityEventSequence;
     public int eventSequence;
@@ -27,9 +29,9 @@ public class PlayerState {
     public int externalEvent;
     public int externalEventParam;
     public int externalEventTime;
-    public Vector2f origin = new Vector2f();
-    public Vector2f velocity = new Vector2f();
-    public Vector2f viewangles = new Vector2f(); // TODO: Check
+    public Vector3f origin = new Vector3f();
+    public Vector3f velocity = new Vector3f();
+    public Vector3f viewangles = new Vector3f(); // TODO: Check
     public PlayerStats stats = new PlayerStats();
     public int ping = -1;
 
@@ -52,7 +54,7 @@ public class PlayerState {
     public void Clear() {
         clientNum = 0;
         commandTime = 0;
-        delta_angles[0] = delta_angles[1]  = 0;
+        delta_angles = new int[3];
         eFlags = EntityFlags.NONE;
         entityEventSequence = 0;
         eventSequence = 0;
@@ -61,9 +63,9 @@ public class PlayerState {
         externalEvent = 0;
         externalEventParam = 0;
         externalEventTime = 0;
-        origin = new Vector2f();
-        velocity = new Vector2f();
-        viewangles = new Vector2f();
+        origin = new Vector3f();
+        velocity = new Vector3f();
+        viewangles = new Vector3f();
         ping = -1;
         moveType = MoveType.SPECTATOR;
         stepTime = 0;
@@ -77,16 +79,34 @@ public class PlayerState {
         stats = new PlayerStats();
     }
 
-    // Use mouse position as a viewangle
+//    // Use mouse position as a viewangle
+//    public void UpdateViewAngle(PlayerInput cmd) {
+//        // Scale from [0 -> 1] to [-1 -> 1], so 0 is center of the screen
+//        viewangles.x = cmd.MousePos.x*2f - 1f;
+//        viewangles.y = cmd.MousePos.y*2f - 1f;
+//
+//        if(viewangles.x == 0 && viewangles.y == 0)
+//            viewangles.set(1, 0); // can't have zero-lenght view vectors, can we now?
+//
+//        Helper.Normalize(viewangles);
+//    }
+
     public void UpdateViewAngle(PlayerInput cmd) {
-        // Scale from [0 -> 1] to [-1 -> 1], so 0 is center of the screen
-        viewangles.x = cmd.MousePos.x*2f - 1f;
-        viewangles.y = cmd.MousePos.y*2f - 1f;
-
-        if(viewangles.x == 0 && viewangles.y == 0)
-            viewangles.set(1, 0); // can't have zero-lenght view vectors, can we now?
-
-        Helper.Normalize(viewangles);
+        // circularly clamp the angles with deltas
+        for (int i= 0; i < 3; i++) {
+            int temp = cmd.angles[i] + delta_angles[i];
+            if(i == Input.ANGLE_PITCH) {
+                // don't let the player look up or down more than 90 degrees
+                if(temp > 16000){
+                    delta_angles[i] = 16000 - cmd.angles[i];
+                    temp = 16000; // this is actually more like 88deg
+                } else if(temp < -16000) {
+                    delta_angles[i] = -16000 - cmd.angles[i];
+                    temp = -16000;
+                }
+            }
+            Helper.VectorSet(viewangles, i, Helper.Short2Angle(temp));
+        }
     }
 
     public PlayerState Clone(PlayerState ps) {
@@ -97,6 +117,7 @@ public class PlayerState {
         ps.commandTime = commandTime;
         ps.delta_angles[0] = delta_angles[0];
         ps.delta_angles[1] = delta_angles[1];
+        ps.delta_angles[2] = delta_angles[2];
         ps.eFlags = eFlags;
         ps.entityEventSequence = entityEventSequence;
         ps.eventSequence = eventSequence;
@@ -107,21 +128,18 @@ public class PlayerState {
         ps.externalEvent = externalEvent;
         ps.externalEventParam = externalEventParam;
         ps.externalEventTime = externalEventTime;
-        ps.origin = new Vector2f();
+        ps.origin = new Vector3f();
         if(origin != null) {
-
-            ps.origin.x = origin.x;
-            ps.origin.y = origin.y;
+            ps.origin.set(origin);
         }
-        ps.velocity = new Vector2f();
+        ps.velocity = new Vector3f();
         if(velocity != null) {
-            ps.velocity.x = velocity.x;
-            ps.velocity.y = velocity.y;
+            ps.velocity.set(velocity);
         }
         ps.ping = ping;
         ps.moveType = moveType;
         ps.stepTime = stepTime;
-        ps.viewangles = new Vector2f(viewangles);
+        ps.viewangles = new Vector3f(viewangles);
         ps.stats = stats.clone();
         ps.jumpTime = jumpTime;
         ps.applyPull = applyPull;
@@ -134,45 +152,6 @@ public class PlayerState {
 //        }
     }
 
-//    public void ToEntityStateExtrapolate(EntityState s, boolean snap) {
-//        s.eType = EntityType.PLAYER;
-//        s.pos.type = Trajectory.LINEAR_STOP;
-//        s.pos.base.x = origin.x;
-//        s.pos.base.y = origin.y;
-//        if(snap) {
-//            s.pos.base.x = (int)s.pos.base.x;
-//            s.pos.base.y = (int)s.pos.base.y;
-//        }
-//        // set the trDelta for flag direction and linear prediction
-//        s.pos.delta.x = velocity.x;
-//        s.pos.delta.y = velocity.y;
-//        s.pos.time = commandTime;
-//        s.pos.duration = 50;
-//
-//        s.apos.type = Trajectory.INTERPOLATE;
-//        s.apos.base.x = viewangles.x;
-//        s.apos.base.y = viewangles.y;
-//        s.ClientNum = clientNum;
-//        s.eFlags = eFlags;
-//
-//        if(externalEvent > 0) {
-//            s.evt = externalEvent;
-//            s.evtParams = externalEventParam;
-//
-//        } else if(entityEventSequence < eventSequence) {
-//            if(entityEventSequence < eventSequence - Common.MAX_PS_EVENTS)
-//                entityEventSequence = eventSequence - Common.MAX_PS_EVENTS;
-//
-//            int seq = entityEventSequence & (Common.MAX_PS_EVENTS-1);
-//            s.evt = events[seq] | ((entityEventSequence & 3) << 8);
-//            s.evtParams = eventParams[seq];
-//            entityEventSequence++;
-//        }
-//
-//
-//
-//    }
-
     public void ToEntityState(EntityState s, boolean snap) {
         if(moveType == MoveType.SPECTATOR)
             s.eType = EntityType.INVISIBLE;
@@ -180,20 +159,18 @@ public class PlayerState {
             s.eType = EntityType.PLAYER;
         s.ClientNum = clientNum;
         s.time = movetime;
-        s.pos.base.x = origin.x;
-        s.pos.base.y = origin.y;
+        s.pos.base.set(origin);
         s.pos.type = Trajectory.INTERPOLATE;
         if(snap) {
             s.pos.base.x = (int)s.pos.base.x;
             s.pos.base.y = (int)s.pos.base.y;
+            s.pos.base.z = (int)s.pos.base.z;
         }
         // set the trDelta for flag direction
-        s.pos.delta.x = velocity.x;
-        s.pos.delta.y = velocity.y;
+        s.pos.delta.set(velocity);
 
         s.apos.type = Trajectory.INTERPOLATE;
-        s.apos.base.x = viewangles.x;
-        s.apos.base.y = viewangles.y;
+        s.apos.base.set(viewangles);
         s.eFlags = eFlags;
         if(stats.Health <= 0)
             s.eFlags |= EntityFlags.DEAD;
@@ -248,6 +225,7 @@ public class PlayerState {
         msg.WriteDelta(ps.commandTime, commandTime);
         msg.WriteDelta(ps.delta_angles[0], delta_angles[0]);
         msg.WriteDelta(ps.delta_angles[1], delta_angles[1]);
+        msg.WriteDelta(ps.delta_angles[2], delta_angles[2]);
         msg.WriteDelta(ps.eFlags, eFlags);
         msg.WriteDelta(ps.entityEventSequence, entityEventSequence);
         msg.WriteDelta(ps.eventParams[0], eventParams[0]);
@@ -283,6 +261,7 @@ public class PlayerState {
         commandTime = msg.ReadDeltaInt(ps.commandTime);
         delta_angles[0] = msg.ReadDeltaInt(ps.delta_angles[0]);
         delta_angles[1] = msg.ReadDeltaInt(ps.delta_angles[1]);
+        delta_angles[2] = msg.ReadDeltaInt(ps.delta_angles[2]);
         eFlags = msg.ReadDeltaInt(ps.eFlags);
         entityEventSequence = msg.ReadDeltaInt(ps.entityEventSequence);
         eventParams[0] = msg.ReadDeltaInt(ps.eventParams[0]);

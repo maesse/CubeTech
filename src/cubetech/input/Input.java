@@ -1,9 +1,13 @@
 package cubetech.input;
 
+import cubetech.common.CVar;
+import cubetech.common.CVarFlags;
 import cubetech.common.Commands.ExecType;
+import cubetech.common.Helper;
 import cubetech.misc.Ref;
 import cubetech.net.ConnectState;
 import cubetech.ui.UI.MENU;
+import java.util.EnumSet;
 import java.util.HashMap;
 import javax.swing.event.EventListenerList;
 import org.lwjgl.LWJGLException;
@@ -11,6 +15,7 @@ import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  * Handles input from frame to frame
@@ -36,8 +41,13 @@ public class Input {
 
     ButtonState in_left, in_right, in_forward, in_back;
     ButtonState[] in_buttons = new ButtonState[31]; // Custom buttons
-
+    public float[] viewangles = new float[3]; // viewangle this frame
+    float[] oldangles = new float[3]; // viewangles from last frame
     public Binds binds;
+
+    public final static int ANGLE_PITCH = 0; // up/down
+    public final static int ANGLE_YAW = 1; // left/right
+    public final static int ANGLE_ROLL = 2; // fall over
 
     // Custom mouse wheel code
     private int mWheelUpTime = 0;
@@ -46,6 +56,9 @@ public class Input {
     private int backSpaceTime = 0;
     private int backSpaceGracePeriod = 200;
     private int backSpaceRepeat = 30;
+
+    private CVar sens;
+    private CVar in_mouselook;
 
     public Input() {
         binds = new Binds(this);
@@ -84,11 +97,18 @@ public class Input {
         binds.BindKey("TAB", "+scores");
         binds.BindKey("RETURN", "message");
         binds.BindKey("y", "message");
+        
+        
     }
 
     public void SetKeyCatcher(int catcher) {
         if(catcher == KeyCatcher)
             return;
+
+        // Was in game
+        if(KeyCatcher == KEYCATCH_NONE && in_mouselook.isTrue()) {
+            Mouse.setGrabbed(false);
+        }
 
         ClearKeys();
         // Pause/unpause when entering/exiting menu
@@ -99,6 +119,10 @@ public class Input {
                 && (catcher & KEYCATCH_UI) > 0)
             Ref.cvars.Set2("cl_paused", "1", true);
         KeyCatcher = catcher;
+        // was in menu and is now in game
+        if(KeyCatcher == KEYCATCH_NONE && in_mouselook.isTrue()) {
+            Mouse.setGrabbed(true);
+        }
     }
 
     public int GetKeyCatcher() {
@@ -171,6 +195,8 @@ public class Input {
 
         playerInput = new PlayerInput();
         mouseDelta = new Vector2f();
+        sens = Ref.cvars.Get("sensitivity", "3", EnumSet.of(CVarFlags.ARCHIVE));
+        in_mouselook = Ref.cvars.Get("in_mouselook", "1", EnumSet.of(CVarFlags.ARCHIVE));
     }
     public void Update() {
         Display.processMessages();
@@ -178,6 +204,10 @@ public class Input {
         KeyboardUpdate();
         UpdateUserInput();
 
+        
+        
+
+        // Repeat backspace events
         if(Keyboard.isKeyDown(Keyboard.KEY_BACK)) {
             if(backSpaceTime == 0)
                 backSpaceTime = Ref.client.realtime + backSpaceGracePeriod;
@@ -236,13 +266,13 @@ public class Input {
         if(playerInput.Mouse3Diff)
             playerInput.Mouse3Diff = false;
         
-        Vector2f delta = new Vector2f();
+        int dx = 0, dy = 0;
         boolean event = false;
         while(Mouse.next()) {
             event = true;
             // Add up delta
-            delta.x += Mouse.getEventDX();
-            delta.y += Mouse.getEventDY();
+            dx += Mouse.getEventDX();
+            dy += Mouse.getEventDY();
 
             // Set Position
             float mousex = (float)Mouse.getEventX() / (float)Ref.glRef.GetResolution().x;
@@ -282,7 +312,7 @@ public class Input {
                     playerInput.Mouse3 = pressed;
                     break;
             }
-            FireMouseEvent(new MouseEvent(button, pressed, wheelDelta, new Vector2f(delta.x, delta.y), new Vector2f(playerInput.MousePos.x,playerInput.MousePos.y)));
+            FireMouseEvent(new MouseEvent(button, pressed, wheelDelta, dx, dy, new Vector2f(playerInput.MousePos.x,playerInput.MousePos.y)));
             // Also fire a key event for button presses
             if(button != -1) {
                 // Fire regular mouse button event
@@ -323,7 +353,8 @@ public class Input {
         }
 
         // Set delta
-        playerInput.MouseDelta = delta;
+        playerInput.MouseDelta[0] = dx;
+        playerInput.MouseDelta[1] = dy;
     }
 
     void KeyboardUpdate() {
@@ -442,10 +473,41 @@ public class Input {
 
     }
 
-    
+    private void MouseMove(PlayerInput cmd) {
+        if(cmd.MouseDelta[0] == 0 && cmd.MouseDelta[1] == 0) {
+            for (int i= 0; i < 3; i++) {
+                cmd.angles[i] = Helper.Angle2Short(viewangles[i]);
+            }
+            return; // No change
+        }
+
+        // Cast to float
+        float mx = cmd.MouseDelta[0];
+        float my = cmd.MouseDelta[1];
+
+        // Multiply by sensitivity
+        mx *= sens.fValue;
+        my *= sens.fValue;
+
+        viewangles[ANGLE_YAW] -= 0.022f * mx;
+        viewangles[ANGLE_PITCH] += 0.022f * my;
+
+        if(viewangles[ANGLE_PITCH] > 180f)
+            viewangles[ANGLE_PITCH] = 180f;
+        else if(viewangles[ANGLE_PITCH] < 0f)
+            viewangles[ANGLE_PITCH] = 0f;
+
+        // Ensure angles have not been wrapped
+        cmd.angles[0] = Helper.Angle2Short(viewangles[0]);
+        cmd.angles[1] = Helper.Angle2Short(viewangles[1]);
+        cmd.angles[2] = Helper.Angle2Short(viewangles[2]);
+    }
 
     public PlayerInput CreateCmd() {
+        System.arraycopy(viewangles, 0, oldangles, 0, viewangles.length);
+        PlayerInput cmd = playerInput.Clone();
+        MouseMove(cmd);
 
-        return playerInput.Clone();
+        return cmd;
     }
 }

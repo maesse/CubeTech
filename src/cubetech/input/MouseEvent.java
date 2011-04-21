@@ -18,13 +18,20 @@ public class MouseEvent  {
     public boolean Pressed;
     public int WheelDelta;
 
-    public Vector2f Delta;
+    public int[] Delta;
     public Vector2f Position;
-    
-    public MouseEvent(int button, boolean pressed, int wheelDelta, Vector2f delta, Vector2f pos) {
+    public MouseEvent(int button, boolean pressed, int wheelDelta, int[] delta, Vector2f pos) {
         this.Button = button;
         this.Pressed = pressed;
         this.Delta = delta;
+        this.Position = pos;
+        this.WheelDelta = wheelDelta;
+    }
+    
+    public MouseEvent(int button, boolean pressed, int wheelDelta, int dx, int dy, Vector2f pos) {
+        this.Button = button;
+        this.Pressed = pressed;
+        this.Delta = new int[] {dx, dy};
         this.Position = pos;
         this.WheelDelta = wheelDelta;
     }

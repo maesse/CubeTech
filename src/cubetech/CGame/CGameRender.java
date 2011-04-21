@@ -9,6 +9,7 @@ import cubetech.Block;
 import cubetech.Game.Game;
 import cubetech.Game.Gentity;
 import cubetech.collision.BlockModel;
+import cubetech.collision.CubeMap;
 import cubetech.common.Common;
 import cubetech.common.Content;
 import cubetech.common.GItem;
@@ -38,6 +39,8 @@ import org.lwjgl.util.vector.Vector2f;
  */
 public class CGameRender {
     private CGame game;
+
+    
     
     // Player
     private CubeMaterial c_head;
@@ -100,6 +103,8 @@ public class CGameRender {
                 continue;
             block.Render();
         }
+
+        
     }
 
 
@@ -228,7 +233,7 @@ public class CGameRender {
 //        spr.Set(new Vector2f(cent.lerpOrigin.x - size.x/2f, cent.lerpOrigin.y - size.y/2f), size, null, null,null);
 //        spr.SetDepth(CGame.PLAYER_LAYER);
 
-        RenderModel(cent.currentState.modelindex, cent.lerpOrigin, CGame.PLAYER_LAYER);
+        RenderModel(cent.currentState.modelindex, new Vector2f(cent.lerpOrigin), CGame.PLAYER_LAYER); // FIX
     }
 
     //
@@ -267,7 +272,9 @@ public class CGameRender {
             Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()), "Velocity: " + game.cg.predictedPlayerState.velocity, Align.LEFT, Type.HUD);
             //Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Ping: " + Ref.cgame.cg.snap.ps.ping, Align.LEFT, Type.HUD);
             Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Pull accel: " + game.getPullAccel(), Align.LEFT, Type.HUD);
-
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*3), "v: " + game.cg.predictedPlayerState.delta_angles[0], Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*4), "V: " + game.cg.predictedPlayerState.viewangles, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*5), "Vv: " + Ref.Input.viewangles[0], Align.LEFT, Type.HUD);
         }
 
         if(Ref.net.net_graph.iValue > 0) {
@@ -565,7 +572,10 @@ public class CGameRender {
 
             Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
             Vector2f size = new Vector2f();
-            Vector2f.sub(ent.r.absmax, ent.r.absmin, size);
+            // FIX
+            size.x = ent.r.absmax.x - ent.r.absmin.x;
+            size.y = ent.r.absmax.y - ent.r.absmin.y;
+            
 
             // Figure out what texture to display
             CubeTexture tex = null;
@@ -588,7 +598,7 @@ public class CGameRender {
             if(tex == null)
                 Ref.ResMan.getWhiteTexture();
 
-            spr.Set(ent.r.absmin, size, tex, null, null);
+            spr.Set(new Vector2f(ent.r.absmin.x, ent.r.absmin.y), size, tex, null, null);
             spr.SetDepth(MapEditor.EDITOR_LAYER-1);
             spr.SetColor(0, 255, 255, 127);
 

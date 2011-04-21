@@ -1,12 +1,4 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.gfx;
-import org.lwjgl.opengl.GL20;
-import cubetech.misc.Ref;
-import org.lwjgl.opengl.GL13;
 import static org.lwjgl.opengl.GL11.*;
 /**
  *
@@ -21,6 +13,10 @@ public class CubeTexture {
     // GL
     private int TextureID;
     private int Target;
+
+    int minfilter;
+    int magfilter;
+    int wrap = GL_REPEAT;
     
 
     public CubeTexture(int target, int id, String name) {
@@ -35,6 +31,25 @@ public class CubeTexture {
 
     public boolean needSort() {
         return true;
+    }
+
+    public void setWrap(int value) {
+        Bind();
+        wrap = value;
+        glTexParameteri(Target, GL_TEXTURE_WRAP_S, value);
+        glTexParameteri(Target, GL_TEXTURE_WRAP_T, value);
+    }
+
+    public void setFiltering(boolean min, int filter) {
+        Bind();
+        if(min) {
+            minfilter = filter;
+            glTexParameteri(Target, GL_TEXTURE_MIN_FILTER, minfilter);
+        }
+        else {
+            magfilter = filter;
+            glTexParameteri(Target, GL_TEXTURE_MAG_FILTER, magfilter);
+        }
     }
 
     public void Bind() {

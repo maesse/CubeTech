@@ -19,6 +19,7 @@ import cubetech.input.PlayerInput;
 import cubetech.misc.Ref;
 import java.util.AbstractMap.SimpleEntry;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -50,7 +51,7 @@ public class CGameState {
     public CEntity predictedPlayerEntity = new CEntity();
     public boolean validPPS;				// clear until the first call to CG_PredictPlayerState
     public int predictedErrorTime;
-    public Vector2f predictedError = new Vector2f();
+    public Vector3f predictedError = new Vector3f();
 
     public int			eventSequence;
     public int[] predictableEvents = new int[16]; // 16
@@ -242,15 +243,15 @@ public class CGameState {
             if(predictedPlayerState.commandTime == oldPlayerState.commandTime) {
                 if(thisFrameTeleport) {
                     // a teleport will not cause an error decay
-                    predictedError = new Vector2f();
+                    predictedError = new Vector3f();
                     thisFrameTeleport = false;
                 } else {
                     // TODO: AdjustPositionForMover()
 //                    if(oldPlayerState.origin.x != predictedPlayerState.origin.x
 //                            || oldPlayerState.origin.y != predictedPlayerState.origin.y)
 //                        Ref.cgame.Print("Prediction error");
-                    Vector2f delta = new Vector2f();
-                    Vector2f.sub(oldPlayerState.origin, predictedPlayerState.origin, delta);
+                    Vector3f delta = new Vector3f();
+                    Vector3f.sub(oldPlayerState.origin, predictedPlayerState.origin, delta);
                     float len = delta.length();
                     if(len > 0.1f) {
 //                        Ref.cgame.Print("Prediction miss: " + len);
@@ -266,8 +267,8 @@ public class CGameState {
                             if(Float.isInfinite(predictedError.y) || Float.isNaN(predictedError.y))
                                 predictedError.y = 0f;
                         } else
-                            predictedError = new Vector2f();
-                        Vector2f.add(predictedError, delta, predictedError);
+                            predictedError = new Vector3f();
+                        Vector3f.add(predictedError, delta, predictedError);
                         predictedErrorTime = oldTime;
                     }
                 }

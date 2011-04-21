@@ -10,6 +10,7 @@ import cubetech.entities.EntityType;
 import cubetech.entities.Event;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  * centity have a direct corespondence with gentity_t in the game, but
@@ -27,24 +28,24 @@ public class CEntity {
     //public PlayerEntity pe;
 
     public int errorTime; // decay the error from this time
-    public Vector2f errorOrigin = new Vector2f();
-    public Vector2f errorAngles = new Vector2f();
+    public Vector3f errorOrigin = new Vector3f();
+    public Vector3f errorAngles = new Vector3f();
 
     public boolean extrapolated; // false if origin / angles is an interpolation
-    public Vector2f rawOrigin = new Vector2f();
-    public Vector2f rawAngles = new Vector2f();
+    public Vector3f rawOrigin = new Vector3f();
+    public Vector3f rawAngles = new Vector3f();
 
     // exact interpolated position of entity on this frame
-    public Vector2f lerpOrigin = new Vector2f();
-    public Vector2f lerpAngles = new Vector2f();
+    public Vector3f lerpOrigin = new Vector3f();
+    public Vector3f lerpAngles = new Vector3f();
 
     void ResetEntity() {
         // if the previous snapshot this entity was updated in is at least
 	// an event window back in time then we can reset the previous event
         if(snapshotTime < Ref.cgame.cg.time - Common.EVENT_VALID_MSEC)
             previousEvent = 0;
-        lerpOrigin = new Vector2f(currentState.origin);
-        lerpAngles = new Vector2f(currentState.Angles);
+        lerpOrigin = new Vector3f(currentState.origin);
+        lerpAngles = new Vector3f(currentState.Angles);
         if(currentState.eType == EntityType.PLAYER)
             ResetPlayerEntity();
     }
@@ -156,8 +157,8 @@ public class CEntity {
 
         // this will linearize a sine or parabolic curve, but it is important
 	// to not extrapolate player positions if more recent data is available
-        Vector2f current = new Vector2f();
-        Vector2f next = new Vector2f();
+        Vector3f current = new Vector3f();
+        Vector3f next = new Vector3f();
         currentState.pos.Evaluate(Ref.cgame.cg.snap.serverTime, current);
         nextState.pos.Evaluate(Ref.cgame.cg.nextSnap.serverTime, next);
 
@@ -165,12 +166,15 @@ public class CEntity {
         lerpOrigin.x = current.x + diff;
         diff = f * (next.y - current.y);
         lerpOrigin.y = current.y + diff;
+        diff = f * (next.z - current.z);
+        lerpOrigin.z = current.z + diff;
 
         currentState.apos.Evaluate(Ref.cgame.cg.snap.serverTime, current);
         nextState.apos.Evaluate(Ref.cgame.cg.nextSnap.serverTime, next);
 
         lerpAngles.x = current.x + f * (next.x - current.x);
         lerpAngles.y = current.y + f * (next.y - current.y);
+        lerpAngles.z = current.z + f * (next.z - current.z);
     }
 
     public void Event() {

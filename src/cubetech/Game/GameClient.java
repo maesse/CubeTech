@@ -7,6 +7,7 @@ import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Content;
 import cubetech.common.GItem;
+import cubetech.common.Helper;
 import cubetech.common.ICommand;
 import cubetech.common.Info;
 import cubetech.common.Move;
@@ -21,6 +22,7 @@ import cubetech.misc.Ref;
 import cubetech.spatial.SectorQuery;
 import java.util.ArrayList;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 
 /**
@@ -75,6 +77,17 @@ public class GameClient extends Gentity {
             }
             
         }
+    }
+
+    public void SetViewAngles(Vector3f angle) {
+        int cmdAngle = Helper.Angle2Short(angle.x);
+        ps.delta_angles[0] = cmdAngle - pers.cmd.angles[0];
+        cmdAngle = Helper.Angle2Short(angle.y);
+        ps.delta_angles[1] = cmdAngle - pers.cmd.angles[1];
+        cmdAngle = Helper.Angle2Short(angle.z);
+        ps.delta_angles[2] = cmdAngle - pers.cmd.angles[2];
+        Helper.VectorCopy(angle, s.Angles);
+        Helper.VectorCopy(angle, ps.viewangles);
     }
 
     /**
@@ -232,9 +245,9 @@ public class GameClient extends Gentity {
 
         String bCmd = tokens[1];
         if(bCmd.equalsIgnoreCase("add")) {
-            Vector2f position = ps.origin;
+            Vector3f position = ps.origin;
             Block b = Ref.cm.cm.AddBlock();
-            b.SetCentered(position, new Vector2f(8, 8));
+            b.SetCentered(new Vector2f(position.x, position.y), new Vector2f(8, 8));
             Ref.game.SendBlock(b);
         }
     }
@@ -326,8 +339,8 @@ public class GameClient extends Gentity {
         ps.eFlags = flags;
         inuse = true;
         classname = "player";
-        r.mins = new Vector2f(Game.PlayerMins);
-        r.maxs = new Vector2f(Game.PlayerMaxs);
+        r.mins = new Vector3f(Game.PlayerMins);
+        r.maxs = new Vector3f(Game.PlayerMaxs);
         r.contents = Content.BODY;
         ClipMask = Content.PLAYERCLIP | Content.BODY;
         ps.clientNum = index;
@@ -337,12 +350,12 @@ public class GameClient extends Gentity {
         // Set spawn
         Gentity spawnPoint = selectSpawnPoint(ps.origin);
         if(spawnPoint != null) {
-            SetOrigin(new Vector2f(spawnPoint.s.origin));
-            ps.origin = new Vector2f(spawnPoint.s.origin);
+            SetOrigin(new Vector3f(spawnPoint.s.origin));
+            ps.origin = new Vector3f(spawnPoint.s.origin);
         }
         
         pers.cmd = Ref.server.GetUserCommand(index);
-
+        SetViewAngles(new Vector3f(0, 180, 0));
         Link();
         respawnTime = Ref.game.level.time;
 
@@ -358,8 +371,7 @@ public class GameClient extends Gentity {
 
         // positively link the client, even if the command times are weird
         ps.ToEntityState(s, false);
-        r.currentOrigin.x = ps.origin.x;
-        r.currentOrigin.y = ps.origin.y;
+        r.currentOrigin.set(ps.origin);
         Link();
 
         ClientEndFrame();
@@ -428,10 +440,9 @@ public class GameClient extends Gentity {
         ps.SendPendingPredictableEvents();
 
         // use the snapped origin for linking so it matches client predicted versions
-        r.currentOrigin.x = s.pos.base.x;
-        r.currentOrigin.y = s.pos.base.y;
-        r.mins = new Vector2f(Game.PlayerMins);
-        r.maxs = new Vector2f(Game.PlayerMaxs);
+        r.currentOrigin.set(s.pos.base);
+        r.mins = new Vector3f(Game.PlayerMins);
+        r.maxs = new Vector3f(Game.PlayerMaxs);
 
         // execute client events
         HandleEvents(oldEventSequence);
@@ -442,8 +453,7 @@ public class GameClient extends Gentity {
             TouchTriggers();
 
         // NOTE: now copy the exact origin over otherwise clients can be snapped into solid
-        r.currentOrigin.x = ps.origin.x;
-        r.currentOrigin.y = ps.origin.y;
+        r.currentOrigin.set(ps.origin);
 
         // save results of triggers and client events
         if(ps.eventSequence != oldEventSequence)
@@ -524,17 +534,17 @@ public class GameClient extends Gentity {
 
         Vector2f range = new Vector2f(40,40);
         Vector2f mins = new Vector2f(ps.origin);
-        mins.x -= range.x;
-        mins.y -= range.y;
+        Vector2f.sub(mins, range, mins);
         Vector2f maxs = new Vector2f(ps.origin);
-        maxs.x += range.x;
-        maxs.y += range.y;
+        Vector2f.add(maxs, range, maxs);
 
         SectorQuery query = Ref.server.EntitiesInBox(mins, maxs);
 
         // can't use ent->absmin, because that has a one unit pad
-        Vector2f.add(ps.origin, r.mins, mins);
-        Vector2f.add(ps.origin, r.maxs, maxs);
+        mins.x = ps.origin.x + r.mins.x;
+        mins.y = ps.origin.y + r.mins.y;
+        maxs.x = ps.origin.x + r.maxs.x;
+        maxs.y = ps.origin.y + r.maxs.y;
 
         for (int index : query.List) {
             Gentity hit = Ref.game.g_entities[index];
@@ -626,7 +636,7 @@ public class GameClient extends Gentity {
         ps.moveType = MoveType.EDITMODE;
     }
 
-    private Gentity selectSpawnPoint(Vector2f origin) {
+    private Gentity selectSpawnPoint(Vector3f origin) {
         Gentity spot = null;
         ArrayList<Gentity> spots = new ArrayList<Gentity>();
 

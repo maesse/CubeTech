@@ -188,7 +188,7 @@ public class Common {
         
         int msec = minMsec;
         
-        boolean sleepy = (com_sleepy.iValue == 1 && Ref.cvars.Find("r_vsync").iValue != 1) || com_unfocused.iValue == 1;
+        boolean sleepy = (com_sleepy.iValue == 1 && Ref.cvars.Find("r_vsync").iValue != 1) || (com_unfocused.isTrue() && !developer.isTrue());
         try {
             do {
                 // Sleepy frees up the CPU when not running vsync.

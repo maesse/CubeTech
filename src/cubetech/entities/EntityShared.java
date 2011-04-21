@@ -4,6 +4,7 @@ import cubetech.common.Common;
 import cubetech.server.SvFlags;
 import java.util.EnumSet;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  * shared by both the server system and game
@@ -21,8 +22,8 @@ public class EntityShared {
     
     public boolean linked; // true if currently linked into the worldsectors
     public int linkcount; // incremented at each link, for stats
-    public Vector2f absmax = new Vector2f(); // max in world-space, used for linking
-    public Vector2f absmin = new Vector2f(); // derived from mins/maxs and origin + rotation
+    public Vector3f absmax = new Vector3f(); // max in world-space, used for linking
+    public Vector3f absmin = new Vector3f(); // derived from mins/maxs and origin + rotation
 
     // Used by clipMoveToEntities
     public int contents; // CONTENTS_TRIGGER, CONTENTS_SOLID, CONTENTS_BODY, etc
@@ -39,10 +40,10 @@ public class EntityShared {
     // it will not necessarily be the same as the trajectory evaluation for the current
     // time, because each entity must be moved one at a time after time is advanced
     // to avoid simultanious collision issues
-    public Vector2f currentAngles = new Vector2f(); // Also used for Linking
-    public Vector2f currentOrigin = new Vector2f(); // Also used for Linking
-    public Vector2f maxs = new Vector2f(); // Also used for Linking 
-    public Vector2f mins = new Vector2f(); // Also used for Linking 
+    public Vector3f currentAngles = new Vector3f(); // Also used for Linking
+    public Vector3f currentOrigin = new Vector3f(); // Also used for Linking
+    public Vector3f maxs = new Vector3f(); // Also used for Linking
+    public Vector3f mins = new Vector3f(); // Also used for Linking
 
     // The corresponding Gentity will clear the shared entity, when
     // it is freed.
@@ -51,12 +52,12 @@ public class EntityShared {
         linkcount = 0;
         svFlags = EnumSet.of(SvFlags.NONE);
         singleClient = 0;
-        mins = new Vector2f();
-        maxs = new Vector2f();
-        absmin = new Vector2f();
-        absmax = new Vector2f();
-        currentAngles = new Vector2f();
-        currentOrigin = new Vector2f();
+        mins = new Vector3f();
+        maxs = new Vector3f();
+        absmin = new Vector3f();
+        absmax = new Vector3f();
+        currentAngles = new Vector3f();
+        currentOrigin = new Vector3f();
         ownernum = Common.ENTITYNUM_NONE;
     }
 }

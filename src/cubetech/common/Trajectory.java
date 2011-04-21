@@ -3,6 +3,7 @@ package cubetech.common;
 import cubetech.misc.Ref;
 import cubetech.net.NetBuffer;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  * Stores a position + the velocity at that time + the time this position
@@ -21,33 +22,36 @@ public class Trajectory {
     public int type; // Should be one of the flags defined
     public int time;
     public int duration;
-    public Vector2f base = new Vector2f();
-    public Vector2f delta  = new Vector2f();
+    public Vector3f base = new Vector3f();
+    public Vector3f delta  = new Vector3f();
     
     // Just a wrapper, returns a new vector instead of reusing
-    public Vector2f Evaluate(int time) {
-        Vector2f result = new Vector2f();
+    public Vector3f Evaluate(int time) {
+        Vector3f result = new Vector3f();
         Evaluate(time, result);
         return result;
     }
 
-    public void Evaluate(int attime, Vector2f dest) {
+    public void Evaluate(int attime, Vector3f dest) {
         switch(type) {
             case STATIONARY:
             case INTERPOLATE:
                 dest.x = base.x;
                 dest.y = base.y;
+                dest.z = base.z;
                 break;
             case LINEAR:
                 float deltaTime = (attime - time) * 0.001f;
                 dest.x = base.x + deltaTime * delta.x;
                 dest.y = base.y + deltaTime * delta.y;
+                dest.z = base.z + deltaTime * delta.z;
                 break;
             case SINE:
                 deltaTime = (attime - time) / duration;
                 float phase = (float)Math.sin(deltaTime * Math.PI * 2f);
                 dest.x = base.x + phase * delta.x;
                 dest.y = base.y + phase * delta.y;
+                dest.z = base.z + phase * delta.z;
                 break;
             case LINEAR_STOP:
                 if(attime > time + duration)
@@ -57,12 +61,14 @@ public class Trajectory {
                     deltaTime = 0;
                 dest.x = base.x + deltaTime * delta.x;
                 dest.y = base.y + deltaTime * delta.y;
+                dest.z = base.z + deltaTime * delta.z;
                 break;
             case GRAVITY:
                 deltaTime = (attime - time) * 0.001f;
                 dest.x = base.x + deltaTime * delta.x;
                 dest.y = base.y + deltaTime * delta.y;
-                dest.y -= 0.5f * Common.DEFAULT_GRAVITY * deltaTime * deltaTime; // FIXME: local gravity...
+                dest.z = base.z + deltaTime * delta.z;
+                dest.z -= 0.5f * Common.DEFAULT_GRAVITY * deltaTime * deltaTime; // FIXME: local gravity...
                 break;
             default:
                 Ref.common.Error(Common.ErrorCode.DROP, "Trajectory.Evaluate(): Unknown type " + type);

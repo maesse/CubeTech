@@ -8,6 +8,7 @@ import java.nio.ByteBuffer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -141,6 +142,18 @@ public class NetBuffer {
         }
     }
 
+    public void WriteDelta(Vector3f old, Vector3f newval) {
+        if(old != null && Helper.Equals(old, newval))
+            Write(false);
+        else
+        {
+            Write(true);
+            Write(newval.x);
+            Write(newval.y);
+            Write(newval.z);
+        }
+    }
+
     public int ReadDeltaInt(int old) {
         int newval = old;
         if(ReadBool())
@@ -152,6 +165,20 @@ public class NetBuffer {
         float newval = old;
         if(ReadBool())
             newval = ReadFloat();
+        return newval;
+    }
+
+    public Vector3f ReadDeltaVector(Vector3f old) {
+        Vector3f newval = new Vector3f();
+        if(ReadBool()) {
+            newval.x = ReadFloat();
+            newval.y = ReadFloat();
+            newval.z = ReadFloat();
+        } else if(old != null) {
+            newval.x = old.x;
+            newval.y = old.y;
+            newval.z = old.z;
+        }
         return newval;
     }
 

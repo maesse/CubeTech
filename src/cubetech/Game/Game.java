@@ -18,14 +18,15 @@ import cubetech.misc.Ref;
 import java.util.EnumSet;
 import java.util.HashMap;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
  * @author mads
  */
 public class Game {
-    public static final Vector2f PlayerMins = new Vector2f(-8,-12);
-    public static final Vector2f PlayerMaxs = new Vector2f(8,12);
+    public static final Vector3f PlayerMins = new Vector3f(-8,-12,-12);
+    public static final Vector3f PlayerMaxs = new Vector3f(8,12,12);
     CVar sv_speed;
     CVar sv_gravity;
     CVar sv_jumpmsec;
@@ -297,7 +298,7 @@ public class Game {
      * @param evt the event type
      * @return a linked temporary Gentity
      */
-    public Gentity TempEntity(Vector2f origin, int evt) {
+    public Gentity TempEntity(Vector3f origin, int evt) {
         Gentity e = Spawn();
         e.s.eType = EntityType.EVENTS + evt;
         e.classname = "tempentity";

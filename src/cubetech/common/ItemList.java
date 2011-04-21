@@ -11,6 +11,7 @@ import cubetech.server.SvFlags;
 import java.util.ArrayList;
 import java.util.HashMap;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  * Setup global itemlist for this game
@@ -94,8 +95,8 @@ public class ItemList {
         public void think(Gentity ent) {
 
             // set bounds
-            ent.r.mins.set(-GItem.ITEM_RADIUS, -GItem.ITEM_RADIUS);
-            ent.r.maxs.set(GItem.ITEM_RADIUS, GItem.ITEM_RADIUS);
+            ent.r.mins.set(-GItem.ITEM_RADIUS, -GItem.ITEM_RADIUS, -GItem.ITEM_RADIUS);
+            ent.r.maxs.set(GItem.ITEM_RADIUS, GItem.ITEM_RADIUS, GItem.ITEM_RADIUS);
 
             ent.s.eType = EntityType.ITEM;
             ent.s.modelindex = Ref.common.items.getItemIndex(ent.item);
@@ -229,12 +230,14 @@ public class ItemList {
     };
 
     public boolean playerTouchesItem(PlayerState ps, EntityState item, int time) {
-        Vector2f origin = item.pos.Evaluate(time);
+        Vector3f origin = item.pos.Evaluate(time);
 
         if(ps.origin.x - origin.x > 26
                 || ps.origin.x - origin.x < -26
                 || ps.origin.y - origin.y > 26
-                || ps.origin.y - origin.y < -26)
+                || ps.origin.y - origin.y < -26
+                || ps.origin.z - origin.z > 26
+                || ps.origin.z - origin.z < -26)
             return false;
 
         return true;

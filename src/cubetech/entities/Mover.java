@@ -16,6 +16,7 @@ import cubetech.spatial.SectorQuery;
 import org.lwjgl.util.vector.Vector;
 
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -30,7 +31,7 @@ public class Mover {
     int soundloop;
     
     Gentity activator;
-    Vector2f pos1 = new Vector2f(), pos2 = new Vector2f();
+    Vector3f pos1 = new Vector3f(), pos2 = new Vector3f();
 
     Gentity chain;
     Gentity teamchain;
@@ -39,7 +40,7 @@ public class Mover {
     boolean takedamage;
     boolean teamslave;
 
-    Vector2f movedir = new Vector2f(1,0);
+    Vector3f movedir = new Vector3f(1,0,0);
     
     Gentity ent;
 
@@ -67,26 +68,27 @@ public class Mover {
         ent.s.pos.base.set(pos1);
 
         // calculate time to reach second position from speed
-        Vector2f move = new Vector2f();
-        Vector2f.sub(pos2, pos1, move);
+        Vector3f move = new Vector3f();
+        Vector3f.sub(pos2, pos1, move);
         float len = Helper.Normalize(move);
 
         if(ent.speed == 0)
             ent.speed = 100;
         ent.s.pos.delta.x = move.x * ent.speed;
         ent.s.pos.delta.y = move.y * ent.speed;
+        ent.s.pos.delta.z = move.z * ent.speed;
         ent.s.pos.duration = (int)(len * 1000 / ent.speed);
         if(ent.s.pos.duration <= 0)
             ent.s.pos.duration = 1;
     }
 
-    private static Gentity moverPush(Gentity pusher, Vector2f move, Vector2f amove) {
+    private static Gentity moverPush(Gentity pusher, Vector3f move, Vector3f amove) {
         // mins/maxs are the bounds at the destination
 	// totalMins / totalMaxs are the bounds for the entire move
-        Vector2f totalMins = new Vector2f();
-        Vector2f totalMaxs = new Vector2f();
-        Vector2f mins = new Vector2f();
-        Vector2f maxs = new Vector2f();
+        Vector3f totalMins = new Vector3f();
+        Vector3f totalMaxs = new Vector3f();
+        Vector3f mins = new Vector3f();
+        Vector3f maxs = new Vector3f();
             
         if ( pusher.r.currentAngles.x != 0 || pusher.r.currentAngles.y != 0
 		|| amove.x != 0|| amove.y != 0 ) {
@@ -96,8 +98,8 @@ public class Mover {
             maxs.set(pusher.r.currentOrigin.x + move.x + radius,
                                         pusher.r.currentOrigin.y + move.y + radius);
             
-            Vector2f.sub(mins, move, totalMins);
-            Vector2f.sub(maxs, move, totalMaxs);
+            Vector3f.sub(mins, move, totalMins);
+            Vector3f.sub(maxs, move, totalMaxs);
         } else {
             mins.set(pusher.r.absmin.x + move.x, pusher.r.absmin.y + move.y);
             maxs.set(pusher.r.absmax.x + move.x, pusher.r.absmax.y + move.y);
@@ -117,10 +119,10 @@ public class Mover {
         // unlink the pusher so we don't get it in the entityList
         pusher.Unlink();
 
-        SectorQuery query = Ref.server.EntitiesInBox(totalMins, totalMaxs);
+        SectorQuery query = Ref.server.EntitiesInBox(new Vector2f(totalMins), new Vector2f(totalMaxs));
         // move the pusher to it's final position
-        Vector2f.add(pusher.r.currentOrigin, move, pusher.r.currentOrigin);
-        Vector2f.add(pusher.r.currentAngles, amove, pusher.r.currentAngles);
+        Vector3f.add(pusher.r.currentOrigin, move, pusher.r.currentOrigin);
+        Vector3f.add(pusher.r.currentAngles, amove, pusher.r.currentAngles);
         pusher.Link();
 
         // see if any solid entities are inside the final position
@@ -156,27 +158,27 @@ public class Mover {
             mask = ent.ClipMask;
 
         CollisionResult res = null;
-        if(ent.isClient())
-            res = Ref.server.Trace(ent.getClient().ps.origin, ent.getClient().ps.origin, ent.r.mins, ent.r.maxs, mask, ent.s.ClientNum);
-        else
-            res = Ref.server.Trace(ent.s.pos.base, ent.s.pos.base, ent.r.mins, ent.r.maxs, mask, ent.s.ClientNum);
-
-        if(res.startsolid)
-            return Ref.game.g_entities[res.entitynum];
+//        if(ent.isClient())
+//            res = Ref.server.Trace(ent.getClient().ps.origin, ent.getClient().ps.origin, ent.r.mins, ent.r.maxs, mask, ent.s.ClientNum);
+//        else
+//            res = Ref.server.Trace(ent.s.pos.base, ent.s.pos.base, ent.r.mins, ent.r.maxs, mask, ent.s.ClientNum);
+//
+//        if(res.startsolid)
+//            return Ref.game.g_entities[res.entitynum];
 
         return null;
     }
 
-    private static boolean TryPushingEntity(Gentity check, Gentity pusher, Vector2f move, Vector2f amove) {
+    private static boolean TryPushingEntity(Gentity check, Gentity pusher, Vector3f move, Vector3f amove) {
 //        Vector2f org = new Vector2f();
 //        if(check.isClient())
 //            Vector2f.sub(check.getClient().ps.origin, pusher.r.currentOrigin, org);
 //        else
 //            Vector2f.sub(check.s.pos.base, pusher.r.currentOrigin, org);
 
-        Vector2f.add(check.s.pos.base, move, check.s.pos.base);
+        Vector3f.add(check.s.pos.base, move, check.s.pos.base);
         if(check.isClient()) {
-            Vector2f.add(check.getClient().ps.origin, move, check.getClient().ps.origin);
+            Vector3f.add(check.getClient().ps.origin, move, check.getClient().ps.origin);
         }
 
         Gentity block = TestEntityPosition(check);
@@ -199,14 +201,14 @@ public class Mover {
 	// any moves or calling any think functions
 	// if the move is blocked, all moved objects will be backed out
         Gentity part, obstacle = null;
-        Vector2f origin = new Vector2f(), angles = new Vector2f();
-        Vector2f move = new Vector2f(), amove = new Vector2f();
+        Vector3f origin = new Vector3f(), angles = new Vector3f();
+        Vector3f move = new Vector3f(), amove = new Vector3f();
         for(part = ent; part != null; part = part.mover.teamchain) {
             // get current position
             part.s.pos.Evaluate(Ref.game.level.time, origin);
             part.s.apos.Evaluate(Ref.game.level.time, angles);
-            Vector2f.sub(origin, part.r.currentOrigin, move);
-            Vector2f.sub(angles, part.r.currentAngles, amove);
+            Vector3f.sub(origin, part.r.currentOrigin, move);
+            Vector3f.sub(angles, part.r.currentAngles, amove);
             if((obstacle = moverPush(part, move, amove)) != null) {
                 break; // blocked
             }
@@ -267,18 +269,18 @@ public class Mover {
                 break;
             case _1TO2:
                 ent.s.pos.base.set(pos1);
-                Vector2f delta = new Vector2f();
-                Vector2f.sub(pos2, pos1, delta);
+                Vector3f delta = new Vector3f();
+                Vector3f.sub(pos2, pos1, delta);
                 float f = 1000f / ent.s.pos.duration;
-                ent.s.pos.delta.set(delta.x * f, delta.y * f);
+                ent.s.pos.delta.set(delta.x * f, delta.y * f, delta.z * f);
                 ent.s.pos.type = Trajectory.LINEAR_STOP;
                 break;
             case _2TO1:
                 ent.s.pos.base.set(pos2);
-                delta = new Vector2f();
-                Vector2f.sub(pos1, pos2, delta);
+                delta = new Vector3f();
+                Vector3f.sub(pos1, pos2, delta);
                 f = 1000f / ent.s.pos.duration;
-                ent.s.pos.delta.set(delta.x * f, delta.y * f);
+                ent.s.pos.delta.set(delta.x * f, delta.y * f, delta.z * f);
                 ent.s.pos.type = Trajectory.LINEAR_STOP;
                 break;
         }

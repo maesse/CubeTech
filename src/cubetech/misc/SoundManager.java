@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 import org.newdawn.slick.openal.Audio;
 import org.newdawn.slick.openal.SoundStore;
@@ -37,7 +38,7 @@ public class SoundManager {
   public boolean playmusic = false;
 
   private HashMap<Integer, Vector4f> entityPositions = new HashMap<Integer, Vector4f>();
-  Vector2f lastOrigin = new Vector2f();
+  Vector3f lastOrigin = new Vector3f();
   
   CVar volume = Ref.cvars.Get("volume", "0.5", EnumSet.of(CVarFlags.TEMP));
 
@@ -90,7 +91,7 @@ public class SoundManager {
     }
   }
 
-  public void SetEntityPosition(int entityNum, Vector2f position, Vector2f velocity) {
+  public void SetEntityPosition(int entityNum, Vector3f position, Vector3f velocity) {
       if(!soundOk)
           return;
       Vector4f pos = entityPositions.get(entityNum);
@@ -102,13 +103,13 @@ public class SoundManager {
   }
 
   
-  public void Respatialize(Vector2f origin, Vector2f velocity) {
+  public void Respatialize(Vector3f origin, Vector3f velocity) {
       if(!soundOk)
           return;
       if(Helper.Equals(origin, lastOrigin))
           return;
       lastOrigin.set(origin);
-      store.UpdateListener(origin.x, origin.y, velocity.x, velocity.y);
+      store.UpdateListener(origin.x, origin.y, origin.z, velocity.x, velocity.y, velocity.z);
   }
 
   // Setup the next song and set a delay before starting it

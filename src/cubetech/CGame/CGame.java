@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -37,7 +38,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_drawSolid = Ref.cvars.Get("cg_drawSolid", "0", EnumSet.of(CVarFlags.NONE));
     CVar cg_editmode = Ref.cvars.Get("cg_editmode", "0", EnumSet.of(CVarFlags.ROM));
     CVar cg_depthnear = Ref.cvars.Get("cg_depthnear", "1", EnumSet.of(CVarFlags.ROM));
-    CVar cg_depthfar = Ref.cvars.Get("cg_depthfar", "1000", EnumSet.of(CVarFlags.ROM));
+    CVar cg_depthfar = Ref.cvars.Get("cg_depthfar", "2000", EnumSet.of(CVarFlags.ROM));
     CVar cg_viewmode = Ref.cvars.Get("cg_viewmode", "0", EnumSet.of(CVarFlags.NONE));
     CVar cg_drawentities = Ref.cvars.Get("cg_drawentities", "0", EnumSet.of(CVarFlags.ROM));
     CVar cg_drawbin = Ref.cvars.Get("cg_drawbin", "0", EnumSet.of(CVarFlags.NONE));
@@ -577,22 +578,23 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         // TODO
     }
 
-    public CollisionResult Trace(Vector2f start, Vector2f end, Vector2f mins, Vector2f maxs, int tracemask, int passEntityNum) {
+    public CollisionResult Trace(Vector3f start, Vector3f end, Vector3f mins, Vector3f maxs, int tracemask, int passEntityNum) {
         if(mins == null)
-            mins = new Vector2f();
+            mins = new Vector3f();
         if(maxs == null)
-            maxs = new Vector2f();
+            maxs = new Vector3f();
 
-        Vector2f delta = new Vector2f();
-        Vector2f.sub(end, start, delta);
+        Vector3f delta = new Vector3f();
+        Vector3f.sub(end, start, delta);
         // clip to world
-        CollisionResult worldResult = Ref.collision.TestMovement(start, delta, maxs, tracemask);
+        // FIX FIX
+        CollisionResult worldResult = Ref.collision.TestMovement(new Vector2f(start), new Vector2f(delta), new Vector2f(maxs), tracemask);
         if(worldResult.frac == 0.0f) {
             return worldResult; // Blocked instantl by world
         }
 
 
-        ClipMoveToEntities(start, end, mins, maxs, passEntityNum, tracemask, worldResult);
+        ClipMoveToEntities(new Vector2f(start), new Vector2f(end), new Vector2f(mins), new Vector2f(maxs), passEntityNum, tracemask, worldResult);
 
         return worldResult;
     }
@@ -612,10 +614,10 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                 // special value for bmodel
                 int index = Ref.cm.cm.InlineModel(ent.modelindex);
                 
-                Vector2f origin = new Vector2f();
+                Vector3f origin = new Vector3f();
                 ent.pos.Evaluate(cg.physicsTime, origin);
 
-                Ref.collision.SetSubModel(index, origin);
+                Ref.collision.SetSubModel(index, new Vector2f(origin.x, origin.y)); // FIXFIX
             } else {
                 int x = pack & 255;
                 int y = (pack >> 8) & 255;
@@ -623,7 +625,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                 if(x == 0 || y == 0)
                     continue;
                 
-                Ref.collision.SetBoxModel(new Vector2f(x, y), cent.lerpOrigin);
+                Ref.collision.SetBoxModel(new Vector2f(x, y), new Vector2f(cent.lerpOrigin)); // FIX HAX
             }
 
             

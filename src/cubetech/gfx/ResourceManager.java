@@ -316,6 +316,8 @@ public final class ResourceManager {
         if (target == GL_TEXTURE_2D) {
             glTexParameteri(target, GL_TEXTURE_MIN_FILTER, minFilter);
             glTexParameteri(target, GL_TEXTURE_MAG_FILTER, magFilter);
+            texture.minfilter = minFilter;
+            texture.magfilter = magFilter;
         }
 
 

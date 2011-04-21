@@ -6,12 +6,13 @@
 package cubetech.common;
 
 import cubetech.collision.CollisionResult;
-import org.lwjgl.util.vector.Vector2f;
+
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
  * @author mads
  */
 public interface ITrace {
-    public CollisionResult Trace(Vector2f start, Vector2f end, Vector2f mins, Vector2f maxs, int tracemask, int passEntityNum);
+    public CollisionResult Trace(Vector3f start, Vector3f end, Vector3f mins, Vector3f maxs, int tracemask, int passEntityNum);
 }

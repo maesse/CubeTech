@@ -1,20 +1,23 @@
 package cubetech.CGame;
 
+import cubetech.common.Helper;
 import cubetech.misc.Ref;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.GLU;
 import org.lwjgl.util.vector.Matrix;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
  * @author mads
  */
 public class ViewParams {
-    public Vector2f Origin  = new Vector2f();
+    public Vector3f Origin  = new Vector3f();
     public int ViewportX;
     public int ViewportY;
     public int ViewportWidth;
@@ -22,10 +25,20 @@ public class ViewParams {
     public float FovX;
     public int FovY;
     public Matrix ProjectionMatrix;
-    public Vector2f Angles = new Vector2f();
+    public Vector3f Angles = new Vector3f();
+    public Vector3f[] ViewAxis = new Vector3f[3];
 
     public float xmin, xmax, ymin, ymax;
     public float w, h;
+
+    private FloatBuffer viewbuffer = ByteBuffer.allocateDirect(16*4).order(ByteOrder.nativeOrder()).asFloatBuffer();
+
+    public ViewParams() {
+        for (int i= 0; i < 3; i++) {
+            ViewAxis[i] = new Vector3f();
+        }
+
+    }
 
     public void SetupProjection() {
         // Use fovx and fovy to set up a matrix
@@ -164,15 +177,53 @@ public class ViewParams {
             GL11.glOrtho(-FovX*0.5f, FovX*0.5f, -FovX*aspect*0.5f, FovX*aspect*0.5f, near,far);
         }
 
+        ViewAxis = Helper.AnglesToAxis(Angles);
+//        viewbuffer.put(ViewAxis[1].x); viewbuffer.put(ViewAxis[2].x); viewbuffer.put(ViewAxis[0].x); viewbuffer.put(Origin.x);
+//        viewbuffer.put(ViewAxis[1].y); viewbuffer.put(ViewAxis[2].y); viewbuffer.put(ViewAxis[0].y); viewbuffer.put(Origin.y);
+//        viewbuffer.put(ViewAxis[1].z);viewbuffer.put(ViewAxis[2].z);viewbuffer.put(ViewAxis[0].z); viewbuffer.put(0);
+//        viewbuffer.put(0); viewbuffer.put(0); viewbuffer.put(0); viewbuffer.put(1);
+
+
+        int derp = 0;
         
         
+
+//        ViewAxis[1].set(-1,0,0);
+//        ViewAxis[2].set(0,1,0);
+//        ViewAxis[0].set(0,0,1);
+
+        Vector3f org = new Vector3f(Origin.x, Origin.y, -200);
+        
+        viewbuffer.put(ViewAxis[1].x); viewbuffer.put(ViewAxis[2].x); viewbuffer.put(ViewAxis[0].x); viewbuffer.put(0);
+        viewbuffer.put(ViewAxis[1].y); viewbuffer.put(ViewAxis[2].y); viewbuffer.put(ViewAxis[0].y); viewbuffer.put(0);
+        viewbuffer.put(ViewAxis[1].z); viewbuffer.put(ViewAxis[2].z); viewbuffer.put(ViewAxis[0].z); viewbuffer.put(0);
+        viewbuffer.put(Vector3f.dot(ViewAxis[1], org)); viewbuffer.put(Vector3f.dot(ViewAxis[2], org)); viewbuffer.put(Vector3f.dot(ViewAxis[0], org));
+        viewbuffer.put(1);
+
+//        viewbuffer.put(ViewAxis[1].x); viewbuffer.put(ViewAxis[1].y); viewbuffer.put(ViewAxis[1].z); // right
+//        viewbuffer.put(0);
+//        viewbuffer.put(ViewAxis[2].x); viewbuffer.put(ViewAxis[2].y); viewbuffer.put(ViewAxis[2].z); // up
+//        viewbuffer.put(0);
+//        viewbuffer.put(ViewAxis[0].x); viewbuffer.put(ViewAxis[0].y); viewbuffer.put(ViewAxis[0].z); // forward
+//        viewbuffer.put(0);
+//        //viewbuffer.put(0);viewbuffer.put(0);viewbuffer.put(000);viewbuffer.put(1);
+//        viewbuffer.put(Origin.x-400); viewbuffer.put(Origin.y-200); viewbuffer.put(200); viewbuffer.put(1f);
+        viewbuffer.flip();
 //        GL11.glTranslatef(-Origin.x, -Origin.y, 1);
-        float z = 1;
-        if(Ref.cgame.cg_viewmode.iValue == 1)
-            z = ((float)Math.sin(Ref.client.realtime / 250f) + 1) * 50f;
-        GLU.gluLookAt(Origin.x, Origin.y, z, Origin.x, Origin.y, 0, 0, 1, 0);
+        
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
-        GL11.glLoadIdentity();
+        
+        GL11.glLoadMatrix(viewbuffer);
+//        float z = 1;
+//        if(Ref.cgame.cg_viewmode.iValue == 1) {
+//            // First person view
+//            z = ((float)Math.sin(Ref.client.realtime / 250f) + 1) * 2f + FovX;
+//            GLU.gluLookAt(0, 0, 0, ViewAxis[0].x, ViewAxis[0].y, ViewAxis[0].z, ViewAxis[1].x, ViewAxis[1].y, ViewAxis[1].z);
+//        } else {
+//            GLU.gluLookAt(Origin.x, Origin.y, z, Origin.x, Origin.y, 0, 0, 1, 0);
+//        }
+//        GL11.glLoadIdentity();
+
 //        GL11.glRotatef((float)Math.PI/2f, 0, 1, 0);
 //        GL11.glRotatef(Ref.game.level.time/100f, 0, 0, 1);
     }
@@ -180,7 +231,7 @@ public class ViewParams {
     private void setup3DProjection(float fov, float aspect, float znear, float zfar) {
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glLoadIdentity();
-        GLU.gluPerspective(fov, aspect, znear, zfar);
+        GLU.gluPerspective(fov, 1f/aspect, znear, zfar);
         return;
 //        float xymax = znear * (float)Math.tan(fov * (Math.PI/360f));
 //        float ymin = -xymax;

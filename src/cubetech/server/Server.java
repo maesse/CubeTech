@@ -45,6 +45,7 @@ import java.util.HashMap;
 import org.lwjgl.util.vector.Quaternion;
 
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -762,19 +763,21 @@ public class Server implements ITrace {
         } else
             gent.s.solid = 0;
 
-        Vector2f origin = gent.r.currentOrigin;
-        Vector2f.add(origin, gent.r.mins, gent.r.absmin);
-        Vector2f.add(origin, gent.r.maxs, gent.r.absmax);
+        Vector3f origin = gent.r.currentOrigin;
+        Vector3f.add(origin, gent.r.mins, gent.r.absmin);
+        Vector3f.add(origin, gent.r.maxs, gent.r.absmax);
 
         // because movement is clipped an epsilon away from an actual edge,
 	// we must fully check even when bounding boxes don't quite touch
         gent.r.absmin.x -= 1; gent.r.absmin.y -= 1;
         gent.r.absmax.x += 1; gent.r.absmax.y += 1;
+        gent.r.absmax.z += 1; gent.r.absmin.z -= 1;
 
         gent.r.linkcount++;
 
         // find the first world sector node that the ent's box crosses
-        WorldSector node = sv_worldSector.FindCrossingNode(gent.r.absmin, gent.r.absmax);
+        // FIX FIX FIX
+        WorldSector node = sv_worldSector.FindCrossingNode(new Vector2f(gent.r.absmin), new Vector2f(gent.r.absmax));
 
         // link it in
         node.LinkEntity(ent);
@@ -796,17 +799,18 @@ public class Server implements ITrace {
     }
 
 
-    Vector2f boxmins = new Vector2f(), boxmaxs = new Vector2f();
-    Vector2f delta = new Vector2f();
-    public CollisionResult Trace(Vector2f start, Vector2f end, Vector2f mins, Vector2f maxs, int tracemask, int passEntityNum) {
+    Vector3f boxmins = new Vector3f(), boxmaxs = new Vector3f();
+    Vector3f delta = new Vector3f();
+    public CollisionResult Trace(Vector3f start, Vector3f end, Vector3f mins, Vector3f maxs, int tracemask, int passEntityNum) {
         if(mins == null)
-            mins = new Vector2f();
+            mins = new Vector3f();
         if(maxs == null)
-            maxs = new Vector2f();
+            maxs = new Vector3f();
 
-        Vector2f.sub(end, start, delta);
+        Vector3f.sub(end, start, delta);
         // clip to world
-        CollisionResult worldResult = Ref.collision.TestMovement(start, delta, maxs, tracemask);
+        // FIX FIX
+        CollisionResult worldResult = Ref.collision.TestMovement(new Vector2f(start), new Vector2f(delta), new Vector2f(maxs), tracemask);
         if(worldResult.frac == 0.0f)
             return worldResult; // Blocked instantl by world
 
@@ -835,21 +839,21 @@ public class Server implements ITrace {
         Vector2f origin = new Vector2f(gEnt.r.currentOrigin);
         // TODO: Take account for angles
 
-        Vector2f halfSize = new Vector2f();
-        Vector2f.sub(gEnt.r.maxs, gEnt.r.mins, halfSize);
+        Vector3f halfSize = new Vector3f();
+        Vector3f.sub(gEnt.r.maxs, gEnt.r.mins, halfSize);
         halfSize.scale(0.5f);
 //        Vector2f.sub(gEnt.r.maxs, delta, origin);
 
-        Ref.collision.SetBoxModel(halfSize, origin);
+        Ref.collision.SetBoxModel(new Vector2f(halfSize), origin); // FIX
         CollisionResult res = Ref.collision.TransformedBoxTrace(new Vector2f(), null, mins, maxs, -1);
 
         return res.startsolid;
     }
 
-    private void ClipMoveToEntities(CollisionResult clip, Vector2f start, Vector2f end, Vector2f mins, Vector2f maxs,
-        Vector2f boxmins, Vector2f boxmaxs, int tracemask, int passEntityNum) {
+    private void ClipMoveToEntities(CollisionResult clip, Vector3f start, Vector3f end, Vector3f mins, Vector3f maxs,
+        Vector3f boxmins, Vector3f boxmaxs, int tracemask, int passEntityNum) {
 
-        SectorQuery entityList = sv_worldSector.AreaEntities(boxmins, boxmaxs);
+        SectorQuery entityList = sv_worldSector.AreaEntities(new Vector2f(boxmins), new Vector2f(boxmaxs)); // FIX
 
         int passOwnerNum = -1;
         if(passEntityNum != Common.ENTITYNUM_NONE) {
@@ -879,8 +883,10 @@ public class Server implements ITrace {
 
             // might intersect, so do an exact clip
             ClipHandleForEntity(touch);
-            
-            CollisionResult res = Ref.collision.TransformedBoxTrace(start, end, mins, maxs, tracemask);
+
+            // FIX FIX
+            CollisionResult res = Ref.collision.TransformedBoxTrace(new Vector2f(start), new Vector2f(end), new Vector2f(mins), new Vector2f(maxs)
+                    , tracemask);
             //if()
             if(res.frac  < clip.frac) {
                 clip.frac = res.frac;
@@ -907,9 +913,9 @@ public class Server implements ITrace {
 
         BlockModel model = Ref.cm.cm.getModel(h);
         model.attachEntity(shEnt.s.ClientNum);
-        shEnt.r.mins.set(model.size);
+        shEnt.r.mins.set(model.size.x, model.size.y);
         shEnt.r.mins.scale(-0.5f);
-        shEnt.r.maxs.set(model.size);
+        shEnt.r.maxs.set(model.size.x, model.size.y);
         shEnt.r.maxs.scale(0.5f);
         shEnt.r.bmodel = true;
         shEnt.r.contents = 1;
@@ -1098,9 +1104,9 @@ public class Server implements ITrace {
 
     private void ClipHandleForEntity(SharedEntity touch) {
         if(touch.r.bmodel) {
-            Ref.collision.SetSubModel(touch.s.modelindex, touch.r.currentOrigin);
+            Ref.collision.SetSubModel(touch.s.modelindex, new Vector2f(touch.r.currentOrigin));
         } else
-            Ref.collision.SetBoxModel(touch.r.maxs, touch.r.currentOrigin);
+            Ref.collision.SetBoxModel(new Vector2f(touch.r.maxs), new Vector2f(touch.r.currentOrigin));
     }
     
 }

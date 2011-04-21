@@ -153,6 +153,7 @@ public class SpriteManager {
     }
     
     public void DrawNormal() {
+//        if(true)return;
         boolean useVBO = Ref.glRef.isShadersSupported();
         if(!useVBO) {
             DrawNormalFixedFunction();

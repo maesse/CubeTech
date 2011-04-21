@@ -7,7 +7,8 @@ package cubetech.common;
 
 import cubetech.collision.CollisionResult;
 import cubetech.input.PlayerInput;
-import org.lwjgl.util.vector.Vector2f;
+
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -24,7 +25,7 @@ public class MoveQuery {
     // results (out)
     //public float maxSpeed;
     // TODO: Add list for touched entities
-    public Vector2f groundNormal = null;
+    public Vector3f groundNormal = null;
     public boolean onGround;
     public int blocked = 0; // 1 = step/wall, 2 = slope
     private ITrace traceImplementation;
@@ -34,7 +35,7 @@ public class MoveQuery {
         traceImplementation = traceImpl;
     }
 
-    public CollisionResult Trace(Vector2f start, Vector2f end, Vector2f mins, Vector2f maxs, int tracemask, int passEntityNum) {
+    public CollisionResult Trace(Vector3f start, Vector3f end, Vector3f mins, Vector3f maxs, int tracemask, int passEntityNum) {
         if(traceImplementation != null)
             return traceImplementation.Trace(start, end, mins, maxs, tracemask, passEntityNum);
         return null;

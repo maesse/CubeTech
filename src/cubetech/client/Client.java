@@ -2,6 +2,7 @@ package cubetech.client;
 
 import cubetech.CGame.CGame;
 import cubetech.CGame.Snapshot;
+import cubetech.collision.CubeMap;
 import cubetech.common.*;
 import cubetech.common.Common.ErrorCode;
 import cubetech.entities.EntityState;
@@ -37,6 +38,7 @@ import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
 /**
@@ -59,6 +61,7 @@ public class Client {
     public CVar cl_cmdbackup;
 
     public String servername;
+    private CubeMap testmap = new CubeMap();
 
     public int frametime;
     public int realtime;
@@ -75,6 +78,8 @@ public class Client {
 
     protected FinishedUpdatingListener updateListener = null;
     private boolean cgameStarted;
+
+    
 
     int lastFpsUpdateTime = 0;
     int nFrames = 0;
@@ -862,12 +867,14 @@ public class Client {
         int cmdNum = cl.cmdNumber & 63;
         if(cl.cmdNumber > 1 &&
                 ((Ref.Input.GetKeyCatcher() & (Input.KEYCATCH_CONSOLE | Input.KEYCATCH_MESSAGE | Input.KEYCATCH_UI)) > 0)) {
-            cl.cmds[cmdNum] = cl.cmds[(cl.cmdNumber-1) & 63].Clone();
+            cl.cmds[cmdNum] = cl.cmds[(cl.cmdNumber-1) & 63].Clone(); // don't update input to server, when client is using it
         } else {
             cl.cmds[cmdNum] = Ref.Input.CreateCmd();
         }
         cl.cmds[cmdNum].serverTime = cl.serverTime;
     }
+
+    
 
     private void InitCGame() {
         String mapname = Info.ValueForKey(cl.GameState.get(0), "mapname");
@@ -1141,10 +1148,13 @@ public class Client {
             Ref.glRef.setShader("sprite");
             if(RenderingCGame())
                 Ref.cgame.cgr.RenderBackground();
-        } else {
+        } else if(RenderingCGame()) {
             Ref.cgame.cgr.RenderBackground();
         }
         Ref.SpriteMan.DrawNormal();
+
+        if(testmap != null)
+            testmap.Render();
        
         // Set HUD render projection
         GL11.glViewport(0, 0, (int)Ref.glRef.GetResolution().x, (int)Ref.glRef.GetResolution().y);
@@ -1178,8 +1188,13 @@ public class Client {
         
         // Display frame
 //        Display.sync(60);
-        Display.update();
+        updateScreen();
 //        GL11.glGetError();
+    }
+
+
+    private void updateScreen() {
+        Display.update();
     }
 
     public void FlushMemory() {

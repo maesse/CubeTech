@@ -12,6 +12,7 @@ import cubetech.entities.Mover;
 import cubetech.entities.SharedEntity;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -107,15 +108,17 @@ public class Gentity {
             getClient().Clear();
     }
 
-    public void SetOrigin(Vector2f org) {
+    public void SetOrigin(Vector3f org) {
         s.pos.base.x = org.x;
         s.pos.base.y = org.y;
+        s.pos.base.z = org.z;
         s.pos.type = Trajectory.STATIONARY;
         s.pos.time = 0;
         s.pos.duration = 0;
-        s.pos.delta.x = s.pos.delta.y = 0;
+        s.pos.delta.x = s.pos.delta.y = s.pos.delta.z = 0;
         r.currentOrigin.x = org.x;
         r.currentOrigin.y = org.y;
+        r.currentOrigin.z = org.z;
     }
 
     void Init(int i) {
@@ -215,7 +218,7 @@ public class Gentity {
         }
 
         // get current position
-        Vector2f origin = s.pos.Evaluate(Ref.game.level.time);
+        Vector3f origin = s.pos.Evaluate(Ref.game.level.time);
 
         // trace a line from the previous position to the current position
         int mask = ClipMask;

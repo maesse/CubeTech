@@ -114,8 +114,8 @@ public class GLRef {
         }
 
         // Create the display
-        Display.create(new PixelFormat());
-        //Display.create(new PixelFormat(8, 8, 0, 0));
+        //Display.create(new PixelFormat());
+        Display.create(new PixelFormat(8, 8, 0, 4));
         checkError();
 
         // Set vsync
@@ -194,11 +194,15 @@ public class GLRef {
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
+        glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
+        glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
         glDepthMask(true);
         glDepthFunc(GL_LEQUAL);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glViewport(0, 0, currentMode.getWidth(), currentMode.getHeight());
         checkError();
+
+        glDisable(GL_CULL_FACE);
 
         InitFBO();
 

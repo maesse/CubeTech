@@ -11,6 +11,7 @@ import cubetech.entities.Mover.MoverState;
 import cubetech.gfx.CubeTexture;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -40,11 +41,12 @@ public class Func_Door implements IEntity {
 //        ent.r.mins = new Vector2f(-20, -4);
 //        ent.r.maxs = new Vector2f(20, 4);
 
-        Vector2f size = new Vector2f();
-        Vector2f.sub(ent.r.maxs, ent.r.mins, size);
-        float distance = Vector2f.dot(ent.mover.movedir, size);
+        Vector3f size = new Vector3f();
+        Vector3f.sub(ent.r.maxs, ent.r.mins, size);
+        float distance = Vector3f.dot(ent.mover.movedir, size); // FIX FIIX
         ent.mover.pos2.set(ent.mover.pos1.x + distance * ent.mover.movedir.x,
-                           ent.mover.pos1.y + distance * ent.mover.movedir.y);
+                           ent.mover.pos1.y + distance * ent.mover.movedir.y,
+                           ent.mover.pos1.z + distance * ent.mover.movedir.z);
         
         ent.mover.initMover(ent);
 
@@ -64,12 +66,12 @@ public class Func_Door implements IEntity {
                 other.mover.takedamage = true;
             }
 
-            Vector2f mins = new Vector2f(ent.r.absmin);
-            Vector2f maxs = new Vector2f(ent.r.absmax);
+            Vector3f mins = new Vector3f(ent.r.absmin);
+            Vector3f maxs = new Vector3f(ent.r.absmax);
 
             for(other = ent.mover.teamchain; other != null; other = ent.mover.teamchain) {
                 Helper.AddPointToBounds(other.r.absmin, mins, maxs);
-                Helper.AddPointToBounds(other.r.absmax, mins, maxs);
+                Helper.AddPointToBounds(other.r.absmax, mins, maxs); // FIX FIX
             }
 
             // find the thinnest axis, which will be the one we expand
@@ -92,8 +94,8 @@ public class Func_Door implements IEntity {
             // create a trigger with this size
             Gentity trig = Ref.game.Spawn();
             trig.classname = "door_trigger";
-            trig.r.mins.set(mins);
-            trig.r.maxs.set(maxs);
+            trig.r.mins.set(mins.x, mins.y, mins.z);
+            trig.r.maxs.set(maxs.x, maxs.y, maxs.z); // FIX
             trig.parent = ent;
             trig.r.contents = Content.TRIGGER;
             trig.touch = Touch_DoorTrigger;

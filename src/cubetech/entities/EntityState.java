@@ -6,6 +6,7 @@ import cubetech.common.PlayerState;
 import cubetech.common.Trajectory;
 import cubetech.net.NetBuffer;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  * // entityState_t is the information conveyed from the server
@@ -37,13 +38,13 @@ public class EntityState {
     // not used atm
 //    public int[] powerups = new int[PlayerState.NUM_POWERUPS];
     public int frame; 
-    public Vector2f origin = new Vector2f();
-    public Vector2f Angles = new Vector2f();
+    public Vector3f origin = new Vector3f();
+    public Vector3f Angles = new Vector3f();
     public int time;
 
     public void Clear() {
-        Angles = new Vector2f();
-        origin = new Vector2f();
+        Angles = new Vector3f();
+        origin = new Vector3f();
         evt = 0;
         evtParams = 0;
         eType = EntityType.GENERAL;
@@ -143,8 +144,8 @@ public class EntityState {
     }
 
     public EntityState Clone(EntityState st) {
-        st.Angles = new Vector2f(Angles.x, Angles.y);
-        st.origin = new Vector2f(origin.x, origin.y);
+        st.Angles = new Vector3f(Angles);
+        st.origin = new Vector3f(origin);
         st.evt = evt;
         st.evtParams = evtParams;
         st.eType = eType;
@@ -152,14 +153,14 @@ public class EntityState {
         st.frame = frame;
         st.time = time;
         st.pos = new Trajectory();
-        st.pos.base = new Vector2f(pos.base.x, pos.base.y);
-        st.pos.delta = new Vector2f(pos.delta.x, pos.delta.y);
+        st.pos.base = new Vector3f(pos.base);
+        st.pos.delta = new Vector3f(pos.delta);
         st.pos.type = pos.type;
         st.pos.time = pos.time;
         st.pos.duration = pos.duration;
         st.apos = new Trajectory();
-        st.apos.base = new Vector2f(apos.base.x, apos.base.y);
-        st.apos.delta = new Vector2f(apos.delta.x, apos.delta.y);
+        st.apos.base = new Vector3f(apos.base);
+        st.apos.delta = new Vector3f(apos.delta);
         st.apos.type = apos.type;
         st.apos.time = apos.time;
         st.apos.duration = apos.duration;

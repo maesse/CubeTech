@@ -33,6 +33,7 @@ import java.util.Queue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  * client_t
@@ -330,7 +331,7 @@ public class SvClient {
         }
     }
 
-    private void AddEntitiesVisibleFromPoint(Vector2f origin, ClientSnapshot frame, ArrayList<Integer> snapEntNums, boolean b) {
+    private void AddEntitiesVisibleFromPoint(Vector3f origin, ClientSnapshot frame, ArrayList<Integer> snapEntNums, boolean b) {
         // during an error shutdown message we may need to transmit
         // the shutdown message after the server has shutdown, so
         // specfically check for it
