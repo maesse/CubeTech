@@ -1147,7 +1147,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
 
         ButtonEvent spawnEntityEvent = new ButtonEvent() {
             public void buttonPressed(CComponent button, MouseEvent evt) {
-                SpawnEntity ent = new SpawnEntity(((CButton)button).getText(), new Vector2f(Ref.cgame.cg.refdef.Origin));
+                SpawnEntity ent = new SpawnEntity(((CButton)button).getText(), Ref.cgame.cg.refdef.Origin);
                 Ref.game.spawnEntities.AddEntity(ent);
                 entities = Ref.game.spawnEntities.getList();
                 selectBlock(null);

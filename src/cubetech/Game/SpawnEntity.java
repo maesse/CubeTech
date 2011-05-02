@@ -18,11 +18,11 @@ public class SpawnEntity {
     private Gentity ent = null;
     private Block editBlock = null;
 
-    public SpawnEntity(String className, Vector2f position) {
+    public SpawnEntity(String className, Vector3f position) {
         if(className == null || className.isEmpty())
             Ref.common.Error(Common.ErrorCode.FATAL, "SpawnEntity(): className == null");
         this.className = className;
-        origin.set(position.x, position.y, 0);
+        origin.set(position);
         editBlock = new Block(-1, new Vector2f(position.x - 6, position.y - 6), new Vector2f(12,12), false);
         editBlock.setLayer(-20); // make sure entities are the first to be selected in the editor
         editBlock.spawnEntity = this;
@@ -53,8 +53,8 @@ public class SpawnEntity {
         if(spawned) {
             Common.LogDebug("SpawnEntity.Spawn(): WARNING Is already spawned.");
         }
-        Vector2f bCent = editBlock.GetCenter();
-        origin.set(bCent.x, bCent.y, 0);
+//        Vector2f bCent = editBlock.GetCenter();
+//        origin.set(bCent.x, bCent.y, 0);
         ent = Ref.game.Spawn();
         ent.s.origin.set(origin);
         ent.classname = className;

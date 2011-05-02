@@ -25,8 +25,8 @@ import org.lwjgl.util.vector.Vector3f;
  * @author mads
  */
 public class Game {
-    public static final Vector3f PlayerMins = new Vector3f(-8,-12,-12);
-    public static final Vector3f PlayerMaxs = new Vector3f(8,12,12);
+    public static final Vector3f PlayerMins = new Vector3f(-12,-12,-28);
+    public static final Vector3f PlayerMaxs = new Vector3f(12,12,28);
     CVar sv_speed;
     CVar sv_gravity;
     CVar sv_jumpmsec;
@@ -94,7 +94,9 @@ public class Game {
         ent = new Func_Door();
         addEntityToSpawn(ent);
         addEntityToSpawn(new Info_Player_Goal());
-        spawnEntities = Ref.cm.cm.spawnEntities;
+        spawnEntities = new SpawnEntities();
+        
+//        spawnEntities = Ref.cm.cm.spawnEntities;
     }
 
     private void addEntityToSpawn(IEntity ent) {
@@ -175,8 +177,8 @@ public class Game {
 //        if(!callSpawn(hp))
 //            hp.Free();
 
-        SpawnEntity spEnt = new SpawnEntity("info_player_spawn", new Vector2f(150,100));
-        spawnEntities.AddEntity(spEnt);
+//        SpawnEntity spEnt = new SpawnEntity("info_player_spawn", new Vector2f(150,100));
+//        spawnEntities.AddEntity(spEnt);
 //        spEnt = new SpawnEntity("info_player_goal", new Vector2f(500,100));
 //        spawnEntities.AddEntity(spEnt);
 
@@ -188,7 +190,7 @@ public class Game {
 //
 //        if(!callSpawn(hp))
 //            hp.Free();
-
+        spawnEntities.AddEntity(new SpawnEntity("info_player_spawn", new Vector3f(0,0,300)));
         spawnEntities.SpawnAll();
 
 //        Ref.cm.cm.ToSubModel(Ref.cm.cm.GetBlock(20));
@@ -439,7 +441,7 @@ public class Game {
         }
 
         // Cache the changed map
-        Ref.cm.SaveMap("custom");
+//        Ref.cm.SaveBlockMap("custom");
         spawnEntities.SpawnAll();
     }
 

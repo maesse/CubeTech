@@ -48,13 +48,17 @@ public class PlayerState {
     public int movetime = 0;
 
     public int maptime = 0;
-    
+
+    public PlayerState() {
+        delta_angles[0] = -16000;
+    }
 
     // Wipe values
     public void Clear() {
         clientNum = 0;
         commandTime = 0;
         delta_angles = new int[3];
+        delta_angles[0] = -16000;
         eFlags = EntityFlags.NONE;
         entityEventSequence = 0;
         eventSequence = 0;

@@ -1,6 +1,7 @@
 package cubetech.Game;
 
 import cubetech.Block;
+import cubetech.collision.CubeMap;
 import cubetech.common.CS;
 import cubetech.common.Commands;
 import cubetech.common.Common;
@@ -82,6 +83,7 @@ public class GameClient extends Gentity {
     public void SetViewAngles(Vector3f angle) {
         int cmdAngle = Helper.Angle2Short(angle.x);
         ps.delta_angles[0] = cmdAngle - pers.cmd.angles[0];
+        ps.delta_angles[0] = -16000;
         cmdAngle = Helper.Angle2Short(angle.y);
         ps.delta_angles[1] = cmdAngle - pers.cmd.angles[1];
         cmdAngle = Helper.Angle2Short(angle.z);
@@ -355,7 +357,7 @@ public class GameClient extends Gentity {
         }
         
         pers.cmd = Ref.server.GetUserCommand(index);
-        SetViewAngles(new Vector3f(0, 180, 0));
+        SetViewAngles(new Vector3f(90, 180, 0));
         Link();
         respawnTime = Ref.game.level.time;
 
@@ -468,7 +470,7 @@ public class GameClient extends Gentity {
         ClientTimerActions(msec);
 
         // Check for death
-        if(ps.origin.y < Ref.game.g_killheight.iValue) {
+        if(ps.origin.z < Ref.game.g_killheight.iValue) {
             Die();
         }
     }
@@ -511,6 +513,8 @@ public class GameClient extends Gentity {
         timeResidual += msec;
         while(timeResidual >= 1000) {
             timeResidual -= 1000;
+
+            Ref.cm.cubemap.growFromPosition(ps.origin, CubeMap.DEFAULT_GROW_DIST);
 
             if(getHealth() > getMaxHealth())
                 ps.stats.Health--;

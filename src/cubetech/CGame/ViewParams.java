@@ -192,7 +192,9 @@ public class ViewParams {
 //        ViewAxis[2].set(0,1,0);
 //        ViewAxis[0].set(0,0,1);
 
-        Vector3f org = new Vector3f(Origin.x, Origin.y, -200);
+        Vector3f org = new Vector3f(-Origin.x, -Origin.y, -Origin.z);
+        ViewAxis[0].scale(-1);
+        ViewAxis[1].scale(-1);
         
         viewbuffer.put(ViewAxis[1].x); viewbuffer.put(ViewAxis[2].x); viewbuffer.put(ViewAxis[0].x); viewbuffer.put(0);
         viewbuffer.put(ViewAxis[1].y); viewbuffer.put(ViewAxis[2].y); viewbuffer.put(ViewAxis[0].y); viewbuffer.put(0);

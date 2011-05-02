@@ -18,6 +18,7 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.HashMap;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  * Loaded instance of a collision map
@@ -165,7 +166,7 @@ public class CMap {
                     if(className.isEmpty() || origin == null)
                         Ref.common.Error(ErrorCode.DROP, "CMap.LoadEntities: Entity entry didn't contain all the required values.");
                     
-                    spEnt = new SpawnEntity(className, origin);
+                    spEnt = new SpawnEntity(className, new Vector3f(origin.x, origin.y,0));
                     
                     spawnEntities.AddEntity(spEnt);
                     spEnt = null;

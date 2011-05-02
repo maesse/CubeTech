@@ -39,7 +39,7 @@ public class Input {
     public final static int KEYCATCH_CGAME = 4;
     public final static int KEYCATCH_MESSAGE = 8;
 
-    ButtonState in_left, in_right, in_forward, in_back;
+    ButtonState in_left, in_right, in_forward, in_back, in_up, in_down;
     ButtonState[] in_buttons = new ButtonState[31]; // Custom buttons
     public float[] viewangles = new float[3]; // viewangle this frame
     float[] oldangles = new float[3]; // viewangles from last frame
@@ -63,6 +63,7 @@ public class Input {
     public Input() {
         binds = new Binds(this);
         InitButtons();
+        viewangles[0] = 90;
     }
 
     private void InitButtons() {
@@ -70,6 +71,8 @@ public class Input {
         in_back = new ButtonState();
         in_left = new ButtonState();
         in_right = new ButtonState();
+        in_up = new ButtonState();
+        in_down = new ButtonState();
         Ref.commands.AddCommand("+forward", in_forward.KeyDownHook);
         Ref.commands.AddCommand("-forward", in_forward.KeyUpHook);
         Ref.commands.AddCommand("+back", in_back.KeyDownHook);
@@ -78,6 +81,10 @@ public class Input {
         Ref.commands.AddCommand("-left", in_left.KeyUpHook);
         Ref.commands.AddCommand("+right", in_right.KeyDownHook);
         Ref.commands.AddCommand("-right", in_right.KeyUpHook);
+        Ref.commands.AddCommand("+up", in_up.KeyDownHook);
+        Ref.commands.AddCommand("-up", in_up.KeyUpHook);
+        Ref.commands.AddCommand("+down", in_down.KeyDownHook);
+        Ref.commands.AddCommand("-down", in_down.KeyUpHook);
 
         for (int i= 0; i < in_buttons.length; i++) {
             in_buttons[i] = new ButtonState();
@@ -89,6 +96,8 @@ public class Input {
         binds.BindKey("S", "+back");
         binds.BindKey("A", "+left");
         binds.BindKey("D", "+right");
+        binds.BindKey("SPACE", "+up");
+        binds.BindKey("C", "+down");
         binds.BindKey("UP", "+forward");
         binds.BindKey("DOWN", "+back");
         binds.BindKey("LEFT", "+left");
@@ -245,10 +254,12 @@ public class Input {
 //            return;
 
         
-        playerInput.Up = ((int)Math.ceil(in_forward.KeyState()) == 1)?true:false;
-        playerInput.Down = ((int)Math.ceil(in_back.KeyState()) == 1)?true:false;
+        playerInput.Forward = ((int)Math.ceil(in_forward.KeyState()) == 1)?true:false;
+        playerInput.Back = ((int)Math.ceil(in_back.KeyState()) == 1)?true:false;
         playerInput.Left = ((int)Math.ceil(in_left.KeyState()) == 1)?true:false;
         playerInput.Right = ((int)Math.ceil(in_right.KeyState()) == 1)?true:false;
+        playerInput.Up = ((int)Math.ceil(in_up.KeyState()) == 1)?true:false;
+        playerInput.Down = ((int)Math.ceil(in_down.KeyState()) == 1)?true:false;
     }
 
     public boolean IsKeyPressed(int key) {
@@ -490,7 +501,7 @@ public class Input {
         my *= sens.fValue;
 
         viewangles[ANGLE_YAW] -= 0.022f * mx;
-        viewangles[ANGLE_PITCH] += 0.022f * my;
+        viewangles[ANGLE_PITCH] -= 0.022f * my;
 
         if(viewangles[ANGLE_PITCH] > 180f)
             viewangles[ANGLE_PITCH] = 180f;

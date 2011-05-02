@@ -2,6 +2,7 @@ package cubetech.input;
 
 import cubetech.common.Helper;
 import cubetech.net.NetBuffer;
+import java.util.Arrays;
 import org.lwjgl.util.vector.Vector2f;
 
 /**
@@ -23,11 +24,12 @@ public class PlayerInput {
     public boolean Mouse2Diff;
     public boolean Mouse3;
     public boolean Mouse3Diff;
-    public boolean Up;
-    public boolean Down;
+    public boolean Forward;
+    public boolean Back;
     public boolean Left;
     public boolean Right;
-    public boolean Jump;
+    public boolean Up;
+    public boolean Down;
 
     public static PlayerInput ReadDeltaUserCmd(NetBuffer buf, PlayerInput oldcmd) {
         PlayerInput dest = new PlayerInput();
@@ -35,11 +37,12 @@ public class PlayerInput {
         if(buf.ReadBool()) { // Got new data
             int hags = buf.ReadInt();
             int index = 0;
-            dest.Up = getBit(hags,index++);
-            dest.Down = getBit(hags,index++);
+            dest.Forward = getBit(hags,index++);
+            dest.Back = getBit(hags,index++);
             dest.Left = getBit(hags,index++);
             dest.Right = getBit(hags,index++);
-            dest.Jump = getBit(hags,index++);
+            dest.Up = getBit(hags,index++);
+            dest.Down = getBit(hags,index++);
             dest.Mouse1Diff = getBit(hags,index++);
             dest.Mouse1 = getBit(hags,index++);
             dest.Mouse2Diff = getBit(hags,index++);
@@ -61,11 +64,12 @@ public class PlayerInput {
             dest.angles[2] = buf.ReadInt();
         } else { // unchanged
 
-            dest.Up = oldcmd.Up;
-            dest.Down = oldcmd.Down;
+            dest.Forward = oldcmd.Forward;
+            dest.Back = oldcmd.Back;
             dest.Left = oldcmd.Left;
             dest.Right = oldcmd.Right;
-            dest.Jump = oldcmd.Jump;
+            dest.Up = oldcmd.Up;
+            dest.Down = oldcmd.Down;
             dest.Mouse1Diff = oldcmd.Mouse1Diff;
             dest.Mouse2Diff = oldcmd.Mouse2Diff;
             dest.Mouse3Diff = oldcmd.Mouse3Diff;
@@ -94,20 +98,24 @@ public class PlayerInput {
     @Override
     public int hashCode() {
         int hash = 7;
-        hash = 41 * hash + this.WheelDelta;
-        hash = 41 * hash + (this.Mouse1 ? 1 : 0);
-        hash = 41 * hash + (this.Mouse1Diff ? 1 : 0);
-        hash = 41 * hash + (this.Mouse2 ? 1 : 0);
-        hash = 41 * hash + (this.Mouse2Diff ? 1 : 0);
-        hash = 41 * hash + (this.Mouse3 ? 1 : 0);
-        hash = 41 * hash + (this.Mouse3Diff ? 1 : 0);
-        hash = 41 * hash + (this.Up ? 1 : 0);
-        hash = 41 * hash + (this.Down ? 1 : 0);
-        hash = 41 * hash + (this.Left ? 1 : 0);
-        hash = 41 * hash + (this.Right ? 1 : 0);
-        hash = 41 * hash + (this.Jump ? 1 : 0);
+        hash = 59 * hash + Arrays.hashCode(this.angles);
+        hash = 59 * hash + this.WheelDelta;
+        hash = 59 * hash + (this.Mouse1 ? 1 : 0);
+        hash = 59 * hash + (this.Mouse1Diff ? 1 : 0);
+        hash = 59 * hash + (this.Mouse2 ? 1 : 0);
+        hash = 59 * hash + (this.Mouse2Diff ? 1 : 0);
+        hash = 59 * hash + (this.Mouse3 ? 1 : 0);
+        hash = 59 * hash + (this.Mouse3Diff ? 1 : 0);
+        hash = 59 * hash + (this.Forward ? 1 : 0);
+        hash = 59 * hash + (this.Back ? 1 : 0);
+        hash = 59 * hash + (this.Left ? 1 : 0);
+        hash = 59 * hash + (this.Right ? 1 : 0);
+        hash = 59 * hash + (this.Up ? 1 : 0);
+        hash = 59 * hash + (this.Down ? 1 : 0);
         return hash;
     }
+
+
 
 
 
@@ -130,8 +138,7 @@ public class PlayerInput {
         
         if(this.equals(from)
                 && Helper.Equals(MousePos, from.MousePos)
-                && MouseDelta[0] == from.MouseDelta[0] && MouseDelta[1] == from.MouseDelta[1]
-                && angles[0] == from.angles[0] && angles[1] == from.angles[1] && angles[2] == from.angles[2]) {
+                && MouseDelta[0] == from.MouseDelta[0] && MouseDelta[1] == from.MouseDelta[1]) {
             buf.Write(false); // no change
             return;
         }
@@ -140,11 +147,12 @@ public class PlayerInput {
 
         int hags = 0;
         int index = 0;
-        hags = setBit(hags, index++, Up);
-        hags = setBit(hags, index++, Down);
+        hags = setBit(hags, index++, Forward);
+        hags = setBit(hags, index++, Back);
         hags = setBit(hags, index++, Left);
         hags = setBit(hags, index++, Right);
-        hags = setBit(hags, index++, Jump);
+        hags = setBit(hags, index++, Up);
+        hags = setBit(hags, index++, Down);
         hags = setBit(hags, index++, Mouse1Diff);
         hags = setBit(hags, index++, Mouse1);
         hags = setBit(hags, index++, Mouse2Diff);
@@ -183,11 +191,12 @@ public class PlayerInput {
         n.Mouse2Diff = Mouse2Diff;
         n.Mouse3 = Mouse3;
         n.Mouse3Diff = Mouse3Diff;
-        n.Up = Up;
-        n.Down = Down;
+        n.Forward = Forward;
+        n.Back = Back;
         n.Left = Left;
         n.Right = Right;
-        n.Jump = Jump;
+        n.Up = Up;
+        n.Down = Down;
         return n;
     }
 }

@@ -77,7 +77,7 @@ public class Server implements ITrace {
     CVar sv_killserver;
     CVar sv_gametype;
     CVar sv_serverid;
-    CVar sv_mapChecksum;
+//    CVar sv_mapChecksum;
     CVar sv_lan;
 
     public HashMap<String, ICommand> ucmds = new HashMap<String, ICommand>();
@@ -208,7 +208,7 @@ public class Server implements ITrace {
         sv_killserver = Ref.cvars.Get("sv_killserver", "0", EnumSet.of(CVarFlags.TEMP));
         sv_gametype = Ref.cvars.Get("g_gametype", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.LATCH));
         sv_serverid = Ref.cvars.Get("sv_serverid", "0", EnumSet.of(CVarFlags.SYSTEM_INFO,CVarFlags.ROM));
-        sv_mapChecksum = Ref.cvars.Get("sv_mapChecksum", "", EnumSet.of(CVarFlags.ROM));
+//        sv_mapChecksum = Ref.cvars.Get("sv_mapChecksum", "", EnumSet.of(CVarFlags.ROM));
         for (int i= 0; i < challenges.length; i++) {
             challenges[i] = new Challenge();
         }
@@ -233,7 +233,7 @@ public class Server implements ITrace {
         Ref.common.HunkClear();
         
 
-        Ref.cm.ClearMap();
+        Ref.cm.ClearCubeMap();
 
         // init client structures and numSnapshotEntities
         if(Ref.cvars.Find("sv_running").iValue == 0) {
@@ -269,13 +269,14 @@ public class Server implements ITrace {
         ClearServer();
         sv.configstrings.clear();
         Ref.cvars.Set2("cl_paused", "0", true);
-        try {
-            Ref.cm.LoadMap(mapname, false);
-        } catch (ClipmapException ex) {
-            Ref.common.Error(Common.ErrorCode.DROP, Common.getExceptionString(ex));
-        }
+        Ref.cm.GenerateCubeMap(System.currentTimeMillis());
+//        try {
+//            Ref.cm.LoadBlockMap(mapname, false);
+//        } catch (ClipmapException ex) {
+//            Ref.common.Error(Common.ErrorCode.DROP, Common.getExceptionString(ex));
+//        }
         Ref.cvars.Set2("mapname", mapname, true);
-        Ref.cvars.Set2("sv_mapChecksum", ""+Ref.cm.cm.checksum, true);
+//        Ref.cvars.Set2("sv_mapChecksum", ""+Ref.cm.cm.checksum, true);
 
         // serverid should be different each time
         sv.serverid = Ref.common.frametime;
@@ -810,7 +811,8 @@ public class Server implements ITrace {
         Vector3f.sub(end, start, delta);
         // clip to world
         // FIX FIX
-        CollisionResult worldResult = Ref.collision.TestMovement(new Vector2f(start), new Vector2f(delta), new Vector2f(maxs), tracemask);
+        CollisionResult worldResult = Ref.collision.traceCubeMap(start, delta, mins, maxs);
+        //CollisionResult worldResult = Ref.collision.TestMovement(new Vector2f(start), new Vector2f(delta), new Vector2f(maxs), tracemask);
         if(worldResult.frac == 0.0f)
             return worldResult; // Blocked instantl by world
 
@@ -890,9 +892,9 @@ public class Server implements ITrace {
             //if()
             if(res.frac  < clip.frac) {
                 clip.frac = res.frac;
-                clip.Hit = res.Hit;
+                clip.hit = res.hit;
                 clip.entitynum = touch.s.ClientNum;
-                clip.HitAxis = res.HitAxis;
+                clip.hitAxis = res.hitAxis;
                 clip.hitmask = res.hitmask;
 
                 if(res.frac < 0)
