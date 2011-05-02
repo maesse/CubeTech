@@ -93,7 +93,7 @@ public class Common {
         com_timer = Ref.cvars.Get("com_timer", "2", EnumSet.of(CVarFlags.TEMP));
         com_unfocused = Ref.cvars.Get("com_unfocused", "0", EnumSet.of(CVarFlags.ROM));
         com_timescale = Ref.cvars.Get("timescale", "1", EnumSet.of(CVarFlags.CHEAT, CVarFlags.SYSTEM_INFO));
-        com_maxfpsUnfocused = Ref.cvars.Get("com_maxfpsUnfocused", "30", EnumSet.of(CVarFlags.ARCHIVE));
+        com_maxfpsUnfocused = Ref.cvars.Get("com_maxfpsUnfocused", "60", EnumSet.of(CVarFlags.ARCHIVE));
         com_abnormalExit = Ref.cvars.Get("com_abnormalExit", "0", EnumSet.of(CVarFlags.ROM));
         com_timer.Max = 2;
         com_timer.Min = 1;

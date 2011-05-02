@@ -61,7 +61,7 @@ public class Client {
     public CVar cl_cmdbackup;
 
     public String servername;
-    private CubeMap testmap = new CubeMap();
+    
 
     public int frametime;
     public int realtime;
@@ -140,7 +140,7 @@ public class Client {
         cl_debugui = Ref.cvars.Get("cl_debugui", "0", EnumSet.of(CVarFlags.ARCHIVE));
         cl_debugui.modified = false;
         cl_showfps  = Ref.cvars.Get("cl_showfps", "0", EnumSet.of(CVarFlags.ARCHIVE));
-        r_sky  = Ref.cvars.Get("r_sky", "1", EnumSet.of(CVarFlags.ARCHIVE));
+        r_sky  = Ref.cvars.Get("r_sky", "0", EnumSet.of(CVarFlags.ARCHIVE));
         cl_netquality = Ref.cvars.Get("cl_netquality", "50", EnumSet.of(CVarFlags.ARCHIVE)); // allow 50ms cgame delta
 
         Ref.commands.AddCommand("connect", new cmd_Connect());
@@ -619,6 +619,7 @@ public class Client {
 
     public void UpdateScreen() {
         BeginFrame();
+
 
 
         if(!Ref.ui.IsFullscreen()) {
@@ -1153,8 +1154,7 @@ public class Client {
         }
         Ref.SpriteMan.DrawNormal();
 
-        if(testmap != null)
-            testmap.Render();
+        
        
         // Set HUD render projection
         GL11.glViewport(0, 0, (int)Ref.glRef.GetResolution().x, (int)Ref.glRef.GetResolution().y);
@@ -1204,7 +1204,7 @@ public class Client {
         if(Ref.common.sv_running.iValue == 0) {
             Ref.common.HunkClear();
             // clear collision map data
-            Ref.cm.ClearMap();
+            Ref.cm.ClearCubeMap();
         }
         
     }
