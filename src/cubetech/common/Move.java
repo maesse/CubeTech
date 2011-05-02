@@ -16,31 +16,36 @@ import org.lwjgl.util.vector.Vector3f;
  */
 public class Move {
     // Constants loaded
-    private static float accel = 8f;
+    private static float acceleration = 8f;
     private static float friction = 4f;
-    private static float spectator_friction = 2f;
+//    private static float spectator_friction = 2f;
     private static float stopspeed = 15f;
     private static float gravity;
-    private static float pullacceleration;
+//    private static float pullacceleration;
     private static int speed = 100;
     private static float jumpvel = 100;
     private static int jumpmsec = 250;
     private static float stepheight = 10;
-    private static int movemode = 1;
+//    private static int movemode = 1;
 
-    private static int pull1 = 100;
-    private static int pull2 = 200;
-    private static int pull3 = 300;
-    private static int pull4 = 400;
-    private static int pull5 = 500;
-    private static int pull6 = 600;
-    private static float pullstep = 0.75f;
+    private static final float MIN_WALK_NORMAL = 0.7f;
+    private static final float OVERCLIP = 1.0001f;
 
-    private static Vector3f org_origin = new Vector3f();
-    private static Vector3f org_velocity = new Vector3f();
+//    private static int pull1 = 100;
+//    private static int pull2 = 200;
+//    private static int pull3 = 300;
+//    private static int pull4 = 400;
+//    private static int pull5 = 500;
+//    private static int pull6 = 600;
+//    private static float pullstep = 0.75f;
+//
+//    private static Vector3f org_origin = new Vector3f();
+//    private static Vector3f org_velocity = new Vector3f();
 
     private static int msec;
     private static float frametime;
+
+    
 
     public class MoveType {
         public static final int NORMAL = 0;
@@ -64,19 +69,19 @@ public class Move {
             speed = Ref.cvars.Find("sv_speed").iValue;
             jumpvel = Ref.cvars.Find("sv_jumpvel").fValue;
             jumpmsec = Ref.cvars.Find("sv_jumpmsec").iValue;
-            accel = Ref.cvars.Find("sv_acceleration").fValue;
+            acceleration = Ref.cvars.Find("sv_acceleration").fValue;
             friction = Ref.cvars.Find("sv_friction").fValue;
             stopspeed = Ref.cvars.Find("sv_stopspeed").fValue;
-            pullacceleration = Ref.cvars.Find("sv_pullacceleration").fValue;
+//            pullacceleration = Ref.cvars.Find("sv_pullacceleration").fValue;
             stepheight = Ref.cvars.Find("sv_stepheight").fValue;
-            movemode = Ref.cvars.Find("sv_movemode").iValue;
-            pull1 = Ref.cvars.Find("sv_pull1").iValue;
-            pull2 = Ref.cvars.Find("sv_pull2").iValue;
-            pull3 = Ref.cvars.Find("sv_pull3").iValue;
-            pull4 = Ref.cvars.Find("sv_pull4").iValue;
-            pull5 = Ref.cvars.Find("sv_pull5").iValue;
-            pull6 = Ref.cvars.Find("sv_pull6").iValue;
-            pullstep = Ref.cvars.Find("sv_pullstep").fValue;
+//            movemode = Ref.cvars.Find("sv_movemode").iValue;
+//            pull1 = Ref.cvars.Find("sv_pull1").iValue;
+//            pull2 = Ref.cvars.Find("sv_pull2").iValue;
+//            pull3 = Ref.cvars.Find("sv_pull3").iValue;
+//            pull4 = Ref.cvars.Find("sv_pull4").iValue;
+//            pull5 = Ref.cvars.Find("sv_pull5").iValue;
+//            pull6 = Ref.cvars.Find("sv_pull6").iValue;
+//            pullstep = Ref.cvars.Find("sv_pullstep").fValue;
 
         } catch(Exception ex) {
             
@@ -112,177 +117,131 @@ public class Move {
             msec = 200;
         query.ps.commandTime = query.cmd.serverTime;
         frametime = msec * 0.001f;
-        DropTimers(query); // Decrement timers
+
         query.ps.UpdateViewAngle(query.cmd);
+
+        Helper.AngleVectors(query.ps.viewangles, query.forward, query.right, query.up);
+
 
         if(query.ps.moveType == MoveType.DEAD)
             return; // Dead players can't move
 
-        boolean noclip = query.ps.moveType == MoveType.NOCLIP || query.ps.moveType == MoveType.EDITMODE;
+        if(query.ps.moveType == MoveType.NOCLIP) {
+            NoclipMove(query);
+            DropTimers(query); // Decrement timers
+            return;
+        }
         
         // Direction player wants to move
         Vector3f wishdir = new Vector3f();
         // Handle horizontal wish direction
-        if(!query.ps.applyPull || noclip) {
-            if(query.cmd.Left)
-                wishdir.x -= 1f;
-            if(query.cmd.Right)
-                wishdir.x += 1f;
-        }
-//        else {
-//            wishdir.x = 1f;
-//        }
+        if(query.cmd.Left)
+            wishdir.y -= 1f;
+        if(query.cmd.Right)
+            wishdir.y += 1f;
+        if(query.cmd.Forward)
+            wishdir.x += 1f;
+        if(query.cmd.Back)
+            wishdir.x -= 1f;
 
-        // let player move up and down if not running in normal movement mode
-        if(query.ps.moveType != MoveType.NORMAL) {
-            if(query.cmd.Up)
-                wishdir.y += 1f;
-            if(query.cmd.Down)
-                wishdir.y -= 1f;
-        }
+        groundTrace(query);
+        DropTimers(query); // Decrement timers
 
-        isOnGround(query);
-        if(query.onGround && query.ps.powerups[0] > 0 && !query.ps.jumpDown)
-            query.ps.canDoubleJump = true;
 
-//        float len = wishdir.length();
-        if(wishdir.length() != 0f) {
-
-            Helper.Normalize(wishdir);
-
-            if(query.onGround) {
-                // project wishdir along ground normal
-                float xloss = wishdir.x;
-                ClipVelocity(wishdir, wishdir, query.groundNormal, 1.000f, query);
-                query.blocked = 0;
-                xloss -= wishdir.x;
-                wishdir.scale(speed * (1+(xloss)));
-            } else
-                wishdir.scale(speed * (noclip?2:1));
+        if(query.onGround) {
+            // Walk
+            WalkMove(wishdir, query);
+        } else {
+            AirMove(wishdir, query);
         }
 
-        boolean ignoreGravity = false;
-        if(query.cmd.Up && !query.onGround && query.ps.moveType == MoveType.NORMAL && query.ps.jumpTime > 0) {
-            ignoreGravity = true;
+        groundTrace(query);
+
+        if(!query.onGround) {
+            query.ps.velocity.z -= gravity * frametime * 0.5f;
         }
 
-        if(!query.onGround && query.ps.moveType == MoveType.NORMAL && !ignoreGravity) {
-            query.ps.velocity.y -= gravity * frametime * 0.5f;
-        }
-
-        
-        if( query.ps.moveType == MoveType.NORMAL) {
-            if(query.ps.jumpDown && !query.cmd.Up)
-                query.ps.jumpDown = false;
-            
-            if(query.cmd.Up && !query.ps.jumpDown) {
-                if((!query.onGround && query.ps.canDoubleJump)) {
-                    Jump(query);
-                    query.ps.canDoubleJump = false;
-                    query.ps.jumpDown = true;
-                } else if(query.onGround) {
-                    Jump(query);
-                    query.ps.canDoubleJump = query.ps.powerups[0] > 0;
-                    query.ps.jumpDown = true;
-                    query.onGround = false;
-                }
-                
-            }
-
-//            if(query.cmd.Up &&  & !query.ps.jumpDown) {
-//
-//            }
-        }
-
-        
-
-        if(query.ps.moveType == MoveType.NORMAL)
-            UpdateStepSound(query);
-
-        if(query.ps.moveType == MoveType.NORMAL && 
-                ((movemode == 1 && query.ps.applyPull) || (movemode == 2))) {
-            FrictionSpecial(query);
-        }
-
-        if((query.onGround && !query.ps.applyPull) || query.ps.moveType != MoveType.NORMAL) {
-//            if(movemode == 1)
-//                FrictionSpecial(query);
-//            else
-                Friction(query);
-        }
-
-        
-
-        WalkMove(wishdir, query);
-
-        boolean wasOnGround = query.onGround;
-        isOnGround(query);
-        if(!wasOnGround && query.onGround) {
-            // Landed on the ground
-            
-        }
-
-        if(!query.onGround && query.ps.moveType == MoveType.NORMAL && !ignoreGravity) {
-            query.ps.velocity.y -= gravity * frametime * 0.5f;
-        }
     }
 
     
 
-    static void Jump(MoveQuery pm) {
-        pm.ps.jumpTime = jumpmsec;
-        pm.ps.velocity.y = jumpvel;
-        if(pm.onGround)
-            AddEvent(pm, Event.FOOTSTEP, 0);
-        AddEvent(pm, Event.JUMP, 0);
-        
-    }
+//    static void Jump(MoveQuery pm) {
+//        pm.ps.jumpTime = jumpmsec;
+//        pm.ps.velocity.y = jumpvel;
+//        if(pm.onGround)
+//            AddEvent(pm, Event.FOOTSTEP, 0);
+//        AddEvent(pm, Event.JUMP, 0);
+//
+//    }
 
-    static boolean isOnGround(MoveQuery pm) {
-        if(pm.ps.moveType == MoveType.EDITMODE || pm.ps.moveType == MoveType.NOCLIP)
-        {
-            pm.onGround = false;
-            return false;
-        }
+
+
+    static boolean groundTrace(MoveQuery pm) {
         Vector3f end = new Vector3f(pm.ps.origin);
-        end.y -= 1f;
-        CollisionResult trace = pm.Trace(pm.ps.origin, end, Game.PlayerMins, Game.PlayerMaxs, pm.tracemask, pm.ps.clientNum);
+        end.z -= 1f;
+        CollisionResult trace = TracePlayerBBox(pm, pm.ps.origin, end, pm.tracemask);
         if(trace.frac == 1f)
         {
+            groundTraceMissed(pm);
             pm.onGround = false;
             return false;
         }
-
-        pm.groundNormal = new Vector3f(trace.HitAxis.x, trace.HitAxis.y,0);
-        pm.onGround = true;
-
+        pm.groundNormal = trace.hitAxis;
+        
         // check if getting thrown off the ground
-        if(Vector3f.dot(pm.ps.velocity, pm.groundNormal) > 100) {
+        if(pm.ps.velocity.z > 0 && Vector3f.dot(pm.ps.velocity, pm.groundNormal) > 10) {
             Common.LogDebug("Kickoff");
             pm.onGround = false;
+            pm.groundNormal = null;
             return false;
         }
 
         // slopes that are too steep will not be considered onground
-        
+        if(pm.groundNormal.z < MIN_WALK_NORMAL) {
+            pm.onGround = false;
+            pm.groundNormal = null;
+            return false;
+        }
 
-        
+        pm.onGround = true;
+
+//        if(pm.ps.groundEntityNum == Common.ENTITYNUM_NONE) {
+//            // just hit the ground
+//            CrashLand(query);
+//
+//
+//        }
         return true;
     }
 
+    static void groundTraceMissed(MoveQuery pm) {
+        pm.onGround = false;
+        pm.groundNormal = null;
+        
+    }
+
+    private static Vector3f fric_vel = new Vector3f();
     static void Friction(MoveQuery pm) {
+       fric_vel.set(pm.ps.velocity);
 
-       float speed2 = (float)Math.sqrt(pm.ps.velocity.x * pm.ps.velocity.x + pm.ps.velocity.y * pm.ps.velocity.y);
-       if(speed2 < 0.1f)
+       // ignore slope movement
+       if(pm.onGround) {    
+           fric_vel.z = 0;
+       }
+
+       float speed2 = fric_vel.length();
+       if(speed2 < 0.1f) {
+           pm.ps.velocity.x = 0;
+           pm.ps.velocity.y = 0;
            return;
+       }
 
-       float fric = pm.ps.applyPull ? friction : 4;
-
-       if(pm.ps.moveType == MoveType.SPECTATOR)
-           fric = spectator_friction;
-
-       float control = (speed2 < stopspeed ? stopspeed : speed2);
-       float drop = control * fric * frametime;
+       // Apply ground friction
+       float drop = 0;
+       if(pm.onGround) {
+           float control = (speed2 < stopspeed ? stopspeed : speed2);
+           drop = control * friction * frametime;
+       }
 
        float newspeed = speed2 - drop;
        if(newspeed < 0)
@@ -290,8 +249,7 @@ public class Move {
 
        newspeed /= speed2;
 
-       pm.ps.velocity.x *= newspeed;
-       pm.ps.velocity.y *= newspeed;
+       pm.ps.velocity.scale(newspeed);
    }
     
     static void FrictionSpecial(MoveQuery pm) {
@@ -317,151 +275,264 @@ public class Move {
 //       pm.ps.velocity.y *= newspeed;
    }
 
-    static void WalkMove(Vector3f wishdir, MoveQuery pm) {
-        // normalize
-        float wishspeed = (float)Math.sqrt(wishdir.x * wishdir.x + wishdir.y * wishdir.y);
-        if(wishspeed > 0) {
-           wishdir.x /= wishspeed;
-           wishdir.y /= wishspeed;
-        }
-        int maxspeed = speed;
-        if(wishspeed > maxspeed)
-        {
-           wishdir.x *= (maxspeed/wishspeed);
-           wishdir.y *= (maxspeed/wishspeed);
-           wishspeed = maxspeed;
-        }
+    static void AirAccelerate(MoveQuery pm, Vector3f wishdir, float wishspeed, float accel) {
+        // Cap speed
+        if(wishspeed > 30)
+            wishspeed = 30;
 
+        Accelerate(pm, wishdir, wishspeed, accel);
+    }
+
+    static void Accelerate(MoveQuery pm, Vector3f wishdir, float wishspeed, float accel) {
+        // Determine veer amount
         float currentSpeed = Vector3f.dot(pm.ps.velocity, wishdir);
+
+        // See how much to add
         float addSpeed = wishspeed  - currentSpeed;
-        if(addSpeed > 0f)
-        {
-           float acc = (pm.ps.moveType == MoveType.EDITMODE || pm.ps.moveType == MoveType.NOCLIP)? accel * 2 : accel;
-           float accelspeed = acc * frametime * wishspeed;
-           if(accelspeed > addSpeed)
-               accelspeed = addSpeed;
 
-           pm.ps.velocity.x += accelspeed * wishdir.x;
-           pm.ps.velocity.y += accelspeed * wishdir.y;
+        // If not adding any, done.
+        if(addSpeed <= 0f)
+            return;
+       
+        // Determine acceleration speed after acceleration
+        float accelspeed = accel * frametime * wishspeed;
+
+        // Cap it
+        if(accelspeed > addSpeed)
+            accelspeed = addSpeed;
+
+        // Adjust pmove vel.
+        Helper.VectorMA(pm.ps.velocity, accelspeed, wishdir, pm.ps.velocity);
+    }
+
+    static boolean checkJump(MoveQuery pm) {
+        if(!pm.cmd.Up)
+            return false;
+
+        pm.onGround =false;
+        pm.groundNormal = null;
+        pm.ps.velocity.z = jumpvel;
+        return true;
+    }
+
+    static void AirMove(Vector3f move, MoveQuery pm) {
+        pm.ps.velocity.z -= gravity * frametime * 0.5f;
+        
+        pm.forward.z = 0;
+        pm.right.z = 0;
+        Helper.Normalize(pm.forward);
+        Helper.Normalize(pm.right);
+
+        Vector3f wishvel = new Vector3f();
+        wishvel.x = pm.forward.x * move.x + pm.right.x * move.y;
+        wishvel.y = pm.forward.y * move.x + pm.right.y * move.y;
+
+        Vector3f wishdir = new Vector3f(wishvel);
+        float wishspeed = Helper.Normalize(wishdir);
+        wishspeed = speed;
+        if(wishspeed > speed) {
+            wishvel.scale(speed / wishspeed);
+            wishspeed = speed;
         }
 
-        float spd = Math.abs(pm.ps.velocity.x);
-        float actualaccel = pullacceleration;
+        AirAccelerate(pm, wishdir, wishspeed, acceleration*1.5f);
 
-        if(spd > pull1)
-           actualaccel *= pullstep;
-        if(spd > pull2)
-           actualaccel *= pullstep;
-        if(spd > pull3)
-           actualaccel *= pullstep;
-        if(spd > pull4)
-           actualaccel *= pullstep;
-        if(spd > pull5)
-           actualaccel *= pullstep;
-        if(spd > pull6)
-           actualaccel *= pullstep;
+        SlideMove(pm);
+    }
 
-        if(((pm.ps.applyPull && movemode == 1) || (movemode == 2 && pm.cmd.Right))
-                && pm.ps.moveType == MoveType.NORMAL)
-           pm.ps.velocity.x += actualaccel * frametime;
+    static void WalkMove(Vector3f move, MoveQuery pm) {
+        
 
-        float speed2 = (float)Math.sqrt(pm.ps.velocity.x * pm.ps.velocity.x + pm.ps.velocity.y * pm.ps.velocity.y);
-        if(speed2 < 1f)
-        {
-           pm.ps.velocity.x = 0f;
-           pm.ps.velocity.y = 0f;
-           return;
+        // Check for jump
+        if(checkJump(pm)) {
+            AirMove(move, pm);
+            return;
         }
 
-        // If noclipping, just apply the velocity and be done with it
-        if(pm.ps.moveType == MoveType.NOCLIP || pm.ps.moveType == MoveType.EDITMODE) {
-           pm.ps.origin.x += pm.ps.velocity.x * frametime;
-           pm.ps.origin.y += pm.ps.velocity.y * frametime;
-           return;
-        }
+        // Add Gravity
+        
 
-        org_origin.x = pm.ps.origin.x;
-        org_origin.y = pm.ps.origin.y;
-        org_velocity.x = pm.ps.velocity.x;
-        org_velocity.y = pm.ps.velocity.y;
-
-        // Slide velocity along groundplane
+        // Apply friction
         if(pm.onGround) {
-           ClipVelocity(pm.ps.velocity, pm.ps.velocity, pm.groundNormal, 1.00f, pm);
+            pm.ps.velocity.z = 0f;
         }
-       
-       
+        Friction(pm);
+
+        // Project down to flat plane
+        pm.forward.z = 0;
+        pm.right.z = 0;
+
+        // project the forward and right directions onto the ground plane
+        ClipVelocity(pm.forward, pm.forward, pm.groundNormal, OVERCLIP);
+        ClipVelocity(pm.right, pm.right, pm.groundNormal, OVERCLIP);
+
+        Helper.Normalize(pm.forward);
+        Helper.Normalize(pm.right);
+
+        Vector3f wishvel = new Vector3f();
+        wishvel.x = pm.forward.x * move.x + pm.right.x * move.y;
+        wishvel.y = pm.forward.y * move.x + pm.right.y * move.y;
+        wishvel.z = pm.forward.z * move.x + pm.right.z * move.y;
+
+        Vector3f wishdir = new Vector3f(wishvel);
+        float wishspeed = Helper.Normalize(wishdir);
+        wishspeed = speed;
+
+        Accelerate(pm, wishdir, wishspeed, acceleration);
+
+        float vel = pm.ps.velocity.length();
+
+        // slide along the ground plane
+        ClipVelocity(pm.ps.velocity, pm.ps.velocity, pm.groundNormal, OVERCLIP);
 
 
-       pm.blocked = 0;
-       int tries = 0;
-       CollisionResult res = null;
-       boolean hit = false;
-       float timeLeft = frametime;
-       do {
+        // don't decrease velocity when going up or down a slope
+        Helper.Normalize(pm.ps.velocity);
+        pm.ps.velocity.scale(vel);
 
-           float destx = pm.ps.origin.x + pm.ps.velocity.x * timeLeft;
-           float desty = pm.ps.origin.y + pm.ps.velocity.y * timeLeft;
+        // don't do anything if standing still
+        if(pm.ps.velocity.x == 0 && pm.ps.velocity.y == 0) {
+            return;
+        }
 
-           res = pm.Trace(pm.ps.origin, new Vector3f(destx, desty,0), Game.PlayerMins, Game.PlayerMaxs, pm.tracemask, pm.ps.clientNum);
+        StepSlideMove(pm, false);
 
-           // Move up
-           pm.ps.origin.x += pm.ps.velocity.x * timeLeft * res.frac;
-           pm.ps.origin.y += pm.ps.velocity.y * timeLeft * res.frac;
 
-           timeLeft *= 1f-res.frac;
-           tries++;
-           if(res.frac != 1f) {
-
-                
-               if((res.HitAxis.x == 0f && res.HitAxis.y == 0f) ) {
-                   // Stuck
-                   pm.ps.velocity.set(0,0);
-                   pm.ps.origin.set(org_origin);
-                   Common.LogDebug("Stuck");
-                   return;
-               }
-//               Vector2f moveDir = new Vector2f(pm.ps.velocity);
-//               Helper.Normalize(moveDir);
-               // Clip velocity and try to move the remaining bit               
-               ClipVelocity(pm.ps.velocity, pm.ps.velocity, new Vector3f(res.HitAxis.x, res.HitAxis.y, 0), 1.00f, pm);
-               if((pm.blocked & 2) != 0)
-                hit = true;
-//               Vector2f moveDir2 = new Vector2f(pm.ps.velocity);
-//               Helper.Normalize(moveDir2);
-//               int test = 2;
-               // Blocked
-           }
-       } while( timeLeft > 0.0f && tries < 3);
-
-       if((pm.blocked & 1) == 1 && (pm.onGround || org_velocity.y > 0.1f)) { //
-           // Store normal move results
-           Vector3f saved_org = new Vector3f(pm.ps.origin);
-           Vector3f saved_vel = new Vector3f(pm.ps.velocity);
-
-           // Revert to pre-walkmove
-           pm.ps.origin.set(org_origin);
-           pm.ps.velocity.set(org_velocity);
-
-           if(!TryStepMove(pm)) {
-               pm.ps.origin.set(saved_org);
-               pm.ps.velocity.set(saved_vel);
-               if(Math.abs(saved_vel.x) < 10f && Math.abs(org_velocity.x) > 10f)
-                AddEvent(pm, Event.HIT_WALL, 0);
-           } else {
-               float heightDiff = pm.ps.origin.y - org_origin.y;
-               AddEvent(pm, Event.STEP, (int)(heightDiff*100));
-           }
-       } else if((pm.blocked & 1) ==  1 && Math.abs(pm.ps.velocity.x) < 10f && Math.abs(org_velocity.x) > 10f)
-                AddEvent(pm, Event.HIT_WALL, 0);
-       if(hit && !pm.onGround) {
-           //isOnGround(pm);
-           //if(pm.onGround) {
-               pm.ps.stepTime = 0;
-               UpdateStepSound(pm);
-           //}
-       }
    }
+
+    private static void StepSlideMove(MoveQuery pm, boolean gravity) {
+        if(SlideMove(pm) == 0) {
+            return; // we got exactly where we wanted to go first try
+        }
+    }
+
+    private static int SlideMove(MoveQuery pm) {
+        int bumpcount = 4;
+        Vector3f orgVel = new Vector3f(pm.ps.velocity);
+        Vector3f priVel = new Vector3f(pm.ps.velocity);
+        Vector3f[] planes = new Vector3f[5];
+        Vector3f newVel = new Vector3f();
+        int numplanes = 0;
+        int blocked = 0;
+
+        float allFrac = 0;
+        float timeLeft = frametime;
+        Vector3f end = new Vector3f();
+        for (int bump= 0; bump < bumpcount; bump++) {
+            if(pm.ps.velocity.lengthSquared() == 0) {
+                break;
+            }
+
+            // Assume we can move all the way from the current origin to the
+            //  end point.
+            end.set(pm.ps.velocity);
+            end.scale(timeLeft);
+            Vector3f.add(end, pm.ps.origin, end);
+
+            // See if we can make it from origin to end point.
+            CollisionResult res = TracePlayerBBox(pm, pm.ps.origin, end, pm.tracemask);
+            allFrac += res.frac;
+
+            // If we started in a solid object, or we were in solid space
+            //  the whole way, zero out our velocity and return that we
+            //  are blocked by floor and wall.
+            // FIX
+
+            // If we moved some portion of the total distance, then
+            //  copy the end position into the pmove->origin and
+            //  zero the plane counter.
+            if(res.frac > 0) {
+                // actually covered some distance
+                Helper.VectorMA(res.start, res.frac, res.delta, pm.ps.origin);
+                orgVel.set(pm.ps.velocity);
+                numplanes = 0;
+            }
+
+            // If we covered the entire distance, we are done
+            //  and can return.
+            if(res.frac == 1f)
+                break;
+
+            // If the plane we hit has a high z component in the normal, then
+            //  it's probably a floor
+            if(res.hitAxis.z > MIN_WALK_NORMAL)
+                blocked |= 1; // floor
+            if(res.hitAxis.z == 0)
+                blocked |= 2; // wall/step
+
+            timeLeft -= timeLeft * res.frac;
+
+            // Did we run out of planes to clip against?
+            if(numplanes >= 5) {
+                pm.ps.velocity.set(0,0,0);
+                break;
+            }
+
+            // Set up next clipping plane
+            planes[numplanes++] = res.hitAxis;
+
+            // modify original_velocity so it parallels all of the clip planes
+            if(numplanes == 1 && !pm.onGround) {
+                for (int i= 0; i < numplanes; i++) {
+                    if(planes[i].z > MIN_WALK_NORMAL) {
+                        // floor or slope
+                        ClipVelocity(orgVel, newVel, planes[i], 1);
+                        orgVel.set(newVel);
+                    } else {
+                        ClipVelocity(orgVel, newVel, planes[i], 1);
+                    }
+                }
+                pm.ps.velocity.set(newVel);
+                orgVel.set(newVel);
+            } else {
+                int i;
+                for (i= 0; i < numplanes; i++) {
+                    ClipVelocity(orgVel, pm.ps.velocity, planes[i], 1);
+                    int j;
+                    for (j= 0; j < numplanes; j++) {
+                        if(j != i) {
+                            // Are we now moving against this plane?
+                            if(Vector3f.dot(pm.ps.velocity, planes[j]) < 0f)
+                                break; // not ok
+                        }
+                    }
+                    if(j == numplanes) // Didn't have to clip, so we're ok
+                        break;
+                }
+
+                // Did we go all the way through plane set
+                if(i != numplanes) {
+                    // go along this plane
+                    // pmove->velocity is set in clipping call, no need to set again.
+                } else {
+                    // go along the crease
+                    if(numplanes != 2) {
+                        pm.ps.velocity.set(0,0,0);
+                        break;
+                    }
+                    Vector3f dir = Vector3f.cross(planes[0], planes[1], null);
+                    float d = Vector3f.dot(dir, pm.ps.velocity);
+                    pm.ps.velocity.set(dir).scale(d);
+                }
+
+                //
+                // if original velocity is against the original velocity, stop dead
+                // to avoid tiny occilations in sloping corners
+                //
+                float vdiff = Vector3f.dot(pm.ps.velocity, priVel);
+                if(vdiff <= 0f) {
+                    pm.ps.velocity.set(0,0,0);
+                    break;
+                }
+            }
+        }
+
+        if(allFrac == 0) {
+            pm.ps.velocity.set(0,0,0);
+        }
+
+        return blocked;
+    }
 
     // try a series of up, forward, down moves
    private static boolean TryStepMove(MoveQuery pm) {
@@ -500,36 +571,69 @@ public class Move {
        return true; // success
    }
 
-    
+   private static void NoclipMove(MoveQuery pm) {
+        // friction
+        float spd = pm.ps.velocity.length();
+        if(spd < 1) {
+            pm.ps.velocity.set(0,0,0);
+        } else {
+            float fric = friction * 1.5f;
+            float control = spd < stopspeed ? stopspeed : spd;
+            float drop = control * fric * frametime;
 
-    // result = in - 2*n (n*in);
-    private static void ClipVelocity(Vector3f in, Vector3f out, Vector3f normal, float overbounce, MoveQuery pm) {
-        // Normalize the normal :)
+            float newspeed = spd - drop;
+            if(newspeed < 0)
+                newspeed = 0;
+            newspeed /= spd;
+            pm.ps.velocity.scale(newspeed);
+        }
 
-        
-        //float len = in.length();
-        Vector3f result = normal;//new Vector2f(normal);
-        //Helper.Normalize(result);
+        // accelerate
+        float forwardmove = 0, sidemove = 0;
+        // Handle horizontal wish direction
+        if(pm.cmd.Left)
+            sidemove -= 1f;
+        if(pm.cmd.Right)
+            sidemove += 1f;
+        if(pm.cmd.Forward)
+            forwardmove += 1f;
+        if(pm.cmd.Back)
+            forwardmove -= 1f;
 
-        if(result.x > 0.9 || result.x < -0.9)
-            pm.blocked |= 1; // step/wall
-        if(result.x < 0.5 && result.x > -0.5f)
-            pm.blocked |= 2; // floor
-        
-        float dot = Vector3f.dot(result, in) * overbounce;
-        float change = result.x * dot;
-        out.x = in.x - change;
-        change = result.y * dot;
-        out.y = in.y - change;
+        Vector3f wishvel = new Vector3f();
+        wishvel.x = pm.forward.x * forwardmove + pm.right.x * sidemove;
+        wishvel.y = pm.forward.y * forwardmove + pm.right.y * sidemove;
+        wishvel.z = pm.forward.z * forwardmove + pm.right.z * sidemove;
 
-        if(out.x > -0.001 && out.x < 0.001 && out.y > -0.001 && out.y < 0.001)
+        Helper.Normalize(wishvel);
+
+        Accelerate(pm, wishvel, speed, acceleration);
+
+        Vector3f delta = new Vector3f(pm.ps.velocity);
+        delta.scale(frametime);
+        Vector3f.add(delta, pm.ps.origin, delta);
+        if(pm.Trace(pm.ps.origin, delta, new Vector3f(-5,-5,-5), new Vector3f(5,5,5), 0,0).hit)
             return;
 
-//        if((pm.blocked & 2) == 0)
-//            return;
-//
-//        out.normalise();
-//        out.scale(len);
+        Helper.VectorMA(pm.ps.origin, frametime, pm.ps.velocity, pm.ps.origin);
+    }
+
+    private static CollisionResult TracePlayerBBox(MoveQuery pm, Vector3f origin, Vector3f end, int tracemask) {
+        return pm.Trace(origin, end, Game.PlayerMins, Game.PlayerMaxs, tracemask, pm.ps.clientNum);
+    }
+
+    // result = in - 2*n (n*in);
+    private static void ClipVelocity(Vector3f in, Vector3f out, Vector3f normal, float overbounce) {
+        float dot = Vector3f.dot(normal, in);
+        if(dot < 0) {
+            dot *= overbounce;
+        } else {
+            dot /= overbounce;
+        }
+
+        out.x = in.x - normal.x * dot;
+        out.y = in.y - normal.y * dot;
+        out.z = in.z - normal.z * dot;
     }
 
     private static void UpdateStepSound(MoveQuery pm) {

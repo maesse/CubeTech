@@ -29,7 +29,9 @@ public class MoveQuery {
     public boolean onGround;
     public int blocked = 0; // 1 = step/wall, 2 = slope
     private ITrace traceImplementation;
-    
+    Vector3f forward = new Vector3f();
+    Vector3f up = new Vector3f();
+    Vector3f right = new Vector3f();
 
     public MoveQuery(ITrace traceImpl) {
         traceImplementation = traceImpl;
