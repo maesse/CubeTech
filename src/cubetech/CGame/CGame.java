@@ -5,10 +5,14 @@ import cubetech.Game.Game;
 import cubetech.collision.BlockModel;
 import cubetech.collision.ClipmapException;
 import cubetech.collision.CollisionResult;
+import cubetech.collision.CubeCollision;
+import cubetech.collision.SingleCube;
 import cubetech.common.*;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
 import cubetech.gfx.CubeTexture;
+import cubetech.gfx.Shader;
+import cubetech.gfx.SkyDome;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
 import cubetech.gfx.SpriteManager.Type;
@@ -38,8 +42,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_drawSolid = Ref.cvars.Get("cg_drawSolid", "0", EnumSet.of(CVarFlags.NONE));
     CVar cg_editmode = Ref.cvars.Get("cg_editmode", "0", EnumSet.of(CVarFlags.ROM));
     CVar cg_depthnear = Ref.cvars.Get("cg_depthnear", "1", EnumSet.of(CVarFlags.ROM));
-    CVar cg_depthfar = Ref.cvars.Get("cg_depthfar", "2000", EnumSet.of(CVarFlags.ROM));
-    CVar cg_viewmode = Ref.cvars.Get("cg_viewmode", "0", EnumSet.of(CVarFlags.NONE));
+    CVar cg_depthfar = Ref.cvars.Get("cg_depthfar", "10000", EnumSet.of(CVarFlags.ROM));
+    CVar cg_viewmode = Ref.cvars.Get("cg_viewmode", "1", EnumSet.of(CVarFlags.NONE));
     CVar cg_drawentities = Ref.cvars.Get("cg_drawentities", "0", EnumSet.of(CVarFlags.ROM));
     CVar cg_drawbin = Ref.cvars.Get("cg_drawbin", "0", EnumSet.of(CVarFlags.NONE));
 
@@ -58,7 +62,10 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     // Move camera in vertical direction when vertical velocity > this
     CVar camera_vsnapmin = Ref.cvars.Get("camera_vsnapmin", "140", EnumSet.of(CVarFlags.ARCHIVE));
     CVar camera_vsnapmax = Ref.cvars.Get("camera_vsnapmax", "300", EnumSet.of(CVarFlags.ARCHIVE));
-    
+
+    public Vector3f rayStart = new Vector3f();
+    public Vector3f rayEnd = new Vector3f();
+    public int rayTime = 0;
 
     public CGameState cg;
     CGameStatic cgs;
@@ -112,14 +119,17 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Ref.commands.AddCommand("block", null);
 
         LoadingString("Collision Map");
-        try {
-            if(Ref.client.clc.mapdata != null)
-                Ref.cm.LoadMap(Ref.client.clc.mapdata, true);
-            else
-                Ref.cm.LoadMap(cgs.mapname, true);
-        } catch (ClipmapException ex) {
-            Ref.common.Error(Common.ErrorCode.DROP, "Couldn't load map:_" + Common.getExceptionString(ex));
+        if(!Ref.client.servername.equalsIgnoreCase("localhost")) {
+            Ref.cm.EmptyCubeMap();
         }
+//        try {
+//            if(Ref.client.clc.mapdata != null)
+//                Ref.cm.LoadBlockMap(Ref.client.clc.mapdata, true);
+//            else
+//                Ref.cm.LoadBlockMap(cgs.mapname, true);
+//        } catch (ClipmapException ex) {
+//            Ref.common.Error(Common.ErrorCode.DROP, "Couldn't load map:_" + Common.getExceptionString(ex));
+//        }
 
         cg.loading = true; // Dont defer now
 
@@ -175,6 +185,35 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg.PredictPlayerState();
 
         CalcViewValues();
+        SkyDome.RenderDome(cg.refdef.Origin, 8000, false);
+
+        // Highlight block
+        if(Ref.cm.cubemap != null) {
+            Vector3f dir = new Vector3f(cg.refdef.ViewAxis[0]);
+            Helper.Normalize(dir);
+            dir.scale(-1f);
+            CubeCollision col = Ref.cm.cubemap.TraceRay(cg.refdef.Origin, dir, 4);
+            if(col != null) {
+                SingleCube cube = new SingleCube(col);
+                cgr.highlightCube = cube;
+            } else
+            {
+                cgr.highlightCube = null;
+            }
+        }
+
+        if(Ref.cm.cubemap != null && Ref.Input.playerInput.Mouse1 && Ref.Input.playerInput.Mouse1Diff) {
+            Vector3f dir = new Vector3f(cg.refdef.ViewAxis[0]);
+            Helper.Normalize(dir);
+            dir.scale(-1f);
+            Ref.cm.cubemap.TraceRay(cg.refdef.Origin, dir, 64);
+            rayTime = cg.time + 8000;
+            rayStart.set(cg.refdef.Origin);
+            rayEnd.set(dir);
+            rayEnd.scale(1000);
+            Vector3f.add(rayEnd, rayStart, rayEnd);
+        }
+
         Ref.soundMan.Respatialize(cg.refdef.Origin, cg.predictedPlayerState.velocity);
 //        AddLocalEntities();
         
@@ -186,9 +225,9 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         lag.AddFrameInfo();
 
         // Time to do some drawing
-        if(cg_editmode.iValue == 0)
-            cgr.RenderClouds();
-        else if(mapEditor.isShowingAnimator())  
+//        if(cg_editmode.iValue == 0)
+//            cgr.RenderClouds();
+        if(cg_editmode.iValue == 1 && mapEditor.isShowingAnimator())
             mapEditor.animEditor.SetView(); // Let mapeditor override viewparams
 
         if(cg_drawbin.iValue == 1) {
@@ -198,9 +237,20 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
         if(cg_editmode.iValue == 0 || !mapEditor.isShowingAnimator()) {
             // Normal render
+            
+            if(Ref.cm.cubemap != null) {
+                //Shader shad = Ref.glRef.getShader("GroundFromAtmosphere");
+                //Ref.glRef.PushShader(shad);
+                //SkyDome.updateShader(shad, true);
+                
+                Ref.cm.cubemap.Render();
+                //Ref.glRef.PopShader();
+            }
+            cgr.RenderClientEffects();
             cgr.RenderScene(cg.refdef);
             AddPacketEntities();
             cgr.DrawEntities();
+            
         }
         // UI
         cgr.Draw2D();
@@ -588,7 +638,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Vector3f.sub(end, start, delta);
         // clip to world
         // FIX FIX
-        CollisionResult worldResult = Ref.collision.TestMovement(new Vector2f(start), new Vector2f(delta), new Vector2f(maxs), tracemask);
+        CollisionResult worldResult = Ref.collision.traceCubeMap(start, delta, mins, maxs);
+        //CollisionResult worldResult = Ref.collision.TestMovement(new Vector2f(start), new Vector2f(delta), new Vector2f(maxs), tracemask);
         if(worldResult.frac == 0.0f) {
             return worldResult; // Blocked instantl by world
         }
@@ -634,8 +685,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             if(res.frac < worldResult.frac) {
                 worldResult.entitynum = ent.ClientNum;
                 worldResult.frac = res.frac;
-                worldResult.Hit = res.Hit;
-                worldResult.HitAxis = res.HitAxis;
+                worldResult.hit = res.hit;
+                worldResult.hitAxis = res.hitAxis;
                 worldResult.hitmask = res.hitmask;
 
                 if(res.frac < 0f)

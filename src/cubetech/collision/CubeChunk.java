@@ -18,6 +18,7 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.util.Color;
+import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
 /**
@@ -30,27 +31,45 @@ public class CubeChunk {
     public static final int BLOCK_SIZE = 32;
     private static final int PLANE_SIZE = 4*32; // (vertex: 3*4, color: 4*1, tex: 2*4) * 4 points
 
-    private boolean[] visBlock = new boolean[CHUNK_SIZE]; // pre-vis data
-    private short[] visBlock2 = new short[CHUNK_SIZE];
-    private boolean[] visible = new boolean[CHUNK_SIZE*6];
-    private int nVis = 0;
+    // block data
+    private boolean[] visible = new boolean[CHUNK_SIZE*6]; // plane vis data
     private byte[] blockType = new byte[CHUNK_SIZE];
+    public int[] absmin = new int[3];
+    public int[] absmax = new int[3];
+    CubeMap map = null;
+
+    // render
     private VBO vbo = null;
     private boolean dirty = true;
 
+    // vis
+    private int nVis = 0;
+    private boolean[] visBlock = new boolean[CHUNK_SIZE]; // pre-vis data
+    private short[] visBlock2 = new short[CHUNK_SIZE];
+    private static final int MAX_VIS_RELATIONS = 128;
+    boolean[] visRelations = new boolean[MAX_VIS_RELATIONS];
+    int visIndex = 1;
+
+    // debug draw
+    int traceTime = 0;
+    int[] traceCache = null;
+    int traceCount = 0;
+
     int px, py, pz; // Position/Origin. Grows in the positive direction.
-    public CubeChunk(int x, int y, int z, boolean fill) {
+    public CubeChunk(CubeMap map, int x, int y, int z) {
         px = x;
         py = y;
         pz = z;
-        if(fill) {
-            for (int i= 0; i < CHUNK_SIZE; i++) {
-                if(Ref.rnd.nextBoolean() || Ref.rnd.nextBoolean() || Ref.rnd.nextBoolean())
-                    continue;
-                visBlock[i] = true;
-                blockType[i] = CubeType.GRASS;
-            }
-        }
+        this.map = map;
+
+        
+
+        absmin[0] = x * SIZE * BLOCK_SIZE;
+        absmin[1] = y * SIZE * BLOCK_SIZE;
+        absmin[2] = z * SIZE * BLOCK_SIZE;
+        absmax[0] = (x+1) * SIZE * BLOCK_SIZE;
+        absmax[1] = (y+1) * SIZE * BLOCK_SIZE;
+        absmax[2] = (z+1) * SIZE * BLOCK_SIZE;
     }
 
     public void Render() {
@@ -58,11 +77,32 @@ public class CubeChunk {
         markVisible();
         
         renderVBO();
+
+//        renderDebug();
     }
 
-    private static final int MAX_VIS_RELATIONS = 128;
-    boolean[] visRelations = new boolean[MAX_VIS_RELATIONS];
-    int visIndex = 1;
+    private void renderDebug() {
+        if(traceTime <= 0)
+            return;
+
+        traceTime -= 10;
+        if(traceTime <= 0) {
+            traceTime = 0;
+            traceCount = 0;
+        }
+
+        for (int i= 0; i < traceCount; i++) {
+            int index = traceCache[i];
+            int z = index / (SIZE*SIZE);
+            index -= z * SIZE*SIZE;
+            int y = index / SIZE;
+            index -= y * SIZE;
+            int x = index;
+            renderSingle(x, y, z, 1);
+        }
+    }
+
+    
     private void preVIS() {
         // Clear pre-vis data
         for (int i= 0; i < visBlock.length; i++) {
@@ -203,6 +243,167 @@ public class CubeChunk {
 
 
     }
+
+//
+//    // Thanks goes out to http://www.xnawiki.com/index.php?title=Voxel_traversal
+//    public CubeCollision TraceRay(Vector3f start, Vector3f dir, int maxDepth) {
+//        traceTime = 5000;
+//        // NOTES:
+//        // * This code assumes that the ray's position and direction are in 'cell coordinates', which means
+//        //   that one unit equals one cell in all directions.
+//        // * When the ray doesn't start within the voxel grid, calculate the first position at which the
+//        //   ray could enter the grid. If it never enters the grid, there is nothing more to do here.
+//        // * Also, it is important to test when the ray exits the voxel grid when the grid isn't infinite.
+//        // * The Point3D structure is a simple structure having three integer fields (X, Y and Z).
+//
+//        // The cell in which the ray starts.
+//        float dx = (start.x / BLOCK_SIZE);
+//        float dy = (start.y / BLOCK_SIZE);
+//        float dz = (start.z / BLOCK_SIZE);
+//        int x = (int)Math.floor(start.x / BLOCK_SIZE);
+//        int y = (int)Math.floor(start.y / BLOCK_SIZE);
+//        int z = (int)Math.floor(start.z / BLOCK_SIZE);
+//
+//        // Determine which way we go.
+//        float stepX = Math.signum(dir.x);
+//        float stepY = Math.signum(dir.y);
+//        float stepZ = Math.signum(dir.z);
+//
+//        // Calculate cell boundaries. When the step (i.e. direction sign) is positive,
+//        // the next boundary is AFTER our current position, meaning that we have to add 1.
+//        // Otherwise, it is BEFORE our current position, in which case we add nothing.
+//        int cx = x + (stepX > 0 ? 1 : 0);
+//        int cy = y + (stepY > 0 ? 1 : 0);
+//        int cz = z + (stepZ > 0 ? 1 : 0);
+//
+//        // NOTE: For the following calculations, the result will be Single.PositiveInfinity
+//        // when ray.Direction.X, Y or Z equals zero, which is OK. However, when the left-hand
+//        // value of the division also equals zero, the result is Single.NaN, which is not OK.
+//
+//        // Determine how far we can travel along the ray before we hit a voxel boundary.
+//        Vector3f tMax = new Vector3f(
+//                (cx - dx) / dir.x,
+//                (cy - dy) / dir.y,
+//                (cz - dz) / dir.z);
+//        if(Float.isNaN(tMax.x)) tMax.x = Float.POSITIVE_INFINITY;
+//        if(Float.isNaN(tMax.y)) tMax.y = Float.POSITIVE_INFINITY;
+//        if(Float.isNaN(tMax.z)) tMax.z = Float.POSITIVE_INFINITY;
+//
+//        // Determine how far we must travel along the ray before we have crossed a gridcell.
+//        Vector3f delta = new Vector3f(
+//                stepX / dir.x,
+//                stepY / dir.y,
+//                stepZ / dir.z);
+//        if(Float.isNaN(delta.x)) delta.x = Float.POSITIVE_INFINITY;
+//        if(Float.isNaN(delta.y)) delta.y = Float.POSITIVE_INFINITY;
+//        if(Float.isNaN(delta.z)) delta.z = Float.POSITIVE_INFINITY;
+//        // For each step, determine which distance to the next voxel boundary is lowest (i.e.
+//        // which voxel boundary is nearest) and walk that way.
+//        traceCount = 0;
+//        traceCache = new int[maxDepth];
+//        for (int i= 0; i < maxDepth; i++) {
+//            // Check bounds
+//            if((x < 0 && stepX < 0) || (y < 0 && stepY < 0) || (z < 0 && stepZ < 0)
+//                    || (x > SIZE-1 && stepX > 0) || (y > SIZE-1 && stepY > 0) || (z > SIZE-1 && stepZ > 0))
+//                return null; // leaving the chunk
+//
+//            if(x < 0 || y < 0 || z < 0 || x > SIZE-1 || y > SIZE-1 || z > SIZE-1)
+//                continue; // out of bounds, but might be ok next step...
+//
+//            // Try this one:
+//            int cubeIndex = getIndex(x, y, z);
+//            traceCache[i] = cubeIndex;
+//            traceCount++;
+//            if(blockType[cubeIndex] != 0) {
+//                // Collision
+//                return new CubeCollision(this, x, y, z);
+//            }
+//
+//            // Do the next step.
+//            if(tMax.x < tMax.y && tMax.x < tMax.z) {
+//                // tMax.X is the lowest, an YZ cell boundary plane is nearest.
+//                x += stepX;
+//                tMax.x += delta.x;
+//            } else if(tMax.y < tMax.z) {
+//                // tMax.Y is the lowest, an XZ cell boundary plane is nearest.
+//                y += stepY;
+//                tMax.y += delta.y;
+//            } else {
+//                // tMax.Z is the lowest, an XY cell boundary plane is nearest.
+//                z += stepZ;
+//                tMax.z += delta.z;
+//            }
+//        }
+//
+//        return null; // no collision
+//    }
+
+    public void setCubeType(int x, int y, int z, byte type) {
+        setCubeType(getIndex(x, y, z), type);
+
+    }
+
+    public byte getCubeType(int index)
+    {
+        return blockType[index];
+    }
+
+     public void setCubeType(int index, byte type) {
+        dirty = true;
+        blockType[index] = type;
+        visBlock[index] = type != 0;
+    }
+
+    private int pointToCubeIndex(Vector3f point) {
+        // TODO: Check point should be < SIZE * BLOCK_SIZE
+        int x = (int)Math.floor(point.x / BLOCK_SIZE);
+        int y = (int)Math.floor(point.y / BLOCK_SIZE);
+        int z = (int)Math.floor(point.z / BLOCK_SIZE);
+        return getIndex(x, y, z);
+    }
+
+    ChunkSpatialPart getCubesInVolume(Vector3f start, Vector3f end) {
+        // start
+        int sx = (int)Math.floor(start.x / BLOCK_SIZE);
+        int sy = (int)Math.floor(start.y / BLOCK_SIZE);
+        int sz = (int)Math.floor(start.z / BLOCK_SIZE);
+        if(sx >= SIZE) sx = SIZE-1;
+        if(sy >= SIZE) sy = SIZE-1;
+        if(sz >= SIZE) sz = SIZE-1;
+
+        // end
+        int ex = (int)Math.floor(end.x / BLOCK_SIZE)+1;
+        int ey = (int)Math.floor(end.y / BLOCK_SIZE)+1;
+        int ez = (int)Math.floor(end.z / BLOCK_SIZE)+1;
+        if(ex > SIZE) ex = SIZE;
+        if(ey > SIZE) ey = SIZE;
+        if(ez > SIZE) ez = SIZE;
+        
+        ChunkSpatialPart part = new ChunkSpatialPart();
+        part.chunk = this;
+        part.indexes = new int[(ex - sx) * (ey - sy) * (ez - sz) * 3];
+
+        // Iterate though cubes
+        for (int z= sz; z < ez; z++) {
+            for (int y= sy; y < ey; y++) {
+                for (int x= sx; x < ex; x++) {
+                    int index = getIndex(x, y, z);
+
+                    if(blockType[index] == 0)
+                        continue; // no cube there
+
+                    // Save off real-world position
+                    part.indexes[part.nIndex * 3] = x * BLOCK_SIZE + absmin[0];
+                    part.indexes[part.nIndex * 3 + 1] = y * BLOCK_SIZE + absmin[1];
+                    part.indexes[part.nIndex * 3 + 2] = z * BLOCK_SIZE + absmin[2];
+                    part.nIndex++;
+                }
+            }
+        }
+        return part;
+    }
+
+    
     private class RelItem implements Comparable<RelItem> {
         int min, max;
         public RelItem(int min, int max) {
@@ -275,7 +476,7 @@ public class CubeChunk {
         dirty = false;
     }
     
-    private int getIndex(int x, int y, int z) {
+    public static int getIndex(int x, int y, int z) {
         return x + y * SIZE + z * SIZE * SIZE;
     }
 
@@ -506,6 +707,7 @@ public class CubeChunk {
         ARBVertexShader.glVertexAttribPointerARB(2, 2, GL11.GL_FLOAT, false, stride, 4*4);
         CubeTexture tex = Ref.ResMan.LoadTexture("data/terrain.png");
         tex.setFiltering(false, GL11.GL_NEAREST);
+        tex.setAnisotropic(4);
         tex.setWrap(GL12.GL_CLAMP_TO_EDGE);
     }
 
@@ -526,6 +728,226 @@ public class CubeChunk {
         GL11.glEnable(GL11.GL_BLEND);
         postVbo();
         vbo.unbind();
+    }
+
+    public void renderSingle(int x, int y, int z, int typ) {
+        // ready the texture
+        CubeTexture tex = Ref.ResMan.LoadTexture("data/terrain.png");
+        tex.setFiltering(false, GL11.GL_NEAREST);
+        tex.setWrap(GL12.GL_CLAMP_TO_EDGE);
+
+        
+        // 
+        int CHUNK_SIDE = SIZE * BLOCK_SIZE;
+        int ppx = px * CHUNK_SIDE;
+        int ppy = py * CHUNK_SIDE;
+        int ppz = pz * CHUNK_SIDE;
+
+        // Get absolute coords
+        int lx = ppx+ x * BLOCK_SIZE;
+        int ly = ppy+ y * BLOCK_SIZE;
+        int lz = ppz+ z * BLOCK_SIZE;
+
+        // Get texture offsets
+        byte type = (byte) typ;
+        boolean multiTex = (type < 0);
+        Vector4f tx;
+
+        GL11.glBegin(GL11.GL_QUADS);
+        col(false);
+
+        // Render thyme!
+        if(!multiTex) tx = TerrainTextureCache.getTexOffset(type);
+        else tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.TOP);
+
+        // Top: Z+
+        {
+            tex(tx.x, tx.y);
+            GL11.glVertex3i(lx,             ly,             lz+ BLOCK_SIZE);
+            tex(tx.z, tx.y);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly,             lz+ BLOCK_SIZE);
+            tex(tx.z, tx.w);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly + BLOCK_SIZE,lz+ BLOCK_SIZE);
+            tex(tx.x, tx.w);
+            GL11.glVertex3i(lx,             ly + BLOCK_SIZE,lz+ BLOCK_SIZE);
+        }
+
+        // Bottom: Z-
+        {
+            if(multiTex) tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.BOTTOM);
+            tex(tx.x, tx.y);
+            GL11.glVertex3i(lx,             ly,                 lz );
+            tex(tx.x, tx.w);
+            GL11.glVertex3i(lx,             ly + BLOCK_SIZE,    lz);
+            tex(tx.z, tx.w);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly + BLOCK_SIZE,    lz );
+            tex(tx.z, tx.y);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly,                 lz);
+        }
+
+        // Y+
+        if(multiTex) tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.SIDE);
+        {
+            tex(tx.x, tx.y);
+            GL11.glVertex3i(lx,             ly+ BLOCK_SIZE,     lz );
+            tex(tx.x, tx.w);
+            GL11.glVertex3i(lx,             ly + BLOCK_SIZE,    lz+ BLOCK_SIZE);
+            tex(tx.z, tx.w);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly + BLOCK_SIZE,    lz + BLOCK_SIZE);
+            tex(tx.z, tx.y);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly+ BLOCK_SIZE,     lz);
+        }
+
+        // Y-
+        {
+            tex(tx.x, tx.y);
+            GL11.glVertex3i(lx,             ly,     lz );
+            tex(tx.z, tx.y);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly,     lz);
+            tex(tx.z, tx.w);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly ,    lz + BLOCK_SIZE);
+            tex(tx.x, tx.w);
+            GL11.glVertex3i(lx,             ly,    lz+ BLOCK_SIZE);
+        }
+
+        // X+
+        {
+            tex(tx.x, tx.y);
+            GL11.glVertex3i(lx+ BLOCK_SIZE, ly,                  lz );
+            tex(tx.z, tx.y);
+            GL11.glVertex3i(lx+ BLOCK_SIZE ,ly+ BLOCK_SIZE,     lz);
+            tex(tx.z, tx.w);
+            GL11.glVertex3i(lx+ BLOCK_SIZE ,ly+ BLOCK_SIZE ,    lz + BLOCK_SIZE);
+            tex(tx.x, tx.w);
+            GL11.glVertex3i(lx+ BLOCK_SIZE, ly,                 lz+ BLOCK_SIZE);
+        }
+
+        // X-
+        {
+            tex(tx.x, tx.y);
+            GL11.glVertex3i(lx, ly,                  lz );
+            tex(tx.x, tx.w);
+            GL11.glVertex3i(lx, ly,                 lz+ BLOCK_SIZE);
+            tex(tx.z, tx.w);
+            GL11.glVertex3i(lx ,ly+ BLOCK_SIZE ,    lz + BLOCK_SIZE);
+            tex(tx.z, tx.y);
+            GL11.glVertex3i(lx ,ly+ BLOCK_SIZE,     lz);
+        }
+        GL11.glEnd();
+    }
+
+    public void renderSingleWireframe(int x, int y, int z, int typ) {
+        // ready the texture
+        CubeTexture tex = Ref.ResMan.LoadTexture("data/terrain.png");
+        tex.setFiltering(false, GL11.GL_NEAREST);
+        tex.setWrap(GL12.GL_CLAMP_TO_EDGE);
+
+
+        //
+        int CHUNK_SIDE = SIZE * BLOCK_SIZE;
+        int ppx = px * CHUNK_SIDE;
+        int ppy = py * CHUNK_SIDE;
+        int ppz = pz * CHUNK_SIDE;
+
+        // Get absolute coords
+        int lx = ppx+ x * BLOCK_SIZE;
+        int ly = ppy+ y * BLOCK_SIZE;
+        int lz = ppz+ z * BLOCK_SIZE;
+
+        // Get texture offsets
+        byte type = (byte) typ;
+        boolean multiTex = (type < 0);
+        Vector4f tx;
+
+        GL11.glBegin(GL11.GL_LINES);
+        col(false);
+
+        // Render thyme!
+        if(!multiTex) tx = TerrainTextureCache.getTexOffset(type);
+        else tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.TOP);
+
+        // Top: Z+
+        {
+            tex(tx.x, tx.y);
+            GL11.glVertex3i(lx,             ly,             lz+ BLOCK_SIZE);
+            tex(tx.z, tx.y);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly,             lz+ BLOCK_SIZE);
+            tex(tx.z, tx.y);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly,             lz+ BLOCK_SIZE);
+            tex(tx.z, tx.w);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly + BLOCK_SIZE,lz+ BLOCK_SIZE);
+            tex(tx.z, tx.w);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly + BLOCK_SIZE,lz+ BLOCK_SIZE);
+            tex(tx.x, tx.w);
+            GL11.glVertex3i(lx,             ly + BLOCK_SIZE,lz+ BLOCK_SIZE);
+            tex(tx.x, tx.w);
+            GL11.glVertex3i(lx,             ly + BLOCK_SIZE,lz+ BLOCK_SIZE);
+            tex(tx.x, tx.y);
+            GL11.glVertex3i(lx,             ly,             lz+ BLOCK_SIZE);
+        }
+
+        // Bottom: Z-
+        {
+            if(multiTex) tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.BOTTOM);
+            tex(tx.x, tx.y);
+            GL11.glVertex3i(lx,             ly,                 lz );
+            tex(tx.x, tx.w);
+            GL11.glVertex3i(lx,             ly + BLOCK_SIZE,    lz);
+            tex(tx.z, tx.w);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly + BLOCK_SIZE,    lz );
+            tex(tx.z, tx.y);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly,                 lz);
+        }
+
+        // Y+
+        if(multiTex) tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.SIDE);
+        {
+            tex(tx.x, tx.y);
+            GL11.glVertex3i(lx,             ly+ BLOCK_SIZE,     lz );
+            tex(tx.x, tx.w);
+            GL11.glVertex3i(lx,             ly + BLOCK_SIZE,    lz+ BLOCK_SIZE);
+            tex(tx.z, tx.w);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly + BLOCK_SIZE,    lz + BLOCK_SIZE);
+            tex(tx.z, tx.y);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly+ BLOCK_SIZE,     lz);
+        }
+
+        // Y-
+        {
+            tex(tx.x, tx.y);
+            GL11.glVertex3i(lx,             ly,     lz );
+            tex(tx.z, tx.y);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly,     lz);
+            tex(tx.z, tx.w);
+            GL11.glVertex3i(lx + BLOCK_SIZE,ly ,    lz + BLOCK_SIZE);
+            tex(tx.x, tx.w);
+            GL11.glVertex3i(lx,             ly,    lz+ BLOCK_SIZE);
+        }
+
+        // X+
+        {
+            tex(tx.x, tx.y);
+            GL11.glVertex3i(lx+ BLOCK_SIZE, ly,                  lz );
+            tex(tx.z, tx.y);
+            GL11.glVertex3i(lx+ BLOCK_SIZE ,ly+ BLOCK_SIZE,     lz);
+            tex(tx.z, tx.w);
+            GL11.glVertex3i(lx+ BLOCK_SIZE ,ly+ BLOCK_SIZE ,    lz + BLOCK_SIZE);
+            tex(tx.x, tx.w);
+            GL11.glVertex3i(lx+ BLOCK_SIZE, ly,                 lz+ BLOCK_SIZE);
+        }
+
+        // X-
+        {
+            tex(tx.x, tx.y);
+            GL11.glVertex3i(lx, ly,                  lz );
+            tex(tx.x, tx.w);
+            GL11.glVertex3i(lx, ly,                 lz+ BLOCK_SIZE);
+            tex(tx.z, tx.w);
+            GL11.glVertex3i(lx ,ly+ BLOCK_SIZE ,    lz + BLOCK_SIZE);
+            tex(tx.z, tx.y);
+            GL11.glVertex3i(lx ,ly+ BLOCK_SIZE,     lz);
+        }
+        GL11.glEnd();
     }
 
     private void RenderSimple() {

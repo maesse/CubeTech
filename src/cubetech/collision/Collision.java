@@ -7,6 +7,7 @@ import cubetech.common.Content;
 import cubetech.misc.Ref;
 import cubetech.spatial.SpatialQuery;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  * Collision class. Handles OBB's and point of impact
@@ -14,70 +15,37 @@ import org.lwjgl.util.vector.Vector2f;
  */
 public class Collision {
     public static final float EPSILON = 0.0625f;
-
-
     static final int RESULT_BUFFER_SIZE = 256;
-
-    /**
-     * Returns true on collision
-     * @param Position The point to test
-     * @param x x-min
-     * @param y y-min
-     * @param x0 x-max
-     * @param y0 y-max
-     * @return
-     */
-    public static boolean TestPointAABB(Vector2f Position, float x, float y, float x0, float y0) {
-        return (Position.x >= x && Position.x <= x0
-                && Position.y >= y && Position.y <= y0);
-    }
-
-    
-    
     private CollisionResult[] resultBuffer = new CollisionResult[RESULT_BUFFER_SIZE];
     private int BufferOffset = 0;
+    
     Vector2f AAxis[] = new Vector2f[2];
     Block tempCollisionBox = new Block(-1, new Vector2f(), new Vector2f(1, 1), false);
+    Vector2f derpAxis = new Vector2f();
+
+    // block submodel
+    private boolean boxTrace = false;
+    private int submodel = 0;
+    private Vector2f submodelOrigin = null;
+
+    // x+, x-, y+, y-, z+, z-
+    private static Vector3f[] AABBNormals = new Vector3f[] {
+        new Vector3f(1,0,0),
+        new Vector3f(-1,0,0),
+        new Vector3f(0,1,0),
+        new Vector3f(0,-1,0),
+        new Vector3f(0,0,1),
+        new Vector3f(0,0,-1)
+    };
 
     public Collision() {
         // Init CollisionBuffers
         for (int i= 0; i < RESULT_BUFFER_SIZE; i++) {
             resultBuffer[i] = new CollisionResult();
         }
-//        Test();
         AAxis[0] = new Vector2f(1, 0);
         AAxis[1] = new Vector2f(0, 1);
-
-        //Block testB = new Block(-2, new Vector2f(-1, -1), new Vector2f(2,2), false);
-        //testB.SetAngle(-(float)Math.PI*0.25f);
-        //Test(new Vector2f(0, 4), new Vector2f(1,1), new Vector2f(0, 2), testB, resultBuffer[0]);
     }
-
-    // Get next collisionresult from the circular buffer
-    private CollisionResult GetNext() {
-        return resultBuffer[BufferOffset++ & RESULT_BUFFER_SIZE-1];
-    }
-
-    /**
-     *
-     * @param mins 
-     * @param maxs
-     * @param origin
-     */
-    public void SetBoxModel(Vector2f extent, Vector2f origin) {
-        tempCollisionBox.SetCentered(origin, extent);
-        boxTrace = true; // next BoxTrace will use the boxmodel
-    }
-
-    public void SetSubModel(int index, Vector2f origin) {
-        submodelOrigin = origin;
-        submodel = index;
-        boxTrace = false; // next boxTrace wont use the boxmodel
-    }
-
-    private boolean boxTrace = false;
-    private int submodel = 0;
-    private Vector2f submodelOrigin = null;
 
     private boolean TestPosition(Vector2f pos, Vector2f extent, Block testBlock) {
         Vector2f bCenter = testBlock.GetCenter();
@@ -168,6 +136,163 @@ public class Collision {
         return true; // collision
     }
 
+    /**
+     * Does a AABB -> AABB trace on the loaded cubemap
+     * @param start
+     * @param delta
+     * @param mins
+     * @param maxs
+     * @return
+     */
+    public CollisionResult traceCubeMap(Vector3f start, Vector3f delta, Vector3f mins, Vector3f maxs) {
+        // Prepare a collision result
+        CollisionResult res = GetNext();
+        res.reset(start, delta, mins, maxs);
+
+        Vector3f centerStart = new Vector3f();
+        
+        // Create a bounding volume for the move
+        Vector3f mmin = Vector3f.add(start, mins, null);
+        Vector3f mmax = Vector3f.add(start, maxs, null);
+        if(delta.x < 0) mmin.x += delta.x; else mmax.x += delta.x;
+        if(delta.y < 0) mmin.y += delta.y; else mmax.y += delta.y;
+        if(delta.z < 0) mmin.z += delta.z; else mmax.z += delta.z;
+
+        delta.scale(-1f);
+
+        // query the cube map
+        ChunkAreaQuery area = Ref.cm.cubemap.getCubesInVolume(mmin, mmax);
+        int[] cubePosition = new int[3];
+
+        Vector3f extent = new Vector3f();
+        Vector3f.sub(maxs, mins, extent).scale(0.5f);
+
+        Vector3f diff = new Vector3f(mins);
+        diff.scale(-1f);
+        Vector3f.sub(diff, maxs, diff);
+
+        Vector3f.sub(start, diff, centerStart);
+
+        // iterate though results
+        while(area.getNext(cubePosition) != null) {
+            // Test swept position
+            if(TestAABBAABB(cubePosition[0]-1, cubePosition[1]-1, cubePosition[2]-1,
+                            cubePosition[0] + CubeChunk.BLOCK_SIZE+1, cubePosition[1] + CubeChunk.BLOCK_SIZE+1, cubePosition[2] + CubeChunk.BLOCK_SIZE+1,
+                            mmin.x, mmin.y, mmin.z, mmax.x, mmax.y, mmax.z)) {
+
+                TestAABBCube(centerStart, delta, extent, cubePosition, CubeChunk.BLOCK_SIZE, res);
+                if(res.frac == 0f) {
+                    break;
+                }
+            }
+        }
+        delta.scale(-1f);
+        
+        return res;
+    }
+
+    public void TestAABBCube(Vector3f center, Vector3f v, Vector3f Extent, int[] cubePosition, int cubeSize, CollisionResult res) {
+        Vector3f hitaxis = null;
+        boolean startsolid = false;
+        
+        float first = 0f;
+        float last = 1f;
+
+        float bmin = cubePosition[0];
+        float bmax = cubePosition[0]+cubeSize;
+        float amax = center.x + Extent.x;
+        float amin = center.x - Extent.x;
+        if(v.x < 0.0f) { // moving left
+            if(bmax < amin) return; // player max is already to the left
+            // player min is to the right of block
+            if(amax < bmin) { float fv = (amax - bmin)/v.x; if(fv > first) { first = fv - EPSILON; hitaxis = AABBNormals[1];} }
+            else
+                startsolid = true;
+            if(bmax > amin) last = Math.min((amin-bmax)/v.x,last);
+        } else if(v.x > 0.0f) {
+            if(bmin > amax) return;
+            if(bmax < amin) { float fv = (amin - bmax)/v.x; if(fv > first) { first = fv - EPSILON; hitaxis = AABBNormals[0];} }
+            else
+                startsolid = true;
+            if(amax > bmin) last = Math.min((amax - bmin)/v.x,last);
+        } else {
+            if(bmin >= amax  + EPSILON || bmax  + EPSILON <= amin)
+                return;
+            else
+                startsolid = true;
+        }
+
+        if(first > last)
+            return;
+
+        // A - Y Axis
+        bmin = cubePosition[1];
+        bmax = cubePosition[1]+cubeSize;
+        amax = center.y + Extent.y;
+        amin = center.y - Extent.y;
+
+        if(v.y < 0.0f) {
+            if(bmax < amin) return;
+            if(amax < bmin) { float fv = (amax - bmin)/v.y; if(fv > first){ first = fv - EPSILON; hitaxis = AABBNormals[3];} }
+            else
+                startsolid = true;
+            if(bmax > amin) last = Math.min((amin-bmax)/v.y,last);
+        } else if(v.y > 0.0f) {
+            if(bmin > amax) return;
+            if(bmax < amin) { float fv = (amin - bmax)/v.y; if(fv > first) { first = fv - EPSILON; hitaxis = AABBNormals[2];} }
+            else
+                startsolid = true;
+            if(amax > bmin) last = Math.min((amax - bmin)/v.y,last);
+        } else {
+            if(bmin >= amax  + EPSILON || bmax  + EPSILON <= amin)
+                return;
+            else
+                startsolid = true;
+        }
+
+        if(first > last)
+            return;
+
+        // A - Z Axis
+        bmin = cubePosition[2];
+        bmax = cubePosition[2]+cubeSize;
+        amax = center.z + Extent.z;
+        amin = center.z - Extent.z;
+
+        if(v.z < 0.0f) {
+            if(bmax < amin) return;
+            if(amax < bmin) { float fv = (amax - bmin)/v.z; if(fv > first){ first = fv - EPSILON; hitaxis = AABBNormals[5];} }
+            else
+                startsolid = true;
+            if(bmax > amin) last = Math.min((amin-bmax)/v.z,last);
+        } else if(v.z > 0.0f) {
+            if(bmin > amax) return;
+            if(bmax < amin) { float fv = (amin - bmax)/v.z; if(fv > first) { first = fv - EPSILON; hitaxis = AABBNormals[4];} }
+            else
+                startsolid = true;
+            if(amax > bmin) last = Math.min((amax - bmin)/v.z,last);
+        } else {
+            if(bmin >= amax  + EPSILON || bmax  + EPSILON <= amin)
+                return;
+            else
+                startsolid = true;
+        }
+
+        if(first > last)
+            return;
+
+        if(first < res.frac && hitaxis != null) {
+            res.frac = first;
+            if(res.frac < 0f)
+                res.frac = 0f;
+            res.hit = true;
+            res.entitynum = Common.ENTITYNUM_WORLD;
+            res.hitmask = Content.SOLID;
+            res.hitAxis.set(hitaxis);
+            res.startsolid = startsolid;
+        }
+    }
+
     public CollisionResult TransformedBoxTrace(Vector2f startin, Vector2f end, Vector2f mins, Vector2f maxs, int tracemask) {
         Vector2f extent = new Vector2f();
         Vector2f.sub(maxs, mins, extent);
@@ -183,7 +308,7 @@ public class Collision {
             Vector2f.sub(start, end, dir);
 
         CollisionResult res = GetNext();
-        res.Reset(start, dir, extent);
+        res.reset(start, dir, extent);
 
         boolean cheapTest = dir.length() == 0;
 
@@ -193,8 +318,8 @@ public class Collision {
                 if(TestPosition(start, extent, tempCollisionBox)) {
                     // Collided
                     res.frac = 0f;
-                    res.Hit = true;
-                    res.HitAxis.set(0,0);
+                    res.hit = true;
+                    res.hitAxis.set(0,0);
                     res.hitmask = Content.SOLID; // unknown hitmask
                     res.startsolid = true;
                 }
@@ -215,8 +340,8 @@ public class Collision {
                     if(TestPosition(start, extent, block)) {
                         // hit block
                         res.frac = 0f;
-                        res.Hit = true;
-                        res.HitAxis.set(0,0);
+                        res.hit = true;
+                        res.hitAxis.set(0,0);
                         res.hitmask = Content.SOLID;
                         res.startsolid = true;
                     }
@@ -231,7 +356,7 @@ public class Collision {
         return res;
     }
 
-    Vector2f derpAxis = new Vector2f();
+    
     void Test(Vector2f center, Vector2f Extent, Vector2f v, Block block, CollisionResult res) {
 
 
@@ -394,10 +519,10 @@ public class Collision {
             res.frac = first - EPSILON;
             if(res.frac < 0f)
                 res.frac = 0f;
-            res.Hit = true;
+            res.hit = true;
             res.entitynum = Common.ENTITYNUM_WORLD;
             res.hitmask = Content.SOLID;
-            res.HitAxis.set(hitaxis);
+            res.hitAxis.set(hitaxis.x, hitaxis.y,0);
             res.startsolid = startsolid;
         }
     }
@@ -405,7 +530,7 @@ public class Collision {
     // True if collision occured
     public CollisionResult TestMovement(Vector2f pos, Vector2f dir, Vector2f extent, int tracemask) {
         CollisionResult res = GetNext();
-        res.Reset(pos, dir, extent);
+        res.reset(pos, dir, extent);
 
         // Do the cheap tests if we're not trying to move
         boolean stationary = dir.length() == 0;
@@ -440,8 +565,8 @@ public class Collision {
                         res.frac = 0f;
                         res.startsolid = true;
                         res.hitmask = Content.SOLID; // hit world
-                        res.HitAxis.set(0,0);
-                        res.Hit = true;
+                        res.hitAxis.set(0,0);
+                        res.hit = true;
                         break; // no reason to keep testing
                     }
                 } else // Test with velocity
@@ -452,7 +577,7 @@ public class Collision {
             v.scale(-1.0f);
 
             // Hit world
-            if(res.Hit && res.HitAxis != null) {
+            if(res.hit && res.hitAxis != null) {
                 // FIX: Shouldn't be necesarry
 //                res.HitAxis.normalise();
             }
@@ -461,12 +586,40 @@ public class Collision {
         return res;
     }
 
+    /**
+     * Returns true on collision
+     * @param Position The point to test
+     * @param x x-min
+     * @param y y-min
+     * @param x0 x-max
+     * @param y0 y-max
+     * @return
+     */
+    public static boolean TestPointAABB(Vector2f Position, float x, float y, float x0, float y0) {
+        return (Position.x >= x && Position.x <= x0
+                && Position.y >= y && Position.y <= y0);
+    }
+
     public static boolean TestAABBAABB(float aminx, float aminy, float amaxx, float amaxy,
                                         float bminx, float bminy, float bmaxx, float bmaxy) {
         if(aminx >= bmaxx + EPSILON || amaxx <= bminx - EPSILON)
             return false;
 
         if(aminy >= bmaxy + EPSILON || amaxy <= bminy - EPSILON)
+            return false;
+
+        return true;
+    }
+
+    public static boolean TestAABBAABB(float aminx, float aminy, float aminz, float amaxx, float amaxy, float amaxz,
+                                        float bminx, float bminy, float bminz, float bmaxx, float bmaxy, float bmaxz) {
+        if(aminx >= bmaxx + EPSILON || amaxx <= bminx - EPSILON)
+            return false;
+
+        if(aminy >= bmaxy + EPSILON || amaxy <= bminy - EPSILON)
+            return false;
+
+        if(aminz >= bmaxz + EPSILON || amaxz <= bminz - EPSILON)
             return false;
 
         return true;
@@ -494,7 +647,21 @@ public class Collision {
     public CollisionResult[] getResultBuffer() {
         return resultBuffer;
     }
+    // Get next collisionresult from the circular buffer
+    private CollisionResult GetNext() {
+        return resultBuffer[BufferOffset++ & RESULT_BUFFER_SIZE-1];
+    }
 
+    public void SetBoxModel(Vector2f extent, Vector2f origin) {
+        tempCollisionBox.SetCentered(origin, extent);
+        boxTrace = true; // next BoxTrace will use the boxmodel
+    }
+
+    public void SetSubModel(int index, Vector2f origin) {
+        submodelOrigin = origin;
+        submodel = index;
+        boxTrace = false; // next boxTrace wont use the boxmodel
+    }
     
 
 }

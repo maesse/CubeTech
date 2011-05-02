@@ -10,6 +10,7 @@ import cubetech.Game.Game;
 import cubetech.Game.Gentity;
 import cubetech.collision.BlockModel;
 import cubetech.collision.CubeMap;
+import cubetech.collision.SingleCube;
 import cubetech.common.Common;
 import cubetech.common.Content;
 import cubetech.common.GItem;
@@ -20,6 +21,7 @@ import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
 import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.CubeTexture;
+import cubetech.gfx.CubeType;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
@@ -52,6 +54,7 @@ public class CGameRender {
     public Color sunColor = (Color) Color.WHITE;
     // Cloud effect
     private Cloud[] clouds = new Cloud[16];
+    SingleCube highlightCube;
 
     public CGameRender(CGame game) {
         this.game = game;
@@ -249,16 +252,16 @@ public class CGameRender {
 
         }
 
-        float speeds = Math.abs(game.cg.snap.ps.velocity.x);
-        float maxspeed = 600;
-        float frac = speeds / maxspeed;
-        if(game.cg_editmode.iValue == 0) {
-            spr = Ref.SpriteMan.GetSprite(Type.HUD);
-            Vector2f size = new Vector2f(Ref.glRef.GetResolution().x * 0.75f, 64);
-            Vector2f position = new Vector2f(Ref.glRef.GetResolution().x/2f - size.x / 2f , Ref.glRef.GetResolution().y - size.y - 32 );
-            size.x *= frac;
-            spr.Set(position, size, Ref.ResMan.LoadTexture("data/energybar.png"), null, new Vector2f(1, 1));
-        }
+//        float speeds = Math.abs(game.cg.snap.ps.velocity.x);
+//        float maxspeed = 600;
+//        float frac = speeds / maxspeed;
+//        if(game.cg_editmode.iValue == 0) {
+//            spr = Ref.SpriteMan.GetSprite(Type.HUD);
+//            Vector2f size = new Vector2f(Ref.glRef.GetResolution().x * 0.75f, 64);
+//            Vector2f position = new Vector2f(Ref.glRef.GetResolution().x/2f - size.x / 2f , Ref.glRef.GetResolution().y - size.y - 32 );
+//            size.x *= frac;
+//            spr.Set(position, size, Ref.ResMan.LoadTexture("data/energybar.png"), null, new Vector2f(1, 1));
+//        }
 
 
         DrawChat();
@@ -271,17 +274,26 @@ public class CGameRender {
             Ref.textMan.AddText(new Vector2f(0, 0), "Position: " + game.cg.refdef.Origin, Align.LEFT, Type.HUD);
             Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()), "Velocity: " + game.cg.predictedPlayerState.velocity, Align.LEFT, Type.HUD);
             //Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Ping: " + Ref.cgame.cg.snap.ps.ping, Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Pull accel: " + game.getPullAccel(), Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*3), "v: " + game.cg.predictedPlayerState.delta_angles[0], Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*4), "V: " + game.cg.predictedPlayerState.viewangles, Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*5), "Vv: " + Ref.Input.viewangles[0], Align.LEFT, Type.HUD);
+//            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Pull accel: " + game.getPullAccel(), Align.LEFT, Type.HUD);
+//            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "v: " + game.cg.predictedPlayerState.delta_angles[0], Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "V: " + game.cg.predictedPlayerState.viewangles, Align.LEFT, Type.HUD);
+//            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*4), "Vv: " + Ref.Input.viewangles[0], Align.LEFT, Type.HUD);
+
+            if(game.rayTime > game.cg.time) {
+                Ref.ResMan.getWhiteTexture().Bind();
+                GL11.glBegin(GL11.GL_LINES);
+                GL11.glColor3f(0, 1, 0);
+                GL11.glVertex3f(game.rayStart.x, game.rayStart.y, game.rayStart.z);
+                GL11.glVertex3f(game.rayEnd.x, game.rayEnd.y, game.rayEnd.z);
+                GL11.glEnd();
+            }
         }
 
         if(Ref.net.net_graph.iValue > 0) {
             DrawNetGraph();
         }
 
-        Ref.textMan.AddText(new Vector2f(0, 0), "Time: " + game.cg.snap.ps.maptime, Align.LEFT, Type.HUD);
+//        Ref.textMan.AddText(new Vector2f(0, 0), "Time: " + game.cg.snap.ps.maptime, Align.LEFT, Type.HUD);
 //        Ref.textMan.AddText(new Vector2f(0, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()), "HP: " + Ref.cgame.cg.snap.ps.stats.Health, Align.LEFT, Type.HUD);
 //        Ref.textMan.AddText(new Vector2f(0, 0.75f), "Interp: " + Ref.cgame.cg.frameInterpolation, Align.LEFT, Type.HUD);
 
@@ -629,6 +641,20 @@ public class CGameRender {
 
         for (Block block : blocks) {
             block.Render();
+        }
+    }
+
+    void RenderClientEffects() {
+        if(highlightCube != null) {
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glLineWidth(1f);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            //GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_LINE);
+            highlightCube.chunk.renderSingleWireframe(highlightCube.x, highlightCube.y, highlightCube.z, CubeType.DIRT);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glEnable(GL11.GL_CULL_FACE);
+            //GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
+
         }
     }
 
