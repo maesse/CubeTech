@@ -5,6 +5,7 @@ import cubetech.misc.Ref;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.util.HashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.lwjgl.BufferUtils;
@@ -15,6 +16,7 @@ import org.lwjgl.opengl.ARBGeometryShader4;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -26,6 +28,7 @@ public class Shader {
     private int vertShader = -1; // Vertex shader
     private int fragShader = -1; // Fragment shader
     private int geomShader = -1; // Geometry shader, if any
+    private String shaderName = "NONE";
 
     // GLSL Shader variable positions
     private int uniform_texture = 0;
@@ -42,6 +45,8 @@ public class Shader {
     public Shader(String name) throws Exception {
         if(!Ref.glRef.isInitalized())
             throw new Exception("OpenGL is not initialized");
+
+        shaderName = name;
 
         // Create program
         shaderId = ARBShaderObjects.glCreateProgramObjectARB();
@@ -92,6 +97,45 @@ public class Shader {
         attr_coords2 = GL20.glGetAttribLocation(shaderId, "v_coords2");
         attr_color = GL20.glGetAttribLocation(shaderId, "v_color");
         GLRef.checkError();
+    }
+
+    HashMap<String, Integer> attribMap = new HashMap<String, Integer>();
+
+    public void setUniform(String name, float value) {
+        int index = getUniformIndex(name);
+        if(index <= 0)
+            return;
+
+        // We've got an index, yay
+        ARBShaderObjects.glUniform1fARB(index, value);
+        GLRef.checkError();
+    }
+
+    public void setUniform(String name, Vector3f value) {
+        int index = getUniformIndex(name);
+        if(index <= 0)
+            return;
+
+        // We've got an index, yay
+        ARBShaderObjects.glUniform3fARB(index, value.x, value.y, value.z);
+        GLRef.checkError();
+    }
+
+    private int getUniformIndex(String name) {
+        Integer index = attribMap.get(name);
+        if(index == null) {
+            // try to bind it
+            int pos = GL20.glGetUniformLocation(shaderId, name);
+            // Handle error
+            GLRef.checkError();
+            if(pos <= 0) {
+                Common.LogDebug("Warning: Shader.setAttribute(): Attribute '%s' doesn't exist in %s", name, shaderName);
+            }
+            // cache it
+            index = pos;
+            attribMap.put(name, index);
+        }
+        return index;
     }
 
     public void Bind() {
