@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import java.util.Stack;
 import org.lwjgl.opengl.ARBShaderObjects;
 import org.lwjgl.util.Color;
 import org.lwjgl.opengl.EXTFramebufferObject;
@@ -36,6 +37,7 @@ import org.lwjgl.opengl.ARBVertexArrayObject;
 import org.lwjgl.opengl.ARBVertexBufferObject;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.DisplayMode;
+import org.lwjgl.opengl.EXTTextureFilterAnisotropic;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL20.*;
 /**
@@ -56,6 +58,7 @@ public class GLRef {
     private CVar r_fullscreen;
     private CVar r_refreshrate; // A hint for selecting modes
     private CVar r_toggleRes;
+    public CVar r_fill;
     private Vector2f resolution;
 
     public Shader shader = null; // current shader
@@ -63,10 +66,11 @@ public class GLRef {
 
     private boolean shadersSupported = true;
     private boolean isMac = false;
-    private ContextCapabilities caps = null;
+    ContextCapabilities caps = null;
 
     private int maxVertices = 4096;
     private int maxIndices = 4096;
+    int maxAniso = 0;
     
     private boolean isApplet = false;
     private Applet applet = null;
@@ -197,14 +201,15 @@ public class GLRef {
         glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
         glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
         glDepthMask(true);
+        glLineWidth(2f);
         glDepthFunc(GL_LEQUAL);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glViewport(0, 0, currentMode.getWidth(), currentMode.getHeight());
         checkError();
 
-        glDisable(GL_CULL_FACE);
+//        glDisable(GL_CULL_FACE);
 
-        InitFBO();
+        //InitFBO();
 
 
         // Init systems waiting for opengl
@@ -221,11 +226,13 @@ public class GLRef {
 
     private int fboId = 0;
     private int fboColorId = 0;
-
+    private boolean fboInited = false;
     private void InitFBO() {
+        if(fboInited)
+            return;
         if(!fboSupported)
             return;
-
+        fboInited = true;
         IntBuffer buffer = ByteBuffer.allocateDirect(1*4).order(ByteOrder.nativeOrder()).asIntBuffer(); // allocate a 1 int byte buffer
         EXTFramebufferObject.glGenFramebuffersEXT( buffer ); // generate
         fboId = buffer.get();
@@ -280,6 +287,9 @@ public class GLRef {
     public void BindFBO() {
         if(!fboSupported)
             return;
+
+        if(!fboInited)
+            InitFBO();
         
         
         EXTFramebufferObject.glBindFramebufferEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, fboId);
@@ -290,18 +300,34 @@ public class GLRef {
         if(!fboSupported)
             return;
 
+        if(!fboInited)
+            InitFBO();
+
         
         EXTFramebufferObject.glBindFramebufferEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, 0);
         
     }
 
     public Shader getShader(String str) {
-        return shaders.get(str);
+        Shader shad = shaders.get(str);
+        if(shad == null) {
+            try {
+                // try to load
+                shad = new Shader("gfx/shaders/" + str);
+                shaders.put(str, shad);
+            } catch (Exception ex) {
+                Common.Log("Can't load shader %s: %s", str, Common.getExceptionString(ex));
+            }
+        }
+        return shad;
     }
 
     public void BlitFBO() {
         if(!fboSupported)
             return;
+
+        if(!fboInited)
+            InitFBO();
 
         if(Ref.cgame == null || Ref.cgame.cgr.sunPositionOnScreen == null)
             return;
@@ -389,6 +415,7 @@ public class GLRef {
         r_fullscreen = Ref.cvars.Get("r_fullscreen", "0", EnumSet.of(CVarFlags.ARCHIVE));
         r_refreshrate = Ref.cvars.Get("r_refreshrate", "60", EnumSet.of(CVarFlags.ARCHIVE));
         r_toggleRes = Ref.cvars.Get("r_toggleRes", "0", EnumSet.of(CVarFlags.NONE));
+        r_fill = Ref.cvars.Get("r_fill", "1", EnumSet.of(CVarFlags.ARCHIVE));
         
         Ref.commands.AddCommand("listmodes", Cmd_listmodes);
         
@@ -441,6 +468,10 @@ public class GLRef {
         if(r_fullscreen.modified) {
             SetFullscreen(r_fullscreen.iValue == 1);
             r_fullscreen.modified = false;
+        }
+
+        if(r_fill.modified) {
+            r_fill.modified = false;
         }
 
         // Check if screen has lost focus
@@ -660,20 +691,37 @@ public class GLRef {
             throw new RuntimeException("OpenGL error: " + error);
     }
 
+    Stack<Shader> shaderStack = new Stack<Shader>();
+
+    public void PushShader(Shader shad) {
+        shaderStack.push(shader);
+        setShader(shad);
+    }
+
+    public void PopShader() {
+        Shader shad = shaderStack.pop();
+        setShader(shad);
+    }
+
     public void setShader(String str) {
         Shader s = shaders.get(str);
-        shader = s;
-        s.Bind();
+        setShader(s);
+    }
+
+    public void setShader(Shader shad) {
+        shader = shad;
+        shad.Bind();
     }
 
     private void loadShaders() {
         try {
-            shaders.put("sprite", new Shader("gfx/sprite"));
-            shaders.put("imgspace", new Shader("gfx/imgspace"));
-            shaders.put("scatter", new Shader("gfx/scatter"));
-            shaders.put("blackshader", new Shader("gfx/blackshader"));
-
+            shaders.put("sprite", new Shader("gfx/shaders/sprite"));
+            shaders.put("imgspace", new Shader("gfx/shaders/imgspace"));
+            shaders.put("scatter", new Shader("gfx/shaders/scatter"));
+            shaders.put("blackshader", new Shader("gfx/shaders/blackshader"));
+            shaders.put("GroundFromAtmosphere", new Shader("gfx/shaders/GroundFromAtmosphere"));
             setShader("sprite");
+            
         } catch (Exception ex) {
             Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
             Ref.common.Error(ErrorCode.FATAL, "Failed to load graphics shaders\n" + Common.getExceptionString(ex));
@@ -699,6 +747,11 @@ public class GLRef {
             if(!caps.GL_EXT_draw_range_elements) {
                 okay = false;
                 Common.Log("EXT_draw_range_elements not supported by your graphics card");
+            }
+
+            if(caps.GL_EXT_texture_filter_anisotropic) {
+                // Derp.
+                maxAniso = (int) glGetFloat(EXTTextureFilterAnisotropic.GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT);
             }
 
             if(!caps.GL_EXT_framebuffer_object) {
