@@ -1,4 +1,6 @@
 package cubetech.gfx;
+import cubetech.misc.Ref;
+import org.lwjgl.opengl.EXTTextureFilterAnisotropic;
 import static org.lwjgl.opengl.GL11.*;
 /**
  *
@@ -69,5 +71,13 @@ public class CubeTexture {
     // should only be used by the ressource subsystem
     public void SetID(int id) {
         TextureID = id;
+    }
+
+    public void setAnisotropic(int i) {
+        if(!Ref.glRef.caps.GL_EXT_texture_filter_anisotropic)
+            return;
+        Bind();
+        i = i>Ref.glRef.maxAniso?Ref.glRef.maxAniso:i;
+        glTexParameteri(Target, EXTTextureFilterAnisotropic.GL_TEXTURE_MAX_ANISOTROPY_EXT, i);
     }
 }
