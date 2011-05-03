@@ -40,7 +40,9 @@ public class VBO {
         {
             Ref.common.Error(ErrorCode.FATAL, "VBO.map(): Buffer is already mapped.");
         }
-        return mappedBuffer = Ref.glRef.mapVBO(target, vboId, sizeInBytes);
+        mappedBuffer = Ref.glRef.mapVBO(target, vboId, sizeInBytes);
+        mappedBuffer.limit(mappedBuffer.capacity());
+        return mappedBuffer;
     }
 
     public void unmap() {

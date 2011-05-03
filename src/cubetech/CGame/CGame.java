@@ -202,16 +202,20 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             }
         }
 
-        if(Ref.cm.cubemap != null && Ref.Input.playerInput.Mouse1 && Ref.Input.playerInput.Mouse1Diff) {
-            Vector3f dir = new Vector3f(cg.refdef.ViewAxis[0]);
-            Helper.Normalize(dir);
-            dir.scale(-1f);
-            Ref.cm.cubemap.TraceRay(cg.refdef.Origin, dir, 64);
-            rayTime = cg.time + 8000;
-            rayStart.set(cg.refdef.Origin);
-            rayEnd.set(dir);
-            rayEnd.scale(1000);
-            Vector3f.add(rayEnd, rayStart, rayEnd);
+        if(Ref.cm.cubemap != null && Ref.Input.playerInput.Mouse1 && Ref.Input.playerInput.Mouse1Diff
+                && cgr.highlightCube != null) {
+            if(cgr.highlightCube.highlightSide != 0) {
+                Ref.cm.cubemap.putBlock(cgr.highlightCube, cgr.highlightCube.highlightSide);
+            }
+//            Vector3f dir = new Vectoraf(cg.refdef.ViewAxis[0]);
+//            Helper.Normalize(dir);
+//            dir.scale(-1f);
+//            Ref.cm.cubemap.TraceRay(cg.refdef.Origin, dir, 64);
+//            rayTime = cg.time + 8000;
+//            rayStart.set(cg.refdef.Origin);
+//            rayEnd.set(dir);
+//            rayEnd.scale(1000);
+//            Vector3f.add(rayEnd, rayStart, rayEnd);
         }
 
         Ref.soundMan.Respatialize(cg.refdef.Origin, cg.predictedPlayerState.velocity);

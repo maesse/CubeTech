@@ -55,15 +55,11 @@ public class CubeChunk {
     int[] traceCache = null;
     int traceCount = 0;
 
-    int px, py, pz; // Position/Origin. Grows in the positive direction.
+    int[] p = new int[3]; // Position/Origin. Grows in the positive direction.
+    //int px, py, pz;
     public CubeChunk(CubeMap map, int x, int y, int z) {
-        px = x;
-        py = y;
-        pz = z;
+        p = new int[] {x,y,z};
         this.map = map;
-
-        
-
         absmin[0] = x * SIZE * BLOCK_SIZE;
         absmin[1] = y * SIZE * BLOCK_SIZE;
         absmin[2] = z * SIZE * BLOCK_SIZE;
@@ -244,99 +240,7 @@ public class CubeChunk {
 
     }
 
-//
-//    // Thanks goes out to http://www.xnawiki.com/index.php?title=Voxel_traversal
-//    public CubeCollision TraceRay(Vector3f start, Vector3f dir, int maxDepth) {
-//        traceTime = 5000;
-//        // NOTES:
-//        // * This code assumes that the ray's position and direction are in 'cell coordinates', which means
-//        //   that one unit equals one cell in all directions.
-//        // * When the ray doesn't start within the voxel grid, calculate the first position at which the
-//        //   ray could enter the grid. If it never enters the grid, there is nothing more to do here.
-//        // * Also, it is important to test when the ray exits the voxel grid when the grid isn't infinite.
-//        // * The Point3D structure is a simple structure having three integer fields (X, Y and Z).
-//
-//        // The cell in which the ray starts.
-//        float dx = (start.x / BLOCK_SIZE);
-//        float dy = (start.y / BLOCK_SIZE);
-//        float dz = (start.z / BLOCK_SIZE);
-//        int x = (int)Math.floor(start.x / BLOCK_SIZE);
-//        int y = (int)Math.floor(start.y / BLOCK_SIZE);
-//        int z = (int)Math.floor(start.z / BLOCK_SIZE);
-//
-//        // Determine which way we go.
-//        float stepX = Math.signum(dir.x);
-//        float stepY = Math.signum(dir.y);
-//        float stepZ = Math.signum(dir.z);
-//
-//        // Calculate cell boundaries. When the step (i.e. direction sign) is positive,
-//        // the next boundary is AFTER our current position, meaning that we have to add 1.
-//        // Otherwise, it is BEFORE our current position, in which case we add nothing.
-//        int cx = x + (stepX > 0 ? 1 : 0);
-//        int cy = y + (stepY > 0 ? 1 : 0);
-//        int cz = z + (stepZ > 0 ? 1 : 0);
-//
-//        // NOTE: For the following calculations, the result will be Single.PositiveInfinity
-//        // when ray.Direction.X, Y or Z equals zero, which is OK. However, when the left-hand
-//        // value of the division also equals zero, the result is Single.NaN, which is not OK.
-//
-//        // Determine how far we can travel along the ray before we hit a voxel boundary.
-//        Vector3f tMax = new Vector3f(
-//                (cx - dx) / dir.x,
-//                (cy - dy) / dir.y,
-//                (cz - dz) / dir.z);
-//        if(Float.isNaN(tMax.x)) tMax.x = Float.POSITIVE_INFINITY;
-//        if(Float.isNaN(tMax.y)) tMax.y = Float.POSITIVE_INFINITY;
-//        if(Float.isNaN(tMax.z)) tMax.z = Float.POSITIVE_INFINITY;
-//
-//        // Determine how far we must travel along the ray before we have crossed a gridcell.
-//        Vector3f delta = new Vector3f(
-//                stepX / dir.x,
-//                stepY / dir.y,
-//                stepZ / dir.z);
-//        if(Float.isNaN(delta.x)) delta.x = Float.POSITIVE_INFINITY;
-//        if(Float.isNaN(delta.y)) delta.y = Float.POSITIVE_INFINITY;
-//        if(Float.isNaN(delta.z)) delta.z = Float.POSITIVE_INFINITY;
-//        // For each step, determine which distance to the next voxel boundary is lowest (i.e.
-//        // which voxel boundary is nearest) and walk that way.
-//        traceCount = 0;
-//        traceCache = new int[maxDepth];
-//        for (int i= 0; i < maxDepth; i++) {
-//            // Check bounds
-//            if((x < 0 && stepX < 0) || (y < 0 && stepY < 0) || (z < 0 && stepZ < 0)
-//                    || (x > SIZE-1 && stepX > 0) || (y > SIZE-1 && stepY > 0) || (z > SIZE-1 && stepZ > 0))
-//                return null; // leaving the chunk
-//
-//            if(x < 0 || y < 0 || z < 0 || x > SIZE-1 || y > SIZE-1 || z > SIZE-1)
-//                continue; // out of bounds, but might be ok next step...
-//
-//            // Try this one:
-//            int cubeIndex = getIndex(x, y, z);
-//            traceCache[i] = cubeIndex;
-//            traceCount++;
-//            if(blockType[cubeIndex] != 0) {
-//                // Collision
-//                return new CubeCollision(this, x, y, z);
-//            }
-//
-//            // Do the next step.
-//            if(tMax.x < tMax.y && tMax.x < tMax.z) {
-//                // tMax.X is the lowest, an YZ cell boundary plane is nearest.
-//                x += stepX;
-//                tMax.x += delta.x;
-//            } else if(tMax.y < tMax.z) {
-//                // tMax.Y is the lowest, an XZ cell boundary plane is nearest.
-//                y += stepY;
-//                tMax.y += delta.y;
-//            } else {
-//                // tMax.Z is the lowest, an XY cell boundary plane is nearest.
-//                z += stepZ;
-//                tMax.z += delta.z;
-//            }
-//        }
-//
-//        return null; // no collision
-//    }
+
 
     public void setCubeType(int x, int y, int z, byte type) {
         setCubeType(getIndex(x, y, z), type);
@@ -354,13 +258,7 @@ public class CubeChunk {
         visBlock[index] = type != 0;
     }
 
-    private int pointToCubeIndex(Vector3f point) {
-        // TODO: Check point should be < SIZE * BLOCK_SIZE
-        int x = (int)Math.floor(point.x / BLOCK_SIZE);
-        int y = (int)Math.floor(point.y / BLOCK_SIZE);
-        int z = (int)Math.floor(point.z / BLOCK_SIZE);
-        return getIndex(x, y, z);
-    }
+    
 
     ChunkSpatialPart getCubesInVolume(Vector3f start, Vector3f end) {
         // start
@@ -485,11 +383,12 @@ public class CubeChunk {
             vbo = new VBO(PLANE_SIZE * SIZE*SIZE*SIZE*6, BufferTarget.Vertex);
 
         ByteBuffer buffer = vbo.map();
+        
 
         try {
             fillBuffer(buffer);
         } catch(BufferOverflowException ex) {
-            Ref.common.Error(ErrorCode.FATAL,"CubeChunk.fillBuffer: VBO overflow");
+            Ref.common.Error(ErrorCode.FATAL,"CubeChunk.fillBuffer: VBO overflow" + Common.getExceptionString(ex));
 
         }
 
@@ -509,9 +408,9 @@ public class CubeChunk {
 
     private void fillBuffer(ByteBuffer buffer) {
         int CHUNK_SIDE = SIZE * BLOCK_SIZE;
-        int ppx = px * CHUNK_SIDE;
-        int ppy = py * CHUNK_SIDE;
-        int ppz = pz * CHUNK_SIDE;
+        int ppx = p[0] * CHUNK_SIDE;
+        int ppy = p[1] * CHUNK_SIDE;
+        int ppz = p[2] * CHUNK_SIDE;
 
         Color white = (Color) Color.WHITE;
 
@@ -739,9 +638,9 @@ public class CubeChunk {
         
         // 
         int CHUNK_SIDE = SIZE * BLOCK_SIZE;
-        int ppx = px * CHUNK_SIDE;
-        int ppy = py * CHUNK_SIDE;
-        int ppz = pz * CHUNK_SIDE;
+        int ppx = p[0] * CHUNK_SIDE;
+        int ppy = p[1] * CHUNK_SIDE;
+        int ppz = p[2] * CHUNK_SIDE;
 
         // Get absolute coords
         int lx = ppx+ x * BLOCK_SIZE;
@@ -845,9 +744,9 @@ public class CubeChunk {
 
         //
         int CHUNK_SIDE = SIZE * BLOCK_SIZE;
-        int ppx = px * CHUNK_SIDE;
-        int ppy = py * CHUNK_SIDE;
-        int ppz = pz * CHUNK_SIDE;
+        int ppx = p[0] * CHUNK_SIDE;
+        int ppy = p[1] * CHUNK_SIDE;
+        int ppz = p[2] * CHUNK_SIDE;
 
         // Get absolute coords
         int lx = ppx+ x * BLOCK_SIZE;
@@ -960,9 +859,9 @@ public class CubeChunk {
         GL11.glBegin(GL11.GL_QUADS);
 
         int CHUNK_SIDE = SIZE * BLOCK_SIZE;
-        int ppx = px * CHUNK_SIDE;
-        int ppy = py * CHUNK_SIDE;
-        int ppz = pz * CHUNK_SIDE;
+        int ppx = p[0] * CHUNK_SIDE;
+        int ppy = p[1] * CHUNK_SIDE;
+        int ppz = p[2] * CHUNK_SIDE;
 
         col(false);
         for (int z= 0; z < SIZE; z++) {

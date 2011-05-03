@@ -1,6 +1,7 @@
 package cubetech.collision;
 
 import cubetech.common.Common;
+import cubetech.gfx.CubeType;
 import cubetech.gfx.TerrainTextureCache;
 import cubetech.misc.Ref;
 import java.util.HashMap;
@@ -163,7 +164,7 @@ public class CubeMap {
 
                 if(chunk.getCubeType(cubeIndex) != 0) {
                     // Collision
-                    return new CubeCollision(chunk, cubeX, cubeY, cubeZ, lastAxis);
+                    return new CubeCollision(chunk, cubeX, cubeY, cubeZ, lastAxis*-1);
                 }
             }
 
@@ -275,5 +276,41 @@ public class CubeMap {
             }
         }
         return query;
+    }
+
+    /**
+     *Take a SingleCube, and put a block on the highlight side of it
+     * @param cube singlecube (chunk + position) used as an origin
+     * @param side which axis to grow on and which direction (positive x = 1, negative z = -3)
+     */
+    public void putBlock(SingleCube cube, int side) {
+        // FIgure out coords for new cube
+        int[] p = new int[] {cube.x, cube.y, cube.z};
+        int sign = (int)Math.signum(side);
+        int index = (int)Math.abs(side);
+        if(index <= 0 || index > 3)
+            throw new IllegalArgumentException("side needs to be betweeen -3 and 3 excl. 0");
+
+        // move point in the given direction
+        p[index-1] += sign;
+
+        CubeChunk chunk = cube.chunk;
+        if(p[index-1] < 0 || p[index-1] >= CubeChunk.SIZE) {
+            // Moving into another chunk.
+            int[] chunkPos = new int[3];
+            System.arraycopy(chunk.p, 0, chunkPos, 0, 3);
+            chunkPos[index-1] += sign; // correct the chunk index
+            // retrieve the chunk
+            Long newChunk = positionToLookup(chunkPos[0], chunkPos[1], chunkPos[2]);
+            if(!chunks.containsKey(newChunk)) {
+                // Going to need to create this chunk
+                generateChunk(chunkPos[0], chunkPos[1], chunkPos[2]);
+            }
+
+            chunk = chunks.get(newChunk);
+            p[index-1] = p[index-1] & (CubeChunk.SIZE-1); // correct the cube inde
+        }
+
+        chunk.setCubeType(p[0], p[1], p[2], CubeType.GRASS);
     }
 }

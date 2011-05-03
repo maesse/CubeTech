@@ -9,6 +9,8 @@ public class SingleCube {
     public CubeChunk chunk;
     public int x, y, z;
 
+    public int highlightSide = 0;
+
     public SingleCube(CubeChunk chunk, int x, int y, int z) {
         this.chunk = chunk;
         this.x = x;
@@ -21,5 +23,6 @@ public class SingleCube {
         x = col.x;
         y = col.y;
         z = col.z;
+        highlightSide = col.hitAxis;
     }
 }
