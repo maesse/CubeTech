@@ -1,15 +1,14 @@
 
-custom
 logs/
 *.class
 *.cfg
 nbproject/private/
 build/
-dist
+dist/
 *.log
-*~
 *.lock
 *.DS_Store
 *.swp
 *.out
 Thumbs.db
+custom
