@@ -1,9 +1,10 @@
 
+custom
 logs/
 *.class
 *.cfg
 nbproject/private/
-build
+build/
 dist
 *.log
 *~
