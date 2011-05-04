@@ -37,18 +37,18 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_smoothclients = Ref.cvars.Get("cg_smoothclients", "0", EnumSet.of(CVarFlags.TEMP));
     CVar cg_errorDecay = Ref.cvars.Get("cg_errorDecay", "100", EnumSet.of(CVarFlags.TEMP));
     CVar cg_viewsize = Ref.cvars.Get("cg_viewsize", "100", EnumSet.of(CVarFlags.TEMP));
-    CVar cg_fov = Ref.cvars.Get("cg_fov", "350", EnumSet.of(CVarFlags.ARCHIVE));
+    CVar cg_fov = Ref.cvars.Get("cg_fov", "90", EnumSet.of(CVarFlags.ARCHIVE));
     CVar cg_chattime = Ref.cvars.Get("cg_chattime", "5000", EnumSet.of(CVarFlags.ARCHIVE)); // show text for this long
     CVar cg_chatfadetime = Ref.cvars.Get("cg_chatfadetime", "500", EnumSet.of(CVarFlags.ARCHIVE)); // + this time for fading out
     CVar cg_drawSolid = Ref.cvars.Get("cg_drawSolid", "0", EnumSet.of(CVarFlags.NONE));
     CVar cg_editmode = Ref.cvars.Get("cg_editmode", "0", EnumSet.of(CVarFlags.ROM));
-    CVar cg_depthnear = Ref.cvars.Get("cg_depthnear", "1", EnumSet.of(CVarFlags.ROM));
-    CVar cg_depthfar = Ref.cvars.Get("cg_depthfar", "10000", EnumSet.of(CVarFlags.ROM));
+    CVar cg_depthnear = Ref.cvars.Get("cg_depthnear", "1", EnumSet.of(CVarFlags.CHEAT));
+    CVar cg_depthfar = Ref.cvars.Get("cg_depthfar", "3000", EnumSet.of(CVarFlags.CHEAT));
     CVar cg_viewmode = Ref.cvars.Get("cg_viewmode", "1", EnumSet.of(CVarFlags.NONE));
     CVar cg_drawentities = Ref.cvars.Get("cg_drawentities", "0", EnumSet.of(CVarFlags.ROM));
     CVar cg_drawbin = Ref.cvars.Get("cg_drawbin", "0", EnumSet.of(CVarFlags.NONE));
 
-    CVar cg_viewheight = Ref.cvars.Get("cg_viewheight", "10", EnumSet.of(CVarFlags.ARCHIVE));
+    CVar cg_viewheight = Ref.cvars.Get("cg_viewheight", "15", EnumSet.of(CVarFlags.ARCHIVE));
 
     // zoom to this fov
     CVar camera_maxfov = Ref.cvars.Get("camera_maxfov", "1500", EnumSet.of(CVarFlags.ARCHIVE));
@@ -251,8 +251,10 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                 //Shader shad = Ref.glRef.getShader("GroundFromAtmosphere");
                 //Ref.glRef.PushShader(shad);
                 //SkyDome.updateShader(shad, true);
-                
-                Ref.cm.cubemap.Render();
+//                if(cg.refdef.planes[0] != null) {
+//                    cg.refdef.planes[0].DebugRender(cg.refdef.Origin);
+//                }
+                Ref.cm.cubemap.Render(cg.refdef);
                 //Ref.glRef.PopShader();
             }
             cgr.RenderClientEffects();
@@ -262,7 +264,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             
         }
         // UI
-//        cgr.Draw2D();
+        cgr.Draw2D();
     }
 
     float getPullAccel() {
