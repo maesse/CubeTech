@@ -54,7 +54,7 @@ public class CGameRender {
     public Color sunColor = (Color) Color.WHITE;
     // Cloud effect
     private Cloud[] clouds = new Cloud[16];
-    SingleCube highlightCube;
+    SingleCube lookingAtCube;
 
     public CGameRender(CGame game) {
         this.game = game;
@@ -124,7 +124,7 @@ public class CGameRender {
         cent.Effects();
         switch(cent.currentState.eType) {
             case EntityType.PLAYER:
-                Player(cent);
+                //Player(cent);
                 break;
             case EntityType.ITEM:
                 Item(cent);
@@ -645,12 +645,13 @@ public class CGameRender {
     }
 
     void RenderClientEffects() {
-        if(highlightCube != null) {
+        if(lookingAtCube != null) {
             GL11.glDisable(GL11.GL_DEPTH_TEST);
             GL11.glLineWidth(1f);
             GL11.glDisable(GL11.GL_CULL_FACE);
             //GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_LINE);
-            highlightCube.chunk.renderSingleWireframe(highlightCube.x, highlightCube.y, highlightCube.z, CubeType.DIRT);
+            Ref.textMan.AddText(new Vector2f(10, 200), ""+lookingAtCube.highlightSide, Align.LEFT, Type.HUD);
+            lookingAtCube.chunk.renderSingleWireframe(lookingAtCube.x, lookingAtCube.y, lookingAtCube.z, CubeType.DIRT);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
             GL11.glEnable(GL11.GL_CULL_FACE);
             //GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
