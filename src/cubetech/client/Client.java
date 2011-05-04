@@ -55,7 +55,6 @@ public class Client {
     CVar cl_timenudge;
     CVar cl_debugui;
     CVar cl_showfps;
-    CVar r_sky;
     public CVar cl_netquality; // 0, less lag more jitter - ~50-100, more lag, less time jitter
     public CVar cl_nodelta;
     public CVar cl_cmdbackup;
@@ -140,7 +139,6 @@ public class Client {
         cl_debugui = Ref.cvars.Get("cl_debugui", "0", EnumSet.of(CVarFlags.ARCHIVE));
         cl_debugui.modified = false;
         cl_showfps  = Ref.cvars.Get("cl_showfps", "0", EnumSet.of(CVarFlags.ARCHIVE));
-        r_sky  = Ref.cvars.Get("r_sky", "0", EnumSet.of(CVarFlags.ARCHIVE));
         cl_netquality = Ref.cvars.Get("cl_netquality", "50", EnumSet.of(CVarFlags.ARCHIVE)); // allow 50ms cgame delta
 
         Ref.commands.AddCommand("connect", new cmd_Connect());
@@ -1118,40 +1116,6 @@ public class Client {
 //        return;
 //        }
         // Render normal sprites
-        if(r_sky.isTrue()) {
-            Ref.glRef.BindFBO();
-
-            Vector4f skyColor = new Vector4f(0, 0.01f, 0.03f, 1);
-            if(RenderingCGame()) {
-                Color col = Ref.cgame.cgr.sunColor;
-                skyColor.set(col.getRedByte(), col.getGreenByte(), col.getBlueByte(), col.getAlphaByte());
-
-                skyColor.scale(2f/255f);
-                skyColor.x += 1;
-                skyColor.y += 1;
-                float skyFromSunFrac = 0.01f;
-
-                skyColor.scale(skyFromSunFrac);
-                skyColor.w = 1f;
-            }
-            GL11.glClearColor(skyColor.x, skyColor.y, skyColor.z, skyColor.w);
-            GL11.glDisable(GL11.GL_TEXTURE_2D);
-            GL11.glDisable(GL11.GL_DEPTH_TEST);
-            GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
-            if(RenderingCGame())
-                Ref.cgame.cgr.DrawSun();
-            Ref.glRef.setShader("blackshader");
-            GL11.glClearColor(0, 0.0f, 0f, 0);
-            Ref.SpriteMan.DrawNormal();
-            GL11.glEnable(GL11.GL_TEXTURE_2D);
-            GL11.glEnable(GL11.GL_DEPTH_TEST);
-            Ref.glRef.UnbindFBO();
-            Ref.glRef.setShader("sprite");
-            if(RenderingCGame())
-                Ref.cgame.cgr.RenderBackground();
-        } else if(RenderingCGame()) {
-            Ref.cgame.cgr.RenderBackground();
-        }
         Ref.SpriteMan.DrawNormal();
 
         
@@ -1163,10 +1127,6 @@ public class Client {
         //GL11.glOrtho(0, 1,1, 0, 1,-1000);
         GL11.glOrtho(0, (int)Ref.glRef.GetResolution().x, 0, (int)Ref.glRef.GetResolution().y, 1,-1000);
 
-        if(r_sky.isTrue()) {
-            GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE);
-            Ref.glRef.BlitFBO();
-        }
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glLoadIdentity();
