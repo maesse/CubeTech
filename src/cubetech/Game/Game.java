@@ -42,7 +42,7 @@ public class Game {
     CVar sv_stopspeed;
     CVar sv_stepheight;
     CVar sv_movemode;
-    CVar g_killheight;
+    CVar g_killheight;          
 
     CVar sv_pull1;
     CVar sv_pull2;
@@ -67,7 +67,7 @@ public class Game {
         g_restarted = Ref.cvars.Get("g_restarted", "0", EnumSet.of(CVarFlags.ROM));
         g_maxclients = Ref.cvars.Get("g_maxclients", "32", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.LATCH, CVarFlags.USER_INFO));
         g_editmode = Ref.cvars.Get("g_editmode", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
-        g_killheight = Ref.cvars.Get("g_killheight", "-1000", EnumSet.of(CVarFlags.NONE, CVarFlags.ARCHIVE));
+        g_killheight = Ref.cvars.Get("g_killheight", "-3000", EnumSet.of(CVarFlags.NONE, CVarFlags.ARCHIVE));
 
         sv_pull1 = Ref.cvars.Get("sv_pull1", "60", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         sv_pull2 = Ref.cvars.Get("sv_pull2", "120", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
