@@ -315,29 +315,29 @@ public class TextManager {
             }
 
             // Draw
-            Vector2f texOffset = new Vector2f(letters[letter].Offset.x, letters[letter].Offset.y);
-            texOffset.x /= fontTex.Width;
-            texOffset.y = fontTex.Height - texOffset.y - charsize.y;
+            ctexOffset.set(letters[letter].Offset.x, letters[letter].Offset.y);
+            ctexOffset.x /= fontTex.Width;
+            ctexOffset.y = fontTex.Height - ctexOffset.y - charsize.y;
 //            texOffset.y -= charsize.y*4;
-            texOffset.y /= fontTex.Height;
-            Vector2f size = new Vector2f(charsize.x, charsize.y);
+            ctexOffset.y /= fontTex.Height;
+            csize.set(charsize.x, charsize.y);
             if(charsize.x - charSizes[letter].x - 4 > 0)
-                size.x -= 2;
-            Vector2f texSize = new Vector2f(size.x, size.y);
-            size.x /= width;
-            size.y /= height;
-            texSize.x /= fontTex.Width;
-            texSize.y /= fontTex.Height;
+                csize.x -= 2;
+            ctexSize.set(csize.x, csize.y);
+            csize.x /= width;
+            csize.y /= height;
+            ctexSize.x /= fontTex.Width;
+            ctexSize.y /= fontTex.Height;
             float finalY = Ref.glRef.GetResolution().y - (charsize.y* scale) - (pos.y - (currH * charsize.y * scale) / height);
             if(type == Type.GAME)
                 finalY = (pos.y - (currH * charsize.y) / (float)height);
             int bonusY = -1;
             if(type == Type.HUD)
                 bonusY = 2;
-            Vector2f finalpos = new Vector2f((float)(xoffset + currW) / width , finalY+bonusY);
+            cfinalpos.set((float)(xoffset + currW) / width , finalY+bonusY);
 
             Sprite sprite = Ref.SpriteMan.GetSprite(type);
-            sprite.Set(finalpos, size, fontTex, texOffset, texSize);
+            sprite.Set(cfinalpos, csize, fontTex, ctexOffset, ctexSize);
             sprite.SetColor(color);
             sprite.SetDepth(layer);
 
@@ -345,6 +345,10 @@ public class TextManager {
             currW += (int)charSizes[letter].x;
         }
     }
+    private Vector2f ctexOffset = new Vector2f();
+    private Vector2f cfinalpos = new Vector2f();
+    private Vector2f ctexSize = new Vector2f();
+    private Vector2f csize = new Vector2f();
 
     // Adds text, uses default color (white) and maxsize is screen bounds
     public Vector2f AddText(Vector2f pos, String text, Align align, Type type) {

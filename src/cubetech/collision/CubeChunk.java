@@ -260,6 +260,7 @@ public class CubeChunk {
 
     
 
+    ChunkSpatialPart lastPart = null;
     ChunkSpatialPart getCubesInVolume(Vector3f start, Vector3f end) {
         // start
         int sx = (int)Math.floor(start.x / BLOCK_SIZE);
@@ -277,9 +278,20 @@ public class CubeChunk {
         if(ey > SIZE) ey = SIZE;
         if(ez > SIZE) ez = SIZE;
         
-        ChunkSpatialPart part = new ChunkSpatialPart();
-        part.chunk = this;
-        part.indexes = new int[(ex - sx) * (ey - sy) * (ez - sz) * 3];
+        ChunkSpatialPart part = null;
+        int count = (ex - sx) * (ey - sy) * (ez - sz)*3;
+        if(lastPart != null) {
+            part = lastPart;
+            part.nIndex = 0;
+            if(part.indexes.length < count) {
+                part.indexes = new int[count];
+            }
+        } else {
+            part = new ChunkSpatialPart();
+            part.chunk = this;
+            part.indexes = new int[count];
+            lastPart = part;
+        }
 
         // Iterate though cubes
         for (int z= sz; z < ez; z++) {

@@ -18,11 +18,10 @@ public class CubeMap {
     IChunkGenerator chunkGen = null;
     public static final int MIN_Z = -10; // how many chunks to allow to grow downward
     public static final int MAX_Z = 10;
-    public static final int DEFAULT_GROW_DIST = 3;
+    public static final int DEFAULT_GROW_DIST = 8;
 
-    public CubeMap(long seed, int w, int h, int d) {
-        chunkGen = new ChunkGenerator();
-        chunkGen.setSeed(seed);
+    public CubeMap(IChunkGenerator gen, int w, int h, int d) {
+        chunkGen = gen;
         generateSimpleMap(w, h, d);
     }
 
@@ -231,6 +230,8 @@ public class CubeMap {
         return tx;
     }
 
+    private Vector3f tempStart = new Vector3f();
+    private Vector3f tempEnd = new Vector3f();
     ChunkAreaQuery getCubesInVolume(Vector3f mmin, Vector3f mmax) {
         // Figure out min/max chunk positions
         int axisSize = CubeChunk.SIZE * CubeChunk.BLOCK_SIZE;
@@ -242,8 +243,7 @@ public class CubeMap {
         int maxy = (int)Math.floor(mmax.y / axisSize)+1;
         int maxz = (int)Math.floor(mmax.z / axisSize)+1;
 
-        Vector3f start = new Vector3f();
-        Vector3f end = new Vector3f();
+        
         ChunkAreaQuery query = new ChunkAreaQuery((maxz - minz) * (maxx - minx) * (maxy - miny));
         for (int z= minz; z < maxz; z++) {
             for (int y= miny; y < maxy; y++) {
@@ -262,15 +262,15 @@ public class CubeMap {
                     int[] chunkMax = chunk.absmax;
 
                     // Cut start/end so they are withing the chunk bounds
-                    start.x = Math.max(chunkMin[0], mmin.x) - chunkMin[0];
-                    start.y = Math.max(chunkMin[1], mmin.y) - chunkMin[1];
-                    start.z = Math.max(chunkMin[2], mmin.z) - chunkMin[2];
+                    tempStart.x = Math.max(chunkMin[0], mmin.x) - chunkMin[0];
+                    tempStart.y = Math.max(chunkMin[1], mmin.y) - chunkMin[1];
+                    tempStart.z = Math.max(chunkMin[2], mmin.z) - chunkMin[2];
 
-                    end.x = Math.min(chunkMax[0], mmax.x) - chunkMin[0];
-                    end.y = Math.min(chunkMax[1], mmax.y) - chunkMin[1];
-                    end.z = Math.min(chunkMax[2], mmax.z) - chunkMin[2];
+                    tempEnd.x = Math.min(chunkMax[0], mmax.x) - chunkMin[0];
+                    tempEnd.y = Math.min(chunkMax[1], mmax.y) - chunkMin[1];
+                    tempEnd.z = Math.min(chunkMax[2], mmax.z) - chunkMin[2];
 
-                    ChunkSpatialPart part = chunk.getCubesInVolume(start, end);
+                    ChunkSpatialPart part = chunk.getCubesInVolume(tempStart, tempEnd);
                     query.addPart(part);
                 }
             }
@@ -278,39 +278,50 @@ public class CubeMap {
         return query;
     }
 
-    /**
-     *Take a SingleCube, and put a block on the highlight side of it
-     * @param cube singlecube (chunk + position) used as an origin
-     * @param side which axis to grow on and which direction (positive x = 1, negative z = -3)
-     */
-    public void putBlock(SingleCube cube, int side) {
-        // FIgure out coords for new cube
-        int[] p = new int[] {cube.x, cube.y, cube.z};
-        int sign = (int)Math.signum(side);
-        int index = (int)Math.abs(side);
-        if(index <= 0 || index > 3)
-            throw new IllegalArgumentException("side needs to be betweeen -3 and 3 excl. 0");
+//    /**
+//     *Take a SingleCube, and put a block on the highlight side of it
+//     * @param cube singlecube (chunk + position) used as an origin
+//     * @param side which axis to grow on and which direction (positive x = 1, negative z = -3)
+//     */
+//    public void putBlock(SingleCube cube, byte type) {
+//        // FIgure out coords for new cube
+//        int[] p = new int[] {cube.x, cube.y, cube.z};
+//        int sign = (int)Math.signum(cube.highlightSide);
+//        int index = (int)Math.abs(cube.highlightSide);
+//        if(index <= 0 || index > 3)
+//            throw new IllegalArgumentException("side needs to be betweeen -3 and 3 excl. 0");
+//
+//        // move point in the given direction
+//        p[index-1] += sign;
+//
+//        CubeChunk chunk = cube.chunk;
+//        if(p[index-1] < 0 || p[index-1] >= CubeChunk.SIZE) {
+//            // Moving into another chunk.
+//            int[] chunkPos = new int[3];
+//            System.arraycopy(chunk.p, 0, chunkPos, 0, 3);
+//            chunkPos[index-1] += sign; // correct the chunk index
+//            // retrieve the chunk
+//            Long newChunk = positionToLookup(chunkPos[0], chunkPos[1], chunkPos[2]);
+//            if(!chunks.containsKey(newChunk)) {
+//                // Going to need to create this chunk
+//                generateChunk(chunkPos[0], chunkPos[1], chunkPos[2]);
+//            }
+//
+//            chunk = chunks.get(newChunk);
+//            p[index-1] = p[index-1] & (CubeChunk.SIZE-1); // correct the cube inde
+//        }
+//
+//        chunk.setCubeType(p[0], p[1], p[2], type);
+//    }
 
-        // move point in the given direction
-        p[index-1] += sign;
-
-        CubeChunk chunk = cube.chunk;
-        if(p[index-1] < 0 || p[index-1] >= CubeChunk.SIZE) {
-            // Moving into another chunk.
-            int[] chunkPos = new int[3];
-            System.arraycopy(chunk.p, 0, chunkPos, 0, 3);
-            chunkPos[index-1] += sign; // correct the chunk index
-            // retrieve the chunk
-            Long newChunk = positionToLookup(chunkPos[0], chunkPos[1], chunkPos[2]);
-            if(!chunks.containsKey(newChunk)) {
-                // Going to need to create this chunk
-                generateChunk(chunkPos[0], chunkPos[1], chunkPos[2]);
-            }
-
-            chunk = chunks.get(newChunk);
-            p[index-1] = p[index-1] & (CubeChunk.SIZE-1); // correct the cube inde
+    CubeChunk getChunk(int x, int y, int z) {
+        Long index = positionToLookup(x, y, z);
+        
+        if(!chunks.containsKey(index)) {
+            // Going to need to create this chunk
+            generateChunk(x,y,z);
         }
 
-        chunk.setCubeType(p[0], p[1], p[2], CubeType.GRASS);
+        return chunks.get(index);
     }
 }

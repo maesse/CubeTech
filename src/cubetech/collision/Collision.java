@@ -136,6 +136,10 @@ public class Collision {
         return true; // collision
     }
 
+
+    Vector3f cmmin = new Vector3f(), cmmax = new Vector3f(), cextent = new Vector3f(), cdiff = new Vector3f()
+            , cstart = new Vector3f();
+    int[] cCubePosition = new int[3];
     /**
      * Does a AABB -> AABB trace on the loaded cubemap
      * @param start
@@ -149,38 +153,37 @@ public class Collision {
         CollisionResult res = GetNext();
         res.reset(start, delta, mins, maxs);
 
-        Vector3f centerStart = new Vector3f();
+
         
         // Create a bounding volume for the move
-        Vector3f mmin = Vector3f.add(start, mins, null);
-        Vector3f mmax = Vector3f.add(start, maxs, null);
-        if(delta.x < 0) mmin.x += delta.x; else mmax.x += delta.x;
-        if(delta.y < 0) mmin.y += delta.y; else mmax.y += delta.y;
-        if(delta.z < 0) mmin.z += delta.z; else mmax.z += delta.z;
+        Vector3f.add(start, mins, cmmin);
+        Vector3f.add(start, maxs, cmmax);
+        if(delta.x < 0) cmmin.x += delta.x; else cmmax.x += delta.x;
+        if(delta.y < 0) cmmin.y += delta.y; else cmmax.y += delta.y;
+        if(delta.z < 0) cmmin.z += delta.z; else cmmax.z += delta.z;
 
         delta.scale(-1f);
 
         // query the cube map
-        ChunkAreaQuery area = Ref.cm.cubemap.getCubesInVolume(mmin, mmax);
-        int[] cubePosition = new int[3];
+        ChunkAreaQuery area = Ref.cm.cubemap.getCubesInVolume(cmmin, cmmax);
+        //int[] cubePosition = new int[3];
 
-        Vector3f extent = new Vector3f();
-        Vector3f.sub(maxs, mins, extent).scale(0.5f);
+        Vector3f.sub(maxs, mins, cextent).scale(0.5f);
 
-        Vector3f diff = new Vector3f(mins);
-        diff.scale(-1f);
-        Vector3f.sub(diff, maxs, diff);
+        cdiff.set(mins);
+        cdiff.scale(-1f);
+        Vector3f.sub(cdiff, maxs, cdiff);
 
-        Vector3f.sub(start, diff, centerStart);
+        Vector3f.sub(start, cdiff, cstart);
 
         // iterate though results
-        while(area.getNext(cubePosition) != null) {
+        while(area.getNext(cCubePosition) != null) {
             // Test swept position
-            if(TestAABBAABB(cubePosition[0]-1, cubePosition[1]-1, cubePosition[2]-1,
-                            cubePosition[0] + CubeChunk.BLOCK_SIZE+1, cubePosition[1] + CubeChunk.BLOCK_SIZE+1, cubePosition[2] + CubeChunk.BLOCK_SIZE+1,
-                            mmin.x, mmin.y, mmin.z, mmax.x, mmax.y, mmax.z)) {
+            if(TestAABBAABB(cCubePosition[0]-1, cCubePosition[1]-1, cCubePosition[2]-1,
+                            cCubePosition[0] + CubeChunk.BLOCK_SIZE+1, cCubePosition[1] + CubeChunk.BLOCK_SIZE+1, cCubePosition[2] + CubeChunk.BLOCK_SIZE+1,
+                            cmmin.x, cmmin.y, cmmin.z, cmmax.x, cmmax.y, cmmax.z)) {
 
-                TestAABBCube(centerStart, delta, extent, cubePosition, CubeChunk.BLOCK_SIZE, res);
+                TestAABBCube(cstart, delta, cextent, cCubePosition, CubeChunk.BLOCK_SIZE, res);
                 if(res.frac == 0f) {
                     break;
                 }
