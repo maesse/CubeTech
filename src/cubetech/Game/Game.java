@@ -1,6 +1,7 @@
 package cubetech.Game;
 
 import cubetech.Block;
+import cubetech.collision.CubeChunk;
 import cubetech.common.CS;
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
@@ -61,7 +62,7 @@ public class Game {
     public HashMap<String, IEntity> spawns = new HashMap<String, IEntity>();
 
     public Game() {
-        sv_speed = Ref.cvars.Get("sv_speed", "200", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_speed = Ref.cvars.Get("sv_speed", "175", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         g_cheats = Ref.cvars.Get("g_cheats", "0", EnumSet.of(CVarFlags.NONE));
         g_gametype = Ref.cvars.Get("g_gametype", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.LATCH, CVarFlags.USER_INFO));
         g_restarted = Ref.cvars.Get("g_restarted", "0", EnumSet.of(CVarFlags.ROM));
@@ -69,22 +70,14 @@ public class Game {
         g_editmode = Ref.cvars.Get("g_editmode", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
         g_killheight = Ref.cvars.Get("g_killheight", "-3000", EnumSet.of(CVarFlags.NONE, CVarFlags.ARCHIVE));
 
-        sv_pull1 = Ref.cvars.Get("sv_pull1", "60", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_pull2 = Ref.cvars.Get("sv_pull2", "120", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_pull3 = Ref.cvars.Get("sv_pull3", "180", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_pull4 = Ref.cvars.Get("sv_pull4", "260", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_pull5 = Ref.cvars.Get("sv_pull5", "350", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_pull6 = Ref.cvars.Get("sv_pull6", "500", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_pullstep = Ref.cvars.Get("sv_pullstep", "0.65", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-
+        
         sv_movemode = Ref.cvars.Get("sv_movemode", "1", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
-        sv_gravity = Ref.cvars.Get("sv_gravity", "300", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_jumpmsec = Ref.cvars.Get("sv_jumpmsec", "250", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_jumpvel = Ref.cvars.Get("sv_jumpvel", "125", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_pullacceleration = Ref.cvars.Get("sv_pullacceleration", "80", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_acceleration = Ref.cvars.Get("sv_acceleration", "8", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_gravity = Ref.cvars.Get("sv_gravity", "550", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_jumpmsec = Ref.cvars.Get("sv_jumpmsec", "200", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_jumpvel = Ref.cvars.Get("sv_jumpvel", "200", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_acceleration = Ref.cvars.Get("sv_acceleration", "6", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         sv_friction = Ref.cvars.Get("sv_friction", "4", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_stopspeed = Ref.cvars.Get("sv_stopspeed", "15", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_stopspeed = Ref.cvars.Get("sv_stopspeed", "50", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         sv_stepheight = Ref.cvars.Get("sv_stepheight", "4", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
 //        sv_doublejump = Ref.cvars.Get("sv_doublejump", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
 
@@ -190,7 +183,7 @@ public class Game {
 //
 //        if(!callSpawn(hp))
 //            hp.Free();
-        spawnEntities.AddEntity(new SpawnEntity("info_player_spawn", new Vector3f(0,0,300)));
+        spawnEntities.AddEntity(new SpawnEntity("info_player_spawn", new Vector3f(0,0,CubeChunk.BLOCK_SIZE * CubeChunk.SIZE + 50)));
         spawnEntities.SpawnAll();
 
 //        Ref.cm.cm.ToSubModel(Ref.cm.cm.GetBlock(20));
