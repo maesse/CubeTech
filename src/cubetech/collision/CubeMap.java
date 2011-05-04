@@ -1,8 +1,10 @@
 package cubetech.collision;
 
+import cubetech.CGame.ViewParams;
 import cubetech.common.Common;
 import cubetech.gfx.CubeType;
 import cubetech.gfx.TerrainTextureCache;
+import cubetech.misc.Plane;
 import cubetech.misc.Ref;
 import java.util.HashMap;
 import java.util.Random;
@@ -16,9 +18,13 @@ import org.lwjgl.util.vector.Vector3f;
 public class CubeMap {
     HashMap<Long, CubeChunk> chunks = new HashMap<Long, CubeChunk>();
     IChunkGenerator chunkGen = null;
-    public static final int MIN_Z = -10; // how many chunks to allow to grow downward
+    public static final int MIN_Z = -2; // how many chunks to allow to grow downward
     public static final int MAX_Z = 10;
-    public static final int DEFAULT_GROW_DIST = 8;
+    public static final int DEFAULT_GROW_DIST = 4;
+
+    // render stats
+    public int nSides = 0; // sides rendered this frame
+    public int nChunks = 0;
 
     public CubeMap(IChunkGenerator gen, int w, int h, int d) {
         chunkGen = gen;
@@ -59,14 +65,51 @@ public class CubeMap {
         }
     }
 
-    public void Render() {
+    public void Render(ViewParams view) {
 //        GL11.glLineWidth(2f);
         if(!Ref.glRef.r_fill.isTrue()) {
             GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_LINE);
         }
-        for (CubeChunk cubeChunk : chunks.values()) {
-            cubeChunk.Render();
+        nSides = 0;
+        nChunks = 0;
+        
+        int cubeDistance = (int) (view.farDepth / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+        if(cubeDistance <= 0)
+            cubeDistance = 1;
+
+        int orgX =  (int)Math.floor(view.Origin.x / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+        int orgY =  (int)Math.floor (view.Origin.y / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+        int orgZ =  (int)Math.floor (view.Origin.z / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+
+        for (int z= -cubeDistance; z <= cubeDistance; z++) {
+            for (int y= -cubeDistance; y <= cubeDistance; y++) {
+                for (int x= -cubeDistance; x <= cubeDistance; x++) {
+                    Long lookup = positionToLookup(orgX + x, orgY + y, orgZ + z);
+
+                    CubeChunk chunk = chunks.get(lookup);
+                    if(chunk == null) {
+                        // todo: generate
+                        continue;
+                    }
+
+                    // do frustum culling
+                    if(view.planes[0] != null) {
+                        Plane p = view.planes[0];
+
+                        if(p.testPoint(chunk.fcenter[0], chunk.fcenter[1], chunk.fcenter[2]) < -CubeChunk.RADIUS) {
+                            continue;
+                        } else {
+                            //continue;
+                        }
+                    }
+
+                    chunk.Render();
+                    nSides += chunk.nSides;
+                    nChunks++;
+                }
+            }
         }
+
         if(!Ref.glRef.r_fill.isTrue()) {
             GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
         }
