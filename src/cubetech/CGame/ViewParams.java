@@ -1,6 +1,7 @@
 package cubetech.CGame;
 
 import cubetech.common.Helper;
+import cubetech.misc.Plane;
 import cubetech.misc.Ref;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -8,9 +9,11 @@ import java.nio.FloatBuffer;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.GLU;
 import org.lwjgl.util.vector.Matrix;
+import org.lwjgl.util.vector.Matrix3f;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
+import org.omg.PortableServer.POA;
 
 /**
  *
@@ -30,8 +33,12 @@ public class ViewParams {
 
     public float xmin, xmax, ymin, ymax;
     public float w, h;
+    public float farDepth;
+
+    public Plane[] planes = new Plane[6];
 
     private FloatBuffer viewbuffer = ByteBuffer.allocateDirect(16*4).order(ByteOrder.nativeOrder()).asFloatBuffer();
+    private FloatBuffer projbuffer = ByteBuffer.allocateDirect(16*4).order(ByteOrder.nativeOrder()).asFloatBuffer();
 
     public ViewParams() {
         for (int i= 0; i < 3; i++) {
@@ -90,7 +97,7 @@ public class ViewParams {
 //            far = Ref.cvars.Find("edit_farlayer").iValue;
 //        }
         if(Ref.cgame.cg_viewmode.iValue == 1)
-            setup3DProjection(90 * aspect, aspect, near, far);
+            setup3DProjection(Ref.cgame.cg_fov.fValue * aspect, aspect, near, far);
         else if(Ref.cgame.cg_editmode.iValue == 0) {
             float left = Ref.cvars.Find("camera_hplayerpos").fValue;
 
@@ -216,6 +223,27 @@ public class ViewParams {
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         
         GL11.glLoadMatrix(viewbuffer);
+
+        GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projbuffer);
+//        projbuffer.flip();
+        Matrix4f prov = (Matrix4f) new Matrix4f().load(projbuffer);
+        Matrix4f view = (Matrix4f) new Matrix4f().load(viewbuffer);
+        viewbuffer.position(0);
+        projbuffer.position(0);
+
+        Matrix4f mvp = Matrix4f.mul(view, prov, null);
+        
+        // create the near plane
+        Vector3f derps = new Vector3f(ViewAxis[0]);
+        derps.scale(-1f);
+        float d = Vector3f.dot(derps, Origin);
+
+        planes[0] = new Plane(derps.x, derps.y, derps.z, d).normalize();
+        //planes[0] = new Plane(mvp.m20 + mvp.m30, mvp.m21 + mvp.m31, mvp.m22 + mvp.m32, mvp.m23 + mvp.m33).normalize();
+        //planes[0] = new Plane(mvp.m02 + mvp.m03, mvp.m12 + mvp.m13, mvp.m32 + mvp.m33, mvp.m22 + mvp.m23).normalize();
+
+        // normalize the plane
+        
 //        float z = 1;
 //        if(Ref.cgame.cg_viewmode.iValue == 1) {
 //            // First person view
@@ -234,6 +262,8 @@ public class ViewParams {
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glLoadIdentity();
         GLU.gluPerspective(fov, 1f/aspect, znear, zfar);
+        farDepth = zfar;
+
         return;
 //        float xymax = znear * (float)Math.tan(fov * (Math.PI/360f));
 //        float ymin = -xymax;

@@ -9,6 +9,7 @@ import cubetech.Block;
 import cubetech.Game.Game;
 import cubetech.Game.Gentity;
 import cubetech.collision.BlockModel;
+import cubetech.collision.CubeChunk;
 import cubetech.collision.CubeMap;
 import cubetech.collision.SingleCube;
 import cubetech.common.Common;
@@ -29,7 +30,9 @@ import cubetech.input.Input;
 import cubetech.misc.Ref;
 import cubetech.spatial.Bin;
 import cubetech.spatial.SpatialQuery;
+import java.sql.NClob;
 import java.util.ArrayList;
+import java.util.Locale;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.util.Color;
@@ -243,8 +246,8 @@ public class CGameRender {
     // UI
     //
     void Draw2D() {
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(), Ref.glRef.GetResolution(), Ref.ResMan.LoadTexture("data/hags.png"), null, null);
+//        Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+//        spr.Set(new Vector2f(), Ref.glRef.GetResolution(), Ref.ResMan.LoadTexture("data/hags.png"), null, null);
 
         // Render mapeditor if in editmode
         if(game.cg_editmode.iValue == 1) {
@@ -277,6 +280,12 @@ public class CGameRender {
 //            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Pull accel: " + game.getPullAccel(), Align.LEFT, Type.HUD);
 //            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "v: " + game.cg.predictedPlayerState.delta_angles[0], Align.LEFT, Type.HUD);
             Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "V: " + game.cg.predictedPlayerState.viewangles, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*3), "Quads: " + Ref.cm.cubemap.nSides + " (VBO: "+ (Ref.cm.cubemap.nSides * CubeChunk.PLANE_SIZE)/1024 +" kb)", Align.LEFT, Type.HUD);
+            if(Ref.cm.cubemap.nChunks != 0)
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*4), 
+                    String.format(Locale.ENGLISH,"Chunks: %d (avg. quads/chunk: %d (%.1fkb))", Ref.cm.cubemap.nChunks, (Ref.cm.cubemap.nSides)/Ref.cm.cubemap.nChunks, (Ref.cm.cubemap.nSides* CubeChunk.PLANE_SIZE )/Ref.cm.cubemap.nChunks/1024f), Align.LEFT, Type.HUD);
+            if(Ref.cgame.cg.refdef.planes[0] != null)
+                Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*5), "near plane: " + game.cg.refdef.planes[0], Align.LEFT, Type.HUD);
 //            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*4), "Vv: " + Ref.Input.viewangles[0], Align.LEFT, Type.HUD);
 
             if(game.rayTime > game.cg.time) {
@@ -318,7 +327,7 @@ public class CGameRender {
                 Common.LogDebug("CGame.Draw2D: Can't find item " + i);
                 continue;
             }
-            spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
             Vector2f res = Ref.glRef.GetResolution();
             float radius = 32;
             spr.Set(res.x - radius * 2, res.y - ( res.y * 0.7f + i * radius * 2) , radius, item.icon);
