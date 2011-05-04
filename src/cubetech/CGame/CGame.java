@@ -11,6 +11,7 @@ import cubetech.common.*;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
 import cubetech.gfx.CubeTexture;
+import cubetech.gfx.CubeType;
 import cubetech.gfx.Shader;
 import cubetech.gfx.SkyDome;
 import cubetech.gfx.Sprite;
@@ -46,6 +47,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_viewmode = Ref.cvars.Get("cg_viewmode", "1", EnumSet.of(CVarFlags.NONE));
     CVar cg_drawentities = Ref.cvars.Get("cg_drawentities", "0", EnumSet.of(CVarFlags.ROM));
     CVar cg_drawbin = Ref.cvars.Get("cg_drawbin", "0", EnumSet.of(CVarFlags.NONE));
+
+    CVar cg_viewheight = Ref.cvars.Get("cg_viewheight", "10", EnumSet.of(CVarFlags.ARCHIVE));
 
     // zoom to this fov
     CVar camera_maxfov = Ref.cvars.Get("camera_maxfov", "1500", EnumSet.of(CVarFlags.ARCHIVE));
@@ -185,27 +188,29 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg.PredictPlayerState();
 
         CalcViewValues();
-        SkyDome.RenderDome(cg.refdef.Origin, 8000, false);
+        //SkyDome.RenderDome(cg.refdef.Origin, 8000, false);
 
         // Highlight block
         if(Ref.cm.cubemap != null) {
             Vector3f dir = new Vector3f(cg.refdef.ViewAxis[0]);
             Helper.Normalize(dir);
             dir.scale(-1f);
-            CubeCollision col = Ref.cm.cubemap.TraceRay(cg.refdef.Origin, dir, 4);
+            CubeCollision col = Ref.cm.cubemap.TraceRay(cg.refdef.Origin, dir, 6);
             if(col != null) {
                 SingleCube cube = new SingleCube(col);
-                cgr.highlightCube = cube;
+                cgr.lookingAtCube = cube;
             } else
             {
-                cgr.highlightCube = null;
+                cgr.lookingAtCube = null;
             }
         }
 
-        if(Ref.cm.cubemap != null && Ref.Input.playerInput.Mouse1 && Ref.Input.playerInput.Mouse1Diff
-                && cgr.highlightCube != null) {
-            if(cgr.highlightCube.highlightSide != 0) {
-                Ref.cm.cubemap.putBlock(cgr.highlightCube, cgr.highlightCube.highlightSide);
+        if(Ref.cm.cubemap != null && cgr.lookingAtCube != null && cgr.lookingAtCube.highlightSide != 0) {
+            if(Ref.Input.playerInput.Mouse1 && Ref.Input.playerInput.Mouse1Diff) {
+                cgr.lookingAtCube.getHightlightside().putBlock(CubeType.GRASS);
+                //Ref.cm.cubemap.putBlock(cgr.highlightCube, CubeType.GRASS);
+            } else if(Ref.Input.playerInput.Mouse2 && Ref.Input.playerInput.Mouse2Diff) {
+                cgr.lookingAtCube.removeBlock();
             }
 //            Vector3f dir = new Vectoraf(cg.refdef.ViewAxis[0]);
 //            Helper.Normalize(dir);
@@ -251,13 +256,13 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                 //Ref.glRef.PopShader();
             }
             cgr.RenderClientEffects();
-            cgr.RenderScene(cg.refdef);
+            //cgr.RenderScene(cg.refdef);
             AddPacketEntities();
             cgr.DrawEntities();
             
         }
         // UI
-        cgr.Draw2D();
+//        cgr.Draw2D();
     }
 
     float getPullAccel() {
@@ -290,6 +295,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg.refdef.CalcVRect();
 
         Helper.VectorCopy(cg.predictedPlayerState.origin, cg.refdef.Origin);
+        cg.refdef.Origin.z += cg_viewheight.fValue;
         Helper.VectorCopy(cg.predictedPlayerState.viewangles, cg.refdef.Angles);
 
         if(cg_errorDecay.fValue > 0f) {
