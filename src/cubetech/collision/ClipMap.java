@@ -40,7 +40,9 @@ public class ClipMap {
     }
 
     public void GenerateCubeMap(long seed) {
-        cubemap = new CubeMap(seed, 4, 4, 2);
+        IChunkGenerator gen = new PerlinChunkGenerator();
+        gen.setSeed(seed);
+        cubemap = new CubeMap(gen, 4, 4, 2);
     }
 
     public void ClearCubeMap() {
