@@ -15,4 +15,5 @@ void main()
     gl_Position = gl_ModelViewProjectionMatrix * vec4(v_position, 1.0);
     coords = v_coords;
     color = v_color;
+    gl_FogFragCoord = abs(gl_Position.z);
 }
