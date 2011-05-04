@@ -19,6 +19,7 @@ public class VBO {
     private int sizeInBytes;
     private BufferTarget target;
     private ByteBuffer mappedBuffer = null;
+    public float resizeMultiplier = 1f;
 
     public VBO(int sizeInBytes, BufferTarget target) {
         this.sizeInBytes = sizeInBytes;
@@ -36,11 +37,25 @@ public class VBO {
     }
 
     public ByteBuffer map() {
+        return map(sizeInBytes);
+    }
+
+    public ByteBuffer map(int bytes) {
         if(mappedBuffer != null)
         {
             Ref.common.Error(ErrorCode.FATAL, "VBO.map(): Buffer is already mapped.");
         }
-        mappedBuffer = Ref.glRef.mapVBO(target, vboId, sizeInBytes);
+
+        if(bytes > sizeInBytes) {
+            // create a new VBO
+            //Ref.glRef.destroyVBO(vboId);
+            sizeInBytes = (int) (bytes * resizeMultiplier);
+            if(sizeInBytes < bytes) // just to be sure..
+                sizeInBytes = bytes;
+            //vboId = Ref.glRef.createVBOid();
+            Ref.glRef.sizeVBO(target, vboId, sizeInBytes);
+        }
+        mappedBuffer = Ref.glRef.mapVBO(target, vboId, bytes);
         mappedBuffer.limit(mappedBuffer.capacity());
         return mappedBuffer;
     }

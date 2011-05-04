@@ -82,6 +82,8 @@ public class GLRef {
             = new HashMap<Integer, ByteBuffer>();
 
     public boolean fboSupported = false;
+
+    
     
 
     public enum BufferTarget {
@@ -200,6 +202,11 @@ public class GLRef {
         glCullFace(GL_BACK);
         glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
         glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+        intBuf16.position(0);
+        intBuf16.put(255).put(255).put(255).put(255);
+        intBuf16.flip();
+        glFog(GL_FOG_COLOR, intBuf16);
+        glClearColor(0.823f,0.7f,0.486f,1);
         glDepthMask(true);
         glLineWidth(2f);
         glDepthFunc(GL_LEQUAL);
@@ -835,6 +842,16 @@ public class GLRef {
         return intBuf.get(0);
     }
 
+    void destroyVBO(int vboId) {
+        // Remove cached index & vertex buffers
+        Integer bufferID = (vboId+1) << 1;
+        cachedBuffers.remove(bufferID++);
+        cachedBuffers.remove(bufferID);
+
+        ARBVertexBufferObject.glDeleteBuffersARB(vboId);
+        GLRef.checkError();
+    }
+
     private int BufferTargetToOpenGL(BufferTarget value) {
         int t = ARBVertexBufferObject.GL_ARRAY_BUFFER_ARB;
         if(value == BufferTarget.Index)
@@ -849,9 +866,14 @@ public class GLRef {
         int t = BufferTargetToOpenGL(target);
         ARBVertexBufferObject.glBindBufferARB(t, bufferId);
         GLRef.checkError();
-        Integer bufferID = (target == BufferTarget.Index?0:1) + (bufferId+1) << 1;
+        Integer bufferID = (target == BufferTarget.Index?0:1) + ((bufferId+1) << 1);
         ByteBuffer cachedBuf = cachedBuffers.get(bufferID);
-        boolean newBuffer = cachedBuf == null;
+        boolean newBuffer = cachedBuf == null || cachedBuf.capacity() < size;
+//        // Check if we're requesting a larger buffersize than last tie
+//        if(newBuffer && cachedBuf != null) {
+//            // not good
+//            throw new IllegalArgumentException("cached buffer size for this VBO is smaller than the requested size.");
+//        }
         ByteBuffer buf =  ARBVertexBufferObject.glMapBufferARB(t, ARBVertexBufferObject.GL_WRITE_ONLY_ARB, size, cachedBuf);
         GLRef.checkError();
         buf.order(ByteOrder.nativeOrder());
