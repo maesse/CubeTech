@@ -84,8 +84,9 @@ public class CubeMap {
 
         Shader shader = Ref.glRef.getShader("WorldFog");
         Ref.glRef.PushShader(shader);
-        shader.setUniform("fog_factor", 1f/(view.farDepth*0.55f-300));
-        shader.setUniform("fog_color", (Vector4f)new Vector4f(60,68,85,255).scale(1/255f));
+        shader.setUniform("fog_factor", 1f/(view.farDepth*0.55f*0.8f));
+        //shader.setUniform("fog_color", (Vector4f)new Vector4f(60,68,85,255).scale(1/255f));
+        shader.setUniform("fog_color", (Vector4f)new Vector4f(145,140,129,255).scale(1/255f));
         if(!Ref.glRef.r_fill.isTrue()) {
             GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_LINE);
         }
@@ -111,6 +112,8 @@ public class CubeMap {
                         continue;
                     }
 
+                    
+
                     // do frustum culling
                     if(view.planes[0] != null) {
                         Plane p = view.planes[0];
@@ -123,6 +126,8 @@ public class CubeMap {
                     }
 
                     chunk.Render();
+                    if(chunk.nSides == 0) continue; // empty!
+                    
                     nSides += chunk.nSides;
                     nChunks++;
                 }
@@ -266,6 +271,8 @@ public class CubeMap {
         long index = positionToLookup(x, y, z);
 
         Object last = chunks.put(index, chunk);
+
+        chunk.notifyChange();
         
         if(last != null)
             throw new RuntimeException("generateSimpleMap: Chunk already existed.");
@@ -384,12 +391,17 @@ public class CubeMap {
 //        chunk.setCubeType(p[0], p[1], p[2], type);
 //    }
 
-    CubeChunk getChunk(int x, int y, int z) {
+    CubeChunk getChunk(int x, int y, int z, boolean create) {
         Long index = positionToLookup(x, y, z);
         
         if(!chunks.containsKey(index)) {
-            // Going to need to create this chunk
-            generateChunk(x,y,z, false);
+            if(create) {
+                // Going to need to create this chunk
+                generateChunk(x,y,z, false);
+            } else {
+                // Chunk is now created yet
+                return null;
+            }
         }
 
         return chunks.get(index);

@@ -39,19 +39,19 @@ public class SkyBox {
         float radius = (int) (view.farDepth * 0.55f);
         GL11.glCullFace(GL11.GL_FRONT);
         GL11.glDepthMask(false);
-        float offset = 0.2f;
+        float offset = 0.05f;
         view.Origin.z += radius*offset;
         // Top: Z+
         up.Bind();
         GL11.glBegin(GL11.GL_QUADS);
         {
-            tex(tx.x, tx.w);
-            GL11.glVertex3f(view.Origin.x - radius,view.Origin.y - radius,view.Origin.z + radius);
-            tex(tx.z, tx.w);
-            GL11.glVertex3f(view.Origin.x + radius,view.Origin.y - radius,view.Origin.z + radius);
             tex(tx.z, tx.y);
-            GL11.glVertex3f(view.Origin.x + radius,view.Origin.y + radius,view.Origin.z + radius);
+            GL11.glVertex3f(view.Origin.x - radius,view.Origin.y - radius,view.Origin.z + radius);
             tex(tx.x, tx.y);
+            GL11.glVertex3f(view.Origin.x + radius,view.Origin.y - radius,view.Origin.z + radius);
+            tex(tx.x, tx.w);
+            GL11.glVertex3f(view.Origin.x + radius,view.Origin.y + radius,view.Origin.z + radius);
+            tex(tx.z, tx.w);
             GL11.glVertex3f(view.Origin.x - radius,view.Origin.y + radius,view.Origin.z + radius);
         }
         GL11.glEnd();

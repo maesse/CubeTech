@@ -90,7 +90,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     public float lastFov = cg_fov.fValue;
     public float lastVleft = camera_vplayerpos.fValue;
 
-    SkyBox skyBox = new SkyBox("data/miramar");
+    SkyBox skyBox = new SkyBox("data/sky");
 
 
     /**
@@ -257,13 +257,14 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 //                if(cg.refdef.planes[0] != null) {
 //                    cg.refdef.planes[0].DebugRender(cg.refdef.Origin);
 //                }
+                skyBox.Render(cg.refdef);
                 Ref.cm.cubemap.Render(cg.refdef);
                 //Ref.glRef.PopShader();
                 
             }
 
             cgr.RenderClientEffects();
-            skyBox.Render(cg.refdef);
+            
             //cgr.RenderScene(cg.refdef);
             AddPacketEntities();
             cgr.DrawEntities();
