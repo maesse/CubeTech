@@ -13,6 +13,7 @@ import cubetech.entities.EntityType;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.CubeType;
 import cubetech.gfx.Shader;
+import cubetech.gfx.SkyBox;
 import cubetech.gfx.SkyDome;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
@@ -88,6 +89,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     public float speed;
     public float lastFov = cg_fov.fValue;
     public float lastVleft = camera_vplayerpos.fValue;
+
+    SkyBox skyBox = new SkyBox("data/miramar");
 
 
     /**
@@ -256,8 +259,11 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 //                }
                 Ref.cm.cubemap.Render(cg.refdef);
                 //Ref.glRef.PopShader();
+                
             }
+
             cgr.RenderClientEffects();
+            skyBox.Render(cg.refdef);
             //cgr.RenderScene(cg.refdef);
             AddPacketEntities();
             cgr.DrawEntities();
