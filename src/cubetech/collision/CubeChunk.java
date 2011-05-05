@@ -96,19 +96,45 @@ public class CubeChunk {
         }
     }
 
-  
     public void setCubeType(int x, int y, int z, byte type) {
-        setCubeType(getIndex(x, y, z), type);
+        int index = getIndex(x, y, z);
+        dirty = true;
+        blockType[index] = type;
+
+        // Check if we need to notify our neightboughr
+        if(x == 0) notifyChange(0, false);
+        if(x == SIZE-1) notifyChange(0, true);
+        if(y == 0) notifyChange(1, false);
+        if(y == SIZE-1) notifyChange(1, true);
+        if(z == 0) notifyChange(2, false);
+        if(z == SIZE-1) notifyChange(2, true);
+    }
+
+    // notify all neighboughrs
+    void notifyChange() {
+        notifyChange(0, false);
+        notifyChange(0, true);
+        notifyChange(1, false);
+        notifyChange(1, true);
+        notifyChange(2, false);
+        notifyChange(2, true);
+    }
+
+    // Notify a neighbourgh chunk of a change on the edge of
+    private void notifyChange(int axis, boolean pos) {
+        if(Ref.cm.cubemap == null)
+            return; // happens during loading.. we don't need to notify at this point
+        int[] cPos = new int[] {p[0],p[1],p[2]};
+        cPos[axis] += pos?1:-1;
+        CubeChunk c = Ref.cm.cubemap.getChunk(cPos[0], cPos[1], cPos[2], false);
+
+        // mark it dirty
+        if(c != null) c.dirty = true;
     }
 
     public byte getCubeType(int index)
     {
         return blockType[index];
-    }
-
-     public void setCubeType(int index, byte type) {
-        dirty = true;
-        blockType[index] = type;
     }
 
     ChunkSpatialPart lastPart = null;
@@ -167,9 +193,14 @@ public class CubeChunk {
     private void markVisible() {
         if(!dirty)
             return;
-
         nSides = 0;
 
+        CubeChunk chunkX = Ref.cm.cubemap.getChunk(p[0]-1, p[1], p[2], false);
+        CubeChunk chunkX2 = Ref.cm.cubemap.getChunk(p[0]+1, p[1], p[2], false);
+        CubeChunk chunkY = Ref.cm.cubemap.getChunk(p[0], p[1]-1, p[2], false);
+        CubeChunk chunkY2 = Ref.cm.cubemap.getChunk(p[0], p[1]+1, p[2], false);
+        CubeChunk chunkZ = Ref.cm.cubemap.getChunk(p[0], p[1], p[2]-1, false);
+        CubeChunk chunkZ2 = Ref.cm.cubemap.getChunk(p[0], p[1], p[2]+1, false);
         for (int z= 0; z < SIZE; z++) {
             for (int y= 0; y < SIZE; y++) {
                 for (int x= 0; x < SIZE; x++) {
@@ -179,12 +210,95 @@ public class CubeChunk {
                     }
 
                     // Check all 6 sides
-                    visible[lookup*6] = (x == SIZE-1 || blockType[lookup+1] == 0) && (nSides++ >= 0);
-                    visible[lookup*6+1] = (x == 0 || blockType[lookup-1] == 0) && (nSides++ >= 0);
-                    visible[lookup*6+2] = (y == SIZE-1 || blockType[lookup+SIZE] == 0) && (nSides++ >= 0);
-                    visible[lookup*6+3] = (y == 0 || blockType[lookup-SIZE] == 0) && (nSides++ >= 0);
-                    visible[lookup*6+4] = (z == SIZE-1 || blockType[lookup+SIZE*SIZE] == 0) && (nSides++ >= 0);
-                    visible[lookup*6+5] = (z == 0 || blockType[lookup-SIZE*SIZE] == 0) && (nSides++ >= 0);
+                    if(x > 0) {
+                        visible[lookup*6+1] = blockType[lookup-1] == CubeType.EMPTY && (nSides++ >= 0);
+                    }
+                    if(x < SIZE-1) {
+                        visible[lookup*6] = blockType[lookup+1] == 0 && (nSides++ >= 0);
+                    }
+                    if(y < SIZE-1) {
+                        visible[lookup*6+2] = blockType[lookup+SIZE] == 0 && (nSides++ >= 0);
+                    }
+                    if(y > 0) {
+                        visible[lookup*6+3] = blockType[lookup-SIZE] == 0 && (nSides++ >= 0);
+                    }
+                    if(z < SIZE-1) {
+                        visible[lookup*6+4] = blockType[lookup+SIZE*SIZE] == 0 && (nSides++ >= 0);
+                    }
+                    if(z > 0) {
+                        visible[lookup*6+5] = blockType[lookup-SIZE*SIZE] == 0 && (nSides++ >= 0);
+                    }
+                }
+            }
+        }
+
+
+        // Handle ZY plane adjencent to another chunk
+        for (int z= 0; z < SIZE; z++) {
+            for (int y= 0; y < SIZE; y++) {
+                if(chunkX != null) {
+                    int lookup = getIndex(0, y, z);
+                    if(blockType[lookup] != 0) {
+                        boolean vis = chunkX.blockType[lookup+(SIZE-1)] == 0;
+                        visible[lookup*6+1] = vis;
+                        if(vis) nSides++;
+                    }
+                }
+
+                if(chunkX2 != null) {
+                    int lookup = getIndex(SIZE-1, y, z);
+                    if(blockType[lookup] != 0) {
+                        boolean vis = chunkX2.blockType[lookup-(SIZE-1)] == 0;
+                        visible[lookup*6] = vis;
+                        if(vis) nSides++;
+                    }
+                }
+            }
+        }
+
+
+        // ZX plane
+        for (int z= 0; z < SIZE; z++) {
+            for (int x= 0; x < SIZE; x++) {
+                if(chunkY != null) {
+                    int lookup = getIndex(x, 0, z);
+                    if(blockType[lookup] != 0) {
+                        boolean vis = chunkY.blockType[lookup+SIZE*(SIZE-1)] == 0;
+                        visible[lookup*6+3] = vis;
+                        if(vis) nSides++;
+                    }
+                }
+
+                if(chunkY2 != null) {
+                    int lookup = getIndex(x, SIZE-1, z);
+                    if(blockType[lookup] != 0) {
+                        boolean vis = chunkY2.blockType[lookup-SIZE*(SIZE-1)] == 0;
+                        visible[lookup*6+2] = vis;
+                        if(vis) nSides++;
+                    }
+                }
+            }
+        }
+
+        // XY plane
+        for (int y= 0; y < SIZE; y++) {
+            for (int x= 0; x < SIZE; x++) {
+                if(chunkZ != null) {
+                    int lookup = getIndex(x, y, 0);
+                    if(blockType[lookup] != 0) {
+                        boolean vis = chunkZ.blockType[lookup+SIZE*SIZE*(SIZE-1)] == 0;
+                        visible[lookup*6+5] = vis;
+                        if(vis) nSides++;
+                    }
+                }
+
+                if(chunkZ2 != null) {
+                    int lookup = getIndex(x, y, SIZE-1);
+                    if(blockType[lookup] != 0) {
+                        boolean vis = chunkZ2.blockType[lookup-SIZE*SIZE*(SIZE-1)] == 0;
+                        visible[lookup*6+4] = vis;
+                        if(vis) nSides++;
+                    }
                 }
             }
         }
@@ -239,6 +353,8 @@ public class CubeChunk {
 
         Color white = (Color) Color.WHITE;
 
+        int sidesRendered = 0;
+
         for (int z= 0; z < SIZE; z++) {
             for (int y= 0; y < SIZE; y++) {
                 for (int x= 0; x < SIZE; x++) {
@@ -286,6 +402,8 @@ public class CubeChunk {
                         white.writeRGBA(buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
                         padd(buffer);
+
+                        sidesRendered++;
                     }
 
                     // Bottom: Z-
@@ -312,6 +430,7 @@ public class CubeChunk {
                         white.writeRGBA(buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
                         padd(buffer);
+                        sidesRendered++;
                     }
 
                     // Y+
@@ -337,6 +456,7 @@ public class CubeChunk {
                         white.writeRGBA(buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
                         padd(buffer);
+                        sidesRendered++;
                     }
 
                     // Y-
@@ -362,6 +482,7 @@ public class CubeChunk {
                         white.writeRGBA(buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
                         padd(buffer);
+                        sidesRendered++;
                     }
 
                     // X+
@@ -386,6 +507,7 @@ public class CubeChunk {
                         white.writeRGBA(buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
                         padd(buffer);
+                        sidesRendered++;
                     }
 
                     // X-
@@ -410,9 +532,14 @@ public class CubeChunk {
                         white.writeRGBA(buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
                         padd(buffer);
+                        sidesRendered++;
                     }
                 }
             }
+        }
+
+        if(sidesRendered != nSides) {
+            int test = 2;
         }
     }
 
