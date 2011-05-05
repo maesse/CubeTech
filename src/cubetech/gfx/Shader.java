@@ -16,7 +16,9 @@ import org.lwjgl.opengl.ARBGeometryShader4;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
+import org.lwjgl.util.vector.Vector;
 import org.lwjgl.util.vector.Vector3f;
+import org.lwjgl.util.vector.Vector4f;
 
 /**
  *
@@ -103,7 +105,7 @@ public class Shader {
 
     public void setUniform(String name, float value) {
         int index = getUniformIndex(name);
-        if(index <= 0)
+        if(index < 0)
             return;
 
         // We've got an index, yay
@@ -113,11 +115,21 @@ public class Shader {
 
     public void setUniform(String name, Vector3f value) {
         int index = getUniformIndex(name);
-        if(index <= 0)
+        if(index < 0)
             return;
 
         // We've got an index, yay
         ARBShaderObjects.glUniform3fARB(index, value.x, value.y, value.z);
+        GLRef.checkError();
+    }
+
+     public void setUniform(String name, Vector4f value) {
+        int index = getUniformIndex(name);
+        if(index < 0)
+            return;
+
+        // We've got an index, yay
+        ARBShaderObjects.glUniform4fARB(index, value.x, value.y, value.z, value.w);
         GLRef.checkError();
     }
 
@@ -128,7 +140,7 @@ public class Shader {
             int pos = GL20.glGetUniformLocation(shaderId, name);
             // Handle error
             GLRef.checkError();
-            if(pos <= 0) {
+            if(pos < 0) {
                 Common.LogDebug("Warning: Shader.setAttribute(): Attribute '%s' doesn't exist in %s", name, shaderName);
             }
             // cache it
@@ -277,5 +289,7 @@ public class Shader {
 
         //return null;
     }
+
+   
 
 }
