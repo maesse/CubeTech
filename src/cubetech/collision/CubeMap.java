@@ -3,13 +3,17 @@ package cubetech.collision;
 import cubetech.CGame.ViewParams;
 import cubetech.common.Common;
 import cubetech.gfx.CubeType;
+import cubetech.gfx.Shader;
 import cubetech.gfx.TerrainTextureCache;
 import cubetech.misc.Plane;
 import cubetech.misc.Ref;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.Random;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.vector.Vector3f;
+import org.lwjgl.util.vector.Vector4f;
 
 /**
  *
@@ -28,7 +32,7 @@ public class CubeMap {
 
     public CubeMap(IChunkGenerator gen, int w, int h, int d) {
         chunkGen = gen;
-        generateSimpleMap(w, h, d);
+        fillInitialArea(w, h, d);
     }
 
     public CubeMap() {
@@ -59,21 +63,36 @@ public class CubeMap {
                         continue; // chunk exists..
 
                     // Generate chunk here
-                    generateChunk(px-halfDist, py-halfDist, pz-halfDist);
+                    generateChunk(px-halfDist, py-halfDist, pz-halfDist, true);
                 }
             }
         }
     }
 
     public void Render(ViewParams view) {
-//        GL11.glLineWidth(2f);
+        // Generate one chunk pr. frame when multiple chunks are queued
+        int[] chunkQueue = null;
+        boolean chunkLoaded = false;
+        while((chunkQueue = chunkGenQueue.peek()) != null && !chunkLoaded) {
+            chunkGenQueue.poll();
+            if(chunks.containsKey(positionToLookup(chunkQueue[0], chunkQueue[1], chunkQueue[2])))
+                continue;
+            generateChunk(chunkQueue[0], chunkQueue[1], chunkQueue[2], false);
+            chunkLoaded = true;
+        }
+
+
+        Shader shader = Ref.glRef.getShader("WorldFog");
+        Ref.glRef.PushShader(shader);
+        shader.setUniform("fog_factor", 1f/(view.farDepth*0.55f-300));
+        shader.setUniform("fog_color", (Vector4f)new Vector4f(60,68,85,255).scale(1/255f));
         if(!Ref.glRef.r_fill.isTrue()) {
             GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_LINE);
         }
         nSides = 0;
         nChunks = 0;
         
-        int cubeDistance = (int) (view.farDepth / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+        int cubeDistance = (int) (view.farDepth * 0.55f / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE))+1;
         if(cubeDistance <= 0)
             cubeDistance = 1;
 
@@ -88,7 +107,7 @@ public class CubeMap {
 
                     CubeChunk chunk = chunks.get(lookup);
                     if(chunk == null) {
-                        // todo: generate
+                        generateChunk(orgX + x, orgY + y, orgZ + z, true);
                         continue;
                     }
 
@@ -113,6 +132,8 @@ public class CubeMap {
         if(!Ref.glRef.r_fill.isTrue()) {
             GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
         }
+
+        Ref.glRef.PopShader();
     }
     
     // Thanks goes out to http://www.xnawiki.com/index.php?title=Voxel_traversal
@@ -232,9 +253,15 @@ public class CubeMap {
         return null; // no collision
     }
 
-    private CubeChunk generateChunk(int x, int y, int z) {
+    private Queue<int[]> chunkGenQueue = new LinkedList<int[]>();
+    private CubeChunk generateChunk(int x, int y, int z, boolean queue) {
         if(z < MIN_Z || z > MAX_Z)
             return null;
+
+        if(queue) {
+            chunkGenQueue.add(new int[] {x,y,z});
+            return null;
+        }
         CubeChunk chunk = chunkGen.generateChunk(this, x, y, z);
         long index = positionToLookup(x, y, z);
 
@@ -245,12 +272,12 @@ public class CubeMap {
         return chunk;
     }
 
-    private void generateSimpleMap(int w, int h, int d) {
+    private void fillInitialArea(int w, int h, int d) {
         // Create a new 8x8x2 chunk map
         for (int z= 0; z < d; z++) {
             for (int y= 0; y < h; y++) {
                 for (int x= 0; x < w; x++) {
-                    generateChunk(x-w/2, y-h/2, z-d/2);
+                    generateChunk(x-w/2, y-h/2, z-d/2, false);
                 }
             }
         }
@@ -295,7 +322,7 @@ public class CubeMap {
                     if(chunk == null) {
                         if(chunkGen == null)
                             continue; // Running as client?
-                        chunk = generateChunk(x, y, z);
+                        chunk = generateChunk(x, y, z, false);
                         if(chunk == null)
                             continue; // Chunk denied. Probably hit Z bounds.
                     }
@@ -362,7 +389,7 @@ public class CubeMap {
         
         if(!chunks.containsKey(index)) {
             // Going to need to create this chunk
-            generateChunk(x,y,z);
+            generateChunk(x,y,z, false);
         }
 
         return chunks.get(index);
