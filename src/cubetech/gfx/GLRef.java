@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import java.nio.FloatBuffer;
 import java.util.Stack;
 import org.lwjgl.opengl.ARBShaderObjects;
 import org.lwjgl.util.Color;
@@ -39,6 +40,7 @@ import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.DisplayMode;
 import org.lwjgl.opengl.EXTTextureFilterAnisotropic;
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL13.*;
 import static org.lwjgl.opengl.GL20.*;
 /**
  * Controls OpenGL
@@ -78,10 +80,13 @@ public class GLRef {
 
     private IntBuffer intBuf = BufferUtils.createIntBuffer(1);
     private IntBuffer intBuf16 = BufferUtils.createIntBuffer(16);
+    private FloatBuffer floatBuff16 = BufferUtils.createFloatBuffer(16);
+    public FloatBuffer matrixBuffer = BufferUtils.createFloatBuffer(16);
     private HashMap<Integer, ByteBuffer> cachedBuffers
             = new HashMap<Integer, ByteBuffer>();
 
     public boolean fboSupported = false;
+    public FrameBuffer srgbBuffer = null;
 
     
     
@@ -121,7 +126,7 @@ public class GLRef {
 
         // Create the display
         //Display.create(new PixelFormat());
-        Display.create(new PixelFormat(8, 8, 0, 4));
+        Display.create(new PixelFormat(0, 0, 0, 0));
         checkError();
 
         // Set vsync
@@ -196,16 +201,16 @@ public class GLRef {
 
         // Set default states
         glEnable(GL_TEXTURE_2D);
+        glEnable(GL_TEXTURE_CUBE_MAP);
         glEnable(GL_BLEND);
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
-        glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
-        glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
         intBuf16.position(0);
         intBuf16.put(255).put(255).put(255).put(255);
         intBuf16.flip();
         glFog(GL_FOG_COLOR, intBuf16);
+
         glClearColor(0.823f,0.7f,0.486f,1);
         glDepthMask(true);
         glLineWidth(2f);
@@ -214,8 +219,12 @@ public class GLRef {
         glViewport(0, 0, currentMode.getWidth(), currentMode.getHeight());
         checkError();
 
-//        glDisable(GL_CULL_FACE);
+        
 
+//        glDisable(GL_CULL_FACE);
+        
+        srgbBuffer = new FrameBuffer(true, true, (int)GetResolution().x, (int)GetResolution().y);
+//        srgbBuffer.Bind();
         //InitFBO();
 
 
@@ -231,89 +240,24 @@ public class GLRef {
         checkError();
     }
 
-    private int fboId = 0;
-    private int fboColorId = 0;
-    private boolean fboInited = false;
-    private void InitFBO() {
-        if(fboInited)
-            return;
-        if(!fboSupported)
-            return;
-        fboInited = true;
-        IntBuffer buffer = ByteBuffer.allocateDirect(1*4).order(ByteOrder.nativeOrder()).asIntBuffer(); // allocate a 1 int byte buffer
-        EXTFramebufferObject.glGenFramebuffersEXT( buffer ); // generate
-        fboId = buffer.get();
-
-        checkError();
-        if(fboId == 0) {
-            fboSupported = false;
-            Common.Log("Could not create FBO - got zero index back from OpenGL");
-            return;
-        }
-
-        // Create the texture
-        fboColorId = Ref.ResMan.CreateEmptyTexture((int)GetResolution().x, (int)GetResolution().y);
-        Ref.ResMan.CreateEmptyTexture((int)GetResolution().x, (int)GetResolution().y);
-        EXTFramebufferObject.glBindFramebufferEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, fboId );
-        EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, EXTFramebufferObject.GL_COLOR_ATTACHMENT0_EXT,
-                ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, fboColorId, 0);
-        glBindTexture(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, 0);
-        
-//        checkError();
-
-        // Check for error
-        int framebuffer = EXTFramebufferObject.glCheckFramebufferStatusEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT );
-        switch ( framebuffer ) {
-            case EXTFramebufferObject.GL_FRAMEBUFFER_COMPLETE_EXT:
-                    break;
-            case EXTFramebufferObject.GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT_EXT:
-                    throw new RuntimeException( "FrameBuffer: " + fboId
-                                    + ", has caused a GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT_EXT exception" );
-            case EXTFramebufferObject.GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT_EXT:
-                    throw new RuntimeException( "FrameBuffer: " + fboId
-                                    + ", has caused a GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT_EXT exception" );
-            case EXTFramebufferObject.GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS_EXT:
-                    throw new RuntimeException( "FrameBuffer: " + fboId
-                                    + ", has caused a GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS_EXT exception" );
-            case EXTFramebufferObject.GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER_EXT:
-                    throw new RuntimeException( "FrameBuffer: " + fboId
-                                    + ", has caused a GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER_EXT exception" );
-            case EXTFramebufferObject.GL_FRAMEBUFFER_INCOMPLETE_FORMATS_EXT:
-                    throw new RuntimeException( "FrameBuffer: " + fboId
-                                    + ", has caused a GL_FRAMEBUFFER_INCOMPLETE_FORMATS_EXT exception" );
-            case EXTFramebufferObject.GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER_EXT:
-                    throw new RuntimeException( "FrameBuffer: " + fboId
-                                    + ", has caused a GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER_EXT exception" );
-            default:
-                    throw new RuntimeException( "Unexpected reply from glCheckFramebufferStatusEXT: " + framebuffer );
-        }
-
-        
+    public void setLIght() {
+        floatBuff16.position(0);
+        floatBuff16.put(-0.8f).put(0.8f).put(1f).put(0f);
+        floatBuff16.flip();
+        glLight(GL_LIGHT0, GL_POSITION, floatBuff16);
+        floatBuff16.position(0);
+        floatBuff16.put(1f).put(1f).put(1f).put(1f);
+        floatBuff16.flip();
+        glLight(GL_LIGHT0, GL_DIFFUSE, floatBuff16);
+        floatBuff16.position(0);
+        floatBuff16.put(1f).put(1f).put(1f).put(1f);
+        floatBuff16.flip();
+        glLightModel(GL_LIGHT_MODEL_AMBIENT, floatBuff16);
+        //glLight(GL_LIGHT0, GL_AMBIENT, floatBuff16);
+        glMaterialf(GL_FRONT, GL_SHININESS, 64.0f);
     }
 
-    public void BindFBO() {
-        if(!fboSupported)
-            return;
-
-        if(!fboInited)
-            InitFBO();
-        
-        
-        EXTFramebufferObject.glBindFramebufferEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, fboId);
-
-    }
-
-    public void UnbindFBO() {
-        if(!fboSupported)
-            return;
-
-        if(!fboInited)
-            InitFBO();
-
-        
-        EXTFramebufferObject.glBindFramebufferEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, 0);
-        
-    }
+    
 
     public Shader getShader(String str) {
         Shader shad = shaders.get(str);
@@ -329,91 +273,7 @@ public class GLRef {
         return shad;
     }
 
-    public void BlitFBO() {
-        if(!fboSupported)
-            return;
-
-        if(!fboInited)
-            InitFBO();
-
-        if(Ref.cgame == null || Ref.cgame.cgr.sunPositionOnScreen == null)
-            return;
-
-        setShader("scatter");
-
-        int SunPosition_uniform = ARBShaderObjects.glGetUniformLocationARB(getShader("scatter").getShaderId(), "lightPositionOnScreen");
-        glUniform2f(SunPosition_uniform, Ref.cgame.cgr.sunPositionOnScreen.x, Ref.cgame.cgr.sunPositionOnScreen.y);
-        
-        
-        glPushAttrib(GL_VIEWPORT_BIT);
-        glViewport(0, 0, (int)GetResolution().x, (int)GetResolution().y);
-        
-        CubeTexture.Unbind();
-        
-        glDisable(GL_TEXTURE_2D);
-        glEnable(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB);
-        glBindTexture(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, fboColorId);
-//        glBindTexture(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, fboColorId);
-        
-        Vector2f TexOffset = new Vector2f(0, 0);
-        Vector2f TexSize = new Vector2f(GetResolution());
-        Vector2f Extent = new Vector2f(GetResolution().x, GetResolution().y);
-//        Extent.scale(0.5f);
-        float depth = 0;
-        Color color = (Color) Color.WHITE;
-//        color.setAlpha((byte)127);
-
-         glBegin( GL_QUADS);
-        {
-            if(Ref.glRef.isShadersSupported()) {
-                // Fancy pants shaders
-                 glVertexAttrib2f(2, TexOffset.x, TexOffset.y);
-                 glVertexAttrib2f(3, 0,0);
-                 glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                 glVertexAttrib3f(0, 0, 0, depth);
-
-                 glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y);
-                 glVertexAttrib2f(3, 1,0);
-                 glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                 glVertexAttrib3f(0, Extent.x, 0, depth);
-
-                 glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
-                 glVertexAttrib2f(3, 1,1);
-                 glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                 glVertexAttrib3f(0, Extent.x, Extent.y, depth);
-
-                 glVertexAttrib2f(2, TexOffset.x, TexOffset.y+TexSize.y);
-                 glVertexAttrib2f(3, 0,1);
-                 glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                 glVertexAttrib3f(0, 0, Extent.y, depth);
-            } else {
-                // Good ol' fixed function
-                 glTexCoord2f(TexOffset.x, TexOffset.y);
-                 glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                 glVertex3f( 0, 0, depth);
-
-                 glTexCoord2f(TexOffset.x+TexSize.x, TexOffset.y);
-                 glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                 glVertex3f( Extent.x, 0, depth);
-
-                 glTexCoord2f(TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
-                 glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                 glVertex3f( Extent.x, Extent.y, depth);
-
-                 glTexCoord2f(TexOffset.x, TexOffset.y+TexSize.y);
-                 glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                 glVertex3f( 0, Extent.y, depth);
-            }
-
-        }
-         glEnd();
-
-        glPopAttrib();
-        glBindTexture(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, 0);
-        glDisable(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB);
-        glEnable(GL_TEXTURE_2D);
-        setShader("sprite");
-    }
+    
 
     // Set up cvars
     private void Init() {
@@ -717,6 +577,11 @@ public class GLRef {
 
     public void setShader(Shader shad) {
         shader = shad;
+        if(shad == null) {
+            // Return to fixed function
+            ARBShaderObjects.glUseProgramObjectARB(0);
+            return;
+        }
         shad.Bind();
     }
 
@@ -769,6 +634,10 @@ public class GLRef {
                 Common.Log("GL_EXT_texture_rectangle not supported by your graphics card");
             } else if(okay)
                 fboSupported = true;
+
+            if(!caps.GL_EXT_texture_sRGB) {
+                Common.Log("GL_EXT_texture_sRGB not supported by your graphics card");
+            }
 
         }
 
