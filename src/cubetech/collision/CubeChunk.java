@@ -27,6 +27,7 @@ import org.lwjgl.util.vector.Vector4f;
  */
 public class CubeChunk {
     private static final float VBO_RESIZE_MULTIPLIER = 1.3f;
+    private static final int LAZY_TIME = 1000;
     public static final int SIZE = 32;
     public static final int CHUNK_SIZE = SIZE*SIZE*SIZE;
     public static final int BLOCK_SIZE = 32;
@@ -34,15 +35,20 @@ public class CubeChunk {
     public static final int PLANE_SIZE = 4*32; // (vertex: 3*4, color: 4*1, tex: 2*4) * 4 points
 
     // block data
-    private boolean[] visible = new boolean[CHUNK_SIZE*6]; // plane vis data
+//    private boolean[] visible = new boolean[CHUNK_SIZE*6]; // plane vis data
     private byte[] blockType = new byte[CHUNK_SIZE];
+    private byte[] packedVis = new byte[CHUNK_SIZE];
+    private int[] packedAO = new int[CHUNK_SIZE];
     public int[] absmin = new int[3];
     public int[] absmax = new int[3];
     public float[] fcenter = new float[3];
+    private CubeMap map = null;
 
     // render
     private VBO vbo = null;
     private boolean dirty = true;
+    private boolean lazyDirty = false;
+    private int lazyDirtyTime;
     public int nSides = 0; // Number of QUAD's that needs to be rendered
 
     // debug draw
@@ -53,6 +59,7 @@ public class CubeChunk {
     int[] p = new int[3]; // Position/Origin. Grows in the positive direction.
     //int px, py, pz;
     public CubeChunk(CubeMap map, int x, int y, int z) {
+        this.map = map;
         p = new int[] {x,y,z};
         absmin[0] = x * SIZE * BLOCK_SIZE;
         absmin[1] = y * SIZE * BLOCK_SIZE;
@@ -63,6 +70,50 @@ public class CubeChunk {
         fcenter[0] = x * SIZE * BLOCK_SIZE + SIZE/2;
         fcenter[1] = y * SIZE * BLOCK_SIZE + SIZE/2;
         fcenter[2] = z * SIZE * BLOCK_SIZE + SIZE/2;
+    }
+    
+    private static byte packVis(boolean[] vals) {
+        byte out = 0;
+        for (int i= 0; i < vals.length; i++) {
+            if(!vals[i])
+                continue;
+            out |= 1 << i;
+        }
+        return out;
+    }
+
+    private static int packAO(boolean[] vals) {
+        int out = 0;
+        for (int i= 0; i < vals.length; i++) {
+            if(!vals[i])
+                continue;
+            out |= 1 << i;
+        }
+        return out;
+    }
+
+    // Takes a packVis and sets the bit with the given value
+    private void packAO(int index, int bit, boolean value) {
+        if(value)
+            packedAO[index] |= 1 << bit;
+        else
+            packedAO[index] &= ~(1 << bit);
+    }
+
+    // Takes a packVis and sets the bit with the given value
+    private void packVis(int index, int bit, boolean value) {
+        if(value)
+            packedVis[index] |= 1 << bit;
+        else
+            packedVis[index] &= ~(1 << bit);
+    }
+
+    private boolean unpackVis(int index, int bit) {
+        return (packedVis[index] & (1 << bit)) != 0;
+    }
+
+    private boolean unpackAO(int index, int bit) {
+        return (packedAO[index] & (1 << bit)) != 0;
     }
 
     public void Render() {
@@ -96,10 +147,13 @@ public class CubeChunk {
         }
     }
 
-    public void setCubeType(int x, int y, int z, byte type) {
+    public void setCubeType(int x, int y, int z, byte type, boolean notify) {
         int index = getIndex(x, y, z);
-        dirty = true;
+        setDirty(true, false);
         blockType[index] = type;
+
+        if(!notify)
+            return;
 
         // Check if we need to notify our neightboughr
         if(x == 0) notifyChange(0, false);
@@ -129,7 +183,20 @@ public class CubeChunk {
         CubeChunk c = Ref.cm.cubemap.getChunk(cPos[0], cPos[1], cPos[2], false);
 
         // mark it dirty
-        if(c != null) c.dirty = true;
+        if(c != null) c.setDirty(true, false);
+    }
+
+    private void setDirty(boolean isDirty, boolean lazy) {
+            if(!isDirty) {
+                dirty = false;
+                lazyDirty = false;
+            } else {
+                dirty = true;
+                lazyDirty = lazy;
+                if(lazy) {
+                    lazyDirtyTime = Ref.common.frametime + LAZY_TIME;
+                }
+            }
     }
 
     public byte getCubeType(int index)
@@ -191,8 +258,12 @@ public class CubeChunk {
     }
 
     private void markVisible() {
-        if(!dirty)
+        if(!dirty && !lazyDirty)
             return;
+
+        if(lazyDirty && lazyDirtyTime > Ref.common.frametime)
+            return; // lets be lazy
+
         nSides = 0;
 
         CubeChunk chunkX = Ref.cm.cubemap.getChunk(p[0]-1, p[1], p[2], false);
@@ -201,6 +272,7 @@ public class CubeChunk {
         CubeChunk chunkY2 = Ref.cm.cubemap.getChunk(p[0], p[1]+1, p[2], false);
         CubeChunk chunkZ = Ref.cm.cubemap.getChunk(p[0], p[1], p[2]-1, false);
         CubeChunk chunkZ2 = Ref.cm.cubemap.getChunk(p[0], p[1], p[2]+1, false);
+        boolean[] cubeVis = new boolean[6];
         for (int z= 0; z < SIZE; z++) {
             for (int y= 0; y < SIZE; y++) {
                 for (int x= 0; x < SIZE; x++) {
@@ -210,37 +282,75 @@ public class CubeChunk {
                     }
 
                     // Check all 6 sides
-                    if(x > 0) {
-                        visible[lookup*6+1] = blockType[lookup-1] == CubeType.EMPTY && (nSides++ >= 0);
-                    }
                     if(x < SIZE-1) {
-                        visible[lookup*6] = blockType[lookup+1] == 0 && (nSides++ >= 0);
-                    }
+                        cubeVis[0]  = blockType[lookup+1] == 0 && (nSides++ >= 0);
+                    } else cubeVis[0] = false;
+                    if(x > 0) {
+                        cubeVis[1]  = blockType[lookup-1] == CubeType.EMPTY && (nSides++ >= 0);
+                    } else cubeVis[1] = false;
                     if(y < SIZE-1) {
-                        visible[lookup*6+2] = blockType[lookup+SIZE] == 0 && (nSides++ >= 0);
-                    }
+                        cubeVis[2]  = blockType[lookup+SIZE] == 0 && (nSides++ >= 0);
+                    } else cubeVis[2] = false;
                     if(y > 0) {
-                        visible[lookup*6+3] = blockType[lookup-SIZE] == 0 && (nSides++ >= 0);
-                    }
+                        cubeVis[3]  = blockType[lookup-SIZE] == 0 && (nSides++ >= 0);
+                    } else cubeVis[3] = false;
                     if(z < SIZE-1) {
-                        visible[lookup*6+4] = blockType[lookup+SIZE*SIZE] == 0 && (nSides++ >= 0);
+                        cubeVis[4] = blockType[lookup+SIZE*SIZE] == 0 && (nSides++ >= 0);
+                    } else cubeVis[4] = false;
+                    if(z > 0) {
+                        cubeVis[5] = blockType[lookup-SIZE*SIZE] == 0 && (nSides++ >= 0);
+                    } else cubeVis[5] = false;
+
+                    // Pack up the vis
+                    // TODO: implement on the chunks sides
+                    packedVis[lookup] = packVis(cubeVis);
+
+                    // Calculate AO
+                    // Z++
+                    boolean ao[] = new boolean[24];
+                    if(z < SIZE-1) {
+                        ao[0] = (x < SIZE-1) && blockType[lookup+1+SIZE*SIZE] == 0;
+                        ao[1] = (x > 0) && blockType[lookup-1+SIZE*SIZE] == 0;
+                        ao[2] = (y < SIZE-1) && blockType[lookup+SIZE+SIZE*SIZE] == 0;
+                        ao[3] = (y > 0) && blockType[lookup-SIZE+SIZE*SIZE] == 0;
+                        ao[4] = (x < SIZE-1 && y < SIZE-1) && blockType[lookup+1+SIZE+SIZE*SIZE] == 0;
+                        ao[5] = (x > 0 && y < SIZE-1) && blockType[lookup-1+SIZE+SIZE*SIZE] == 0;
+                        ao[6] = (y > 0 && x > 0) && blockType[lookup-1-SIZE+SIZE*SIZE] == 0;
+                        ao[7] = (y > 0 && z < SIZE-1) && blockType[lookup-SIZE+1+SIZE*SIZE] == 0;
                     }
                     if(z > 0) {
-                        visible[lookup*6+5] = blockType[lookup-SIZE*SIZE] == 0 && (nSides++ >= 0);
+                        ao[8] = (x < SIZE-1) && blockType[lookup+1-SIZE*SIZE] == 0;
+                        ao[9] = (x > 0) && blockType[lookup-1-SIZE*SIZE] == 0;
+                        ao[10] = (y < SIZE-1) && blockType[lookup+SIZE-SIZE*SIZE] == 0;
+                        ao[11] = (y > 0) && blockType[lookup-SIZE-SIZE*SIZE] == 0;
+                        ao[12] = (x < SIZE-1 && y < SIZE-1) && blockType[lookup+1+SIZE-SIZE*SIZE] == 0;
+                        ao[13] = (x > 0 && y < SIZE-1) && blockType[lookup-1+SIZE-SIZE*SIZE] == 0;
+                        ao[14] = (y > 0 && x > 0) && blockType[lookup-1-SIZE-SIZE*SIZE] == 0;
+                        ao[15] = (y > 0 && z < SIZE-1) && blockType[lookup-SIZE+1-SIZE*SIZE] == 0;
                     }
+                    ao[16] = (x < SIZE-1) && blockType[lookup+1] == 0;
+                    ao[17] = (x > 0) && blockType[lookup-1] == 0;
+                    ao[18] = (y < SIZE-1) && blockType[lookup+SIZE] == 0;
+                    ao[19] = (y > 0) && blockType[lookup-SIZE] == 0;
+                    ao[20] = (x < SIZE-1 && y < SIZE-1) && blockType[lookup+1+SIZE] == 0;
+                    ao[21] = (x > 0 && y < SIZE-1) && blockType[lookup-1+SIZE] == 0;
+                    ao[22] = (y > 0 && x > 0) && blockType[lookup-1-SIZE] == 0;
+                    ao[23] = (y > 0 && z < SIZE-1) && blockType[lookup-SIZE+1] == 0;
+                    packedAO[lookup] = packAO(ao);
                 }
+
+                
             }
         }
-
-
-        // Handle ZY plane adjencent to another chunk
         for (int z= 0; z < SIZE; z++) {
             for (int y= 0; y < SIZE; y++) {
+        // Handle ZY plane adjencent to another chunk
                 if(chunkX != null) {
                     int lookup = getIndex(0, y, z);
                     if(blockType[lookup] != 0) {
                         boolean vis = chunkX.blockType[lookup+(SIZE-1)] == 0;
-                        visible[lookup*6+1] = vis;
+                        packVis(lookup, 1, vis);
+
                         if(vis) nSides++;
                     }
                 }
@@ -249,61 +359,58 @@ public class CubeChunk {
                     int lookup = getIndex(SIZE-1, y, z);
                     if(blockType[lookup] != 0) {
                         boolean vis = chunkX2.blockType[lookup-(SIZE-1)] == 0;
-                        visible[lookup*6] = vis;
+                        packVis(lookup, 0, vis);
+
                         if(vis) nSides++;
                     }
                 }
-            }
-        }
 
-
-        // ZX plane
-        for (int z= 0; z < SIZE; z++) {
-            for (int x= 0; x < SIZE; x++) {
+                // ZX plane
                 if(chunkY != null) {
-                    int lookup = getIndex(x, 0, z);
+                    int lookup = getIndex(y, 0, z);
                     if(blockType[lookup] != 0) {
                         boolean vis = chunkY.blockType[lookup+SIZE*(SIZE-1)] == 0;
-                        visible[lookup*6+3] = vis;
+
+                        packVis(lookup, 3, vis);
                         if(vis) nSides++;
                     }
                 }
 
                 if(chunkY2 != null) {
-                    int lookup = getIndex(x, SIZE-1, z);
+                    int lookup = getIndex(y, SIZE-1, z);
                     if(blockType[lookup] != 0) {
                         boolean vis = chunkY2.blockType[lookup-SIZE*(SIZE-1)] == 0;
-                        visible[lookup*6+2] = vis;
+
+                        packVis(lookup, 2, vis);
                         if(vis) nSides++;
                     }
                 }
-            }
-        }
 
-        // XY plane
-        for (int y= 0; y < SIZE; y++) {
-            for (int x= 0; x < SIZE; x++) {
+                // XY plane
                 if(chunkZ != null) {
-                    int lookup = getIndex(x, y, 0);
+                    int lookup = getIndex(y, z, 0);
                     if(blockType[lookup] != 0) {
                         boolean vis = chunkZ.blockType[lookup+SIZE*SIZE*(SIZE-1)] == 0;
-                        visible[lookup*6+5] = vis;
+
+                        packVis(lookup, 5, vis);
                         if(vis) nSides++;
                     }
                 }
 
                 if(chunkZ2 != null) {
-                    int lookup = getIndex(x, y, SIZE-1);
+                    int lookup = getIndex(y, z, SIZE-1);
                     if(blockType[lookup] != 0) {
                         boolean vis = chunkZ2.blockType[lookup-SIZE*SIZE*(SIZE-1)] == 0;
-                        visible[lookup*6+4] = vis;
+
+                        packVis(lookup, 4, vis);
                         if(vis) nSides++;
                     }
                 }
             }
         }
+
         updateVBO();
-        dirty = false;
+        setDirty(false, false);
     }
     
     public static int getIndex(int x, int y, int z) {
@@ -345,13 +452,26 @@ public class CubeChunk {
         buf.put((byte)0);
     }
 
+    private static void writeColorAndAO(Color color, boolean ao1, boolean ao2, boolean ao3, ByteBuffer dest) {
+        int ao = 255;
+        if(!ao1 && !ao2) {
+            ao = 85;
+        } else if(!ao1 || !ao2) {
+            ao = 127;
+        } else if(!ao3) ao = 127;
+
+        dest.put((byte)(color.getRed() / 255f * ao));
+        dest.put((byte)(color.getGreen() / 255f * ao));
+        dest.put((byte)(color.getBlue() / 255f * ao));
+        dest.put((byte)255);
+        //dest.put((byte)(color.getAlpha() / 255f * ao));
+    }
+
     private void fillBuffer(ByteBuffer buffer) {
         int CHUNK_SIDE = SIZE * BLOCK_SIZE;
         int ppx = p[0] * CHUNK_SIDE;
         int ppy = p[1] * CHUNK_SIDE;
         int ppz = p[2] * CHUNK_SIDE;
-
-        Color white = (Color) Color.WHITE;
 
         int sidesRendered = 0;
 
@@ -378,28 +498,47 @@ public class CubeChunk {
                     if(!multiTex) tx = TerrainTextureCache.getTexOffset(type);
                     else tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.TOP);
 
-                    // Top: Z+
-                    if(visible[index*6+4]) {
+                    Color color = null;
 
+                    
+
+                    // Top: Z+
+                    boolean ao1, ao2, ao3;
+                    if(unpackVis(index, 4)) {
+                        color = map.lightSides[4];
+                        ao1 = unpackAO(index, 1);
+                        ao2 = unpackAO(index, 3);
+                        ao3 = unpackAO(index, 6);
                         buffer.putFloat(lx).putFloat(ly).putFloat(lz+BLOCK_SIZE);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
+                        //color.writeRGBA(buffer);
                         buffer.putFloat(tx.x).putFloat(tx.y);
                         padd(buffer);
 
-                        
+                        ao1 = unpackAO(index, 0);
+                        ao2 = unpackAO(index, 3);
+                        ao3 = unpackAO(index, 7);
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly).putFloat(             lz+ BLOCK_SIZE);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
+                        //color.writeRGBA(buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
                         padd(buffer);
 
-                        
+                        ao1 = unpackAO(index, 0);
+                        ao2 = unpackAO(index, 2);
+                        ao3 = unpackAO(index, 4);
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly + BLOCK_SIZE).putFloat(lz+ BLOCK_SIZE);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
+                        //color.writeRGBA(buffer);
                         buffer.putFloat(tx.z).putFloat(tx.w);
                         padd(buffer);
-                        
+
+                        ao1 = unpackAO(index, 1);
+                        ao2 = unpackAO(index, 2);
+                        ao3 = unpackAO(index, 5);
                         buffer.putFloat(lx).putFloat(             ly + BLOCK_SIZE).putFloat(lz+ BLOCK_SIZE);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
+                        //color.writeRGBA(buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
                         padd(buffer);
 
@@ -407,27 +546,41 @@ public class CubeChunk {
                     }
 
                     // Bottom: Z-
-                    if(visible[index*6+5]) {
+                    if(unpackVis(index, 5)) {
+                    //if(visible[index*6+5]) {
+                        color = map.lightSides[5];
                         if(multiTex) tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.BOTTOM);
 
-                        
+                        ao1 = unpackAO(index, 1+8);
+                        ao2 = unpackAO(index, 3+8);
+                        ao3 = unpackAO(index, 6+8);
                         buffer.putFloat(lx).putFloat(             ly).putFloat(                 lz );
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.y);
                         padd(buffer);
-                        
+
+                        ao1 = unpackAO(index, 1+8);
+                        ao2 = unpackAO(index, 2+8);
+                        ao3 = unpackAO(index, 5+8);
                         buffer.putFloat(lx).putFloat(             ly + BLOCK_SIZE).putFloat(    lz);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
                         padd(buffer);
-                        
+
+
+                        ao1 = unpackAO(index, 0+8);
+                        ao2 = unpackAO(index, 2+8);
+                        ao3 = unpackAO(index, 4+8);
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly + BLOCK_SIZE).putFloat(    lz );
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.w);
                         padd(buffer);
-                        
+
+                        ao1 = unpackAO(index, 0+8);
+                        ao2 = unpackAO(index, 3+8);
+                        ao3 = unpackAO(index, 7+8);
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly).putFloat(                 lz);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
                         padd(buffer);
                         sidesRendered++;
@@ -435,101 +588,154 @@ public class CubeChunk {
 
                     // Y+
                     if(multiTex) tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.SIDE);
-                    if(visible[index*6+2]) {
-                        
+                    if(unpackVis(index, 2)) {
+                    //if(visible[index*6+2]) {
+                        color = map.lightSides[2];
+                        ao3 = unpackAO(index, 5+8);
+                        ao1 = unpackAO(index, 2+8);
+                        ao2 = unpackAO(index, 5+8+8);
                         buffer.putFloat(lx).putFloat(             ly+ BLOCK_SIZE).putFloat(     lz );
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.y);
                         padd(buffer);
-                        
+
+                        ao1 = unpackAO(index, 2);
+                        ao2 = unpackAO(index, 5+8+8);
+                        ao3 = unpackAO(index, 5);
                         buffer.putFloat(lx).putFloat(             ly + BLOCK_SIZE).putFloat(    lz+ BLOCK_SIZE);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
                         padd(buffer);
-                        
+
+                        ao1 = unpackAO(index, 4+8+8);
+                        ao2 = unpackAO(index, 2);
+                        ao3 = unpackAO(index, 4);
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly + BLOCK_SIZE).putFloat(    lz + BLOCK_SIZE);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.w);
                         padd(buffer);
-                        
+
+                        ao1 = unpackAO(index, 4+8+8);
+                        ao2 = unpackAO(index, 2+8);
+                        ao3 = unpackAO(index, 4+8);
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly+ BLOCK_SIZE).putFloat(     lz);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
                         padd(buffer);
                         sidesRendered++;
                     }
 
                     // Y-
-                    if(visible[index*6+3]) {
-                        
+                    if(unpackVis(index, 3)) {
+                    //if(visible[index*6+3]) {
+                        color = map.lightSides[3];
+                        ao1 = unpackAO(index, 22);
+                        ao2 = unpackAO(index, 11);
+                        ao3 = unpackAO(index, 14);
+                        //ao1 = ao2 = ao3 = true;
                         buffer.putFloat(lx).putFloat(             ly).putFloat(     lz );
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.y);
                         padd(buffer);
 
-                        
+
+                        ao1 = unpackAO(index, 23);
+                        ao2 = unpackAO(index, 11);
+                        ao3 = unpackAO(index, 15);
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly).putFloat(     lz);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
                         padd(buffer);
-                        
+
+                        ao1 = unpackAO(index, 23);
+                        ao2 = unpackAO(index, 3);
+                        ao3 = unpackAO(index, 7);
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly ).putFloat(    lz + BLOCK_SIZE);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.w);
                         padd(buffer);
-                        
+
+                        ao1 = unpackAO(index, 22);
+                        ao2 = unpackAO(index, 3);
+                        ao3 = unpackAO(index, 6);
                         buffer.putFloat(lx).putFloat(             ly).putFloat(    lz+ BLOCK_SIZE);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
                         padd(buffer);
                         sidesRendered++;
                     }
 
                     // X+
-                    if(visible[index*6]) {
-                        
+                    if(unpackVis(index, 0)) {
+                    //if(visible[index*6]) {
+                        color = map.lightSides[0];
+                        ao1 = unpackAO(index, 8);
+                        ao2 = unpackAO(index, 23);
+                        ao3 = unpackAO(index, 15);
                         buffer.putFloat(lx+ BLOCK_SIZE).putFloat( ly).putFloat(                  lz );
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.y);
                         padd(buffer);
-                        
+
+                        ao1 = unpackAO(index, 20);
+                        ao2 = unpackAO(index, 8);
+                        ao3 = unpackAO(index, 12);
                         buffer.putFloat(lx+ BLOCK_SIZE ).putFloat(ly+ BLOCK_SIZE).putFloat(     lz);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
                         padd(buffer);
-                        
+
+                        ao2 = unpackAO(index, 0);
+                        ao1 = unpackAO(index, 20);
+                        ao3 = unpackAO(index, 4);
                         buffer.putFloat(lx+ BLOCK_SIZE ).putFloat(ly+ BLOCK_SIZE ).putFloat(    lz + BLOCK_SIZE);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.w);
                         padd(buffer);
-                        
+
+                        ao1 = unpackAO(index, 0);
+                        ao2 = unpackAO(index, 23);
+                        ao3 = unpackAO(index, 7);
                         buffer.putFloat(lx+ BLOCK_SIZE).putFloat( ly).putFloat(                 lz+ BLOCK_SIZE);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
                         padd(buffer);
                         sidesRendered++;
                     }
 
                     // X-
-                    if(visible[index*6+1]) {
-                        
+                    if(unpackVis(index, 1)) {
+                    //if(visible[index*6+1]) {
+                        color = map.lightSides[1];
+                        ao1 = unpackAO(index, 22);
+                        ao2 = unpackAO(index, 9);
+                        ao3 = unpackAO(index, 14);
                         buffer.putFloat(lx).putFloat( ly).putFloat(                  lz );
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.y);
                         padd(buffer);
-                        
+
+                        ao1 = unpackAO(index, 22);
+                        ao2 = unpackAO(index, 1);
+                        ao3 = unpackAO(index, 6);
                         buffer.putFloat(lx).putFloat( ly).putFloat(                 lz+ BLOCK_SIZE);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
                         padd(buffer);
-                        
+
+                        ao1 = unpackAO(index, 21);
+                        ao2 = unpackAO(index, 1);
+                        ao3 = unpackAO(index, 5);
                         buffer.putFloat(lx ).putFloat(ly+ BLOCK_SIZE ).putFloat(    lz + BLOCK_SIZE);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.w);
                         padd(buffer);
-                        
+
+                        ao1 = unpackAO(index, 21);
+                        ao2 = unpackAO(index, 9);
+                        ao3 = unpackAO(index, 13);
                         buffer.putFloat(lx ).putFloat(ly+ BLOCK_SIZE).putFloat(     lz);
-                        white.writeRGBA(buffer);
+                        writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
                         padd(buffer);
                         sidesRendered++;
@@ -840,7 +1046,7 @@ public class CubeChunk {
                     else tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.TOP);
                     
                     // Top: Z+
-                    if(visible[index*6+4]) {
+                    if(unpackVis(index, 4)) {
                         tex(tx.x, tx.y);
                         GL11.glVertex3i(lx,             ly,             lz+ BLOCK_SIZE);
                         tex(tx.z, tx.y);
@@ -852,7 +1058,7 @@ public class CubeChunk {
                     }
 
                     // Bottom: Z-
-                    if(visible[index*6+5]) {
+                    if(unpackVis(index, 5)) {
                         if(multiTex) tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.BOTTOM);
                         tex(tx.x, tx.y);
                         GL11.glVertex3i(lx,             ly,                 lz );
@@ -866,7 +1072,7 @@ public class CubeChunk {
 
                     // Y+
                     if(multiTex) tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.SIDE);
-                    if(visible[index*6+2]) {
+                    if(unpackVis(index, 2)) {
                         tex(tx.x, tx.y);
                         GL11.glVertex3i(lx,             ly+ BLOCK_SIZE,     lz );
                         tex(tx.x, tx.w);
@@ -878,7 +1084,7 @@ public class CubeChunk {
                     }
 
                     // Y-
-                    if(visible[index*6+3]) {
+                    if(unpackVis(index, 3)) {
                         tex(tx.x, tx.y);
                         GL11.glVertex3i(lx,             ly,     lz );
                         tex(tx.z, tx.y);
@@ -890,7 +1096,7 @@ public class CubeChunk {
                     }
 
                     // X+
-                    if(visible[index*6]) {
+                    if(unpackVis(index, 0)) {
                         tex(tx.x, tx.y);
                         GL11.glVertex3i(lx+ BLOCK_SIZE, ly,                  lz );
                         tex(tx.z, tx.y);
@@ -902,7 +1108,7 @@ public class CubeChunk {
                     }
 
                     // X-
-                    if(visible[index*6+1]) {
+                    if(unpackVis(index, 1)) {
                         tex(tx.x, tx.y);
                         GL11.glVertex3i(lx, ly,                  lz );
                         tex(tx.x, tx.w);
