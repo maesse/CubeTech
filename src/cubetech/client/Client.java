@@ -1118,6 +1118,9 @@ public class Client {
         // Render normal sprites
         Ref.SpriteMan.DrawNormal();
 
+        Ref.render.renderAll();
+        Ref.render.reset();
+
         
        
         // Set HUD render projection
@@ -1144,8 +1147,8 @@ public class Client {
         Ref.textMan.Render(); // Draw remaining text - shouldn't be any
 
         
-        
-        
+        Ref.glRef.srgbBuffer.BlitFBO();
+        //Ref.glRef.srgbBuffer.Unbind();
         // Display frame
 //        Display.sync(60);
         updateScreen();
@@ -1520,8 +1523,8 @@ public class Client {
                     {
                         // Save file
                         if(!ResourceManager.CreatePath("downloads/"+clc.downloadName)) {
-                            Common.Log("Cannot create destination folder: "+CubeMaterial.getPath("downloads/"+clc.downloadName));
-                            clc.downloadName = CubeMaterial.stripPath(clc.downloadName);
+                            Common.Log("Cannot create destination folder: "+Helper.getPath("downloads/"+clc.downloadName));
+                            clc.downloadName = Helper.stripPath(clc.downloadName);
                             Common.Log("Saving as: " + "downloads/" + clc.downloadName);
                         }
                         FileChannel chan = new FileOutputStream("downloads/"+clc.downloadName, false).getChannel();

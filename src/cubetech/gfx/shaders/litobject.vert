@@ -1,34 +1,29 @@
-in vec3 v_position;
-in vec2 v_coords;
-in vec4 v_color;
+#version 120
+attribute vec3 v_position;
+attribute vec2 v_coords;
+//attribute vec3 v_normal;
+attribute vec4 v_color;
 
-out vec2 coords;
-out vec4 color;
-varying vec3 normal, lightDir, halfVector;
-varying vec4 diffuse, ambientGlobal, ambient;
-varying vec3 v;
-varying float dist;
+varying vec2 coords;
+varying vec4 color;
+
 void main()
 {
-    normal = normalize(gl_NormalMatrix * gl_Normal);
+    // Get vertex normal
+    vec3 normal = normalize(gl_NormalMatrix * gl_Normal);
 
-    vec4 ecPos = vec4(gl_LightSource[0].position - vec4(v_position,1.0));
+    // Get light direction
+    vec3 lightDirection = normalize(vec3(gl_LightSource[0].position));
 
-    //vec4 ecPos = vec4(gl_ModelViewMatrix * vec4(v_position,1.0));
-    //vec4 derp = vec4(gl_ModelViewMatrix * gl_LightSource[0].position);
-    vec3 aux = vec4(gl_ModelViewMatrix * ecPos).xyz;
-    v = vec3(ecPos.xyz);
-    lightDir = normalize(aux);
-    dist = float(length(aux));
+    // get angle
+    float NdotL = max(dot(normal, lightDirection), 0.0);
 
-    //halfVector = normalize(gl_LightSource[0].halfVector.xyz);
-    halfVector = normalize(normalize(gl_LightSource[0].position.xyz) + vec3(0,0,1));
-    diffuse = gl_LightSource[0].diffuse;
-
-    ambient = gl_LightSource[0].ambient;
-    ambientGlobal = gl_LightModel.ambient;
+    // compute diffuse term
+    vec4 diffuse = gl_LightSource[0].diffuse; // gl_FrontMaterial.diffuse
+    color = NdotL * diffuse + gl_LightModel.ambient;
+    color.a = 1.0;
+    
 
     gl_Position = gl_ModelViewProjectionMatrix * vec4(v_position, 1.0);
     coords = v_coords;
-    color = v_color;
 }

@@ -1,5 +1,8 @@
 package cubetech.gfx;
 
+import org.lwjgl.opengl.EXTTextureSRGB;
+import cubetech.common.Helper;
+import org.lwjgl.opengl.GL14;
 import cubetech.common.Common;
 import java.awt.RenderingHints;
 import java.awt.Graphics2D;
@@ -49,6 +52,9 @@ import org.lwjgl.opengl.ARBTextureRectangle;
 import org.lwjgl.opengl.EXTTextureRectangle;
 
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.*;
+import static org.lwjgl.opengl.GL13.*;
+import static org.lwjgl.opengl.GL14.*;
 
 /**
  *
@@ -110,7 +116,7 @@ public final class ResourceManager {
                 Common.LogDebug("CubeTexture marked unloaded thinks he's loaded?");
             } else {
                 try {
-                    getTexture(name, GL_TEXTURE_2D, GL_RGBA, GL_LINEAR, GL_LINEAR, tex);
+                    getTexture(name, GL_TEXTURE_2D, EXTTextureSRGB.GL_SRGB8_ALPHA8_EXT, GL_LINEAR, GL_LINEAR, tex);
                 } catch (IOException ex) {
                     Common.Log("Cannot load texture: File not found: " + name);
                 }
@@ -125,6 +131,16 @@ public final class ResourceManager {
         }
     }
 
+    public CubeTexture loadCubemap(String filename) throws IOException {
+        CubeTexture tex = getTexture(filename,
+                         GL_TEXTURE_CUBE_MAP, // target
+                         GL_RGB,     // dst pixel format
+                         GL_LINEAR, // min filter
+                         GL_LINEAR, null);
+        tex.loaded = true;
+
+        return tex;
+    }
 
     public CubeTexture LoadTexture(String filename) {
         // Strip off path, so we can check if it is already loaded
@@ -141,7 +157,8 @@ public final class ResourceManager {
 
         // Try to load
         String name = filename.substring(idx); // get filetype
-        if(name.equalsIgnoreCase(".png") || name.equalsIgnoreCase(".jpg")) { // Load png
+        boolean suffixOk = name.equalsIgnoreCase(".png") || name.equalsIgnoreCase(".jpg") || name.equalsIgnoreCase(".tga");
+        if(suffixOk) {
             CubeTexture tex = null;
             if(Ref.glRef == null || !Ref.glRef.isInitalized()) {
                 // OpenGL not ready, do defered loading
@@ -211,14 +228,14 @@ public final class ResourceManager {
     }
 
     private BufferedImage loadImage(String path) throws IOException {
-//        if(path.startsWith("cubetech"))
-
+        if(!FileExists(path)) throw new IOException("Cannot find: " + path);
+        
         URL url = getClassLoader().getResource((path.startsWith("cubetech")?"":"cubetech/")+path);
 
         Image img = null;
         if(url != null)
             img = new ImageIcon(url).getImage();
-        else {
+        if(img == null) {
             try {
                 img = new ImageIcon(path).getImage();
 
@@ -228,12 +245,16 @@ public final class ResourceManager {
         }
 
         // FIX: Don't load RGB as ARGB
-        BufferedImage bufferedImage = new BufferedImage(img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
-        Graphics g = bufferedImage.getGraphics();
-        g.drawImage(img, 0, 0, null);
-        g.dispose();
-        
-        return bufferedImage;
+        try {
+            BufferedImage bufferedImage = new BufferedImage(img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+            Graphics g = bufferedImage.getGraphics();
+            g.drawImage(img, 0, 0, null);
+            g.dispose();
+
+            return bufferedImage;
+        } catch(IllegalArgumentException ex) {
+            throw new IOException("Failed to load texture.", ex);
+        }
     }
 
     private int createTextureID() {
@@ -259,7 +280,8 @@ public final class ResourceManager {
 
         CubeTexture tex = getTexture(resourceName,
                          GL_TEXTURE_2D, // target
-                         GL_RGBA,     // dst pixel format
+//                         GL_RGBA,     // dst pixel format
+                         EXTTextureSRGB.GL_SRGB8_ALPHA8_EXT,
                          GL_LINEAR, // min filter (unused)
                          GL_LINEAR, null);
 
@@ -278,15 +300,14 @@ public final class ResourceManager {
      * @return The loaded texture
      * @throws IOException Indicates a failure to access the resource
      */
-    private CubeTexture getTexture(String resourceName,
-                              int target,
+    private CubeTexture getTexture(String resourceName, int target,
                               int dstPixelFormat,
-                              int minFilter,
-                              int magFilter, CubeTexture texture) throws IOException {
-        int srcPixelFormat;
-
+                              int minFilter, int magFilter,
+                              CubeTexture texture) throws IOException {
         // create the texture ID for this texture
         int textureID = createTextureID();
+
+        // Create the CubeTexture
         if(texture == null)
             texture = new CubeTexture(target,textureID,resourceName);
         else {
@@ -297,41 +318,65 @@ public final class ResourceManager {
 
         // bind this texture
         glBindTexture(target, textureID);
-
-        BufferedImage bufferedImage = loadImage(resourceName);
-        texture.Width = bufferedImage.getWidth();
-        texture.Height = bufferedImage.getHeight();
-
-//        System.out.println(resourceName + ": " + texture.Width + "x" + texture.Height);
-
-        if (bufferedImage.getColorModel().hasAlpha()) {
-            srcPixelFormat = GL_RGBA;
-        } else {
-            srcPixelFormat = GL_RGB;
-        }
-
-        // convert that image into a byte buffer of texture data
-        ByteBuffer textureBuffer = convertImageData(bufferedImage,texture);
-
-        if (target == GL_TEXTURE_2D) {
+        // Set filter
+        if (target == GL_TEXTURE_2D || target == GL_TEXTURE_CUBE_MAP) {
             glTexParameteri(target, GL_TEXTURE_MIN_FILTER, minFilter);
             glTexParameteri(target, GL_TEXTURE_MAG_FILTER, magFilter);
             texture.minfilter = minFilter;
             texture.magfilter = magFilter;
         }
 
+        
 
+        if(target == GL_TEXTURE_CUBE_MAP) {
+            // convert that image into a byte buffer of texture data
+            ByteBuffer buf = convertImageData(loadImage(resourceName+"_ft.png"),texture);
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X,0,dstPixelFormat,
+                          texture.Width,
+                          texture.Height,
+                          0,GL_RGBA,GL_UNSIGNED_BYTE,
+                           buf );
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_X,0,dstPixelFormat,
+                          texture.Width,
+                          texture.Height,
+                          0,GL_RGBA,GL_UNSIGNED_BYTE,
+                           convertImageData(loadImage(resourceName+"_bk.png"),texture) );
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_Y,0,dstPixelFormat,
+                          texture.Width,
+                          texture.Height,
+                          0,GL_RGBA,GL_UNSIGNED_BYTE,
+                           convertImageData(loadImage(resourceName+"_rt.png"),texture) );
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,0,dstPixelFormat,
+                          texture.Width,
+                          texture.Height,
+                          0,GL_RGBA,GL_UNSIGNED_BYTE,
+                           convertImageData(loadImage(resourceName+"_lf.png"),texture) );
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_Z,0,dstPixelFormat,
+                          texture.Width,
+                          texture.Height,
+                          0,GL_RGBA,GL_UNSIGNED_BYTE,
+                           convertImageData(loadImage(resourceName+"_up.png"),texture) );
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,0,dstPixelFormat,
+                          texture.Width,
+                          texture.Height,
+                          0,GL_RGBA,GL_UNSIGNED_BYTE,
+                           convertImageData(loadImage(resourceName+"_dn.png"),texture) );
+        } else {
+            // load image data
+            BufferedImage bufferedImage = loadImage(resourceName);
+            texture.Width = bufferedImage.getWidth();
+            texture.Height = bufferedImage.getHeight();
 
-        // produce a texture from the byte buffer
-        glTexImage2D(target,
-                      0,
-                      dstPixelFormat,
-                      get2Fold(bufferedImage.getWidth()),
-                      get2Fold(bufferedImage.getHeight()),
-                      0,
-                      srcPixelFormat,
-                      GL_UNSIGNED_BYTE,
-                      textureBuffer );
+            // convert that image into a byte buffer of texture data
+            ByteBuffer textureBuffer = convertImageData(bufferedImage,texture);
+            int srcPixelFormat = bufferedImage.getColorModel().hasAlpha() ? GL_RGBA : GL_RGB;
+            // produce a texture from the byte buffer
+            glTexImage2D(target,0,dstPixelFormat,
+                          get2Fold(bufferedImage.getWidth()),
+                          get2Fold(bufferedImage.getHeight()),
+                          0,srcPixelFormat,GL_UNSIGNED_BYTE,
+                          textureBuffer );
+        }
 
         return texture;
     }
@@ -569,7 +614,7 @@ public final class ResourceManager {
     }
 
     public static boolean CreatePath(String string) {
-        File path = new File(CubeMaterial.getPath(string));
+        File path = new File(Helper.getPath(string));
         if(path.isDirectory())
             return true;
         try {
@@ -647,21 +692,52 @@ public final class ResourceManager {
         return new AbstractMap.SimpleEntry<NetBuffer, Integer>(NetBuffer.CreateCustom(buf), checksum);
     }
 
-    public int CreateEmptyTexture(int width, int height) {
+    // ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB
+
+    public int CreateEmptyDepthTexture(int width, int height, int target) {
         int textureId = createTextureID();
-        glBindTexture(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, textureId);
-        glTexParameteri(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindTexture(target, textureId);
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+//        glTexParameteri(target, GL_DEPTH_TEXTURE_MODE, GL_INTENSITY);
+//        glTexParameteri(target, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
+//        glTexParameteri(target, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+        ByteBuffer nullBuffer = null;
         ByteBuffer buf = ByteBuffer.allocateDirect(width*height*4);
-        buf.order(ByteOrder.nativeOrder());
-        for (int i= 0; i < width*height; i++) {
-            buf.put((byte)125);
-            buf.put((byte)0);
-            buf.put((byte)255);
-            buf.put((byte)255);
+            buf.order(ByteOrder.nativeOrder());
+            for (int i= 0; i < width*height; i++) {
+                buf.put((byte)125);
+                buf.put((byte)0);
+                buf.put((byte)255);
+                buf.put((byte)255);
+            }
+            buf.flip();
+        glTexImage2D(target, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, buf);
+        return textureId;
+    }
+
+    public int CreateEmptyTexture(int width, int height, int target, boolean fill) {
+        int textureId = createTextureID();
+        glBindTexture(target, textureId);
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        if(fill) {
+            ByteBuffer buf = ByteBuffer.allocateDirect(width*height*4);
+            buf.order(ByteOrder.nativeOrder());
+            for (int i= 0; i < width*height; i++) {
+                buf.put((byte)125);
+                buf.put((byte)0);
+                buf.put((byte)255);
+                buf.put((byte)255);
+            }
+            buf.flip();
+            glTexImage2D(target, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf);
+        } else {
+            ByteBuffer nullBuffer = null;
+            glTexImage2D(target, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullBuffer);
         }
-        buf.flip();
-        glTexImage2D(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf);
 
         return textureId;
     }

@@ -4,6 +4,7 @@ import cubetech.common.Common;
 import cubetech.misc.Ref;
 import java.net.URL;
 import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.HashMap;
 import java.util.logging.Level;
@@ -16,6 +17,8 @@ import org.lwjgl.opengl.ARBGeometryShader4;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
+import org.lwjgl.util.vector.Matrix3f;
+import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
@@ -34,15 +37,28 @@ public class Shader {
 
     // GLSL Shader variable positions
     private int uniform_texture = 0;
-    private int uniform_normalTexture = 0;
-    private int attr_position = 0;
-    private int attr_coords = 0;
-    private int attr_coords2 = 0;
-    private int attr_color = 0;
+//    private int attr_position = 0;
+//    private int attr_coords = 0;
+//    private int attr_coords2 = 0;
+//    private int attr_color = 0;
+
+    private int[] textureUniforms = new int[8];
+
+    HashMap<String, Integer> uniforms = new HashMap<String, Integer>();
 
     public int getShaderId() {
         return shaderId;
     }
+
+//    public void setTexture(String uniformName, int index) {
+//        // Get uniform id
+//        int id = ARBShaderObjects.glGetUniformLocationARB(shaderId, uniformName);
+//        uniforms.put(uniformName, id);
+//
+//        // Set value
+//        ARBShaderObjects.glUseProgramObjectARB(shaderId);
+//        ARBShaderObjects.glUniform1iARB(id, index); // Bind TEXTURE0+index to uniformName
+//    }
 
     public Shader(String name) throws Exception {
         if(!Ref.glRef.isInitalized())
@@ -84,6 +100,7 @@ public class Shader {
             GLRef.checkError();
             
             ARBShaderObjects.glLinkProgramARB(shaderId);
+            
             ARBShaderObjects.glValidateProgramARB(shaderId);
             GLRef.checkError();
         } else throw new Exception("Could not load fragment or vertex shader");
@@ -92,12 +109,13 @@ public class Shader {
         if(!infoString)
             throw new Exception("Shader assembly failed.");
         GLRef.checkError();
+
         uniform_texture = ARBShaderObjects.glGetUniformLocationARB(shaderId, "tex");
-        uniform_normalTexture = ARBShaderObjects.glGetUniformLocationARB(shaderId, "normalmap");
-        attr_position = GL20.glGetAttribLocation(shaderId, "v_position");
-        attr_coords = GL20.glGetAttribLocation(shaderId, "v_coords");
-        attr_coords2 = GL20.glGetAttribLocation(shaderId, "v_coords2");
-        attr_color = GL20.glGetAttribLocation(shaderId, "v_color");
+        textureUniforms[0] = uniform_texture;
+//        attr_position = GL20.glGetAttribLocation(shaderId, "v_position");
+//        attr_coords = GL20.glGetAttribLocation(shaderId, "v_coords");
+//        attr_coords2 = GL20.glGetAttribLocation(shaderId, "v_coords2");
+//        attr_color = GL20.glGetAttribLocation(shaderId, "v_color");
         GLRef.checkError();
     }
 
@@ -105,18 +123,34 @@ public class Shader {
 
     public void setUniform(String name, float value) {
         int index = getUniformIndex(name);
-        if(index < 0)
-            return;
+//        if(index < 0)
+//            return;
 
         // We've got an index, yay
         ARBShaderObjects.glUniform1fARB(index, value);
         GLRef.checkError();
     }
 
+    public void setUniform(int name, int value) {
+        // We've got an index, yay
+        ARBShaderObjects.glUniform1iARB(name, value);
+        GLRef.checkError();
+    }
+
+    public void setUniform(String name, int value) {
+        int index = getUniformIndex(name);
+//        if(index < 0)
+//            return;
+
+        // We've got an index, yay
+        ARBShaderObjects.glUniform1iARB(index, value);
+        GLRef.checkError();
+    }
+
     public void setUniform(String name, Vector3f value) {
         int index = getUniformIndex(name);
-        if(index < 0)
-            return;
+//        if(index < 0)
+//            return;
 
         // We've got an index, yay
         ARBShaderObjects.glUniform3fARB(index, value.x, value.y, value.z);
@@ -125,11 +159,44 @@ public class Shader {
 
      public void setUniform(String name, Vector4f value) {
         int index = getUniformIndex(name);
-        if(index < 0)
-            return;
+//        if(index < 0)
+//            return;
 
         // We've got an index, yay
         ARBShaderObjects.glUniform4fARB(index, value.x, value.y, value.z, value.w);
+        GLRef.checkError();
+    }
+
+     public void setUniform(String name, Matrix4f value) {
+        int index = getUniformIndex(name);
+//        if(index < 0)
+//            return;
+
+        // We've got an index, yay
+        Ref.glRef.matrixBuffer.position(0);
+        value.store(Ref.glRef.matrixBuffer);
+        ARBShaderObjects.glUniformMatrix4ARB(index, false, Ref.glRef.matrixBuffer);
+        
+        GLRef.checkError();
+    }
+
+     public void setUniformMat3(String string, FloatBuffer viewbuffer) {
+        int index = getUniformIndex(string);
+        ARBShaderObjects.glUniformMatrix3ARB(index, false, viewbuffer);
+        GLRef.checkError();
+    }
+
+     public void setUniform(String name, Matrix3f value) {
+        int index = getUniformIndex(name);
+//        if(index < 0)
+//            return;
+
+        // We've got an index, yay
+        Ref.glRef.matrixBuffer.position(0);
+        value.store(Ref.glRef.matrixBuffer);
+        Ref.glRef.matrixBuffer.flip();
+        ARBShaderObjects.glUniformMatrix3ARB(index, false, Ref.glRef.matrixBuffer);
+
         GLRef.checkError();
     }
 
@@ -137,7 +204,7 @@ public class Shader {
         Integer index = attribMap.get(name);
         if(index == null) {
             // try to bind it
-            int pos = GL20.glGetUniformLocation(shaderId, name);
+            int pos = ARBShaderObjects.glGetUniformLocationARB(shaderId, name);
             // Handle error
             GLRef.checkError();
             if(pos < 0) {
@@ -152,14 +219,19 @@ public class Shader {
 
     public void Bind() {
         ARBShaderObjects.glUseProgramObjectARB(shaderId);
-        ARBShaderObjects.glUniform1iARB(uniform_texture, 0); // Bind TEXTURE0 to "tex"
-        if(uniform_normalTexture != 0) {
-            ARBShaderObjects.glUniform1iARB(uniform_normalTexture, 1); // Bind TEXTURE0 to "tex"
-            GL13.glActiveTexture(GL13.GL_TEXTURE1);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, Ref.ResMan.LoadTexture("data/water_normal2.jpg").GetID());
-            GLRef.checkError();
-            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+//        ARBShaderObjects.glUniform1iARB(uniform_texture, 0); // Bind TEXTURE0 to "tex"
+        for (int i= 0; i < textureUniforms.length; i++) {
+            if(textureUniforms[i] == 0) continue;
+            ARBShaderObjects.glUniform1iARB(textureUniforms[i], i);
         }
+
+//        if(uniform_normalTexture != 0) {
+//            ARBShaderObjects.glUniform1iARB(uniform_normalTexture, 1); // Bind TEXTURE0 to "tex"
+//            GL13.glActiveTexture(GL13.GL_TEXTURE1);
+//            GL11.glBindTexture(GL11.GL_TEXTURE_2D, Ref.ResMan.LoadTexture("data/water_normal2.jpg").GetID());
+//            GLRef.checkError();
+//            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+//        }
 //        else
 //            ARBShaderObjects.glUniform1iARB(uniform_normalTexture, 1); // Bind TEXTURE0 to "tex"
         GLRef.checkError();
@@ -170,8 +242,12 @@ public class Shader {
         GLRef.checkError();
     }
 
-    public int GetTextureIndex() {
-        return uniform_texture;
+    public void mapTextureUniform(String name, int textureIndex) {
+        textureUniforms[textureIndex] = ARBShaderObjects.glGetUniformLocationARB(shaderId, name);
+    }
+
+    public int GetTextureIndex(int index) {
+        return textureUniforms[index];
     }
 
     private int createVertShader(String name) {
@@ -289,6 +365,8 @@ public class Shader {
 
         //return null;
     }
+
+    
 
    
 

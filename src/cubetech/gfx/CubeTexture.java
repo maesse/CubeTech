@@ -2,6 +2,8 @@ package cubetech.gfx;
 import cubetech.misc.Ref;
 import org.lwjgl.opengl.EXTTextureFilterAnisotropic;
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.*;
+import static org.lwjgl.opengl.GL13.*;
 /**
  *
  * @author mads
@@ -19,6 +21,8 @@ public class CubeTexture {
     int minfilter;
     int magfilter;
     int wrap = GL_REPEAT;
+
+    public int textureSlot = 0;
     
 
     public CubeTexture(int target, int id, String name) {
@@ -40,6 +44,8 @@ public class CubeTexture {
         wrap = value;
         glTexParameteri(Target, GL_TEXTURE_WRAP_S, value);
         glTexParameteri(Target, GL_TEXTURE_WRAP_T, value);
+        if(Target == GL_TEXTURE_CUBE_MAP)
+            glTexParameteri(Target, GL_TEXTURE_WRAP_R, value);
     }
 
     public void setFiltering(boolean min, int filter) {
@@ -56,15 +62,20 @@ public class CubeTexture {
 
     public void Bind() {
         if(loaded) {
-//            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+            glActiveTexture(GL_TEXTURE0+textureSlot);
             glBindTexture(Target, TextureID);
+            
+//            Ref.glRef.shader.setUniform(Ref.glRef.shader.GetTextureIndex(textureSlot), textureSlot);
+            
             GLRef.checkError();
-//            GL20.glUniform1i(Ref.glRef.shader.GetTextureIndex(), TextureID);
+            
+        } else {
+            Ref.ResMan.getWhiteTexture().Bind();
         }
     }
 
-    public static void Unbind() {
-//        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+    public void Unbind() {
+        glActiveTexture(GL_TEXTURE0+textureSlot);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
