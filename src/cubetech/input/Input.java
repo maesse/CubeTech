@@ -279,7 +279,7 @@ public class Input {
         
         int dx = 0, dy = 0;
         boolean event = false;
-        while(Mouse.next()) {
+        while(Mouse.next() && !Ref.common.com_unfocused.isTrue()) {
             event = true;
             // Add up delta
             dx += Mouse.getEventDX();

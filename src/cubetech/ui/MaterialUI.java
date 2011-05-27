@@ -1,5 +1,6 @@
 package cubetech.ui;
 
+import cubetech.common.Helper;
 import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.CubeMaterial.Filtering;
 import cubetech.gfx.ResourceManager;
@@ -295,8 +296,8 @@ public class MaterialUI extends javax.swing.JPanel {
                 img = Ref.ResMan.loadImage2(path);
             } else {
                 // grab path from material
-                String p = CubeMaterial.getPath(mat.getPath());
-                String p2 = CubeMaterial.stripPath(path);
+                String p = Helper.getPath(mat.getPath());
+                String p2 = Helper.stripPath(path);
                 img = Ref.ResMan.loadImage2(p + "/" + p2);
             }
             canvas.setImg(img);

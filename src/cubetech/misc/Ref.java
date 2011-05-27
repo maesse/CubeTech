@@ -2,6 +2,7 @@ package cubetech.misc;
 
 import cubetech.gfx.GLRef;
 import cubetech.CGame.CGame;
+import cubetech.CGame.Render;
 import cubetech.Game.Game;
 import cubetech.common.Common;
 import cubetech.net.Net;
@@ -50,6 +51,8 @@ public class Ref {
     public static UI ui;
     public static ClipMap cm;
 
+    public static Render render;
+
     // Initializes classes that there need to be only one off
     public static void InitRef(boolean isApplet, boolean noSound) throws Exception {
         // Set default platform look and feel
@@ -80,5 +83,6 @@ public class Ref {
         Ref.Console = new Console(); // Set up the console
         Ref.ui = new UI();
         Ref.cm = new ClipMap();
+        Ref.render = new Render();
     }
 }

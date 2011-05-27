@@ -41,6 +41,7 @@ public class ClipMap {
 
     public void GenerateCubeMap(long seed) {
         IChunkGenerator gen = new PerlinChunkGenerator();
+        //IChunkGenerator gen = new ChunkGenerator();
         gen.setSeed(seed);
         cubemap = new CubeMap(gen, 4, 4, 2);
     }

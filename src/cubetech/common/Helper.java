@@ -6,8 +6,14 @@
 package cubetech.common;
 
 import cubetech.input.Input;
+import cubetech.misc.Ref;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL20;
+import org.lwjgl.util.vector.Matrix3f;
+import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
+import org.lwjgl.util.vector.Vector4f;
 
 /**
  *
@@ -23,6 +29,178 @@ public class Helper {
         dst.x = src.x;
         dst.y = src.y;
         dst.z = src.z;
+    }
+
+    public static Matrix4f scale(float f, Matrix4f src, Matrix4f dest) {
+        if (dest == null) {
+            dest = new Matrix4f();
+        }
+        dest.m00 = src.m00 * f;
+        dest.m01 = src.m01 * f;
+        dest.m02 = src.m02 * f;
+        dest.m03 = src.m03 * f;
+
+        dest.m10 = src.m10 * f;
+        dest.m11 = src.m11 * f;
+        dest.m12 = src.m12 * f;
+        dest.m13 = src.m13 * f;
+
+        dest.m20 = src.m20 * f;
+        dest.m21 = src.m21 * f;
+        dest.m22 = src.m22 * f;
+        dest.m23 = src.m23 * f;
+
+        dest.m30 = src.m30 * f;
+        dest.m31 = src.m31 * f;
+        dest.m32 = src.m32 * f;
+        dest.m33 = src.m33 * f;
+        return dest;
+    }
+
+
+    public static void renderBBoxWireframe(float xmin, float ymin, float zmin, float xmax, float ymax, float zmax) {
+        // ready the texture
+        Ref.ResMan.getWhiteTexture().Bind();
+        col(1, 0, 0);
+        GL11.glBegin(GL11.GL_LINES);
+
+        // Top: Z+
+        {
+            GL11.glVertex3f(xmin,             ymin,             zmax);
+            GL11.glVertex3f(xmax,ymin,             zmax);
+            GL11.glVertex3f(xmax,ymin,             zmax);
+            GL11.glVertex3f(xmax,ymax,zmax);
+            GL11.glVertex3f(xmax,ymax,zmax);
+            GL11.glVertex3f(xmin,ymax,zmax);
+            GL11.glVertex3f(xmin,ymax,zmax);
+            GL11.glVertex3f(xmin,ymin,zmax);
+        }
+
+        // Bottom: Z-
+        {
+            GL11.glVertex3f(xmin,             ymin,             zmin);
+            GL11.glVertex3f(xmax,ymin,             zmin);
+            GL11.glVertex3f(xmax,ymin,             zmin);
+            GL11.glVertex3f(xmax,ymax,zmin);
+            GL11.glVertex3f(xmax,ymax,zmin);
+            GL11.glVertex3f(xmin,ymax,zmin);
+            GL11.glVertex3f(xmin,ymax,zmin);
+            GL11.glVertex3f(xmin,ymin,zmin);
+        }
+
+        // Y+
+        {
+            GL11.glVertex3f(xmax,ymax,    zmax);
+            GL11.glVertex3f(xmax,ymax,     zmin);
+        }
+
+        // Y-
+        {
+            GL11.glVertex3f(xmin,             ymin,     zmin );
+            GL11.glVertex3f(xmin,ymin,     zmax);
+        }
+
+        // X+
+        {
+            GL11.glVertex3f(xmax ,ymin ,    zmin);
+            GL11.glVertex3f(xmax, ymin,                 zmax);
+        }
+
+        // X-
+        {
+            GL11.glVertex3f(xmin ,ymax ,    zmax);
+            GL11.glVertex3f(xmin ,ymax,     zmin);
+        }
+        GL11.glEnd();
+    }
+
+    public static void tex(float x, float y) {
+        if(Ref.glRef.isShadersSupported())
+            GL20.glVertexAttrib2f(2, x, y);
+        else
+            GL11.glTexCoord2f(x, y);
+    }
+
+    public static void col(float r, float g, float b) {
+        if(Ref.glRef.isShadersSupported())
+            GL20.glVertexAttrib3f(1, r,g,b);
+        else
+            GL11.glColor3f(r,g,b);
+    }
+    
+
+    public static Vector3f transform(Matrix4f left, Vector3f right, Vector3f dest) {
+        if (dest == null)
+            dest = new Vector3f();
+
+        float x = left.m00 * right.x + left.m10 * right.y + left.m20 * right.z + left.m30;
+        float y = left.m01 * right.x + left.m11 * right.y + left.m21 * right.z + left.m31;
+        float z = left.m02 * right.x + left.m12 * right.y + left.m22 * right.z + left.m32;
+
+        dest.x = x;
+        dest.y = y;
+        dest.z = z;
+
+        return dest;
+    }
+
+    public static Vector3f transform(Matrix3f left, Vector4f right, Vector3f dest) {
+        if (dest == null)
+            dest = new Vector3f();
+
+        float x = left.m00 * right.x + left.m10 * right.y + left.m20 * right.z;
+        float y = left.m01 * right.x + left.m11 * right.y + left.m21 * right.z;
+        float z = left.m02 * right.x + left.m12 * right.y + left.m22 * right.z;
+
+        dest.x = x;
+        dest.y = y;
+        dest.z = z;
+
+        return dest;
+    }
+
+    public static Vector3f transform(Matrix3f left, Vector3f right, Vector3f dest) {
+        if (dest == null)
+            dest = new Vector3f();
+
+        float x = left.m00 * right.x + left.m10 * right.y + left.m20 * right.z;
+        float y = left.m01 * right.x + left.m11 * right.y + left.m21 * right.z;
+        float z = left.m02 * right.x + left.m12 * right.y + left.m22 * right.z;
+
+        dest.x = x;
+        dest.y = y;
+        dest.z = z;
+
+        return dest;
+    }
+
+    public static String stripPath(String s) {
+        s = s.replace('\\', '/');
+        int i = s.lastIndexOf('/');
+        String ext = null;
+        if (i > 0 &&  i < s.length() - 1) {
+            ext = s.substring(i+1);
+        }
+
+        if(ext == null || ext.isEmpty())
+            return s;
+        return ext;
+    }
+
+    public static String getPath(String s) {
+        s = s.replace('\\', '/');
+        int i = s.lastIndexOf('/');
+        if(i == s.length()-1)
+            return s; // ends with /, so assume directory
+
+        String ext = null;
+        if (i > 0 &&  i < s.length() - 1) {
+            ext = s.substring(0,i+1);
+        }
+
+        if(ext == null || ext.isEmpty())
+            return "";
+        return ext;
     }
 
     public static Vector3f[] AnglesToAxis(Vector3f angles) {
@@ -180,10 +358,12 @@ public class Helper {
         dest.y = a.y + b.y * scale;
     }
 
-    public static void VectorMA(Vector3f a, float scale, Vector3f b, Vector3f dest) {
+    public static Vector3f VectorMA(Vector3f a, float scale, Vector3f b, Vector3f dest) {
+        if(dest == null) dest = new Vector3f();
         dest.x = a.x + b.x * scale;
         dest.y = a.y + b.y * scale;
         dest.z = a.z + b.z * scale;
+        return dest;
     }
 
     public static float RadiusFromBounds(Vector3f mins, Vector3f maxs) {
@@ -216,6 +396,32 @@ public class Helper {
             return vec.y;
         return vec.z;
     }
+
+    public static Matrix3f toNormalMatrix(Matrix4f dest, Matrix3f matnorm) {
+        if(matnorm == null)
+            matnorm = new Matrix3f();
+        
+        // Matrix3x3 matnorm(mat.b.cross3(mat.c), mat.c.cross3(mat.a), mat.a.cross3(mat.b));
+        // 1y * 2z - 1z * 2y,
+        // Vec3(y*o.z-z*o.y, z*o.x-x*o.z, x*o.y-y*o.x);
+
+        
+        
+        matnorm.m00 = dest.m11 * dest.m22 - dest.m21 * dest.m12;
+        matnorm.m10 = dest.m21 * dest.m02 - dest.m01 * dest.m22;
+        matnorm.m20 = dest.m01 * dest.m12 - dest.m11 * dest.m02;
+
+        matnorm.m01 = dest.m12 * dest.m20 - dest.m22 * dest.m10;
+        matnorm.m11 = dest.m22 * dest.m00 - dest.m02 * dest.m20;
+        matnorm.m21 = dest.m02 * dest.m10 - dest.m12 * dest.m00;
+
+        matnorm.m02 = dest.m10 * dest.m21 - dest.m20 * dest.m11;
+        matnorm.m12 = dest.m20 * dest.m01 - dest.m00 * dest.m21;
+        matnorm.m22 = dest.m00 * dest.m11 - dest.m10 * dest.m01;
+        return matnorm;
+    }
+
+
 
     
 }

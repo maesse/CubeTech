@@ -19,40 +19,83 @@ public class PerlinChunkGenerator implements IChunkGenerator {
         //this.seed = seed;
     }
 
+    private double getNoise(int chunkx, int chunky, int chunkz, int x, int y, int z,
+            float freq, float ampl) {
+        return (SimplexNoise.noise(
+                            (chunkx * CubeChunk.SIZE + x)*freq,
+                            (chunky * CubeChunk.SIZE + y)*freq,
+                            (chunkz * CubeChunk.SIZE + z)*freq)+1) * 0.5f * ampl;
+    }
+
+
+    private float getHeightFrac(float min, float max, float current) {
+        current -= max;
+        if(current > 0) current = 0;
+        float total = max - min;
+        if(current < -total) current = -total;
+        float frac = current / -total;
+        return frac;
+    }
     public CubeChunk generateChunk(CubeMap map, int x, int y, int z) {
         CubeChunk chunk = new CubeChunk(map, x, y, z);
+
+        float maxHeight = 512;
+        float groundlevel = -1024;
+        float minHeight = CubeChunk.SIZE * CubeChunk.BLOCK_SIZE * CubeMap.MIN_Z;
+        
         
         for (int i= 0; i < CubeChunk.SIZE; i++) {
             for (int j= 0; j < CubeChunk.SIZE; j++) {
                 for (int k= 0; k < CubeChunk.SIZE; k++) {
+                    double rnd = getNoise(x,y,z,k,j,i, 0.001f, 1f);
 
-                    float freq = 0.8484f;
-                    float ampl = 0.1f;
-                    double rnd = (SimplexNoise.noise(
-                            (x * CubeChunk.SIZE + k)*freq,
-                            (y * CubeChunk.SIZE + j)*freq,
-                            (z * CubeChunk.SIZE + i)*freq)) * ampl;
+                    // get height gradient
+                    float currentHeight = (z * CubeChunk.SIZE + i) * CubeChunk.BLOCK_SIZE;
+                    float frac = getHeightFrac(minHeight, maxHeight, currentHeight);
 
-                    freq = 0.4f;
-                    ampl = 0.2f;
-                    rnd += (SimplexNoise.noise(
-                            (x * CubeChunk.SIZE + k)*freq,
-                            (y * CubeChunk.SIZE + j)*freq,
-                            (z * CubeChunk.SIZE + i)*freq)) * ampl;
+                    // Multiply noise by gradient
+                    rnd *= frac*frac;
+                    rnd += frac*0.02;
 
-                    freq = 0.2f;
-                    ampl = 0.4f;
-                    rnd += (SimplexNoise.noise(
-                            (x * CubeChunk.SIZE + k)*freq,
-                            (y * CubeChunk.SIZE + j)*freq,
-                            (z * CubeChunk.SIZE + i)*freq)) * ampl;
+                    
 
-                    freq = 0.1f;
-                    ampl = 8f;
-                    rnd += (SimplexNoise.noise(
-                            (x * CubeChunk.SIZE + k)*freq,
-                            (y * CubeChunk.SIZE + j)*freq,
-                            (z * CubeChunk.SIZE + i)*freq)) * ampl;
+
+                    double rnd2 = getNoise(x,z,y,k,i,j, 0.005f, 0.5f);
+                    frac = getHeightFrac(-1024, 1024, currentHeight);
+                    rnd2 *= frac * rnd2;
+                    rnd += rnd2;
+//                    if(rnd2 > 0.04f) rnd = 1f;
+//                    else if(frac < 1f && frac > 0.5f) rnd = 0f;
+
+                    // saturate
+                    if(rnd > 0.02f) rnd = 1f;
+
+
+//                    if(z * CubeChunk.SIZE * CubeChunk.BLOCK_SIZE > 0) {
+//                        rnd = -100f;
+//                    }
+                    //rnd = ((z * CubeChunk.SIZE + i) + CubeChunk.SIZE * CubeChunk.BLOCK_SIZE * -CubeMap.MIN_Z) / height;
+
+//                    freq = 0.4f;
+//                    ampl = 0.2f;
+//                    rnd += (SimplexNoise.noise(
+//                            (x * CubeChunk.SIZE + k)*freq,
+//                            (y * CubeChunk.SIZE + j)*freq,
+//                            (z * CubeChunk.SIZE + i)*freq)) * ampl;
+//
+//                    freq = 0.2f;
+//                    ampl = 0.4f;
+//                    rnd += (SimplexNoise.noise(
+//                            (x * CubeChunk.SIZE + k)*freq,
+//                            (y * CubeChunk.SIZE + j)*freq,
+//                            (z * CubeChunk.SIZE + i)*freq)) * ampl;
+//
+//                    freq = 0.1f;
+//                    ampl = 8f;
+//                    rnd += (SimplexNoise.noise(
+//                            (x * CubeChunk.SIZE + k)*freq,
+//                            (y * CubeChunk.SIZE + j)*freq,
+//                            (z * CubeChunk.SIZE + i)*freq)) * ampl;
 
 //                    float freq = 0.8484f;
 //                    float ampl = 1f;
@@ -86,18 +129,17 @@ public class PerlinChunkGenerator implements IChunkGenerator {
 //                            (z * CubeChunk.SIZE + i)*seed*freq)) * ampl;
 
 
+                    
 
+                    
+                    boolean empty = rnd <= 0.5f;
 
-                    if(z > 0) {
-                        rnd -= 100f;
-                    }
-                    boolean empty = rnd <= 0.0f;
-
-                    chunk.setCubeType(k,j,i, empty?CubeType.EMPTY:CubeType.GRASS);
+                    chunk.setCubeType(k,j,i, empty?CubeType.EMPTY:CubeType.GRASS, false);
                 }
             }
         
         }
+        chunk.notifyChange();
         return chunk;
     }
 

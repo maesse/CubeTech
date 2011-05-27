@@ -234,7 +234,7 @@
                                       </Group>
                                   </Group>
                               </Group>
-                              <EmptySpace pref="39" max="32767" attributes="0"/>
+                              <EmptySpace pref="56" max="32767" attributes="0"/>
                           </Group>
                       </Group>
                     </DimensionLayout>
@@ -401,7 +401,7 @@
                                       </Group>
                                   </Group>
                               </Group>
-                              <EmptySpace pref="24" max="32767" attributes="0"/>
+                              <EmptySpace pref="41" max="32767" attributes="0"/>
                           </Group>
                       </Group>
                     </DimensionLayout>
@@ -646,7 +646,7 @@
                                   <Group type="102" attributes="0">
                                       <Component id="jLabel8" min="-2" max="-2" attributes="0"/>
                                       <EmptySpace type="unrelated" max="-2" attributes="0"/>
-                                      <Component id="labelMaterial" pref="136" max="32767" attributes="0"/>
+                                      <Component id="labelMaterial" pref="153" max="32767" attributes="0"/>
                                   </Group>
                                   <Component id="jButton4" min="-2" max="-2" attributes="0"/>
                                   <Group type="102" alignment="0" attributes="0">

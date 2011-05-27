@@ -19,12 +19,17 @@ import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.input.*;
+import cubetech.iqm.IQMLoader;
+import cubetech.iqm.IQMModel;
 import cubetech.misc.Ref;
 import cubetech.spatial.Bin;
 import cubetech.spatial.SpatialQuery;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 
@@ -67,6 +72,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar camera_vsnapmin = Ref.cvars.Get("camera_vsnapmin", "140", EnumSet.of(CVarFlags.ARCHIVE));
     CVar camera_vsnapmax = Ref.cvars.Get("camera_vsnapmax", "300", EnumSet.of(CVarFlags.ARCHIVE));
 
+    CVar cg_tps = Ref.cvars.Get("cg_tps", "0", EnumSet.of(CVarFlags.NONE));
+
     public Vector3f rayStart = new Vector3f();
     public Vector3f rayEnd = new Vector3f();
     public int rayTime = 0;
@@ -91,6 +98,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     public float lastVleft = camera_vplayerpos.fValue;
 
     SkyBox skyBox = new SkyBox("data/sky");
+
+    
 
 
     /**
@@ -163,6 +172,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
         Ref.Input.AddKeyEventListener(this, Input.KEYCATCH_CGAME);
         Ref.Input.AddMouseEventListener(this, Input.KEYCATCH_CGAME);
+        
     }
 
     public void DrawActiveFrame(int serverTime) {
@@ -259,6 +269,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 //                }
                 skyBox.Render(cg.refdef);
                 Ref.cm.cubemap.Render(cg.refdef);
+                
                 //Ref.glRef.PopShader();
                 
             }
@@ -304,7 +315,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg.refdef.CalcVRect();
 
         Helper.VectorCopy(cg.predictedPlayerState.origin, cg.refdef.Origin);
-        cg.refdef.Origin.z += cg_viewheight.fValue;
+        
         Helper.VectorCopy(cg.predictedPlayerState.viewangles, cg.refdef.Angles);
 
         if(cg_errorDecay.fValue > 0f) {
@@ -314,6 +325,14 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                 Helper.VectorMA(cg.refdef.Origin, f, cg.predictedError, cg.refdef.Origin);
             else
                 cg.predictedErrorTime = 0;
+        }
+        
+//        cg.refdef.Origin.z += cg_viewheight.fValue;
+
+        if(cg_tps.isTrue()) {
+            cg.refdef.offsetThirdPerson();
+        } else {
+
         }
 
         cg.refdef.SetupProjection();

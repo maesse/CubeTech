@@ -1557,7 +1557,7 @@ public class MapEditor implements KeyEventListener, MouseEventListener {
                 elemCont.addComponent(elem);
                 
 
-                elemCont.addComponent(new CLabel(CubeMaterial.stripPath(list[i]),Align.CENTER,0.5f));
+                elemCont.addComponent(new CLabel(Helper.stripPath(list[i]),Align.CENTER,0.5f));
                 elemCont.setMargin(2, 2, 2, 2);
                 elemCont.doLayout();
                 texRow.addComponent(elemCont);

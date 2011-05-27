@@ -55,7 +55,7 @@ public class Common {
     public CVar com_sleepPrecision; // sleep and yield precision can vary
     public CVar com_yieldPrecision; // for different platforms/computers
 
-    private CVar com_unfocused;
+    public CVar com_unfocused;
     private CVar com_maxfpsUnfocused;
     public CVar com_timescale;
     private CVar com_abnormalExit;
@@ -308,7 +308,7 @@ public class Common {
             if(Ref.glRef != null && Ref.glRef.isApplet())
                 RunBrowserURL("javascript:handleError(\"CubeTech suffered a fatal crash :(\\r\\nCrashlog: " + str + "\")");
             else {
-                JOptionPane.showMessageDialog(null, "CubeTech suffered a fatal crash :(\nCrashlog: " + str, "Fatal Crash", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(Display.getParent(), "CubeTech suffered a fatal crash :(\nCrashlog: " + str, "Fatal Crash", JOptionPane.ERROR_MESSAGE);
             }
             Shutdown();
         }
@@ -360,6 +360,7 @@ public class Common {
     }
 
     public void Shutdown() {
+        Ref.net.shutdown();
         throw new ExitException("Shutdown");
     }
 

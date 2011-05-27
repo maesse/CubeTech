@@ -21,6 +21,8 @@ public class VBO {
     private ByteBuffer mappedBuffer = null;
     public float resizeMultiplier = 1f;
 
+    public static int TotalBytes = 0;
+
     public VBO(int sizeInBytes, BufferTarget target) {
         this.sizeInBytes = sizeInBytes;
         this.target = target;
@@ -30,6 +32,7 @@ public class VBO {
 
         vboId = Ref.glRef.createVBOid();
         Ref.glRef.sizeVBO(target, vboId, sizeInBytes);
+        TotalBytes += sizeInBytes;
     }
 
     public void bind() {
@@ -49,9 +52,11 @@ public class VBO {
         if(bytes > sizeInBytes) {
             // create a new VBO
             //Ref.glRef.destroyVBO(vboId);
+            TotalBytes -= sizeInBytes;
             sizeInBytes = (int) (bytes * resizeMultiplier);
             if(sizeInBytes < bytes) // just to be sure..
                 sizeInBytes = bytes;
+            TotalBytes += sizeInBytes;
             //vboId = Ref.glRef.createVBOid();
             Ref.glRef.sizeVBO(target, vboId, sizeInBytes);
         }

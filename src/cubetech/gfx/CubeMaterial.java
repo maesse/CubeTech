@@ -3,6 +3,7 @@ package cubetech.gfx;
 
 import cubetech.common.Commands;
 import cubetech.common.Common;
+import cubetech.common.Helper;
 import cubetech.misc.Ref;
 
 import java.io.BufferedInputStream;
@@ -12,7 +13,6 @@ import java.io.InputStreamReader;
 
 import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Vector2f;
-
 
 
 /**
@@ -60,7 +60,7 @@ public class CubeMaterial {
 
         // Assemble the material into a netbuffer
         StringBuilder str = new StringBuilder();
-        str.append(String.format("texture \"%s\"\n", stripPath(textureName)));
+        str.append(String.format("texture \"%s\"\n", Helper.stripPath(textureName)));
         str.append(String.format("translucent \"%d\"\n", translucent));
         str.append(String.format("ignorez \"%d\"\n", ignorez?1:0));
         str.append(String.format("filter \"%d\"\n", filter==Filtering.POINT?0:1));
@@ -72,7 +72,7 @@ public class CubeMaterial {
 
         ResourceManager.SaveStringToFile(path, str.toString());
         String copySrc = textureName;
-        String copyDest = getPath(path) + stripPath(textureName);
+        String copyDest = Helper.getPath(path) + Helper.stripPath(textureName);
         // Bam, if madness
         if(!ResourceManager.FileExists(copyDest)) {
             if(ResourceManager.FileExists(copySrc)) {
@@ -88,38 +88,11 @@ public class CubeMaterial {
         }
 
         fullname = path;
-        name = CubeMaterial.stripPath(path);
+        name = Helper.stripPath(path);
         
     }
 
-    public static String stripPath(String s) {
-        s = s.replace('\\', '/');
-        int i = s.lastIndexOf('/');
-        String ext = null;
-        if (i > 0 &&  i < s.length() - 1) {
-            ext = s.substring(i+1);
-        }
-
-        if(ext == null || ext.isEmpty())
-            return s;
-        return ext;
-    }
-
-    public static String getPath(String s) {
-        s = s.replace('\\', '/');
-        int i = s.lastIndexOf('/');
-        if(i == s.length()-1)
-            return s; // ends with /, so assume directory
-        
-        String ext = null;
-        if (i > 0 &&  i < s.length() - 1) {
-            ext = s.substring(0,i+1);
-        }
-
-        if(ext == null || ext.isEmpty())
-            return "";
-        return ext;
-    }
+    
 
     public static CubeMaterial Load(String path, boolean loadTexture) throws Exception {
         BufferedInputStream bis = ResourceManager.OpenFileAsInputStream(path);
@@ -175,8 +148,8 @@ public class CubeMaterial {
             Common.Log("CubeMaterial.Load(" + path + "): Warning: Texturesize is 0");
         }
         // grab path from material
-        String p = CubeMaterial.getPath(path);
-        String p2 = CubeMaterial.stripPath(mat.textureName);
+        String p = Helper.getPath(path);
+        String p2 = Helper.stripPath(mat.textureName);
         if(!ResourceManager.FileExists(mat.textureName) && !ResourceManager.FileExists(p + p2)) {
             Common.Log("CubeMaterial.Load(" + path + "): Warning: Cannot find texture: " + mat.textureName);
             Common.Log("(debug info: p=" + p + ", p2=" + p2 +")");
@@ -187,7 +160,7 @@ public class CubeMaterial {
         }
 
         mat.fullname = path;
-        mat.name = CubeMaterial.stripPath(path);
+        mat.name = Helper.stripPath(path);
 
         // loadTexture true means that this material is loaded for the game
         if(loadTexture) {
@@ -291,7 +264,7 @@ public class CubeMaterial {
 
     public void setPath(String Name) {
         fullname = Name;
-        name = CubeMaterial.stripPath(Name);
+        name = Helper.stripPath(Name);
     }
 
     public Vector2f getTextureOffset() {

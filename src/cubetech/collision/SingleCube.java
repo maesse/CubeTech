@@ -36,14 +36,14 @@ public class SingleCube {
      */
     public void putBlock(byte type) {
         if(chunk != null)
-            chunk.setCubeType(x, y, z, type);
+            chunk.setCubeType(x, y, z, type, true);
     }
 
     /**
      * Removes the block from the chunk (makes it invisible/non-collidable)
      */
     public void removeBlock() {
-        chunk.setCubeType(x,y,z, CubeType.EMPTY);
+        chunk.setCubeType(x,y,z, CubeType.EMPTY, true);
     }
 
     /**
@@ -74,7 +74,7 @@ public class SingleCube {
             chunkPos[index-1] += sign;
             
             // retrieve the chunk
-            nChunk = Ref.cm.cubemap.getChunk(chunkPos[0], chunkPos[1], chunkPos[2]);
+            nChunk = Ref.cm.cubemap.getChunk(chunkPos[0], chunkPos[1], chunkPos[2], true);
 
             // correct the cube position for the new chunk
             p[index-1] = p[index-1] & (CubeChunk.SIZE-1); 

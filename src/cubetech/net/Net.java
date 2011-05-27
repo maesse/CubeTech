@@ -217,6 +217,11 @@ public final class Net {
         UpdateStats();
     }
 
+    public void shutdown() {
+        DestroyClientSocket();
+        DestroyServerSocket();
+    }
+
     void InitNet() throws IOException {
         if(srvChannel != null)
             DestroyServerSocket();
@@ -258,13 +263,27 @@ public final class Net {
     }
 
     void DestroyClientSocket() {
+        cliSocket.close();
         cliSocket = null;
+        
+        try {
+            cliChannel.close();
+        } catch (IOException ex) {
+            Logger.getLogger(Net.class.getName()).log(Level.SEVERE, null, ex);
+        }
         cliChannel = null;
     }
 
     void DestroyServerSocket() {
         // CLean up the socket
+        srvSocket.close();
         srvSocket = null;
+        
+        try {
+            srvChannel.close();
+        } catch (IOException ex) {
+            Logger.getLogger(Net.class.getName()).log(Level.SEVERE, null, ex);
+        }
         srvChannel = null;
     }
 
