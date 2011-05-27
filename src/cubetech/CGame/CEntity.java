@@ -25,7 +25,8 @@ public class CEntity {
 
     public int previousEvent;
     public int snapshotTime; // last time this entity was found in a snapshot
-    //public PlayerEntity pe;
+
+    public PlayerEntity pe = new PlayerEntity();
 
     public int errorTime; // decay the error from this time
     public Vector3f errorOrigin = new Vector3f();

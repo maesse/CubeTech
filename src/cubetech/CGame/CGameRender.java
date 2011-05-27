@@ -15,6 +15,7 @@ import cubetech.collision.SingleCube;
 import cubetech.common.Common;
 import cubetech.common.Content;
 import cubetech.common.GItem;
+import cubetech.common.Helper;
 import cubetech.common.Move.MoveType;
 import cubetech.common.PlayerState;
 import cubetech.entities.EntityFlags;
@@ -26,7 +27,10 @@ import cubetech.gfx.CubeType;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
+import cubetech.gfx.VBO;
 import cubetech.input.Input;
+import cubetech.iqm.IQMAdjacency;
+import cubetech.iqm.IQMAnim;
 import cubetech.misc.Ref;
 import cubetech.spatial.Bin;
 import cubetech.spatial.SpatialQuery;
@@ -37,6 +41,7 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -127,7 +132,7 @@ public class CGameRender {
         cent.Effects();
         switch(cent.currentState.eType) {
             case EntityType.PLAYER:
-                //Player(cent);
+                Player(cent);
                 break;
             case EntityType.ITEM:
                 Item(cent);
@@ -164,71 +169,48 @@ public class CGameRender {
 
     // Render a player
     private void Player(CEntity cent) {
-//        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-//        spr.Set(new Vector2f(cent.lerpOrigin.x + Game.PlayerMins.x, cent.lerpOrigin.y + Game.PlayerMins.y), new Vector2f(Game.PlayerMaxs.x - Game.PlayerMins.x, Game.PlayerMaxs.y - Game.PlayerMins.y), null, null, null);
-//
-//        spr.SetAngle((float) (Math.atan2(cent.lerpAngles.y, cent.lerpAngles.x) + Math.PI / 2f));
+        RenderEntity ent = Ref.render.createEntity(REType.MODEL);
+        ent.model = Ref.cm.cubemap.model;
 
-//        float alpha = 0.5f;
-//        if(cent.interpolate)
-//            alpha = 0.75f;
+        // set origin & angles
+        ent.origin.set(cent.lerpOrigin);
+        ent.origin.z += Game.PlayerMins.z;
+        Vector3f deltaMove = cent.currentState.pos.delta;
 
-//        spr.SetDepth(CGame.PLAYER_LAYER);
+        Vector3f angles;
+        if(deltaMove.lengthSquared() > 0.1f) {
+            angles = new Vector3f(deltaMove);
+            angles.y = (float) (180/Math.PI * Math.atan2(-deltaMove.y, deltaMove.x) + Math.PI / 2f);
+        }
+        else {
+            angles = new Vector3f(cent.lerpAngles);
+        angles.y *= -1f;
+        angles.x *= -1f;
 
-        int time = cent.currentState.time;
+        }
 
+        angles.x = 0;
+        angles.z = 0;
+        ent.axis = Helper.AnglesToAxis(angles);
+//        for (int i= 0; i < 3; i++) {
+//            ent.axis[i].normalise();
+//        }
+//        ent.axis[0].scale(-1f);
+//        ent.axis[1].scale(-1f);
 
-        float px = cent.lerpOrigin.x;
-        float py = cent.lerpOrigin.y;
-        Vector2f bodysize = new Vector2f(15,30);
-        float bodyBias = 3f;
+        playerAnimation(cent, ent);
+    }
 
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-        Vector2f armSize = new Vector2f(20,20);
-        spr.Set(new Vector2f(px - armSize.x * 0.5f + 3, py - armSize.y * 0.5f + bodyBias + bodysize.y*0.10f ),
-                armSize, c_arm.getTexture(), c_arm.getTextureOffset(), c_arm.getTextureSize());
-        spr.SetAngle((float) (Math.sin(((time)+1000) / 100f) * 0.5f) - 0.6f);
-        spr.SetDepth(CGame.PLAYER_LAYER);
-
-        // body
-        spr = Ref.SpriteMan.GetSprite(Type.GAME);
-
-        spr.Set(new Vector2f(px - bodysize.x * 0.5f, py - bodysize.y * 0.5f + bodyBias),
-                bodysize, c_body.getTexture(), c_body.getTextureOffset(), c_body.getTextureSize());
-        spr.SetDepth(CGame.PLAYER_LAYER);
-
-        // head
-        spr = Ref.SpriteMan.GetSprite(Type.GAME);
-        Vector2f headsize = new Vector2f(12,12);
-        Vector2f headoffset = new Vector2f(2,-2);
-        spr.Set(new Vector2f(px - headsize.x * 0.5f + headoffset.x, py - headsize.y * 0.5f + bodyBias + headoffset.y + bodysize.y * 0.5f),
-                headsize, c_head.getTexture(), c_head.getTextureOffset(), c_head.getTextureSize());
-        spr.SetDepth(CGame.PLAYER_LAYER);
-
-        if(cent.currentState.ClientNum != Ref.client.cl.snap.ps.clientNum)
-            spr.SetColor(255, 30, 30, (int)(255));
-
-        // legs
-        spr = Ref.SpriteMan.GetSprite(Type.GAME);
-        Vector2f legsSize = new Vector2f(20,20);
+    private void playerAnimation(CEntity cent, RenderEntity ent) {
+        float speedScale = 1.0f;
         
-        spr.Set(new Vector2f(px - legsSize.x * 0.5f, py - legsSize.y * 0.5f + Game.PlayerMins.y + bodyBias),
-                legsSize, c_legs.getTexture(), c_legs.getTextureOffset(), c_legs.getTextureSize());
-        spr.SetAngle(-time/100f);
-        spr.SetDepth(CGame.PLAYER_LAYER);
+        ClientInfo ci = Ref.cgame.cgs.clientinfo[cent.currentState.ClientNum];
 
-        // arms
-        spr = Ref.SpriteMan.GetSprite(Type.GAME);
+        runLerpFrame(ci, cent.pe.torso, cent.currentState.frame, speedScale);
 
-        spr.Set(new Vector2f(px - armSize.x * 0.5f + 4, py - armSize.y * 0.5f + bodyBias + bodysize.y*0.10f ),
-                armSize, c_arm.getTexture(), c_arm.getTextureOffset(), c_arm.getTextureSize());
-        spr.SetAngle((float) (Math.sin(time / 100f) * 0.5f) - 0.6f);
-        spr.SetDepth(CGame.PLAYER_LAYER);
-
-
-
-
-//        Ref.textMan.AddText(new Vector2f(cent.lerpOrigin.x, cent.lerpOrigin.y+Game.PlayerMaxs.y), "" + cgs.clientinfo[cent.currentState.ClientNum].name, Align.CENTER, Type.GAME, 1, CGame.PLAYER_LAYER+1);
+        ent.oldframe = cent.pe.torso.oldFrame;
+        ent.frame = cent.pe.torso.frame;
+        ent.backlerp = cent.pe.torso.backlerp;
     }
 
     private void Mover(CEntity cent) {
@@ -279,7 +261,7 @@ public class CGameRender {
             //Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Ping: " + Ref.cgame.cg.snap.ps.ping, Align.LEFT, Type.HUD);
 //            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Pull accel: " + game.getPullAccel(), Align.LEFT, Type.HUD);
 //            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "v: " + game.cg.predictedPlayerState.delta_angles[0], Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "V: " + game.cg.predictedPlayerState.viewangles, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Total VBO size: " + VBO.TotalBytes/(1024*1024) + "mb", Align.LEFT, Type.HUD);
             Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*3), "Quads: " + Ref.cm.cubemap.nSides + " (VBO: "+ (Ref.cm.cubemap.nSides * CubeChunk.PLANE_SIZE)/1024 +" kb)", Align.LEFT, Type.HUD);
             if(Ref.cm.cubemap.nChunks != 0)
             Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*4), 
@@ -667,5 +649,79 @@ public class CGameRender {
 
         }
     }
+
+    private void runLerpFrame(ClientInfo ci, LerpFrame lf, int newanimation, float speedScale) {
+
+        // see if the animation sequence is switching
+        if(newanimation != lf.animationNumber || lf.animation == null) {
+            setLerpFrameAnimation(ci, lf, newanimation);
+        }
+
+        // if we have passed the current frame, move it to
+	// oldFrame and calculate a new frame
+        if(Ref.cgame.cg.time >= lf.frametime) {
+            lf.oldFrame = lf.frame;
+            lf.oldFrameTime = lf.frametime;
+
+            // get the next frame based on the animation
+            IQMAnim anim = lf.animation;
+            if(anim.frameLerp == 0) return; // shouldn't happen
+
+            if(Ref.cgame.cg.time < lf.animationTime) {
+                lf.frametime = lf.animationTime;
+            } else {
+                lf.frametime = lf.oldFrameTime + anim.frameLerp;
+            }
+            float f = (lf.frametime - lf.animationTime) / anim.frameLerp;
+            f *= speedScale;
+
+            int numFrames = anim.num_frames;
+            if(f >= numFrames) {
+                f -= numFrames;
+                if(anim.loopFrames != 0) {
+                    f %= anim.loopFrames;
+                    f += anim.num_frames - anim.loopFrames;
+                } else {
+                    f = numFrames - 1;
+                    // the animation is stuck at the end, so it
+                    // can immediately transition to another sequence
+                    lf.frametime = Ref.cgame.cg.time;
+                }
+            }
+
+            if(f < 0) f = -f;
+            lf.frame = (int) (anim.first_frame + f);
+            if(Ref.cgame.cg.time > lf.frametime) {
+                lf.frametime = Ref.cgame.cg.time;
+
+            }
+        }
+
+        if(lf.frametime > Ref.cgame.cg.time + 200) lf.frametime = Ref.cgame.cg.time;
+        if(lf.oldFrameTime > Ref.cgame.cg.time) lf.oldFrameTime = Ref.cgame.cg.time;
+
+        // calculate current lerp value
+        if(lf.frametime == lf.oldFrameTime) {
+            lf.backlerp = 0;
+        } else {
+            lf.backlerp = 1f - (float)(Ref.cgame.cg.time - lf.oldFrameTime) / (lf.frametime - lf.oldFrameTime);
+        }
+
+    }
+
+    private void setLerpFrameAnimation(ClientInfo ci, LerpFrame lf, int newanimation) {
+        lf.animationNumber = newanimation;
+        newanimation &= ~128;
+        if(newanimation < 0 || newanimation > Ref.cm.cubemap.model.anims.length) {
+            Ref.common.Error(Common.ErrorCode.DROP, "Bad animation number " + newanimation);
+        }
+
+        IQMAnim anim = Ref.cm.cubemap.model.anims[newanimation];
+        lf.animation = anim;
+        lf.animationTime = lf.frametime + anim.initialLerp;
+
+    }
+
+
 
 }

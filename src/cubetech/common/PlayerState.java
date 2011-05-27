@@ -49,6 +49,10 @@ public class PlayerState {
 
     public int maptime = 0;
 
+    // Animation
+    public int animation = 0;
+    public int animTime = 0;
+
     public PlayerState() {
         delta_angles[0] = -16000;
     }
@@ -80,6 +84,8 @@ public class PlayerState {
         powerups = new int[NUM_POWERUPS];
         movetime = 0;
         maptime = 0;
+        animation = 0;
+        animTime = 0;
         stats = new PlayerStats();
     }
 
@@ -151,6 +157,8 @@ public class PlayerState {
         ps.canDoubleJump = canDoubleJump;
         ps.movetime = movetime;
         ps.maptime = maptime;
+        ps.animTime = animTime;
+        ps.animation = animation;
         System.arraycopy(powerups, 0, ps.powerups, 0, NUM_POWERUPS);
         return ps;
 //        }
@@ -161,6 +169,9 @@ public class PlayerState {
             s.eType = EntityType.INVISIBLE;
         else
             s.eType = EntityType.PLAYER;
+
+        // TODO animation
+        s.frame = animation;
         s.ClientNum = clientNum;
         s.time = movetime;
         s.pos.base.set(origin);
@@ -249,6 +260,7 @@ public class PlayerState {
         msg.Write(applyPull);
         msg.Write(jumpDown);
         msg.Write(canDoubleJump);
+        msg.Write(ps.animation);
         msg.WriteDelta(ps.maptime, maptime);
         for (int i= 0; i < NUM_POWERUPS; i++) {
             msg.WriteDelta(ps.powerups[i], powerups[i]);
@@ -285,6 +297,7 @@ public class PlayerState {
         applyPull = msg.ReadBool();
         jumpDown = msg.ReadBool();
         canDoubleJump = msg.ReadBool();
+        animation = msg.ReadInt();
         maptime = msg.ReadDeltaInt(ps.maptime);
         for (int i= 0; i < NUM_POWERUPS; i++) {
             powerups[i] = msg.ReadDeltaInt(ps.powerups[i]);

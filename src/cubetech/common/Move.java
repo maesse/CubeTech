@@ -45,6 +45,17 @@ public class Move {
     private static int msec;
     private static float frametime;
 
+    private static void ContinueAnim(int animation, MoveQuery q) {
+        if((q.ps.animation & ~128) == animation) return;
+
+        if(q.ps.animTime > 0) return; // a priority animation is playing
+
+        if(q.ps.moveType == MoveType.DEAD) return;
+
+        // Set animation + togglebit
+        q.ps.animation = ((q.ps.animation & 128) ^ 128) | animation;
+    }
+
     
 
     public class MoveType {
@@ -151,6 +162,7 @@ public class Move {
         if(query.onGround) {
             // Walk
             WalkMove(wishdir, query);
+            
         } else {
             AirMove(wishdir, query);
         }
@@ -159,6 +171,11 @@ public class Move {
 
         if(!query.onGround) {
             query.ps.velocity.z -= gravity * frametime * 0.5f;
+        }
+
+        if(query.onGround) {
+            if(query.ps.velocity.x * query.ps.velocity.x + query.ps.velocity.y * query.ps.velocity.y > 10f) ContinueAnim(0, query);
+            else if(query.ps.velocity.z == 0f) ContinueAnim(1, query);
         }
 
     }
@@ -312,6 +329,7 @@ public class Move {
         pm.onGround =false;
         pm.groundNormal = null;
         pm.ps.velocity.z = jumpvel;
+        ContinueAnim(2, pm);
         return true;
     }
 
