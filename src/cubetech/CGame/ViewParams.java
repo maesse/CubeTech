@@ -325,5 +325,31 @@ public class ViewParams {
 
         GL11.glViewport(ViewportX, ViewportY, ViewportWidth, ViewportHeight);
     }
+
+    void offsetThirdPerson() {
+        Vector3f focusAngle = new Vector3f(Angles);
+        if(focusAngle.x > 65) focusAngle.x = 65;
+
+        Vector3f forward = new Vector3f();
+        Helper.AngleVectors(focusAngle, forward, null, null);
+//        forward.scale(-1f);
+
+        float focusDistance = 510;
+        Vector3f focusPoint = Helper.VectorMA(Origin, focusDistance, forward, null);
+        Vector3f view = new Vector3f(Origin);
+        view.z += 8;
+        Angles.x *= 0.5f;
+
+        Vector3f t_forward = new Vector3f(), t_right = new Vector3f(), t_up = new Vector3f();
+        Helper.AngleVectors(Angles, t_forward, t_right, t_up);
+        t_forward.scale(-1f);
+        Helper.VectorMA(view, 70, t_forward, view);
+
+        Origin.set(view);
+        Vector3f.sub(focusPoint, Origin, focusPoint);
+        float focusDist = (float) Math.sqrt(focusPoint.x * focusPoint.x + focusPoint.y * focusPoint.y);
+        if(focusDist < 1) focusDist = 1;
+        Angles.x = (float) (-180f / Math.PI * Math.atan2(focusPoint.z, focusDist));
+    }
     
 }
