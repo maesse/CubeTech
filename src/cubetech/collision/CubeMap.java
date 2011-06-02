@@ -5,6 +5,7 @@ import cubetech.common.Common;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.CubeType;
 import cubetech.gfx.FrameBuffer;
+import cubetech.gfx.GLRef;
 import cubetech.gfx.Shader;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
@@ -33,90 +34,55 @@ public class CubeMap {
     public static final int DEFAULT_GROW_DIST = 4;
 
     // Chunks
-    HashMap<Long, CubeChunk> chunks = new HashMap<Long, CubeChunk>();
+    public HashMap<Long, CubeChunk> chunks = new HashMap<Long, CubeChunk>();
     IChunkGenerator chunkGen = null;
     private Queue<int[]> chunkGenQueue = new LinkedList<int[]>();
-
-    public Color[] lightSides = new Color[6];
 
     // render stats
     public int nSides = 0; // sides rendered this frame
     public int nChunks = 0;
 
     // temp
-    private Vector3f tempStart = new Vector3f();
-    private Vector3f tempEnd = new Vector3f();
-
-    public IQMModel model = null;
-    FrameBuffer derp;
-    CubeTexture depthTex = null;
+    private static Vector3f tempStart = new Vector3f();
+    private static Vector3f tempEnd = new Vector3f();
 
     public CubeMap(IChunkGenerator gen, int w, int h, int d) {
         chunkGen = gen;
-        
-
-        buildLight();
         fillInitialArea(w, h, d);
-
-        try {
-            //model = IQMLoader.LoadModel("C:\\Users\\mads\\Desktop\\iqm\\mrfixit.iqm");
-            model = IQMLoader.LoadModel("C:\\Users\\mads\\Documents\\Old\\Blender filer\\cubeguyTextured.iqm");
-        } catch (IOException ex) {
-
-        }
-
-        derp = new FrameBuffer(false, true, 512, 512);
-        depthTex = new CubeTexture(GL11.GL_TEXTURE_2D, derp.getTextureId(), "depth");
-        
-
-    }
-
-    private void buildLight() {
-        // Default white
-        for (int i= 0; i < lightSides.length; i++) {
-            lightSides[i] = (Color) Color.WHITE;
-        }
-
-        // Ambient light
-        Vector3f sideColor[] = new Vector3f[6];
-        sideColor[0] = new Vector3f(131, 129, 123);
-        sideColor[1] = new Vector3f(156, 154, 143);
-        sideColor[2] = new Vector3f(148, 144, 134);
-        sideColor[3] = new Vector3f(138, 140, 136);
-        sideColor[4] = new Vector3f(138, 144, 152);
-        sideColor[5] = new Vector3f(145, 140, 129);
-
-        // Add in sun
-        Vector3f sunColor = new Vector3f(255, 255, 255);
-        Vector3f sunDir = new Vector3f(-0.7f, 0.8f, 1.0f);
-        sunDir.normalise();
-
-        Vector3f normals[] = new Vector3f[6];
-        normals[0] = new Vector3f(1, 0, 0); normals[1] = new Vector3f(-1, 0, 0);
-        normals[2] = new Vector3f(0, 1, 0); normals[3] = new Vector3f(0, -1, 0);
-        normals[4] = new Vector3f(0, 0, 1); normals[5] = new Vector3f(0, 0, -1);
-
-        for (int i= 0; i < 6; i++) {
-            float NdotL = Math.max(Vector3f.dot(normals[i], sunDir),0);
-            Vector3f.add(sideColor[i], (Vector3f) new Vector3f(sunColor).scale(NdotL), sideColor[i]);
-        }
-
-        // Save color
-        for (int i= 0; i < 6; i++) {
-            int r = (int)sideColor[i].x, g = (int)sideColor[i].y, b = (int)sideColor[i].z;
-            // ColorShiftLightingBytes from quake
-            int max = r > g ? r : g;
-            max = max > b ? max : b;
-
-            r = r * 255 / max;
-            g = g * 255 / max;
-            b = b * 255 / max;
-
-            lightSides[i] = new Color(r, g, b);
-        }
     }
 
     public CubeMap() {
+    }
+
+    public void update()
+    {
+        // generateChunk(orgX + x, orgY + y, orgZ + z, true);
+        popChunkQueue(); // Generate one chunk pr. frame when multiple chunks are queued
+    }
+
+    public long[] getVisibleChunks(Vector3f position, int dist) {
+        int axisSize = CubeChunk.SIZE * CubeChunk.BLOCK_SIZE;
+        int x = (int)Math.floor(position.x / axisSize);
+        int y = (int)Math.floor(position.y / axisSize);
+        int z = (int)Math.floor(position.z / axisSize);
+
+        if(dist < 2)
+            dist = 2;
+        int halfDist = dist/2;
+
+        long[] lookups = new long[dist*dist*dist];
+        int i=0;
+
+        for (int pz= z; pz < z+dist; pz++) {
+            for (int py= y; py < y+dist; py++) {
+                for (int px= x; px < x + dist; px++) {
+                    long lookup = positionToLookup(px-halfDist, py-halfDist, pz-halfDist);
+                    lookups[i++] = lookup;
+                }
+            }
+        }
+
+        return lookups;
     }
 
     public void growFromPosition(Vector3f position, int dist) {
@@ -162,105 +128,10 @@ public class CubeMap {
         }
     }
 
-    private void renderFromOrigin(int orgX, int orgY, int orgZ, int chunkDistance, boolean enqueue, Plane[] frustum) {
-        // Render chunks
-        for (int z= -chunkDistance; z <= chunkDistance; z++) {
-            for (int y= -chunkDistance; y <= chunkDistance; y++) {
-                for (int x= -chunkDistance; x <= chunkDistance; x++) {
-                    Long lookup = positionToLookup(orgX + x, orgY + y, orgZ + z);
-                    CubeChunk chunk = chunks.get(lookup);
-
-                    // Chunk not generated yet, queue it..
-                    if(chunk == null) {
-                        if(enqueue) generateChunk(orgX + x, orgY + y, orgZ + z, true);
-                        continue;
-                    }
-
-                    // do frustum culling
-                    if(frustum[0] != null) {
-                        Plane p = frustum[0];
-                        if(p.testPoint(chunk.fcenter[0], chunk.fcenter[1], chunk.fcenter[2]) < -CubeChunk.RADIUS) {
-                            continue;
-                        }
-                    }
-
-                    chunk.Render();
-
-                    nSides += chunk.nSides;
-                    if(chunk.nSides > 0) nChunks++; // don't count empty chunks
-                }
-            }
-        }
-    }
-
-    public void Render(ViewParams view) {
-        popChunkQueue(); // Generate one chunk pr. frame when multiple chunks are queued
-
-        // Set shader
-        Shader shader = Ref.glRef.getShader("WorldFog");
-        Ref.glRef.PushShader(shader);
-        shader.setUniform("fog_factor", 1f/(view.farDepth/3f));
-        shader.setUniform("fog_color", (Vector4f)new Vector4f(95,87,67,255).scale(1/255f)); // 145, 140, 129
-
-        
-        // Set rendermodes
-        GL11.glDisable(GL11.GL_BLEND);
-        if(!Ref.glRef.r_fill.isTrue()) {
-            GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_LINE);
-        }
-
-        // clear render stats
-        nSides = 0;
-        nChunks = 0;
-
-        // chunk render distance
-        int chunkDistance = (int) (view.farDepth * 0.3f / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE))+1;
-        if(chunkDistance <= 0)
-            chunkDistance = 1;
-
-        // Origin in chunk coordinates
-        int orgX =  (int)Math.floor(view.Origin.x / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
-        int orgY =  (int)Math.floor (view.Origin.y / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
-        int orgZ =  (int)Math.floor (view.Origin.z / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
-
-        renderFromOrigin(orgX, orgY, orgZ, chunkDistance, true, view.planes);
-
-        // Reset shader
-        Ref.glRef.PopShader();
-        
-        // Shadow mapping
-        //Ref.glRef.PushShader(Ref.glRef.getShader("sprite"));
-        
-        derp.Bind();
-        GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
-        GL11.glViewport(0, 0, 512, 512);
-        GL11.glColorMask(false, false, false, false);
-        renderFromOrigin(orgX, orgY, orgZ, chunkDistance, false, view.planes);
-        GL11.glColorMask(true, true, true, true);
-        derp.Unbind();
-        GL11.glViewport(0, 0, (int)Ref.glRef.GetResolution().x, (int)Ref.glRef.GetResolution().y);
-        
-        //Ref.glRef.PopShader();
-        Ref.glRef.srgbBuffer.Bind();
-
-        // Clear rendermodes
-        GL11.glEnable(GL11.GL_BLEND);
-        if(!Ref.glRef.r_fill.isTrue()) {
-            GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
-        }
-        
-        
-
-        // Render test model
-//        model.animate(Ref.cgame.cg.time*25/1000f);
-//        model.render(Ref.cgame.cg.predictedPlayerState.origin, (float) (-Ref.cgame.cg.predictedPlayerState.viewangles.y + 180));
-
-//        Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-//        spr.Set(0, 0, 256, depthTex);
-    }
+    
     
     // Thanks goes out to http://www.xnawiki.com/index.php?title=Voxel_traversal
-    public CubeCollision TraceRay(Vector3f start, Vector3f dir, int maxDepth) {
+    public static CubeCollision TraceRay(Vector3f start, Vector3f dir, int maxDepth, HashMap<Long, CubeChunk> chunks) {
         // NOTES:
         // * This code assumes that the ray's position and direction are in 'cell coordinates', which means
         //   that one unit equals one cell in all directions.
@@ -313,11 +184,11 @@ public class CubeMap {
         // For each step, determine which distance to the next voxel boundary is lowest (i.e.
         // which voxel boundary is nearest) and walk that way.
         CubeChunk chunk = chunks.get(0L);
-        if(chunk != null) {
-            chunk.traceTime = 5000;
-            chunk.traceCount = 0;
-            chunk.traceCache = new int[maxDepth];
-        }
+//        if(chunk != null) {
+//            chunk.traceTime = 5000;
+//            chunk.traceCount = 0;
+//            chunk.traceCache = new int[maxDepth];
+//        }
         int ccx = 0, ccy = 0, ccz = 0; // chunkx, y, z from last iteration.
         int lastAxis = 0;
         for (int i= 0; i < maxDepth; i++) {
@@ -332,11 +203,11 @@ public class CubeMap {
                 chunk = chunks.get(lookup);
                 ccx = chunkX; ccy = chunkY; ccz = chunkZ;
                 // entering new chunk, clear its trace debug
-                if(chunk != null) {
-                    chunk.traceTime = 5000;
-                    chunk.traceCount = 0;
-                    chunk.traceCache = new int[maxDepth];
-                }
+//                if(chunk != null) {
+//                    chunk.traceTime = 5000;
+//                    chunk.traceCount = 0;
+//                    chunk.traceCache = new int[maxDepth];
+//                }
             }
 
             // Test cube in chunk
@@ -346,7 +217,7 @@ public class CubeMap {
                 int cubeZ = z - chunkZ * CubeChunk.SIZE;
 
                 int cubeIndex = CubeChunk.getIndex(cubeX, cubeY, cubeZ);
-                chunk.traceCache[chunk.traceCount++] = cubeIndex;
+//                chunk.traceCache[chunk.traceCount++] = cubeIndex;
 
                 if(chunk.getCubeType(cubeIndex) != 0) {
                     // Collision
@@ -390,7 +261,7 @@ public class CubeMap {
 
         Object last = chunks.put(index, chunk);
 
-        chunk.notifyChange();
+//        chunk.notifyChange();
         
         if(last != null)
             throw new RuntimeException("generateSimpleMap: Chunk already existed.");
@@ -419,14 +290,38 @@ public class CubeMap {
 
     // Twiddle an int down to 17bit
     private static long bitTwiddle(int input) {
-        int tx = input & 0xffff;
-        if(input < 0)
-            tx |= 0x10000; // negative numbers get an extra bit
-        return tx;
+        if(input < 0) {
+            return -input & 0xffff | 0x10000;
+        }
+        return input & 0xffff;
+//        int tx = (int) (input & 0xffffL);
+//        if(input < 0)
+//            tx |= 0x10000; // negative numbers get an extra bit
+//        return tx;
+    }
+
+    public static int[] lookupToPosition(long lookup) {
+        // decompose:
+        int[] pos = new int[] {
+            unTwiddle(lookup, 0),
+            unTwiddle(lookup, 17),
+            unTwiddle(lookup, 34)
+        };
+        return pos;
+    }
+
+    private static int unTwiddle(long src, int bitIndex) {
+        // bitshift and mask off the stuff we care about
+        
+        long d = (src >> bitIndex);
+        int x = (int) (d & 0xffff);
+        if((d & 0x10000) == 0x10000) x = -x;
+        
+        return x;
     }
 
     
-    ChunkAreaQuery getCubesInVolume(Vector3f mmin, Vector3f mmax) {
+    public static ChunkAreaQuery getCubesInVolume(Vector3f mmin, Vector3f mmax, HashMap<Long, CubeChunk> chunks, boolean server) {
         // Figure out min/max chunk positions
         int axisSize = CubeChunk.SIZE * CubeChunk.BLOCK_SIZE;
         int minx = (int)Math.floor(mmin.x / axisSize);
@@ -444,9 +339,9 @@ public class CubeMap {
                 for (int x= minx; x < maxx; x++) {
                     CubeChunk chunk = chunks.get(positionToLookup(x, y, z));
                     if(chunk == null) {
-                        if(chunkGen == null)
-                            continue; // Running as client?
-                        chunk = generateChunk(x, y, z, false);
+                        if(server) {
+                            chunk = Ref.cm.cubemap.generateChunk(x, y, z, false);
+                        }
                         if(chunk == null)
                             continue; // Chunk denied. Probably hit Z bounds.
                     }
@@ -472,13 +367,13 @@ public class CubeMap {
         return query;
     }
 
-    CubeChunk getChunk(int x, int y, int z, boolean create) {
+    public static CubeChunk getChunk(int x, int y, int z, boolean create, HashMap<Long, CubeChunk> chunks) {
         Long index = positionToLookup(x, y, z);
         
         if(!chunks.containsKey(index)) {
             if(create) {
                 // Going to need to create this chunk
-                generateChunk(x,y,z, false);
+                Ref.cm.cubemap.generateChunk(x,y,z, false);
             } else {
                 // Chunk is now created yet
                 return null;

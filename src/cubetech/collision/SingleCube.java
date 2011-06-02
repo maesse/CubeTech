@@ -74,7 +74,7 @@ public class SingleCube {
             chunkPos[index-1] += sign;
             
             // retrieve the chunk
-            nChunk = Ref.cm.cubemap.getChunk(chunkPos[0], chunkPos[1], chunkPos[2], true);
+            nChunk = CubeMap.getChunk(chunkPos[0], chunkPos[1], chunkPos[2], false, Ref.cgame.map.chunks);
 
             // correct the cube position for the new chunk
             p[index-1] = p[index-1] & (CubeChunk.SIZE-1); 

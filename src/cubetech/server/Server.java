@@ -811,7 +811,7 @@ public class Server implements ITrace {
         Vector3f.sub(end, start, delta);
         // clip to world
         // FIX FIX
-        CollisionResult worldResult = Ref.collision.traceCubeMap(start, delta, mins, maxs);
+        CollisionResult worldResult = Ref.collision.traceCubeMap(start, delta, mins, maxs, true);
         //CollisionResult worldResult = Ref.collision.TestMovement(new Vector2f(start), new Vector2f(delta), new Vector2f(maxs), tracemask);
         if(worldResult.frac == 0.0f)
             return worldResult; // Blocked instantl by world

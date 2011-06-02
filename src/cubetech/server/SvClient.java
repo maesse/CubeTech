@@ -5,6 +5,7 @@
 
 package cubetech.server;
 
+import cubetech.Game.ClientPersistant;
 import cubetech.client.CLSnapshot;
 import cubetech.common.CS;
 import cubetech.common.Commands;
@@ -42,6 +43,8 @@ import org.lwjgl.util.vector.Vector3f;
 public class SvClient {
     private static final int MAX_DOWNLOAD_WINDOW = 8;
     private static final int MAX_DOWNLOAD_BLKSIZE = 2400;
+
+    
 
 
     public enum ClientState {
@@ -109,7 +112,10 @@ public class SvClient {
             frames[i] = new ClientSnapshot();
         }
     }
-    
+
+    private void WriteCubesToClient(NetBuffer msg) {
+        //OPS_CUBEEXT
+    }
 
     private void UserMove(NetBuffer buf, boolean deltaCompressed) {
         if(deltaCompressed)
@@ -274,6 +280,10 @@ public class SvClient {
         // send over all the relevant entityState_t
         // and the playerState_t
         WriteSnapshotToClient(msg);
+
+        if(downloadName == null) {
+            sendCubeFile();
+        }
 
         WriteDownloadToClient(msg);
 
@@ -465,6 +475,8 @@ public class SvClient {
 
         // delta encode the entities
         EmitPacketEntities(oldframe, frame, msg);
+
+        
     }
 
     private void EmitPacketEntities(ClientSnapshot from, ClientSnapshot to, NetBuffer msg) {
@@ -833,6 +845,8 @@ public class SvClient {
         // Stop any existing download
         CloseDownload();
 
+        if(tokens.length < 2) return;
+
         downloadName = tokens[1];
     }
 
@@ -843,8 +857,17 @@ public class SvClient {
         String errorMessage = null;
 
         if(download == null) {
+            if(downloadName.equals("@cube")) {
+                ClientSnapshot frame = frames[netchan.outgoingSequence & 31];
+                ClientPersistant pers = frame.ps.pers;
+                if(pers == null || pers.queuedChunkData.isEmpty()) return;
+
+                ByteBuffer buf = pers.queuedChunkData.poll();
+                pers.queuedBytes -= buf.limit();
+                download = new NetBuffer(buf);
+            }
             // Client is requesting the current map
-            if(downloadName.equalsIgnoreCase("map")) {
+            else if(downloadName.equalsIgnoreCase("map")) {
 
                 if(Ref.cvars.Find("mapname").sValue.equalsIgnoreCase("custom") && !Ref.game.level.editmode) {
                     // Server is running custom map, but not editmode, so try to load the cached custom map
@@ -959,6 +982,7 @@ public class SvClient {
             // block zero is special, contains file size
             if(downloadXmitBlock == 0) {
                 msg.Write(downloadSize);
+                msg.Write(downloadName);
             }
 
             msg.Write(downloadBlockSize[curindex]);
@@ -1014,8 +1038,20 @@ public class SvClient {
     }
 
     private void DoneDownload() {
+        sendCubeFile();
 //        System.out.println("download done");
 //        SendClientGameState();
+    }
+
+    private void sendCubeFile() {
+        ClientSnapshot frame = frames[netchan.outgoingSequence & 31];
+        ClientPersistant pers = frame.ps.pers;
+        if(pers == null || pers.queuedChunkData.isEmpty()) return;
+
+//        ByteBuffer buf = pers.queuedChunkData.poll();
+//        pers.queuedBytes -= buf.limit();
+//        download = new NetBuffer(buf);
+        downloadName = "@cube";
     }
 
     private void UpdateUserInfo(String[] tokens) {

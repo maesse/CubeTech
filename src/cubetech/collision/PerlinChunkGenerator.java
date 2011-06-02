@@ -37,7 +37,7 @@ public class PerlinChunkGenerator implements IChunkGenerator {
         return frac;
     }
     public CubeChunk generateChunk(CubeMap map, int x, int y, int z) {
-        CubeChunk chunk = new CubeChunk(map, x, y, z);
+        CubeChunk chunk = new CubeChunk(map.chunks, x, y, z);
 
         float maxHeight = 512;
         float groundlevel = -1024;
@@ -139,7 +139,7 @@ public class PerlinChunkGenerator implements IChunkGenerator {
             }
         
         }
-        chunk.notifyChange();
+//        chunk.notifyChange();
         return chunk;
     }
 

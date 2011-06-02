@@ -17,7 +17,7 @@ public class ChunkGenerator implements IChunkGenerator {
     }
 
     public CubeChunk generateChunk(CubeMap map, int x, int y, int z) {
-        CubeChunk chunk = new CubeChunk(map, x, y, z);
+        CubeChunk chunk = new CubeChunk(map.chunks, x, y, z);
         if(z <= 0) {
             for (int i= 0; i < CubeChunk.SIZE; i++) {
                 for (int j= 0; j < CubeChunk.SIZE; j++) {

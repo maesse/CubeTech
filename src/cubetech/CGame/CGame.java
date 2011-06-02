@@ -3,9 +3,11 @@ package cubetech.CGame;
 import cubetech.Block;
 import cubetech.Game.Game;
 import cubetech.collision.BlockModel;
+import cubetech.collision.ClientCubeMap;
 import cubetech.collision.ClipmapException;
 import cubetech.collision.CollisionResult;
 import cubetech.collision.CubeCollision;
+import cubetech.collision.CubeMap;
 import cubetech.collision.SingleCube;
 import cubetech.common.*;
 import cubetech.entities.EntityState;
@@ -47,7 +49,6 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_chattime = Ref.cvars.Get("cg_chattime", "5000", EnumSet.of(CVarFlags.ARCHIVE)); // show text for this long
     CVar cg_chatfadetime = Ref.cvars.Get("cg_chatfadetime", "500", EnumSet.of(CVarFlags.ARCHIVE)); // + this time for fading out
     CVar cg_drawSolid = Ref.cvars.Get("cg_drawSolid", "0", EnumSet.of(CVarFlags.NONE));
-    CVar cg_editmode = Ref.cvars.Get("cg_editmode", "0", EnumSet.of(CVarFlags.ROM));
     CVar cg_depthnear = Ref.cvars.Get("cg_depthnear", "1", EnumSet.of(CVarFlags.CHEAT));
     CVar cg_depthfar = Ref.cvars.Get("cg_depthfar", "3000", EnumSet.of(CVarFlags.CHEAT));
     CVar cg_viewmode = Ref.cvars.Get("cg_viewmode", "1", EnumSet.of(CVarFlags.NONE));
@@ -80,6 +81,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
     public CGameState cg;
     CGameStatic cgs;
+    public ClientCubeMap map = new ClientCubeMap();
     public CGameRender cgr;
     public LagOMeter lag;
 
@@ -92,7 +94,6 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     public CEntity[] cg_triggerEntities = new CEntity[256];
     private HashMap<String, ICommand> commands = new HashMap<String, ICommand>();
     CubeTexture playerTexture;
-    MapEditor mapEditor = null;
     public float speed;
     public float lastFov = cg_fov.fValue;
     public float lastVleft = camera_vplayerpos.fValue;
@@ -132,6 +133,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         
         Ref.commands.AddCommand("say", null); // re-direct to server
         Ref.commands.AddCommand("block", null);
+        Ref.commands.AddCommand("weapon", CGameState.cg_SwitchWeapon_f);
 
         LoadingString("Collision Map");
         if(!Ref.client.servername.equalsIgnoreCase("localhost")) {
@@ -196,6 +198,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             return;
         }
 
+        Ref.client.setUserCommand(cg.weaponSelect, cg.zoomSensitivity);
+
         // this counter will be bumped for every valid scene we generate
         cg.clientframe++;
         cg.PredictPlayerState();
@@ -207,8 +211,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         if(Ref.cm.cubemap != null) {
             Vector3f dir = new Vector3f(cg.refdef.ViewAxis[0]);
             Helper.Normalize(dir);
-            dir.scale(-1f);
-            CubeCollision col = Ref.cm.cubemap.TraceRay(cg.refdef.Origin, dir, 6);
+            CubeCollision col = CubeMap.TraceRay(cg.predictedPlayerEntity.lerpOrigin, dir, 6, map.chunks);
             if(col != null) {
                 SingleCube cube = new SingleCube(col);
                 cgr.lookingAtCube = cube;
@@ -218,7 +221,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             }
         }
 
-        if(Ref.cm.cubemap != null && cgr.lookingAtCube != null && cgr.lookingAtCube.highlightSide != 0) {
+        if(Ref.cm.cubemap != null && cgr.lookingAtCube != null && cgr.lookingAtCube.highlightSide != 0 && false) {
             if(Ref.Input.playerInput.Mouse1 && Ref.Input.playerInput.Mouse1Diff) {
                 cgr.lookingAtCube.getHightlightside().putBlock(CubeType.GRASS);
                 //Ref.cm.cubemap.putBlock(cgr.highlightCube, CubeType.GRASS);
@@ -249,15 +252,13 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         // Time to do some drawing
 //        if(cg_editmode.iValue == 0)
 //            cgr.RenderClouds();
-        if(cg_editmode.iValue == 1 && mapEditor.isShowingAnimator())
-            mapEditor.animEditor.SetView(); // Let mapeditor override viewparams
 
         if(cg_drawbin.iValue == 1) {
             cgr.DrawBin();
             return;
         }
 
-        if(cg_editmode.iValue == 0 || !mapEditor.isShowingAnimator()) {
+        
             // Normal render
             
             if(Ref.cm.cubemap != null) {
@@ -268,7 +269,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 //                    cg.refdef.planes[0].DebugRender(cg.refdef.Origin);
 //                }
                 skyBox.Render(cg.refdef);
-                Ref.cm.cubemap.Render(cg.refdef);
+                map.Render(cg.refdef);
                 
                 //Ref.glRef.PopShader();
                 
@@ -279,8 +280,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             //cgr.RenderScene(cg.refdef);
             AddPacketEntities();
             cgr.DrawEntities();
-            
-        }
+            LocalEntities.addLocalEntities();
+        
         // UI
         cgr.Draw2D();
     }
@@ -490,13 +491,11 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     }
 
     public void KeyPressed(KeyEvent evt) {
-        if(mapEditor != null)
-            mapEditor.KeyPressed(evt);
+        
     }
 
     public void GotMouseEvent(MouseEvent evt) {
-        if(mapEditor != null)
-            mapEditor.GotMouseEvent(evt);
+        
     }
 
     class ChatLine {
@@ -676,7 +675,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Vector3f.sub(end, start, delta);
         // clip to world
         // FIX FIX
-        CollisionResult worldResult = Ref.collision.traceCubeMap(start, delta, mins, maxs);
+        CollisionResult worldResult = Ref.collision.traceCubeMap(start, delta, mins, maxs, false);
         //CollisionResult worldResult = Ref.collision.TestMovement(new Vector2f(start), new Vector2f(delta), new Vector2f(maxs), tracemask);
         if(worldResult.frac == 0.0f) {
             return worldResult; // Blocked instantl by world

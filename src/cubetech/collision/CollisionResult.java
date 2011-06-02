@@ -45,4 +45,13 @@ public class CollisionResult {
         this.extent.set(maxs);
         this.mins.set(mins);
     }
+
+    public Vector3f getPOI(Vector3f dest) {
+        if(dest == null) dest = new Vector3f(delta);
+        else dest.set(delta);
+        dest.scale(frac);
+        
+        Vector3f.add(dest, start, dest);
+        return dest;
+    }
 }

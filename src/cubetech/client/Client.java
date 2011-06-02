@@ -1,5 +1,6 @@
 package cubetech.client;
 
+import cubetech.common.items.Weapon;
 import cubetech.CGame.CGame;
 import cubetech.CGame.Snapshot;
 import cubetech.collision.CubeMap;
@@ -7,6 +8,7 @@ import cubetech.common.*;
 import cubetech.common.Common.ErrorCode;
 import cubetech.entities.EntityState;
 import cubetech.gfx.CubeMaterial;
+import cubetech.gfx.GLRef;
 import cubetech.gfx.ResourceManager;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
@@ -64,7 +66,7 @@ public class Client {
 
     public int frametime;
     public int realtime;
-    public int state = ConnectState.DISCONNECTED;
+    public ConnectState state = ConnectState.DISCONNECTED;
 
     public ClientConnect clc = new ClientConnect();
     public ClientActive cl = null;
@@ -121,7 +123,7 @@ public class Client {
 
         name = Ref.cvars.Get("name", "^3Running^4Man^0", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         rate = Ref.cvars.Get("rate", "25000", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        model = Ref.cvars.Get("model", "unknown", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        model = Ref.cvars.Get("model", "cubeguyTextured", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         cl_updaterate = Ref.cvars.Get("cl_updaterate", "30", EnumSet.of(CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         cl_updaterate.Min = 15;
         cl_updaterate.Max = 115;
@@ -228,24 +230,27 @@ public class Client {
 
         // see if we need to update any userinfo
         CheckUserInfo();
-
+        GLRef.checkError();
         // if we haven't gotten a packet in a long time,
         // drop the connection
         CheckTimeout();
-
+        GLRef.checkError();
         // send intentions now
         Ref.Input.Update();
+        GLRef.checkError();
         SendCommand();
-
+        GLRef.checkError();
         // resend a connection request if necessary
         CheckForResend();
-
+        GLRef.checkError();
         // decide on the serverTime to render
         cl.SetCGameTime();
 
+        GLRef.checkError();
+
         Ref.ResMan.Update(); // Do a bit of texture loading
         
-        
+        GLRef.checkError();
         // update the screen
         UpdateScreen();
 
@@ -273,7 +278,7 @@ public class Client {
             return;
         }
 
-        if(state < ConnectState.CONNECTED)
+        if(state.ordinal() < ConnectState.CONNECTED.ordinal())
             return;
 
         //
@@ -306,7 +311,7 @@ public class Client {
         Ref.Input.SetKeyCatcher(Input.KEYCATCH_NONE);
 
         // if we are already connected to the local host, stay connected
-        if(state >= ConnectState.CONNECTED && servername.equalsIgnoreCase("localhost"))
+        if(state.ordinal() >= ConnectState.CONNECTED.ordinal() && servername.equalsIgnoreCase("localhost"))
         {
             state = ConnectState.CONNECTED;
             clc.servermessage = "";
@@ -319,7 +324,9 @@ public class Client {
             servername = "localhost";
             state = ConnectState.CHALLENGING;
             Ref.Input.SetKeyCatcher(Input.KEYCATCH_NONE);
+            GLRef.checkError();
             UpdateScreen();
+            GLRef.checkError();
             clc.ConnectTime = -3000;
             clc.ServerAddr = new InetSocketAddress("localhost", Ref.net.net_svport.iValue);
             CheckForResend();
@@ -406,7 +413,7 @@ public class Client {
             return;
         }
         if(c.equalsIgnoreCase("connectResponse")) {
-            if(state >= ConnectState.CONNECTED)
+            if(state.ordinal() >= ConnectState.CONNECTED.ordinal())
             {
                 Common.Log("Duplicate connection recieved. Rejected.");
                 return;
@@ -482,7 +489,7 @@ public class Client {
         if(cmd.charAt(0) == '-')
             return;
 
-        if(state < ConnectState.CONNECTED || cmd.charAt(0) == '+')
+        if(state.ordinal() < ConnectState.CONNECTED.ordinal() || cmd.charAt(0) == '+')
         {
             Common.Log("Unknown command " + cmd);
             return;
@@ -520,7 +527,7 @@ public class Client {
 
         // send a disconnect message to the server
         // send it a few times in case one is dropped
-        if(state >= ConnectState.CONNECTED) {
+        if(state.ordinal() >= ConnectState.CONNECTED.ordinal()) {
             AddReliableCommand("disconnect", true);
             WritePacket();
             WritePacket();
@@ -546,7 +553,7 @@ public class Client {
 
     private void CheckUserInfo() {
         // don't add reliable commands when not yet connected
-        if(state < ConnectState.CHALLENGING)
+        if(state.ordinal() < ConnectState.CHALLENGING.ordinal())
             return;
 
         // don't overflow the reliable command buffer when paused
@@ -562,7 +569,7 @@ public class Client {
 
     private void CheckTimeout() {
         if( (!CheckPaused() || Ref.common.sv_paused.iValue == 0)
-            &&    state >= ConnectState.CONNECTED && realtime - clc.LastPacketTime > cl_timeout.fValue * 1000f) {
+            &&    state.ordinal() >= ConnectState.CONNECTED.ordinal() && realtime - clc.LastPacketTime > cl_timeout.fValue * 1000f) {
             if(++cl.timeoutCount > 5) {
                 Ref.common.Error(ErrorCode.DROP, "Server connection timed out.");
 //                Disconnect(true);
@@ -594,12 +601,12 @@ public class Client {
         }
 
         switch(state) {
-            case ConnectState.CONNECTING:
+            case CONNECTING:
                 String data = "getchallenge " + clc.challenge;
                 Ref.net.SendOutOfBandPacket(NetSource.CLIENT, clc.ServerAddr, data);
                 Common.Log("Connecting...");
                 break;
-            case ConnectState.CHALLENGING:
+            case CHALLENGING:
                 // sending back the challenge
                 int port = Ref.cvars.Find("net_qport").iValue;
                 
@@ -616,25 +623,26 @@ public class Client {
     }
 
     public void UpdateScreen() {
+        GLRef.checkError();
         BeginFrame();
 
 
 
         if(!Ref.ui.IsFullscreen()) {
             switch(state) {
-                case ConnectState.DISCONNECTED:
+                case DISCONNECTED:
                     // Force ui up
                     Ref.ui.SetActiveMenu(UI.MENU.MAINMENU);
                     break;
-                case ConnectState.CONNECTING:
-                case ConnectState.CHALLENGING:
-                case ConnectState.CONNECTED:
+                case CONNECTING:
+                case CHALLENGING:
+                case CONNECTED:
                     // connecting clients will only show the connection dialog
                     // refresh to update the time
                     Ref.ui.DrawConnectScreen(false);
                     break;
-                case ConnectState.LOADING:
-                case ConnectState.PRIMED:
+                case LOADING:
+                case PRIMED:
                     // draw the game information screen and loading progress
                     Ref.cgame.DrawActiveFrame(cl.serverTime);
 
@@ -643,11 +651,13 @@ public class Client {
                     // refresh to update the time
                     Ref.ui.DrawConnectScreen(true);
                     break;
-                case ConnectState.ACTIVE:
+                case ACTIVE:
                     Ref.cgame.DrawActiveFrame(cl.serverTime);
                     break;
             }
         }
+
+        GLRef.checkError();
 
 //        Ref.StateMan.RunFrame((int)frametime);
 
@@ -709,7 +719,7 @@ public class Client {
     // Called every frame to builds and sends a command packet to the server.
     public void SendCommand() {
         // don't send any message if not connected
-        if(state < ConnectState.CONNECTED)
+        if(state.ordinal() < ConnectState.CONNECTED.ordinal())
             return;
 
         // don't send commands if paused
@@ -849,7 +859,7 @@ public class Client {
     // Called every frame to builds and sends a command packet to the server.
     private void CreateNewCommands() {
         // don't send any message if not connected
-        if(Ref.client.state < ConnectState.PRIMED)
+        if(state.ordinal() < ConnectState.PRIMED.ordinal())
             return;
 
 
@@ -1098,8 +1108,10 @@ public class Client {
     }
 
     private void BeginFrame() {
+        if(Ref.ui.IsFullscreen())
+            GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
 //       GL11.glClearDepth(1000);
-       GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
+//       GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
 //       GL11.glClearDepth(1000);
        Ref.SpriteMan.Reset();
     }
@@ -1146,8 +1158,9 @@ public class Client {
         Ref.SpriteMan.DrawHUD();
         Ref.textMan.Render(); // Draw remaining text - shouldn't be any
 
+
+        if(Ref.glRef.srgbBuffer != null) Ref.glRef.srgbBuffer.BlitFBO();
         
-        Ref.glRef.srgbBuffer.BlitFBO();
         //Ref.glRef.srgbBuffer.Unbind();
         // Display frame
 //        Display.sync(60);
@@ -1158,6 +1171,12 @@ public class Client {
 
     private void updateScreen() {
         Display.update();
+    }
+
+    // CGame tells us what weapon we're using and if we should scale mouse sens (when cgame is zooming for instance)
+    public void setUserCommand(Weapon weapon, float sensitivityScale) {
+        cl.userCmd_weapon = weapon;
+        cl.userCmd_sens = sensitivityScale;
     }
 
     public void FlushMemory() {
@@ -1246,7 +1265,7 @@ public class Client {
     ===================
     */
     private void DisconnectPacket(InetSocketAddress endpoitn) {
-        if(state < ConnectState.CONNECTING)
+        if(state.ordinal() < ConnectState.CONNECTING.ordinal())
             return;
 
         // if not from our server, ignore it
@@ -1454,11 +1473,11 @@ public class Client {
 
     // Returns true of everything was parsed Ok.
     private boolean ParseDownload(NetBuffer buf) {
-        if(clc.downloadName == null) {
-            Common.Log("Recieving unrequested download");
-            AddReliableCommand("stopdl", false);
-            return false;
-        }
+//        if(clc.downloadName == null) {
+//            Common.Log("Recieving unrequested download");
+//            AddReliableCommand("stopdl", false);
+//            return false;
+//        }
 
         int block = buf.ReadInt();
         if(block == 0) {
@@ -1466,7 +1485,7 @@ public class Client {
             clc.downloadSize = buf.ReadInt();
 
             // size -1 is an errormessage
-            if(clc.downloadSize < 0)
+            if(clc.downloadSize <= -1)
             {
                 if(state == ConnectState.ACTIVE) {
                     // Don't drop when already fully connected
@@ -1479,6 +1498,14 @@ public class Client {
                 }
                 Ref.common.Error(ErrorCode.DROP, buf.ReadString());
                 return true;
+            }
+            String filename = buf.ReadString();
+            if(filename.equals("@cube")) {
+                Common.Log("Recieving cubechunk");
+                clc.downloadBlock = 0;
+                clc.downloadCount = 0;
+                clc.downloadTime = realtime;
+                clc.downloadName = filename;
             }
         }
 
@@ -1513,30 +1540,7 @@ public class Client {
         if(size == 0) {
             // got EOF
             if(clc.download != null) {
-                try {
-                    if(clc.downloadName.equalsIgnoreCase("map")) {
-                        // load map
-                        clc.download.limit(clc.download.position());
-                        clc.download.flip();
-                        clc.mapdata = NetBuffer.CreateCustom(clc.download);
-                    } else
-                    {
-                        // Save file
-                        if(!ResourceManager.CreatePath("downloads/"+clc.downloadName)) {
-                            Common.Log("Cannot create destination folder: "+Helper.getPath("downloads/"+clc.downloadName));
-                            clc.downloadName = Helper.stripPath(clc.downloadName);
-                            Common.Log("Saving as: " + "downloads/" + clc.downloadName);
-                        }
-                        FileChannel chan = new FileOutputStream("downloads/"+clc.downloadName, false).getChannel();
-                        clc.download.limit(clc.download.position());
-                        clc.download.flip();
-                        chan.write(clc.download);
-                        chan.close();
-                        
-                    }
-                } catch (IOException ex) {
-                    Common.Log(Common.getExceptionString(ex));
-                }
+                finishedDownload();
 
                 clc.download = null;
             }
@@ -1552,6 +1556,38 @@ public class Client {
             NextDownload();
         }
         return true;
+    }
+
+    private void finishedDownload() {
+        if(clc.download == null || clc.download.limit() == 0) return;
+        clc.download.position(0);
+        try {
+            if(clc.downloadName.equals("@cube")) {
+                Ref.cgame.map.parseCubeData(clc.download);
+            }
+            else if(clc.downloadName.equalsIgnoreCase("map")) {
+                // load map
+                clc.download.limit(clc.download.position());
+                clc.download.flip();
+                clc.mapdata = NetBuffer.CreateCustom(clc.download);
+            } else
+            {
+                // Save file
+                if(!ResourceManager.CreatePath("downloads/"+clc.downloadName)) {
+                    Common.Log("Cannot create destination folder: "+Helper.getPath("downloads/"+clc.downloadName));
+                    clc.downloadName = Helper.stripPath(clc.downloadName);
+                    Common.Log("Saving as: " + "downloads/" + clc.downloadName);
+                }
+                FileChannel chan = new FileOutputStream("downloads/"+clc.downloadName, false).getChannel();
+                clc.download.limit(clc.download.position());
+                clc.download.flip();
+                chan.write(clc.download);
+                chan.close();
+
+            }
+        } catch (IOException ex) {
+            Common.Log(Common.getExceptionString(ex));
+        }
     }
 
     private ICommand cmd_downloadfile = new ICommand() {

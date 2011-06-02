@@ -6,6 +6,7 @@ import cubetech.common.Content;
 
 import cubetech.misc.Ref;
 import cubetech.spatial.SpatialQuery;
+import java.util.HashMap;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 
@@ -148,7 +149,7 @@ public class Collision {
      * @param maxs
      * @return
      */
-    public CollisionResult traceCubeMap(Vector3f start, Vector3f delta, Vector3f mins, Vector3f maxs) {
+    public CollisionResult traceCubeMap(Vector3f start, Vector3f delta, Vector3f mins, Vector3f maxs, boolean server) {
         // Prepare a collision result
         CollisionResult res = GetNext();
         res.reset(start, delta, mins, maxs);
@@ -165,7 +166,7 @@ public class Collision {
         delta.scale(-1f);
 
         // query the cube map
-        ChunkAreaQuery area = Ref.cm.cubemap.getCubesInVolume(cmmin, cmmax);
+        ChunkAreaQuery area = Ref.cm.cubemap.getCubesInVolume(cmmin, cmmax, server?Ref.cm.cubemap.chunks:Ref.cgame.map.chunks, server);
         //int[] cubePosition = new int[3];
 
         Vector3f.sub(maxs, mins, cextent).scale(0.5f);
