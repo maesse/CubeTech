@@ -1,4 +1,4 @@
-#version 120
+
 attribute vec3 v_position;
 attribute vec2 v_coords;
 attribute vec4 v_color;
@@ -9,6 +9,7 @@ varying vec2 coords;
 varying vec4 diffuse, ambient;
 varying vec3 normal, lightDir, halfVector;
 varying vec3 reflectDir;
+varying vec4 col;
 
 void main()
 {
@@ -26,6 +27,7 @@ void main()
     // compute diffuse term
     diffuse = gl_LightSource[0].diffuse; // gl_FrontMaterial.diffuse
     ambient = gl_LightModel.ambient;
+    col = v_color;
 
     gl_Position =  gl_ModelViewProjectionMatrix * vec4(Modell * v_position, 1.0);
     coords = v_coords;

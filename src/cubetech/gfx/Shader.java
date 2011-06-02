@@ -20,6 +20,7 @@ import org.lwjgl.opengl.GL20;
 import org.lwjgl.util.vector.Matrix3f;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector;
+import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
@@ -28,6 +29,11 @@ import org.lwjgl.util.vector.Vector4f;
  * @author mads
  */
 public class Shader {
+
+    public static final int INDICE_POSITION = 0;
+    public static final int INDICE_COLOR = 6;
+    public static final int INDICE_COORDS = 7;
+    public static final int INDICE_COORDS2 = 8;
     // Shader handles
     private int shaderId = -1; // given to us by openGL
     private int vertShader = -1; // Vertex shader
@@ -35,30 +41,14 @@ public class Shader {
     private int geomShader = -1; // Geometry shader, if any
     private String shaderName = "NONE";
 
-    // GLSL Shader variable positions
-    private int uniform_texture = 0;
-//    private int attr_position = 0;
-//    private int attr_coords = 0;
-//    private int attr_coords2 = 0;
-//    private int attr_color = 0;
-
     private int[] textureUniforms = new int[8];
-
     HashMap<String, Integer> uniforms = new HashMap<String, Integer>();
+
+    private boolean validated = false;
 
     public int getShaderId() {
         return shaderId;
     }
-
-//    public void setTexture(String uniformName, int index) {
-//        // Get uniform id
-//        int id = ARBShaderObjects.glGetUniformLocationARB(shaderId, uniformName);
-//        uniforms.put(uniformName, id);
-//
-//        // Set value
-//        ARBShaderObjects.glUseProgramObjectARB(shaderId);
-//        ARBShaderObjects.glUniform1iARB(id, index); // Bind TEXTURE0+index to uniformName
-//    }
 
     public Shader(String name) throws Exception {
         if(!Ref.glRef.isInitalized())
@@ -93,30 +83,38 @@ public class Shader {
                 GLRef.checkError();
 
             }
-            GL20.glBindAttribLocation(shaderId, 0, "v_position");
-            GL20.glBindAttribLocation(shaderId, 1, "v_color");
-            GL20.glBindAttribLocation(shaderId, 2, "v_coords");
-            GL20.glBindAttribLocation(shaderId, 3, "v_coords2");
+            GL20.glBindAttribLocation(shaderId, INDICE_POSITION, "v_position");
+            GL20.glBindAttribLocation(shaderId, INDICE_COLOR, "v_color");
+            GL20.glBindAttribLocation(shaderId, INDICE_COORDS, "v_coords");
+            GL20.glBindAttribLocation(shaderId, INDICE_COORDS2, "v_coords2");
             GLRef.checkError();
-            
+
             ARBShaderObjects.glLinkProgramARB(shaderId);
             
-            ARBShaderObjects.glValidateProgramARB(shaderId);
-            GLRef.checkError();
+            
+            
         } else throw new Exception("Could not load fragment or vertex shader");
+    }
+
+    public void validate() {
+        validated = true;
+        Bind();
+        validated =false;
+        ARBShaderObjects.glValidateProgramARB(shaderId);
         GLRef.checkError();
+        
+        // Do a check
         boolean infoString = checkShader(shaderId, true);
-        if(!infoString)
-            throw new Exception("Shader assembly failed.");
+        if(!infoString) {
+            Common.Log("Warning: Shader link error.");
+        }
+
+        // Check if shader is valid for use
+        if(GL20.glGetProgram(shaderId, GL20.GL_VALIDATE_STATUS)!=GL11.GL_TRUE)
+            Ref.common.Error(Common.ErrorCode.FATAL, "Shader assembly failed.");
         GLRef.checkError();
 
-        uniform_texture = ARBShaderObjects.glGetUniformLocationARB(shaderId, "tex");
-        textureUniforms[0] = uniform_texture;
-//        attr_position = GL20.glGetAttribLocation(shaderId, "v_position");
-//        attr_coords = GL20.glGetAttribLocation(shaderId, "v_coords");
-//        attr_coords2 = GL20.glGetAttribLocation(shaderId, "v_coords2");
-//        attr_color = GL20.glGetAttribLocation(shaderId, "v_color");
-        GLRef.checkError();
+        validated = true;
     }
 
     HashMap<String, Integer> attribMap = new HashMap<String, Integer>();
@@ -154,6 +152,16 @@ public class Shader {
 
         // We've got an index, yay
         ARBShaderObjects.glUniform3fARB(index, value.x, value.y, value.z);
+        GLRef.checkError();
+    }
+
+    public void setUniform(String name, Vector2f value) {
+        int index = getUniformIndex(name);
+//        if(index < 0)
+//            return;
+
+        // We've got an index, yay
+        ARBShaderObjects.glUniform2fARB(index, value.x, value.y);
         GLRef.checkError();
     }
 
@@ -217,13 +225,18 @@ public class Shader {
         return index;
     }
 
-    public void Bind() {
-        ARBShaderObjects.glUseProgramObjectARB(shaderId);
-//        ARBShaderObjects.glUniform1iARB(uniform_texture, 0); // Bind TEXTURE0 to "tex"
+    public void setTextureUniforms() {
         for (int i= 0; i < textureUniforms.length; i++) {
             if(textureUniforms[i] == 0) continue;
             ARBShaderObjects.glUniform1iARB(textureUniforms[i], i);
         }
+    }
+
+    public void Bind() {
+        if(!validated) Ref.common.Error(Common.ErrorCode.FATAL, "Shader.Bind(): Tried to bind an unvalidated shader");
+        ARBShaderObjects.glUseProgramObjectARB(shaderId);
+//        ARBShaderObjects.glUniform1iARB(uniform_texture, 0); // Bind TEXTURE0 to "tex"
+        setTextureUniforms();
 
 //        if(uniform_normalTexture != 0) {
 //            ARBShaderObjects.glUniform1iARB(uniform_normalTexture, 1); // Bind TEXTURE0 to "tex"
@@ -244,6 +257,7 @@ public class Shader {
 
     public void mapTextureUniform(String name, int textureIndex) {
         textureUniforms[textureIndex] = ARBShaderObjects.glGetUniformLocationARB(shaderId, name);
+        GLRef.checkError();
     }
 
     public int GetTextureIndex(int index) {
@@ -365,6 +379,8 @@ public class Shader {
 
         //return null;
     }
+
+
 
     
 

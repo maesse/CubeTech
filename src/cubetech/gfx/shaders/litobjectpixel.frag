@@ -1,4 +1,4 @@
-#version 120
+
 
 uniform samplerCube envmap;
 uniform sampler2D tex;
@@ -7,6 +7,8 @@ varying vec2 coords;
 varying vec4 diffuse, ambient;
 varying vec3 normal, lightDir, halfVector;
 varying vec3 reflectDir;
+varying vec4 col;
+
 void main()
 {
     // Start with ambient
@@ -30,6 +32,6 @@ void main()
                 * pow(NdotHV, gl_FrontMaterial.shininess);
     }
 
-    gl_FragColor = texcol * color;
+    gl_FragColor = texcol * color * col;
     //gl_FragColor = textureCube(envmap, reflectDir);
 }
