@@ -1,13 +1,13 @@
 package cubetech.Game;
 
 import cubetech.Block;
+import cubetech.collision.CubeChunk;
 import cubetech.collision.CubeMap;
 import cubetech.common.CS;
 import cubetech.common.Commands;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Content;
-import cubetech.common.GItem;
 import cubetech.common.Helper;
 import cubetech.common.ICommand;
 import cubetech.common.Info;
@@ -15,12 +15,15 @@ import cubetech.common.Move;
 import cubetech.common.Move.MoveType;
 import cubetech.common.MoveQuery;
 import cubetech.common.PlayerState;
+import cubetech.common.items.IItem;
+import cubetech.common.items.WeaponItem;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityType;
 import cubetech.entities.Event;
 import cubetech.input.PlayerInput;
 import cubetech.misc.Ref;
 import cubetech.spatial.SectorQuery;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
@@ -48,6 +51,78 @@ public class GameClient extends Gentity {
 
     public boolean noclip;
 
+    void updatePlayerCubes() {
+        // Get a list of chunks surrounding the player
+        long[] lookups = Ref.cm.cubemap.getVisibleChunks(ps.origin, CubeMap.DEFAULT_GROW_DIST);
+        
+        for (int i= 0; i < lookups.length; i++) {
+            long index = lookups[i];
+            CubeChunk chunk = Ref.cm.cubemap.chunks.get(index);
+
+            if(chunk == null) continue;
+            
+            int version = chunk.version; // server version
+            ChunkEntry clEntry = pers.chunkVersions.get(index);
+
+            if(clEntry == null)
+            {
+                // full transmit of this chunk
+                sendFullChunk(index);
+            } else if(clEntry.lastSent < version) {
+                // partial transmit
+                sendPartialChunk(index, clEntry.lastSent);
+                // TODO: resend after some time?
+            }
+            
+        }
+        ps.pers = pers;
+    }
+
+    void sendFullChunk(long index) {
+        CubeChunk chunk = Ref.cm.cubemap.chunks.get(index);
+
+        // Create data
+        ByteBuffer buf = chunk.createByteBuffer();
+
+        // Queue up
+        pers.queuedBytes += buf.limit();
+        pers.queuedChunkData.add(buf);
+
+        // Register last sent
+        ChunkEntry en = pers.chunkVersions.get(index);
+        if(en == null) {
+            pers.chunkVersions.put(index, new ChunkEntry(chunk.version));
+        } else {
+            en.lastSent = chunk.version;
+        }
+    }
+
+    void sendPartialChunk(long index, int start) {
+        CubeChunk chunk = Ref.cm.cubemap.chunks.get(index);
+        ChunkEntry en = pers.chunkVersions.get(index);
+        
+        // Check if we have the needed history data
+        if(chunk.version - start >= CubeChunk.NUM_VERSION) {
+            // nope -- fallback to full send
+            sendFullChunk(index);
+            return;
+        }
+
+        // Create delta from given start offset
+        ByteBuffer buf = chunk.createByteBuffer(start);
+
+        // Queue up
+        pers.queuedBytes += buf.limit();
+        pers.queuedChunkData.add(buf);
+
+        // register in client history
+        if(en == null) {
+            pers.chunkVersions.put(index, new ChunkEntry(chunk.version));
+        } else {
+            en.lastSent = chunk.version;
+        }
+    }
+
     /*
     ================
     ClientEvents
@@ -61,19 +136,26 @@ public class GameClient extends Gentity {
             oldEventSequence = ps.eventSequence - Common.MAX_PS_EVENTS;
 
         for(int i = oldEventSequence; i < ps.eventSequence; i++) {
-            int event = ps.events[i & (Common.MAX_PS_EVENTS-1)];
+            Event event = ps.events[i & (Common.MAX_PS_EVENTS-1)];
 
             switch(event) {
-                case Event.FOOTSTEP:
-                case Event.STEP:
-                case Event.DIED:
-                case Event.HIT_WALL:
-                case Event.GOAL:
-                case Event.JUMP:
+                case FOOTSTEP:
+                case STEP:
+                case DIED:
+                case HIT_WALL:
+                case GOAL:
+                case JUMP:
+                    break;
+
+                case FIRE_WEAPON:
+                    WeaponItem.get(ps.weapon).fireWeapon(this);
+                    break;
+                case FIRE_WEAPON_ALT:
+                    WeaponItem.get(ps.weapon).fireAltWeapon(this);
                     break;
 
                 default:
-                    //System.out.println("Unhandled GClient event.");
+                    Common.LogDebug("Unhandled GameClient EV event: " + event);
                     break;
             }
             
@@ -154,13 +236,13 @@ public class GameClient extends Gentity {
 
             // Get a specific item for the player
             if(!giveall) {
-                GItem item = Ref.common.items.findItemByClassname(name);
+                IItem item = Ref.common.items.findItemByClassname(name);
                 if(item == null)
                     return;
 
                 Gentity ent = Ref.game.Spawn();
                 ent.s.origin.set(r.currentOrigin);
-                ent.classname = item.classname;
+                ent.classname = item.getClassName();
                 Ref.game.spawnItem(ent, item);
                 Ref.common.items.FinishSpawningItem.think(ent);
                 Ref.common.items.TouchItem.touch(ent, thisIsSilly);
@@ -278,7 +360,9 @@ public class GameClient extends Gentity {
             Ref.server.GameSendServerCommand(-1, String.format("print \"%s changed name to %s\n\"", oldname, pers.Name));
         }
 
-        String str = String.format("n\\%s",pers.Name);
+        String model = Info.ValueForKey(info, "model");
+
+        String str = String.format("n\\%s\\model\\%s",pers.Name,model);
         Ref.server.SetConfigString(CS.CS_PLAYERS+clientIndex, str);
     }
 
@@ -473,7 +557,11 @@ public class GameClient extends Gentity {
         if(ps.origin.z < Ref.game.g_killheight.iValue) {
             Die();
         }
+
+        updatePlayerCubes();
     }
+
+    
 
     public void startPull() {
         Ref.cvars.Set2("g_editmode", "0", true);
@@ -657,5 +745,11 @@ public class GameClient extends Gentity {
         }
 
         return spot;
+    }
+
+    public Vector3f getForwardVector() {
+        Vector3f fw = new Vector3f();
+        Helper.AngleVectors(ps.viewangles, fw, null, null);
+        return fw;
     }
 }

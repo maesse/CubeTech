@@ -1,6 +1,7 @@
 package cubetech.input;
 
 import cubetech.common.Helper;
+import cubetech.common.items.Weapon;
 import cubetech.net.NetBuffer;
 import java.util.Arrays;
 import org.lwjgl.util.vector.Vector2f;
@@ -16,8 +17,10 @@ public class PlayerInput {
     // this is transmitted
     public Vector2f MousePos = new Vector2f(0.5f,0.5f); // no need to send this one
     public int[] angles = new int[3]; // can be reduced to 3 shorts
+    public boolean[] buttons = new boolean[30];
     public int serverTime;
     public int WheelDelta;
+    public Weapon weapon;
     public boolean Mouse1;
     public boolean Mouse1Diff;
     public boolean Mouse2;
@@ -62,6 +65,11 @@ public class PlayerInput {
             dest.angles[0] = buf.ReadInt();
             dest.angles[1] = buf.ReadInt();
             dest.angles[2] = buf.ReadInt();
+            int buttonPack = buf.ReadInt();
+            for (int i= 0; i < 30; i++) {
+                dest.buttons[i] = (buttonPack & (1 << (i+1))) != 0;
+            }
+            dest.weapon = buf.ReadEnum(Weapon.class);
         } else { // unchanged
 
             dest.Forward = oldcmd.Forward;
@@ -79,6 +87,8 @@ public class PlayerInput {
             dest.WheelDelta = oldcmd.WheelDelta;
             dest.MousePos = oldcmd.MousePos;
             System.arraycopy(oldcmd.angles, 0, dest.angles, 0, oldcmd.angles.length);
+            System.arraycopy(oldcmd.buttons, 0, dest.buttons, 0, oldcmd.buttons.length);
+            dest.weapon = oldcmd.weapon;
         }
 
         return dest;
@@ -132,13 +142,24 @@ public class PlayerInput {
         return (val & (1<<index)) != 0;
     }
 
+    private static boolean arrayEquals(boolean[] a, boolean[] b) {
+        if(a == null || b == null) return a == b;
+
+        for (int i= 0; i < a.length; i++) {
+            if(a[i] != b[i]) return false;
+        }
+
+        return true;
+    }
+
     public void WriteDeltaUserCmd(NetBuffer buf, PlayerInput from) {
 
         buf.Write(serverTime);
         
         if(this.equals(from)
                 && Helper.Equals(MousePos, from.MousePos)
-                && MouseDelta[0] == from.MouseDelta[0] && MouseDelta[1] == from.MouseDelta[1]) {
+                && MouseDelta[0] == from.MouseDelta[0] && MouseDelta[1] == from.MouseDelta[1]
+                && arrayEquals(buttons, from.buttons) && weapon == from.weapon) {
             buf.Write(false); // no change
             return;
         }
@@ -173,6 +194,13 @@ public class PlayerInput {
         buf.Write(angles[0]);
         buf.Write(angles[1]);
         buf.Write(angles[2]);
+        int buttonPack = 0;
+        for (int i= 0; i < buttons.length; i++) {
+            if(!buttons[i]) continue;
+            buttonPack |= 1 << (i+1);
+        }
+        buf.Write(buttonPack);
+        buf.WriteEnum(weapon);
     }
 
     public PlayerInput Clone() {
@@ -197,6 +225,12 @@ public class PlayerInput {
         n.Right = Right;
         n.Up = Up;
         n.Down = Down;
+        System.arraycopy(buttons, 0, n.buttons, 0, buttons.length);
+        n.weapon = weapon;
         return n;
+    }
+
+    public boolean isButtonDown(int i) {
+        return buttons[i];
     }
 }

@@ -4,6 +4,7 @@ import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
 import cubetech.common.Commands.ExecType;
 import cubetech.common.Helper;
+import cubetech.gfx.GLRef;
 import cubetech.misc.Ref;
 import cubetech.net.ConnectState;
 import cubetech.ui.UI.MENU;
@@ -40,7 +41,7 @@ public class Input {
     public final static int KEYCATCH_MESSAGE = 8;
 
     ButtonState in_left, in_right, in_forward, in_back, in_up, in_down;
-    ButtonState[] in_buttons = new ButtonState[31]; // Custom buttons
+    ButtonState[] in_buttons = new ButtonState[30]; // Custom buttons
     public float[] viewangles = new float[3]; // viewangle this frame
     float[] oldangles = new float[3]; // viewangles from last frame
     public Binds binds;
@@ -106,7 +107,12 @@ public class Input {
         binds.BindKey("TAB", "+scores");
         binds.BindKey("RETURN", "message");
         binds.BindKey("y", "message");
-        
+        binds.BindKey("1", "weapon 1");
+        binds.BindKey("2", "weapon 2");
+        binds.BindKey("3", "weapon 3");
+        binds.BindKey("4", "weapon 4");
+        binds.BindKey("5", "weapon 5");
+        binds.BindKey("mouse1", "+button0");
         
     }
 
@@ -208,11 +214,15 @@ public class Input {
         in_mouselook = Ref.cvars.Get("in_mouselook", "1", EnumSet.of(CVarFlags.ARCHIVE));
     }
     public void Update() {
+        GLRef.checkError();
         Display.processMessages();
+        GLRef.checkError();
         MouseUpdate();
+        GLRef.checkError();
         KeyboardUpdate();
+        GLRef.checkError();
         UpdateUserInput();
-
+        GLRef.checkError();
         
         
 
@@ -323,7 +333,9 @@ public class Input {
                     playerInput.Mouse3 = pressed;
                     break;
             }
+            GLRef.checkError();
             FireMouseEvent(new MouseEvent(button, pressed, wheelDelta, dx, dy, new Vector2f(playerInput.MousePos.x,playerInput.MousePos.y)));
+            GLRef.checkError();
             // Also fire a key event for button presses
             if(button != -1) {
                 // Fire regular mouse button event
@@ -518,7 +530,11 @@ public class Input {
         System.arraycopy(viewangles, 0, oldangles, 0, viewangles.length);
         PlayerInput cmd = playerInput.Clone();
         MouseMove(cmd);
-
+        for (int i= 0; i < in_buttons.length; i++) {
+            int state = (int) in_buttons[i].KeyState();
+            cmd.buttons[i] = state != 0;
+        }
+        cmd.weapon = Ref.client.cl.userCmd_weapon;
         return cmd;
     }
 }

@@ -6,6 +6,7 @@ import cubetech.common.CVarFlags;
 import cubetech.common.Commands;
 import cubetech.common.Common;
 import cubetech.common.Info;
+import cubetech.common.items.Weapon;
 import cubetech.entities.EntityState;
 import cubetech.input.PlayerInput;
 import cubetech.misc.Ref;
@@ -45,6 +46,9 @@ public class ClientActive {
 
     public OutPacket[] outPackets = new OutPacket[32];
 
+    public Weapon userCmd_weapon = null;
+    public float userCmd_sens = 1f;
+
     public ClientActive() {
         serverid = Integer.MAX_VALUE;
         for (int i= 0; i < parseEntities.length; i++) {
@@ -60,6 +64,8 @@ public class ClientActive {
             outPackets[i] = new OutPacket();
         }
     }
+
+
 
     public void SetCGameTime() {
         if(Ref.client.state != ConnectState.ACTIVE)

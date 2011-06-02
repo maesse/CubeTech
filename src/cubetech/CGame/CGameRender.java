@@ -14,16 +14,21 @@ import cubetech.collision.CubeMap;
 import cubetech.collision.SingleCube;
 import cubetech.common.Common;
 import cubetech.common.Content;
-import cubetech.common.GItem;
 import cubetech.common.Helper;
 import cubetech.common.Move.MoveType;
 import cubetech.common.PlayerState;
+import cubetech.common.items.IItem;
+import cubetech.common.items.ItemType;
+import cubetech.common.items.Weapon;
+import cubetech.common.items.WeaponInfo;
+import cubetech.common.items.WeaponItem;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
 import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.CubeType;
+import cubetech.gfx.Shader;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
@@ -31,6 +36,7 @@ import cubetech.gfx.VBO;
 import cubetech.input.Input;
 import cubetech.iqm.IQMAdjacency;
 import cubetech.iqm.IQMAnim;
+import cubetech.iqm.IQMModel;
 import cubetech.misc.Ref;
 import cubetech.spatial.Bin;
 import cubetech.spatial.SpatialQuery;
@@ -42,6 +48,7 @@ import org.lwjgl.opengl.GL20;
 import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
+import org.lwjgl.util.vector.Vector4f;
 
 /**
  *
@@ -130,6 +137,7 @@ public class CGameRender {
         // calculate the current origin
         cent.CalcLerpPosition();
         cent.Effects();
+        if(cent == Ref.cgame.cg.predictedPlayerEntity && !Ref.cgame.cg_tps.isTrue()) return;
         switch(cent.currentState.eType) {
             case EntityType.PLAYER:
                 Player(cent);
@@ -140,8 +148,47 @@ public class CGameRender {
             case EntityType.MOVER:
                 Mover(cent);
                 break;
+            case EntityType.MISSILE:
+                missile(cent);
+                break;
         }
     }
+
+    private void missile(CEntity cent) {
+        WeaponItem w = WeaponItem.get(cent.currentState.weapon);
+        cent.lerpAngles.set(cent.currentState.Angles);
+
+        // add trails
+        Vector3f o = cent.lerpOrigin;
+//        Vector3f min = cent.currentState.
+
+        // convert direction of travel into axis
+
+        RenderEntity ent = Ref.render.createEntity(REType.MODEL);
+
+        ent.axis[0].set(cent.currentState.pos.delta);
+        if(Helper.Normalize(ent.axis[0]) == 0) {
+            ent.axis[0].z = 1;
+        }
+//        ent.axis[0].z *= -1;
+
+        WeaponInfo wi = w.getWeaponInfo();
+        if(wi != null) {
+            Helper.rotateAroundDirection(ent.axis, game.cg.time/5f);
+
+            ent.model = wi.missileModel;
+            ent.origin.set(cent.lerpOrigin);
+    //        ent.axis = Helper.AnglesToAxis(ent.axis[0]);
+            Ref.render.addRefEntity(ent);
+
+            wi.missileTrailFunc.run(cent);
+        }
+
+        
+        //Helper.renderBBoxWireframe(o.x - 10, o.y - 10, o.z - 10, o.x + 10, o.y + 10, o.z + 10);
+    }
+
+    
 
     private void Item(CEntity cent) {
         EntityState es = cent.currentState;
@@ -156,21 +203,28 @@ public class CGameRender {
 
         float bounce = 0;
 
-        GItem item = Ref.common.items.getItem(es.modelindex);
-        if(item.type == GItem.Type.POWERUP)
+        IItem item = Ref.common.items.getItem(es.modelindex);
+        if(item.getType() == ItemType.POWERUP)
             bounce = (float) Math.sin(game.cg.time/400f) * 2f;
         Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-        spr.Set(cent.lerpOrigin.x, cent.lerpOrigin.y + bounce, GItem.ITEM_RADIUS, item.icon);
+        Vector3f min = new Vector3f(), max = new Vector3f();
+        item.getBounds(min, max);
+        float radius = (float) Math.sqrt((max.lengthSquared() - min.lengthSquared())*0.5);
+
+        spr.Set(cent.lerpOrigin.x, cent.lerpOrigin.y + bounce, radius, Ref.ResMan.LoadTexture(item.getIconName()));
         spr.SetDepth(CGame.PLAYER_LAYER-1);
-        if(item.type == GItem.Type.HEALTH)
+        if(item.getType() == ItemType.HEALTH)
             spr.SetAngle(game.cg.autoAngle);
 
     }
 
     // Render a player
     private void Player(CEntity cent) {
+        ClientInfo ci = game.cgs.clientinfo[cent.currentState.ClientNum];
+        if(!ci.infoValid) return;
         RenderEntity ent = Ref.render.createEntity(REType.MODEL);
-        ent.model = Ref.cm.cubemap.model;
+
+        ent.model = Ref.ResMan.loadModel(ci.modelName);
 
         // set origin & angles
         ent.origin.set(cent.lerpOrigin);
@@ -184,14 +238,21 @@ public class CGameRender {
         }
         else {
             angles = new Vector3f(cent.lerpAngles);
-        angles.y *= -1f;
-        angles.x *= -1f;
-
+            angles.y *= -1f;
+            angles.x *= -1f;
         }
 
+        Vector3f velNorm = new Vector3f(deltaMove);
+        if(Helper.Normalize(velNorm) == 0) {
+            velNorm.set(0,0,1);
+        }
         angles.x = 0;
         angles.z = 0;
-        ent.axis = Helper.AnglesToAxis(angles);
+        angles.set(0,90,0);
+        ent.axis[0].set(1,0,0);
+        Helper.rotateAroundDirection(ent.axis, game.cg.time/10f);
+        ent.axis = Helper.AnglesToAxis(cent.lerpAngles);
+        //ent.axis = Helper.AnglesToAxis(angles);
 //        for (int i= 0; i < 3; i++) {
 //            ent.axis[i].normalise();
 //        }
@@ -199,7 +260,26 @@ public class CGameRender {
 //        ent.axis[1].scale(-1f);
 
         playerAnimation(cent, ent);
+
+        // Fade out when close to camera
+        Vector3f cameraOrigin = Ref.cgame.cg.refdef.Origin;
+        Vector3f entityOrigin = ent.origin;
+
+        float distance = Helper.VectorDistance(cameraOrigin, entityOrigin);
+        float maxdist = 60; // where fadeout starts
+        float mindist = 30; // where model is completely transparent
+        if(distance < maxdist) {
+            distance -= mindist;
+            if(distance < 2) distance = 2;
+            distance /= maxdist-mindist;
+        }
+
+        ent.color = new Vector4f(255, 255, 255, 255f*distance);
+        Ref.render.addRefEntity(ent);
+//        LocalEntity.smokePuff(cent.lerpOrigin, new Vector3f(), 32, 1, 1, 1, 1, 500, Ref.cgame.cg.time, 0, 0, Ref.ResMan.LoadTexture("data/smokepuff.png").asMaterial());
     }
+
+
 
     private void playerAnimation(CEntity cent, RenderEntity ent) {
         float speedScale = 1.0f;
@@ -232,10 +312,10 @@ public class CGameRender {
 //        spr.Set(new Vector2f(), Ref.glRef.GetResolution(), Ref.ResMan.LoadTexture("data/hags.png"), null, null);
 
         // Render mapeditor if in editmode
-        if(game.cg_editmode.iValue == 1) {
-            game.mapEditor.Render();
-
-        }
+//        if(game.cg_editmode.iValue == 1) {
+//            game.mapEditor.Render();
+//
+//        }
 
 //        float speeds = Math.abs(game.cg.snap.ps.velocity.x);
 //        float maxspeed = 600;
@@ -293,48 +373,33 @@ public class CGameRender {
             Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y/2f  - Ref.textMan.GetCharHeight()), "Click mouse to spawn", Align.CENTER, Type.HUD);
             Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y/2f), "ESC for menu", Align.CENTER, Type.HUD);
         }
+        PlayerState ps = game.cg.snap.ps;
+        Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*7), "^3Weapon: " + ps.weapon + " (" + ps.weaponState + ")", Align.LEFT, Type.HUD);
+        Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*8), "^3Ammo: " + ps.stats.getAmmo(ps.weapon), Align.LEFT, Type.HUD);
 
         // Draw powerups
-        PlayerState ps = game.cg.snap.ps;
-        for (int i= 0; i < PlayerState.NUM_POWERUPS; i++) {
-            if(ps.powerups[i] <= 0)
-                continue;
-
-            int ms = ps.powerups[i];
-            int sec = ms / 1000;
-
-
-            GItem item = Ref.common.items.findItemByClassname("item_boots");
-            if(item == null) {
-                Common.LogDebug("CGame.Draw2D: Can't find item " + i);
-                continue;
-            }
-            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-            Vector2f res = Ref.glRef.GetResolution();
-            float radius = 32;
-            spr.Set(res.x - radius * 2, res.y - ( res.y * 0.7f + i * radius * 2) , radius, item.icon);
-            Ref.textMan.AddText(new Vector2f(res.x - radius * 2 , res.y * 0.7f + i * radius * 2 +5), ""+sec, Align.CENTER, Type.HUD);
-        }
+        
+//        for (int i= 0; i < PlayerState.NUM_POWERUPS; i++) {
+//            if(ps.powerups[i] <= 0)
+//                continue;
+//
+//            int ms = ps.powerups[i];
+//            int sec = ms / 1000;
+//
+//
+//            IItem item = Ref.common.items.findItemByClassname("item_boots");
+//            if(item == null) {
+//                Common.LogDebug("CGame.Draw2D: Can't find item " + i);
+//                continue;
+//            }
+//            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+//            Vector2f res = Ref.glRef.GetResolution();
+//            float radius = 32;
+//            spr.Set(res.x - radius * 2, res.y - ( res.y * 0.7f + i * radius * 2) , radius, item.icon);
+//            Ref.textMan.AddText(new Vector2f(res.x - radius * 2 , res.y * 0.7f + i * radius * 2 +5), ""+sec, Align.CENTER, Type.HUD);
+//        }
 
         // Handle changes from server
-        if(game.cg.snap.ps.moveType == MoveType.EDITMODE && game.cg_editmode.iValue == 0) {
-            // Turn on editmode
-            Ref.cvars.Set2("cg_editmode", "1", true);
-        } else if(game.cg.snap.ps.moveType != MoveType.EDITMODE && game.cg_editmode.iValue == 1) {
-            // Turn off editmode
-            Ref.cvars.Set2("cg_editmode", "0", true);
-        }
-
-        // Handle changes to cvar
-        if(game.cg_editmode.modified) {
-            game.cg_editmode.modified = false;
-            if(game.cg_editmode.iValue == 0) {
-                Ref.Input.SetKeyCatcher(Ref.Input.GetKeyCatcher() & ~Input.KEYCATCH_CGAME);
-                game.mapEditor = null;
-            } else {
-                game.mapEditor = new MapEditor();
-            }
-        }
 
         if(game.cg.showScores)
             DrawScoreboard();
@@ -510,21 +575,21 @@ public class CGameRender {
 
         GL11.glBegin(GL11.GL_QUADS);
         {
-            GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y);
-            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(0, -Extent.x, -Extent.y, depth);
+            GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x, TexOffset.y);
+            GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, -Extent.x, -Extent.y, depth);
 
-            GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y);
-            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(0, Extent.x, -Extent.y, depth);
+            GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x+TexSize.x, TexOffset.y);
+            GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, Extent.x, -Extent.y, depth);
 
-            GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
-            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(0, Extent.x, Extent.y, depth);
+            GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
+            GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, Extent.x, Extent.y, depth);
 
-            GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y+TexSize.y);
-            GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(0, -Extent.x, Extent.y, depth);
+            GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x, TexOffset.y+TexSize.y);
+            GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, -Extent.x, Extent.y, depth);
         }
         GL11.glEnd();
 
@@ -602,14 +667,8 @@ public class CGameRender {
                 Ref.ResMan.getWhiteTexture();
 
             spr.Set(new Vector2f(ent.r.absmin.x, ent.r.absmin.y), size, tex, null, null);
-            spr.SetDepth(MapEditor.EDITOR_LAYER-1);
+            spr.SetDepth(CGame.PLAYER_LAYER-1);
             spr.SetColor(0, 255, 255, 127);
-
-            Vector2f center = new Vector2f(ent.r.absmin);
-            size.scale(0.5f);
-            Vector2f.add(center, size, center);
-
-            MapEditor.renderHighlightBlock(center, size, MapEditor.EDITOR_LAYER-1, (Color) Color.GREEN);
         }
     }
 
@@ -642,7 +701,7 @@ public class CGameRender {
             GL11.glDisable(GL11.GL_CULL_FACE);
             //GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_LINE);
             Ref.textMan.AddText(new Vector2f(10, 200), ""+lookingAtCube.highlightSide, Align.LEFT, Type.HUD);
-            lookingAtCube.chunk.renderSingleWireframe(lookingAtCube.x, lookingAtCube.y, lookingAtCube.z, CubeType.DIRT);
+            lookingAtCube.chunk.render.renderSingleWireframe(lookingAtCube.x, lookingAtCube.y, lookingAtCube.z, CubeType.DIRT);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
             GL11.glEnable(GL11.GL_CULL_FACE);
             //GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
@@ -712,11 +771,16 @@ public class CGameRender {
     private void setLerpFrameAnimation(ClientInfo ci, LerpFrame lf, int newanimation) {
         lf.animationNumber = newanimation;
         newanimation &= ~128;
-        if(newanimation < 0 || newanimation > Ref.cm.cubemap.model.anims.length) {
+        IQMModel model = Ref.ResMan.loadModel(ci.modelName);
+        if(model == null) {
             Ref.common.Error(Common.ErrorCode.DROP, "Bad animation number " + newanimation);
         }
 
-        IQMAnim anim = Ref.cm.cubemap.model.anims[newanimation];
+        if(newanimation < 0 || newanimation >= model.anims.length) {
+            return; // FIX to error
+        }
+
+        IQMAnim anim = model.anims[newanimation];
         lf.animation = anim;
         lf.animationTime = lf.frametime + anim.initialLerp;
 

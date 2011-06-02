@@ -1,5 +1,7 @@
 package cubetech.CGame;
 
+import cubetech.collision.CubeCollision;
+import cubetech.collision.CubeMap;
 import cubetech.common.Helper;
 import cubetech.misc.Plane;
 import cubetech.misc.Ref;
@@ -9,11 +11,8 @@ import java.nio.FloatBuffer;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.GLU;
 import org.lwjgl.util.vector.Matrix;
-import org.lwjgl.util.vector.Matrix3f;
-import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
-import org.omg.PortableServer.POA;
 
 /**
  *
@@ -39,199 +38,89 @@ public class ViewParams {
 
     private FloatBuffer viewbuffer = ByteBuffer.allocateDirect(16*4).order(ByteOrder.nativeOrder()).asFloatBuffer();
     private FloatBuffer projbuffer = ByteBuffer.allocateDirect(16*4).order(ByteOrder.nativeOrder()).asFloatBuffer();
+    private float[] flipMatrix = new float[] {
+        // convert from our coordinate system (looking down X)
+	// to OpenGL's coordinate system (looking down -Z)
+	0, 0, -1, 0,
+	-1, 0, 0, 0,
+	0, 1, 0, 0,
+	0, 0, 0, 1};
 
     public ViewParams() {
         for (int i= 0; i < 3; i++) {
             ViewAxis[i] = new Vector3f();
         }
-
     }
 
     public void SetupProjection() {
         // Use fovx and fovy to set up a matrix
         Vector2f vidSize = Ref.glRef.GetResolution();
         float aspect = vidSize.y/vidSize.x;
-
-        float maxfov = Ref.cvars.Find("camera_maxfov").fValue;
-        float minfov = Ref.cgame.cg_fov.fValue;
-        float maxspeed = Ref.cvars.Find("camera_maxspeed").fValue;
-        float currentspeed = Ref.cgame.speed;
-
-        if(currentspeed > maxspeed)
-            currentspeed = maxspeed;
-
-        float speedFrac = currentspeed / maxspeed;
-        float fovadd = (maxfov-minfov) * speedFrac;
-
-        float fovChangeLimiter =  Ref.cvars.Find("camera_zoomspeed").fValue * (Ref.client.frame_msec / 1000f);
-        
-        float fovChange = (minfov + fovadd) - Ref.cgame.lastFov;
-        float fovChangeFrac = Math.abs(fovChange) / 10f;
-        fovChangeLimiter += fovChangeLimiter * fovChangeFrac;
-        boolean neg = fovChange < 0;
-        if(fovChangeLimiter < Math.abs(fovChange)) {
-            fovChange = fovChangeLimiter;
-        if(neg)
-            fovChange *= -1f;
-        }
-        
-
-        
-        FovX = (int)(Ref.cgame.lastFov + fovChange);
-
-        Ref.cgame.lastFov = Ref.cgame.lastFov + fovChange;
-        if(Ref.cgame.cg_editmode.iValue == 1)
-            FovX = Ref.cgame.cg_fov.iValue;
+        FovX = Ref.cgame.cg_fov.iValue;
         FovY = (int)(FovX*aspect);
-//        this.VisibleSize = new Vector2f(width, width * aspect);
-//        DefaultSize = new Vector2f(VisibleSize.x, VisibleSize.y);
-//        this.Position = position;
-//        if(this.Position.y < 0f)
-//            this.Position.y = 0;
+
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glLoadIdentity();
         int near = Ref.cvars.Find("cg_depthnear").iValue;
         int far = Ref.cvars.Find("cg_depthfar").iValue;
-//        if(Ref.cvars.Find("cg_editmode").iValue == 1) {
-//            near = Ref.cvars.Find("edit_nearlayer").iValue;
-//            far = Ref.cvars.Find("edit_farlayer").iValue;
-//        }
-        if(Ref.cgame.cg_viewmode.iValue == 1)
-            setup3DProjection(Ref.cgame.cg_fov.fValue * aspect, aspect, near, far);
-        else if(Ref.cgame.cg_editmode.iValue == 0) {
-            float left = Ref.cvars.Find("camera_hplayerpos").fValue;
+        setup3DProjection(Ref.cgame.cg_fov.fValue * aspect, aspect, near, far);
 
-            float vleft = Ref.cvars.Find("camera_vplayerpos").fValue;
-            float verticalVelocity = Ref.cgame.cg.predictedPlayerState.velocity.y;
-            float vsnapmin = Ref.cvars.Find("camera_vsnapmin").fValue;
-            float absVel = Math.abs(verticalVelocity);
-//            if(absVel > vsnapmin) {
-                float vsnapmax = Ref.cvars.Find("camera_vsnapmax").fValue;
-                float frac = 0f;
-                if(absVel > vsnapmax)
-                    frac = 1f;
-                else
-                    frac = (absVel-vsnapmin)/(vsnapmax-vsnapmin);
-
-                if(absVel < vsnapmin)
-                    frac = 0.2f;
-
-                if(frac < 0)
-                    frac = 0;
-                if(frac > 1)
-                    frac = 1;
-
-                float maxChange;
-                if(verticalVelocity > 0) {
-                    maxChange = vleft - 0.1f;
-            }
-                else
-                    maxChange = 0.8f - vleft;
-                
-                if(maxChange > 1)
-                    maxChange = 1;
-                if(maxChange < 0)
-                    maxChange = 0;
-
-                float change = -1f;
-                if(verticalVelocity > 0f) {
-                    change = 0.5f;
-                    if(Ref.cgame.lastVleft < vleft)
-                        change = 1f;
-                }
-
-                change *= maxChange * frac;
-
-//                float vChangeLimiter = 1f * 0.01f;
-//                float changeFromLastFrame = (vleft + change) - Ref.cgame.lastVleft;
-//                neg = changeFromLastFrame < 0f;
-//                if(vChangeLimiter < Math.abs(changeFromLastFrame)) {
-//                    changeFromLastFrame = vChangeLimiter;
-//
-//                    if(neg)
-//                        changeFromLastFrame *= -1f;
-//                }
-
-                //
-                vleft =  (vleft + change);
-
-                float delta = vleft - Ref.cgame.lastVleft;
-                float maxVChange = frac * 0.5f* (Ref.client.frame_msec/1000f);
-                if(Math.abs(delta) > maxVChange) {
-                    if(delta > 0f)
-                        delta = maxVChange;
-                    else
-                        delta = -maxVChange;
-                }
-                //vleft = Ref.cgame.lastVleft + changeFromLastFrame;
-                Ref.cgame.lastVleft += delta;
-                vleft = Ref.cgame.lastVleft;
-                //Ref.cgame.lastVleft = vleft;
-                //vleft += change;
-
-                
-
-//            }
-                xmin = -FovX*left;
-                xmax = FovX*(1f-left);
-                ymin = -FovX * aspect * (1f - vleft);
-                ymax = FovX * aspect * vleft;
-                w = xmax-xmin;
-                h = ymax - ymin;
-            GL11.glOrtho(-FovX*left, FovX*(1f-left), -FovX*aspect*(1f-vleft), FovX*aspect*vleft, near,far);
-
-        } else {
-            GL11.glOrtho(-FovX*0.5f, FovX*0.5f, -FovX*aspect*0.5f, FovX*aspect*0.5f, near,far);
-        }
-
+//        Angles.x *= -1f;
+//        Angles.y *= -1f;
         ViewAxis = Helper.AnglesToAxis(Angles);
-//        viewbuffer.put(ViewAxis[1].x); viewbuffer.put(ViewAxis[2].x); viewbuffer.put(ViewAxis[0].x); viewbuffer.put(Origin.x);
-//        viewbuffer.put(ViewAxis[1].y); viewbuffer.put(ViewAxis[2].y); viewbuffer.put(ViewAxis[0].y); viewbuffer.put(Origin.y);
-//        viewbuffer.put(ViewAxis[1].z);viewbuffer.put(ViewAxis[2].z);viewbuffer.put(ViewAxis[0].z); viewbuffer.put(0);
-//        viewbuffer.put(0); viewbuffer.put(0); viewbuffer.put(0); viewbuffer.put(1);
+        float[] view = new float[16];
+        view[0] = ViewAxis[0].x;
+        view[4] = ViewAxis[0].y;
+        view[8] = ViewAxis[0].z;
+        view[12] = -Origin.x * view[0] + -Origin.y * view[4] + -Origin.z * view[8];
 
+        view[1] = ViewAxis[1].x;
+        view[5] = ViewAxis[1].y;
+        view[9] = ViewAxis[1].z;
+        view[13] = -Origin.x * view[1] + -Origin.y * view[5] + -Origin.z * view[9];
 
-        int derp = 0;
-        
-        
+        view[2] = ViewAxis[2].x;
+        view[6] = ViewAxis[2].y;
+        view[10] = ViewAxis[2].z;
+        view[14] = -Origin.x * view[2] + -Origin.y * view[6] + -Origin.z * view[10];
 
-//        ViewAxis[1].set(-1,0,0);
-//        ViewAxis[2].set(0,1,0);
-//        ViewAxis[0].set(0,0,1);
+        view[3] = view[7] = view[11] = 0;
+        view[15] = 1;
 
         Vector3f org = new Vector3f(-Origin.x, -Origin.y, -Origin.z);
-        ViewAxis[0].scale(-1);
-        ViewAxis[1].scale(-1);
+//        ViewAxis[0].scale(-1);
+//        ViewAxis[1].scale(-1);
         
-        viewbuffer.put(ViewAxis[1].x); viewbuffer.put(ViewAxis[2].x); viewbuffer.put(ViewAxis[0].x); viewbuffer.put(0);
-        viewbuffer.put(ViewAxis[1].y); viewbuffer.put(ViewAxis[2].y); viewbuffer.put(ViewAxis[0].y); viewbuffer.put(0);
-        viewbuffer.put(ViewAxis[1].z); viewbuffer.put(ViewAxis[2].z); viewbuffer.put(ViewAxis[0].z); viewbuffer.put(0);
-        viewbuffer.put(Vector3f.dot(ViewAxis[1], org)); viewbuffer.put(Vector3f.dot(ViewAxis[2], org)); viewbuffer.put(Vector3f.dot(ViewAxis[0], org));
-        viewbuffer.put(1);
-
-//        viewbuffer.put(ViewAxis[1].x); viewbuffer.put(ViewAxis[1].y); viewbuffer.put(ViewAxis[1].z); // right
-//        viewbuffer.put(0);
-//        viewbuffer.put(ViewAxis[2].x); viewbuffer.put(ViewAxis[2].y); viewbuffer.put(ViewAxis[2].z); // up
-//        viewbuffer.put(0);
-//        viewbuffer.put(ViewAxis[0].x); viewbuffer.put(ViewAxis[0].y); viewbuffer.put(ViewAxis[0].z); // forward
-//        viewbuffer.put(0);
-//        //viewbuffer.put(0);viewbuffer.put(0);viewbuffer.put(000);viewbuffer.put(1);
-//        viewbuffer.put(Origin.x-400); viewbuffer.put(Origin.y-200); viewbuffer.put(200); viewbuffer.put(1f);
-        viewbuffer.flip();
-//        GL11.glTranslatef(-Origin.x, -Origin.y, 1);
+//        viewbuffer.put(ViewAxis[0].x); viewbuffer.put(ViewAxis[1].x); viewbuffer.put(ViewAxis[2].x); viewbuffer.put(0);
+//        viewbuffer.put(ViewAxis[0].y); viewbuffer.put(ViewAxis[1].y); viewbuffer.put(ViewAxis[2].y); viewbuffer.put(0);
+//        viewbuffer.put(ViewAxis[0].z); viewbuffer.put(ViewAxis[1].z); viewbuffer.put(ViewAxis[2].z); viewbuffer.put(0);
+//        viewbuffer.put(-org.x * ViewAxis[0].x + -org.y * ViewAxis[0].y + -org.z * ViewAxis[0].z);
+//        viewbuffer.put(-org.x * ViewAxis[1].x + -org.y * ViewAxis[1].y + -org.z * ViewAxis[1].z);
+//        viewbuffer.put(-org.x * ViewAxis[2].x + -org.y * ViewAxis[2].y + -org.z * ViewAxis[2].z);
+//        viewbuffer.put(1);
+//
+//        viewbuffer.flip();
+        
+        // convert from our coordinate system (looking down X)
+	// to OpenGL's coordinate system (looking down -Z)
+        viewbuffer.position(0);
+        Helper.multMatrix(view, flipMatrix, viewbuffer);
+        viewbuffer.limit(16);
+        viewbuffer.position(0);
+        
+        
         
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         
         GL11.glLoadMatrix(viewbuffer);
 
-        GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projbuffer);
-//        projbuffer.flip();
-        Matrix4f prov = (Matrix4f) new Matrix4f().load(projbuffer);
-        Matrix4f view = (Matrix4f) new Matrix4f().load(viewbuffer);
-        viewbuffer.position(0);
-        projbuffer.position(0);
-
-        Matrix4f mvp = Matrix4f.mul(view, prov, null);
+//        GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projbuffer);
+//        Matrix4f prov = (Matrix4f) new Matrix4f().load(projbuffer);
+//        Matrix4f view = (Matrix4f) new Matrix4f().load(viewbuffer);
+//        viewbuffer.position(0);
+//        projbuffer.position(0);
+//
+//        Matrix4f mvp = Matrix4f.mul(view, prov, null);
         
         // create the near plane
         Vector3f derps = new Vector3f(ViewAxis[0]);
@@ -239,23 +128,6 @@ public class ViewParams {
         float d = Vector3f.dot(derps, Origin);
 
         planes[0] = new Plane(derps.x, derps.y, derps.z, d).normalize();
-        //planes[0] = new Plane(mvp.m20 + mvp.m30, mvp.m21 + mvp.m31, mvp.m22 + mvp.m32, mvp.m23 + mvp.m33).normalize();
-        //planes[0] = new Plane(mvp.m02 + mvp.m03, mvp.m12 + mvp.m13, mvp.m32 + mvp.m33, mvp.m22 + mvp.m23).normalize();
-
-        // normalize the plane
-        
-//        float z = 1;
-//        if(Ref.cgame.cg_viewmode.iValue == 1) {
-//            // First person view
-//            z = ((float)Math.sin(Ref.client.realtime / 250f) + 1) * 2f + FovX;
-//            GLU.gluLookAt(0, 0, 0, ViewAxis[0].x, ViewAxis[0].y, ViewAxis[0].z, ViewAxis[1].x, ViewAxis[1].y, ViewAxis[1].z);
-//        } else {
-//            GLU.gluLookAt(Origin.x, Origin.y, z, Origin.x, Origin.y, 0, 0, 1, 0);
-//        }
-//        GL11.glLoadIdentity();
-
-//        GL11.glRotatef((float)Math.PI/2f, 0, 1, 0);
-//        GL11.glRotatef(Ref.game.level.time/100f, 0, 0, 1);
     }
 
     private void setup3DProjection(float fov, float aspect, float znear, float zfar) {
@@ -265,45 +137,6 @@ public class ViewParams {
         farDepth = zfar;
 
         return;
-//        float xymax = znear * (float)Math.tan(fov * (Math.PI/360f));
-//        float ymin = -xymax;
-//        float xmin = -xymax;
-//
-//        float width = xymax - xmin;
-//        float height = xymax - ymin;
-//
-//        float depth = zfar - znear;
-//        float q = -(zfar + znear) / depth;
-//        float qn = -2 * (zfar * znear) / depth;
-//
-//        float w = 2 * znear / width;
-//        w = w / aspect;
-//        float h = 2 * znear / height;
-//
-//
-//        FloatBuffer m = ByteBuffer.allocateDirect(16*4).asFloatBuffer();
-//        m.put(w);
-//        m.put(0);
-//        m.put(0);
-//        m.put( 0);
-//
-//        m.put( 0);
-//        m.put( h);
-//        m.put(0);
-//       m.put(0);
-//
-//        m.put(0);
-//        m.put(0);
-//        m.put(q);
-//        m.put(-1);
-//
-//       m.put(0);
-//        m.put(0);
-//       m.put(qn);
-//        m.put(0);
-//
-//        m.flip();
-//        GL11.glLoadMatrix(m);
         
     }
 
@@ -328,13 +161,13 @@ public class ViewParams {
 
     void offsetThirdPerson() {
         Vector3f focusAngle = new Vector3f(Angles);
-        if(focusAngle.x > 65) focusAngle.x = 65;
+        if(focusAngle.x > 75) focusAngle.x = 75;
 
         Vector3f forward = new Vector3f();
         Helper.AngleVectors(focusAngle, forward, null, null);
 //        forward.scale(-1f);
 
-        float focusDistance = 510;
+        float focusDistance = 100;
         Vector3f focusPoint = Helper.VectorMA(Origin, focusDistance, forward, null);
         Vector3f view = new Vector3f(Origin);
         view.z += 8;
@@ -342,8 +175,25 @@ public class ViewParams {
 
         Vector3f t_forward = new Vector3f(), t_right = new Vector3f(), t_up = new Vector3f();
         Helper.AngleVectors(Angles, t_forward, t_right, t_up);
+        t_forward.set(forward);
         t_forward.scale(-1f);
-        Helper.VectorMA(view, 70, t_forward, view);
+
+        CubeCollision col = CubeMap.TraceRay(view, t_forward, 8, Ref.cgame.map.chunks);
+        t_forward.normalise();
+        float len = 70;
+        if(col != null) {
+            Vector3f start = new Vector3f(view);
+            Vector3f delta = Helper.VectorMA(view, len, t_forward, null);
+            Vector3f.sub(delta, start, delta);
+            delta = new Vector3f(t_forward);
+            delta.scale(len);
+
+            Plane p = col.getHitPlane();
+            float frac = p.findIntersection(start, delta);
+            frac -= 0.07f; if( frac < 0) frac = 0f;
+            len *= frac;
+        }
+        Helper.VectorMA(view, len, t_forward, view);
 
         Origin.set(view);
         Vector3f.sub(focusPoint, Origin, focusPoint);

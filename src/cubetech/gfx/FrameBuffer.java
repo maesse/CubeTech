@@ -5,14 +5,17 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.opengl.ARBTextureRectangle;
+import org.lwjgl.opengl.EXTTextureRectangle;
 import cubetech.common.Common;
 import org.lwjgl.opengl.EXTFramebufferObject;
 import cubetech.misc.Ref;
 import org.lwjgl.opengl.EXTFramebufferSRGB;
 import org.lwjgl.opengl.EXTRescaleNormal;
+import org.lwjgl.opengl.NVTextureRectangle;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
 import static org.lwjgl.opengl.GL13.*;
+import static org.lwjgl.opengl.GL14.*;
 import static org.lwjgl.opengl.GL20.*;
 
 
@@ -30,13 +33,102 @@ public class FrameBuffer {
     private boolean useColor = true;
     private boolean useDepth = true;
     private int w, h;
+
+    private int TexRect = EXTTextureRectangle.GL_TEXTURE_RECTANGLE_EXT;
+
+    Shader shader = null;
+
     
     public FrameBuffer(boolean color, boolean depth, int w, int h) {
+        shader = Ref.glRef.getShader("RectBlit");
+        shader.mapTextureUniform("tex", 0);
+        shader.validate();
+        
+        if(!Ref.glRef.caps.GL_EXT_texture_rectangle) { // aint got no ext?
+            if(Ref.glRef.caps.GL_NV_texture_rectangle) { // try nvidia
+                TexRect = NVTextureRectangle.GL_TEXTURE_RECTANGLE_NV;
+            } else if( Ref.glRef.caps.GL_ARB_texture_rectangle) { // try arb
+                TexRect = ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB;
+            } else {
+                TexRect = GL_TEXTURE_2D; 
+                // give up
+                // fix: do gamma correction in software
+                Ref.common.Error(Common.ErrorCode.FATAL, "Your graphics card doesn't support NPOT textures :/");
+            }
+        }
+
         useColor = color;
         useDepth = depth;
         this.w = w;
         this.h = h;
+//        this.w = 512;
+//        this.h = 512;
         InitFBO();
+    }
+
+    public void resize(int x, int y) {
+        if(x == w && y == h) return; // no change
+        
+        this.w = x; this.h = y;
+        Bind();
+        // Create the color texture
+        GL11.glDeleteTextures(fboColorId);
+        fboColorId = Ref.ResMan.CreateEmptyTexture(w,h,TexRect,false);
+        glBindTexture(TexRect, 0);
+        GLRef.checkError();
+        // Attach it
+        EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
+                EXTFramebufferObject.GL_COLOR_ATTACHMENT0_EXT, // attachment
+                TexRect, // textarget
+                fboColorId, // texture
+                0); // level
+
+        GL11.glDeleteTextures(depthId);
+        depthId = Ref.ResMan.CreateEmptyDepthTexture(w, h, TexRect);
+        glBindTexture(TexRect, 0);
+        GLRef.checkError();
+        // Attach it
+        EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
+                EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT, // attachment
+                TexRect, // textarget
+                depthId, // texture
+                0); // level
+//        EXTFramebufferObject.glDeleteRenderbuffersEXT(depthId);
+//        depthId = EXTFramebufferObject.glGenRenderbuffersEXT(); GLRef.checkError();
+//            EXTFramebufferObject.glBindRenderbufferEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT, depthId );
+//            GLRef.checkError();
+//
+//            EXTFramebufferObject.glRenderbufferStorageEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT,
+//                    GL_DEPTH_COMPONENT24,
+//                    w, h); GLRef.checkError();
+//            // attach depth buffer to fbo
+//            EXTFramebufferObject.glFramebufferRenderbufferEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT,
+//                    EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT,
+//                    EXTFramebufferObject.GL_RENDERBUFFER_EXT,
+//                    depthId); GLRef.checkError();
+
+
+        validate();
+        GLRef.checkError();
+//        Unbind();
+        //destroy();
+        //InitFBO();
+        //Bind();
+    }
+
+    public void destroy() {
+        if(!fboInited) return;
+
+        if(useColor && useDepth) {
+            //EXTFramebufferObject.glDeleteRenderbuffersEXT(depthId);
+            GL11.glDeleteTextures(depthId);
+            GL11.glDeleteTextures(fboColorId);
+            fboColorId = 0;
+            depthId = 0;
+        }
+
+        EXTFramebufferObject.glDeleteFramebuffersEXT(fboId);
+        fboId = 0;
     }
 
     public int getTextureId() {
@@ -53,10 +145,17 @@ public class FrameBuffer {
     private void bind(int id) {
         EXTFramebufferObject.glBindFramebufferEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, id );
         // re-enable color
-        if(useDepth && !useColor) {
+        if(useDepth && !useColor && id != 0) {
             glDrawBuffer(GL_NONE);
             glReadBuffer(GL_NONE);
+        } else if(useColor && id != 0) {
+            glDrawBuffer(EXTFramebufferObject.GL_COLOR_ATTACHMENT0_EXT);
+            glReadBuffer(EXTFramebufferObject.GL_COLOR_ATTACHMENT0_EXT);
+        } else if(!useColor && id == 0) {
+            glDrawBuffer(GL_BACK);
+            glReadBuffer(GL_BACK);
         }
+        GLRef.checkError();
     }
 
     public void Unbind() {
@@ -71,9 +170,7 @@ public class FrameBuffer {
     private void InitFBO() {
         if(fboInited) return;
         fboInited = true;
-        if(!Ref.glRef.caps.GL_EXT_framebuffer_object) return;
-
-        
+//        if(!Ref.glRef.caps.GL_EXT_framebuffer_object) return;
 
         // generate id
         fboId = EXTFramebufferObject.glGenFramebuffersEXT( );
@@ -86,32 +183,43 @@ public class FrameBuffer {
 
         if(useColor) {
             // Create the color texture
-            fboColorId = Ref.ResMan.CreateEmptyTexture(w,h,ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB,false);
-            glBindTexture(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, 0);
+            fboColorId = Ref.ResMan.CreateEmptyTexture(w,h,TexRect,false);
+            glBindTexture(TexRect, 0);
             GLRef.checkError();
             // Attach it
             EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
                     EXTFramebufferObject.GL_COLOR_ATTACHMENT0_EXT, // attachment
-                    ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, // textarget
+                    TexRect, // textarget
                     fboColorId, // texture
                     0); // level
+            Bind();
             GLRef.checkError();
         }
 
         if(useDepth && useColor) {
-            depthId = EXTFramebufferObject.glGenRenderbuffersEXT(); GLRef.checkError();
-            EXTFramebufferObject.glBindRenderbufferEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT, depthId );
+            depthId = Ref.ResMan.CreateEmptyDepthTexture(w, h, TexRect);
+            glBindTexture(TexRect, 0);
             GLRef.checkError();
-            EXTFramebufferObject.glRenderbufferStorageEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT,
-                    GL14.GL_DEPTH_COMPONENT24,
-                    w, h); GLRef.checkError();
-            // attach depth buffer to fbo
-            EXTFramebufferObject.glFramebufferRenderbufferEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT,
-                    EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT,
-                    EXTFramebufferObject.GL_RENDERBUFFER_EXT,
-                    depthId); GLRef.checkError();
+            // Attach it
+            EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
+                    EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT, // attachment
+                    TexRect, // textarget
+                    depthId, // texture
+                    0); // level
+//            depthId = EXTFramebufferObject.glGenRenderbuffersEXT(); GLRef.checkError();
+//            EXTFramebufferObject.glBindRenderbufferEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT, depthId );
+//            GLRef.checkError();
+//
+//            EXTFramebufferObject.glRenderbufferStorageEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT,
+//                    GL_DEPTH_COMPONENT24,
+//                    w, h); GLRef.checkError();
+//            // attach depth buffer to fbo
+//            EXTFramebufferObject.glFramebufferRenderbufferEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT,
+//                    EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT,
+//                    EXTFramebufferObject.GL_RENDERBUFFER_EXT,
+//                    depthId); GLRef.checkError();
         } else if(useDepth) {
-            fboColorId = Ref.ResMan.CreateEmptyDepthTexture(512, 512, GL_TEXTURE_2D);
+            fboColorId = Ref.ResMan.CreateEmptyDepthTexture(w, h, GL_TEXTURE_2D);
             glBindTexture(GL_TEXTURE_2D, 0);
             GLRef.checkError();
             // Attach it
@@ -127,18 +235,29 @@ public class FrameBuffer {
 
         GLRef.checkError();
 
-        validate();
-
+        try {
+            validate();
+        } catch(RuntimeException ex) {
+            // clean up
+            destroy();
+            
+            throw ex;
+        }
+        GLRef.checkError();
         Unbind();
-        
+        GLRef.checkError();
     }
 
     private void validate() {
         // Check for error
         int framebuffer = EXTFramebufferObject.glCheckFramebufferStatusEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT );
         switch ( framebuffer ) {
+
             case EXTFramebufferObject.GL_FRAMEBUFFER_COMPLETE_EXT:
                     break;
+            case EXTFramebufferObject.GL_FRAMEBUFFER_UNSUPPORTED_EXT:
+                throw new RuntimeException( "FrameBuffer: " + fboId
+                                    + ", has caused a GL_FRAMEBUFFER_UNSUPPORTED_EXT exception" );
             case EXTFramebufferObject.GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT_EXT:
                     throw new RuntimeException( "FrameBuffer: " + fboId
                                     + ", has caused a GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT_EXT exception" );
@@ -167,15 +286,15 @@ public class FrameBuffer {
             InitFBO();
 
         if(fboId == 0) return;
-
-        Ref.glRef.PushShader(Ref.glRef.getShader("RectBlit"));
+        
+        Ref.glRef.PushShader(shader);
 
         Unbind();
         glDisable(GL_TEXTURE_2D);
         glDisable(GL_BLEND);
         glDisable(GL_DEPTH_TEST);
-        glEnable(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB);
-        glBindTexture(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, fboColorId);
+        glEnable(TexRect);
+        glBindTexture(TexRect, fboColorId);
         glEnable(EXTFramebufferSRGB.GL_FRAMEBUFFER_SRGB_EXT);
         //Ref.ResMan.getWhiteTexture().Bind();
 
@@ -193,25 +312,25 @@ public class FrameBuffer {
         {
             if(Ref.glRef.isShadersSupported() && Ref.glRef.shader != null) {
                 // Fancy pants shaders
-                 glVertexAttrib2f(2, TexOffset.x, TexOffset.y);
-                 glVertexAttrib2f(3, 0,0);
-                 glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                 glVertexAttrib3f(0, 0, 0, depth);
+                 glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x, TexOffset.y);
+                 glVertexAttrib2f(Shader.INDICE_COORDS2, 0,0);
+                 glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                 glVertexAttrib3f(Shader.INDICE_POSITION, 0, 0, depth);
 
-                 glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y);
-                 glVertexAttrib2f(3, 1,0);
-                 glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                 glVertexAttrib3f(0, Extent.x, 0, depth);
+                 glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x+TexSize.x, TexOffset.y);
+                 glVertexAttrib2f(Shader.INDICE_COORDS2, 1,0);
+                 glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                 glVertexAttrib3f(Shader.INDICE_POSITION, Extent.x, 0, depth);
 
-                 glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
-                 glVertexAttrib2f(3, 1,1);
-                 glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                 glVertexAttrib3f(0, Extent.x, Extent.y, depth);
+                 glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
+                 glVertexAttrib2f(Shader.INDICE_COORDS2, 1,1);
+                 glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                 glVertexAttrib3f(Shader.INDICE_POSITION, Extent.x, Extent.y, depth);
 
-                 glVertexAttrib2f(2, TexOffset.x, TexOffset.y+TexSize.y);
-                 glVertexAttrib2f(3, 0,1);
-                 glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                 glVertexAttrib3f(0, 0, Extent.y, depth);
+                 glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x, TexOffset.y+TexSize.y);
+                 glVertexAttrib2f(Shader.INDICE_COORDS2, 0,1);
+                 glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                 glVertexAttrib3f(Shader.INDICE_POSITION, 0, Extent.y, depth);
             } else {
                 // Good ol' fixed function
                  glTexCoord2f(TexOffset.x, TexOffset.y);
@@ -236,12 +355,20 @@ public class FrameBuffer {
 
         glPopAttrib();
         glDisable(EXTFramebufferSRGB.GL_FRAMEBUFFER_SRGB_EXT);
-        glBindTexture(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB, 0);
-        glDisable(ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB);
+        glBindTexture(TexRect, 0);
+        glDisable(TexRect);
         glEnable(GL_TEXTURE_2D);
         glEnable(GL_BLEND);
         glEnable(GL_DEPTH_TEST);
         Bind();
         Ref.glRef.PopShader();
+    }
+
+    public int getDepthTextureId() {
+        return depthId;
+    }
+
+    public int getTarget() {
+        return TexRect;
     }
 }

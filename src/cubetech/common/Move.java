@@ -1,7 +1,10 @@
 package cubetech.common;
 
+import cubetech.common.items.Weapon;
+import cubetech.common.items.WeaponState;
 import cubetech.Game.Game;
 import cubetech.collision.CollisionResult;
+import cubetech.common.items.WeaponItem;
 import cubetech.entities.Event;
 import cubetech.input.Input;
 import cubetech.input.PlayerInput;
@@ -173,15 +176,104 @@ public class Move {
             query.ps.velocity.z -= gravity * frametime * 0.5f;
         }
 
+        // animate
         if(query.onGround) {
             if(query.ps.velocity.x * query.ps.velocity.x + query.ps.velocity.y * query.ps.velocity.y > 10f) ContinueAnim(0, query);
             else if(query.ps.velocity.z == 0f) ContinueAnim(1, query);
         }
 
+        // weapon
+        weapons(query);
     }
 
-    
+    static void beginWeaponChange(MoveQuery pm, Weapon newWeapon) {
+        if(!pm.ps.stats.hasWeapon(newWeapon)) return;
 
+        if(pm.ps.weaponState == WeaponState.DROPPING) return;
+
+        AddEvent(pm, Event.CHANGE_WEAPON, 0);
+        pm.ps.weaponState = WeaponState.DROPPING;
+        pm.ps.weaponTime += Ref.common.items.getWeapon(pm.ps.weapon).getDropTime();
+        // start animation
+    }
+
+    static void finishWeaponChange(MoveQuery pm) {
+        Weapon w = pm.cmd.weapon;
+
+        // maybe fix (make stats.getFirstWeapon())
+        if(!pm.ps.stats.hasWeapon(w)) w = Weapon.NONE;
+        pm.ps.weapon = w;
+        pm.ps.weaponState = WeaponState.RAISING;
+        pm.ps.weaponTime += Ref.common.items.getWeapon(w).getRaiseTime();
+    }
+
+    static void weapons(MoveQuery pm) {
+        if(pm.ps.stats.Health <= 0) return; // dead
+
+        // make weapon function
+        if(pm.ps.weaponTime > 0) {
+            pm.ps.weaponTime -= msec;
+        }
+
+        // check for weapon change
+	// can't change if weapon is firing, but can change
+	// again if lowering or raising
+        if(pm.ps.weaponTime <= 0 || pm.ps.weaponState != WeaponState.FIRING) {
+            if(pm.ps.weapon != pm.cmd.weapon) {
+                beginWeaponChange(pm, pm.cmd.weapon);
+            }
+        }
+
+        if(pm.ps.weaponTime > 0) return; // not yet..
+
+        // change weapon if time
+        if(pm.ps.weaponState == WeaponState.DROPPING) {
+            finishWeaponChange(pm);
+            return;
+        }
+
+        if(pm.ps.weaponState == WeaponState.RAISING) {
+            pm.ps.weaponState = WeaponState.READY;
+            return;
+        }
+
+        // check for fire
+        boolean primary = pm.cmd.isButtonDown(0);
+        boolean secondary = pm.cmd.isButtonDown(1);
+        if(!primary && !secondary) {
+            pm.ps.weaponTime = 0;
+            pm.ps.weaponState = WeaponState.READY;
+            return;
+        }
+
+        if(pm.ps.weapon == Weapon.NONE) return; // firing blanks :O
+
+        pm.ps.weaponState = WeaponState.FIRING;
+
+        // FIX: Handle ammo for primary & secondary
+        // check for out of ammo
+        if(pm.ps.stats.getAmmo(pm.ps.weapon) == 0) {
+            AddEvent(pm, Event.NO_AMMO, 0);
+            pm.ps.weaponTime += 300;
+            return;
+        }
+
+        WeaponItem w = Ref.common.items.getWeapon(pm.ps.weapon);
+
+        // take an ammo away if not infinite
+        pm.ps.stats.addAmmo(pm.ps.weapon, -1);
+
+        // fire weapon
+        if(primary) {
+            // primary fire
+            AddEvent(pm, Event.FIRE_WEAPON, 0);
+            pm.ps.weaponTime += w.getFireTime();
+        } else if(secondary) {
+            // Secondary fire
+            AddEvent(pm, Event.FIRE_WEAPON_ALT, 0);
+            pm.ps.weaponTime += w.getAltFireTime();
+        }
+    }
 //    static void Jump(MoveQuery pm) {
 //        pm.ps.jumpTime = jumpmsec;
 //        pm.ps.velocity.y = jumpvel;
@@ -190,8 +282,6 @@ public class Move {
 //        AddEvent(pm, Event.JUMP, 0);
 //
 //    }
-
-
 
     static boolean groundTrace(MoveQuery pm) {
         Vector3f end = new Vector3f(pm.ps.origin);
@@ -670,7 +760,7 @@ public class Move {
         }
     }
 
-    private static void AddEvent(MoveQuery pm, int event, int eventParam) {
+    private static void AddEvent(MoveQuery pm, Event event, int eventParam) {
         pm.ps.AddPredictableEvent(event, eventParam);
     }
 

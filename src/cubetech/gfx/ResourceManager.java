@@ -1,5 +1,9 @@
 package cubetech.gfx;
 
+import java.util.Iterator;
+import cubetech.iqm.IQMLoader;
+import cubetech.iqm.IQMModel;
+import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.EXTTextureSRGB;
 import cubetech.common.Helper;
 import org.lwjgl.opengl.GL14;
@@ -48,8 +52,6 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import javax.swing.ImageIcon;
-import org.lwjgl.opengl.ARBTextureRectangle;
-import org.lwjgl.opengl.EXTTextureRectangle;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
@@ -64,10 +66,13 @@ public final class ResourceManager {
 
     
     HashMap<String, Resource> Ressources = new HashMap<String, Resource>();
-    ArrayList<String> unloaded = new ArrayList<String>();
+    ArrayList<Resource> unloadedRessources = new ArrayList<Resource>();
+//    ArrayList<String> unloaded = new ArrayList<String>();
     private ColorModel glAlphaColorModel;
     private ColorModel glColorModel;
     int nUnloadedTextures = 0; // numbers of textures that needs to be loaded
+
+    public boolean autoSrgb = true;
 
     // Used for quering new opengl textures ids
     private IntBuffer textureIDBuffer = BufferUtils.createIntBuffer(1);
@@ -99,97 +104,116 @@ public final class ResourceManager {
     // TODO: Implement delay between updates?
     private static final int MAX_LOAD_PER_UPDATE = 1;
     public void Update() {
-        if(nUnloadedTextures == 0)
-            return; // nothing to load
+        if(unloadedRessources.isEmpty()) return; // nothing to load
+        if(Ref.glRef == null || !Ref.glRef.isInitalized()) return; // OpenGL not ready
 
-        if(Ref.glRef == null || !Ref.glRef.isInitalized())
-            return; // OpenGL not ready
-
-        String[] completedLoading = new String[MAX_LOAD_PER_UPDATE];
         int nLoaded = 0;
+        Iterator<Resource> it = unloadedRessources.iterator();
         // continue until limit is hit or we run out of textures to load
-        for(int i=0; i<unloaded.size() && nLoaded < MAX_LOAD_PER_UPDATE; i++) {
-            String name = unloaded.get(i);
-            CubeTexture tex = (CubeTexture)Ressources.get(name).Data;
-            if(tex.loaded) {
-                // Derp?
-                Common.LogDebug("CubeTexture marked unloaded thinks he's loaded?");
-            } else {
-                try {
-                    getTexture(name, GL_TEXTURE_2D, EXTTextureSRGB.GL_SRGB8_ALPHA8_EXT, GL_LINEAR, GL_LINEAR, tex);
-                } catch (IOException ex) {
-                    Common.Log("Cannot load texture: File not found: " + name);
-                }
+        while(it.hasNext() && nLoaded < MAX_LOAD_PER_UPDATE) {
+            Resource res = it.next();
+            if(res.loaded) { // has been loaded
+                it.remove();
+                continue;
             }
-            completedLoading[nLoaded++] = name;
-            tex.loaded = true;
-        }
+            
+            try {
+                getTexture(res);
+                res.loaded = true;
+            } catch (IOException ex) {
+                Common.Log("Cannot load texture: File not found: " + res.Name);
+            }
 
-        // If anything was loaded, remove it from the "to-load" queue
-        for (int i= 0; i < nLoaded; i++) {
-            unloaded.remove(completedLoading[i]);
+            it.remove();
+            nLoaded++;
         }
     }
 
-    public CubeTexture loadCubemap(String filename) throws IOException {
-        CubeTexture tex = getTexture(filename,
-                         GL_TEXTURE_CUBE_MAP, // target
-                         GL_RGB,     // dst pixel format
-                         GL_LINEAR, // min filter
-                         GL_LINEAR, null);
-        tex.loaded = true;
+    public IQMModel loadModel(String modelName) {
+        String filename = Helper.stripPath(modelName).toLowerCase();
+        if(filename == null || filename.isEmpty()) return null; // no go
+        if(Ressources.containsKey(filename)) return (IQMModel)Ressources.get(filename).Data; // cached
 
-        return tex;
-    }
+        modelName = "src/cubetech/" + modelName;
 
-    public CubeTexture LoadTexture(String filename) {
-        // Strip off path, so we can check if it is already loaded
-        int idx = filename.lastIndexOf('.');
-        if(idx <= 0) {
-            System.err.println("LoadResource: Filename invalid, extension required (eg .png): " + filename);
+        // load
+        IQMModel model;
+        try {
+            model = IQMLoader.LoadModel(modelName);
+        } catch (IOException ex) {
+            Common.Log("Couldn't load model " + modelName + ": " + Common.getExceptionString(ex));
             return null;
         }
 
+        // Cache it
+        Resource res = new Resource(filename, Resource.ResourceType.MODEL, 0);
+        res.Data = model;
+        res.loaded = true;
+        Ressources.put(filename, res);
+        
+        return model;
+    }
+
+//    public CubeTexture loadCubemap(String filename) throws IOException {
+//        CubeTexture tex = getTexture(filename,
+//                         GL_TEXTURE_CUBE_MAP, // target
+//                         GL_RGB,     // dst pixel format
+//                         GL_LINEAR, // min filter
+//                         GL_LINEAR, null);
+//        tex.loaded = true;
+//
+//        return tex;
+//    }
+
+    public CubeTexture LoadTexture(String filename) {
+        return LoadTexture(filename, false);
+    }
+
+    public CubeTexture LoadTexture(String filename, boolean cubemap)  {
         // Check if it is cached
         if(Ressources.containsKey(filename.toLowerCase())) {
             return (CubeTexture)Ressources.get(filename.toLowerCase()).Data;
         }
-
-        // Try to load
-        String name = filename.substring(idx); // get filetype
-        boolean suffixOk = name.equalsIgnoreCase(".png") || name.equalsIgnoreCase(".jpg") || name.equalsIgnoreCase(".tga");
-        if(suffixOk) {
-            CubeTexture tex = null;
-            if(Ref.glRef == null || !Ref.glRef.isInitalized()) {
-                // OpenGL not ready, do defered loading
-                // TODO: Check if file exists before doing this
-//                System.out.println("Cannot load texture: OpenGL not initialized. Deferring");
-                nUnloadedTextures++;
-                tex = getUnloadedTexture(filename);
-                unloaded.add(filename);
-            } else { // else try regular loading
-                try {
-                    tex = getTexture(filename);
-                    tex.loaded = true; // If this line runs, there was not exception -- so we should be in the clear
-                } catch (IOException ex) { // file not found
-                    Common.Log("Cannot load texture: File not found: " + filename);
-                    // Fallback to blank texture -- will never load as there isn't a point
-                    tex = getUnloadedTexture(filename);
-                }
+        
+        if(!cubemap) {
+            // Strip off path, so we can check if it is already loaded
+            int idx = filename.lastIndexOf('.');
+            if(idx <= 0) {
+                System.err.println("LoadResource: Filename invalid, extension required (eg .png): " + filename);
+                return null;
             }
+            
+            // Try to load
+            String name = filename.substring(idx); // get filetype
+            boolean nameOk = name.equalsIgnoreCase(".png") || name.equalsIgnoreCase(".jpg") || name.equalsIgnoreCase(".tga");
+            if(!nameOk) {
+                Common.Log("ResMan.LoadTexture: I don't understand this format: " + name);
+                return null;
+            }
+        }
+        
+        // Going to load it..
+        CubeTexture tex = null;
+        // Create unloaded resource
+        Resource res = new Resource(filename, Resource.ResourceType.TEXTURE, cubemap?GL_TEXTURE_CUBE_MAP:GL_TEXTURE_2D);
 
-            // Cache resource
-            Resource res = new Resource();
-            res.Data = tex;
-            res.Type = Resource.ResourceType.TEXTURE;
-            res.Name = filename;
-
-            Ressources.put(filename.toLowerCase(), res);
-            return tex;
+        if(Ref.glRef == null || !Ref.glRef.isInitalized()) {
+            // OpenGL not ready, do defered loading
+            tex = getUnloadedTexture(res);
+            unloadedRessources.add(res);
+        } else { // else try regular loading
+            try {
+                tex = getTexture(res);
+            } catch (IOException ex) { // it's a no go
+                Common.Log("Cannot load texture: File not found: " + filename + "(" + Common.getExceptionString(ex) + ")");
+                tex = getUnloadedTexture(res);// Fallback to blank texture -- will never load as there isn't a point
+            }
+            res.loaded = true;
         }
 
-        Common.Log("ResMan.LoadTexture: I don't understand this format: " + name);
-        return null;
+        // Cache resource
+        Ressources.put(filename.toLowerCase(), res);
+        return tex;
     }
 
     public static ClassLoader getClassLoader() {
@@ -264,8 +288,9 @@ public final class ResourceManager {
 
     // Doesn't load the texture, but returns a cubetexture that
     // may be loaded later automagically (if the file exists)
-    private CubeTexture getUnloadedTexture(String resourceName) {
-        CubeTexture tex = new CubeTexture(GL_TEXTURE_2D, -1, resourceName);
+    private CubeTexture getUnloadedTexture(Resource res) {
+        CubeTexture tex = new CubeTexture(res.target, -1, res.Name);
+        res.Data = tex;
         return tex;
     }
 
@@ -281,10 +306,19 @@ public final class ResourceManager {
         CubeTexture tex = getTexture(resourceName,
                          GL_TEXTURE_2D, // target
 //                         GL_RGBA,     // dst pixel format
-                         EXTTextureSRGB.GL_SRGB8_ALPHA8_EXT,
+                         autoSrgb?EXTTextureSRGB.GL_SRGB_ALPHA_EXT:GL_RGBA,
                          GL_LINEAR, // min filter (unused)
                          GL_LINEAR, null);
 
+        return tex;
+    }
+
+    private CubeTexture getTexture(Resource res) throws IOException
+    {
+        int dstFormat = autoSrgb?EXTTextureSRGB.GL_SRGB_ALPHA_EXT:GL_RGBA;
+        if(res.target == GL_TEXTURE_CUBE_MAP) dstFormat = GL_RGB; // don't need alpha for cubemaps
+        CubeTexture tex = getTexture(res.Name, res.target, dstFormat, GL_LINEAR, GL_LINEAR, (CubeTexture)res.Data);
+        res.Data = tex;
         return tex;
     }
 
@@ -377,6 +411,8 @@ public final class ResourceManager {
                           0,srcPixelFormat,GL_UNSIGNED_BYTE,
                           textureBuffer );
         }
+
+        texture.loaded = true;
 
         return texture;
     }
@@ -699,11 +735,11 @@ public final class ResourceManager {
         glBindTexture(target, textureId);
         glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-//        glTexParameteri(target, GL_DEPTH_TEXTURE_MODE, GL_INTENSITY);
-//        glTexParameteri(target, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
-//        glTexParameteri(target, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+        glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP);
+        glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP);
+        glTexParameteri(GL_TEXTURE_2D, GL_DEPTH_TEXTURE_MODE, GL_INTENSITY);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
         ByteBuffer nullBuffer = null;
         ByteBuffer buf = ByteBuffer.allocateDirect(width*height*4);
             buf.order(ByteOrder.nativeOrder());
@@ -714,7 +750,8 @@ public final class ResourceManager {
                 buf.put((byte)255);
             }
             buf.flip();
-        glTexImage2D(target, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, buf);
+            
+        glTexImage2D(target, 0, GL_DEPTH_COMPONENT32, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, buf);
         return textureId;
     }
 
@@ -723,6 +760,8 @@ public final class ResourceManager {
         glBindTexture(target, textureId);
         glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         if(fill) {
             ByteBuffer buf = ByteBuffer.allocateDirect(width*height*4);
             buf.order(ByteOrder.nativeOrder());
@@ -738,7 +777,7 @@ public final class ResourceManager {
             ByteBuffer nullBuffer = null;
             glTexImage2D(target, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullBuffer);
         }
-
+        
         return textureId;
     }
 

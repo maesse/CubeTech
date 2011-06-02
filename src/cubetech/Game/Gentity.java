@@ -5,6 +5,7 @@
 
 package cubetech.Game;
 
+import cubetech.common.items.IItem;
 import cubetech.common.*;
 import cubetech.entities.EntityShared;
 import cubetech.entities.EntityState;
@@ -55,7 +56,7 @@ public class Gentity {
     public IPainMethod pain;
     public IDieMethod die;
 
-    public GItem item;
+    public IItem item;
 
     // Used by some entities
 //    public int health;

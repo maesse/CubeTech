@@ -4,6 +4,7 @@ import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.common.PlayerState;
 import cubetech.common.Trajectory;
+import cubetech.common.items.Weapon;
 import cubetech.net.NetBuffer;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
@@ -28,12 +29,14 @@ public class EntityState {
     public Trajectory pos = new Trajectory(); // for calculating angles
     public int solid; // packed half-size (y<<8) | x
 
-    // events
+    // events.. 
     public int evt;  // impulse events -- muzzle flashes, footsteps, etc
     public int evtParams;
     
     public int otherEntityNum; // shotgun sources, etc
     public int modelindex = -1;
+
+    public Weapon weapon;
     
     // not used atm
 //    public int[] powerups = new int[PlayerState.NUM_POWERUPS];
@@ -57,7 +60,7 @@ public class EntityState {
         solid = 0;
         otherEntityNum = 0;
         modelindex = -1;
-        
+        weapon = null;
     }
 
     private boolean IsEqual(EntityState s) {
@@ -67,7 +70,7 @@ public class EntityState {
                 && Helper.Equals(s.Angles, Angles) && Helper.Equals(origin, s.origin)
                 && eType == s.eType && eFlags == s.eFlags
                 && frame == s.frame && otherEntityNum == s.otherEntityNum && solid == s.solid
-                && modelindex == s.modelindex)
+                && modelindex == s.modelindex && s.weapon == weapon)
             return true;
         return false;
     }
@@ -110,6 +113,7 @@ public class EntityState {
         otherEntityNum = buf.ReadDeltaInt(from.otherEntityNum);
         solid = buf.ReadDeltaInt(from.solid);
         modelindex = buf.ReadDeltaInt(from.modelindex);
+        weapon = buf.ReadEnum(Weapon.class);
     }
 
     public void WriteDeltaEntity(NetBuffer buf, EntityState b, boolean force) {
@@ -141,6 +145,7 @@ public class EntityState {
         buf.WriteDelta(b.otherEntityNum, otherEntityNum);
         buf.WriteDelta(b.solid, solid);
         buf.WriteDelta(b.modelindex, modelindex);
+        buf.WriteEnum(weapon);
     }
 
     public EntityState Clone(EntityState st) {
@@ -168,6 +173,7 @@ public class EntityState {
         st.otherEntityNum = otherEntityNum;
         st.solid = solid;
         st.modelindex = modelindex;
+        st.weapon = weapon;
         return st;
     }
 

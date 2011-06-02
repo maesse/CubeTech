@@ -23,6 +23,8 @@ public class CubeTexture {
     int wrap = GL_REPEAT;
 
     public int textureSlot = 0;
+
+    private CubeMaterial mat = null;
     
 
     public CubeTexture(int target, int id, String name) {
@@ -60,6 +62,10 @@ public class CubeTexture {
         }
     }
 
+    public static void unbind(int target) {
+        glBindTexture(target, 0);
+    }
+
     public void Bind() {
         if(loaded) {
             glActiveTexture(GL_TEXTURE0+textureSlot);
@@ -76,7 +82,7 @@ public class CubeTexture {
 
     public void Unbind() {
         glActiveTexture(GL_TEXTURE0+textureSlot);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        glBindTexture(Target, 0);
     }
 
     // should only be used by the ressource subsystem
@@ -90,5 +96,14 @@ public class CubeTexture {
         Bind();
         i = i>Ref.glRef.maxAniso?Ref.glRef.maxAniso:i;
         glTexParameteri(Target, EXTTextureFilterAnisotropic.GL_TEXTURE_MAX_ANISOTROPY_EXT, i);
+    }
+
+    // Just wraps this texture in a material
+    public CubeMaterial asMaterial() {
+        if(mat != null) return mat;
+        
+        mat = new CubeMaterial();
+        mat.setTexture(this);
+        return mat;
     }
 }

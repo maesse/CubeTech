@@ -83,6 +83,6 @@ public class Ref {
         Ref.Console = new Console(); // Set up the console
         Ref.ui = new UI();
         Ref.cm = new ClipMap();
-        Ref.render = new Render();
+        
     }
 }

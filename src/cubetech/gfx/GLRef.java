@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import cubetech.CGame.Render;
 import java.nio.FloatBuffer;
 import java.util.Stack;
 import org.lwjgl.opengl.ARBShaderObjects;
@@ -39,6 +40,7 @@ import org.lwjgl.opengl.ARBVertexBufferObject;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.DisplayMode;
 import org.lwjgl.opengl.EXTTextureFilterAnisotropic;
+import org.lwjgl.opengl.EXTTextureRectangle;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL13.*;
 import static org.lwjgl.opengl.GL20.*;
@@ -226,11 +228,12 @@ public class GLRef {
         srgbBuffer = new FrameBuffer(true, true, (int)GetResolution().x, (int)GetResolution().y);
 //        srgbBuffer.Bind();
         //InitFBO();
-
+        Ref.render = new Render();
 
         // Init systems waiting for opengl
         if(Ref.textMan != null)
             Ref.textMan.Init();
+        
 
         if(isApplet())
             setAppletSize();
@@ -354,6 +357,8 @@ public class GLRef {
                 Ref.Input.ClearKeys();
             }
         }
+
+        checkError();
     }
 
     private void SetFullscreen(boolean fullscreen) {
@@ -471,6 +476,7 @@ public class GLRef {
             }
             currentMode = newmode;
             resolution = new Vector2f(currentMode.getWidth(), currentMode.getHeight());
+            if(srgbBuffer != null) srgbBuffer.resize(currentMode.getWidth(), currentMode.getHeight());
             r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
         } catch(NumberFormatException e) { // Can be NumberFormatException and IndexOutOfBounds
             Common.Log("Invalid displaymode: " + mode);
@@ -498,9 +504,13 @@ public class GLRef {
 
     // Closes the context and window
     public void Destroy() {
+        if(!initialized) return;
+        initialized = false;
+
+        if(srgbBuffer != null) srgbBuffer.destroy();
+        
         if(Display.isCreated())
             Display.destroy();
-        initialized = false;
     }
 
     // Increases or decreases the resolution by one step
@@ -587,13 +597,17 @@ public class GLRef {
 
     private void loadShaders() {
         try {
-            shaders.put("sprite", new Shader("gfx/shaders/sprite"));
-            shaders.put("imgspace", new Shader("gfx/shaders/imgspace"));
-            shaders.put("scatter", new Shader("gfx/shaders/scatter"));
-            shaders.put("blackshader", new Shader("gfx/shaders/blackshader"));
-            shaders.put("GroundFromAtmosphere", new Shader("gfx/shaders/GroundFromAtmosphere"));
-            setShader("sprite");
+
+            Shader shad = getShader("sprite");
+            shad.mapTextureUniform("tex", 0);
+            shad.validate();
             
+            shad = Ref.glRef.getShader("litobjectpixel");
+            shad.mapTextureUniform("tex", 0);
+            shad.mapTextureUniform("envmap", 1);
+            shad.validate();
+
+            setShader("sprite");
         } catch (Exception ex) {
             Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
             Ref.common.Error(ErrorCode.FATAL, "Failed to load graphics shaders\n" + Common.getExceptionString(ex));
@@ -626,14 +640,28 @@ public class GLRef {
                 maxAniso = (int) glGetFloat(EXTTextureFilterAnisotropic.GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT);
             }
 
+            
+            fboSupported = true;
             if(!caps.GL_EXT_framebuffer_object) {
                 fboSupported = false;
                 Common.Log("EXT_framebuffer_object not supported by your graphics card");
             } else if(!caps.GL_EXT_texture_rectangle) {
-                fboSupported = false;
-                Common.Log("GL_EXT_texture_rectangle not supported by your graphics card");
-            } else if(okay)
-                fboSupported = true;
+                boolean alternative = caps.GL_ARB_texture_rectangle;
+                if(alternative) {
+                    Common.Log("Using ARB_texture_rectangle instead of EXT_");
+                } else {
+                    Common.Log("GL_EXT_texture_rectangle not supported by your graphics card");
+                }
+            }
+
+            if(!caps.GL_EXT_framebuffer_sRGB) {
+                Common.Log("No EXT_FRAMEBUFFER_SRGB support.");
+            }
+
+            if(!caps.GL_ARB_depth_texture) {
+                Common.Log("No Depth textures :/");
+            }
+                
 
             if(!caps.GL_EXT_texture_sRGB) {
                 Common.Log("GL_EXT_texture_sRGB not supported by your graphics card");

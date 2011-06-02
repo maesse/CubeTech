@@ -1,8 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.gfx;
 
 /**
@@ -13,9 +8,20 @@ public class Resource {
     public String Name;
     public Object Data;
     public ResourceType Type;
-    
+    public boolean loaded;
+
+    //
+    public int target;
+
+    public Resource(String name, ResourceType type, int target) {
+        this.Name = name;
+        this.Type = type;
+        this.target = target;
+    }
+
     public enum ResourceType {
         TEXTURE,
-        SOUND
+        SOUND,
+        MODEL
     }
 }

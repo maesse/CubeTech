@@ -7,14 +7,16 @@ import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
 import cubetech.common.Commands.ExecType;
 import cubetech.common.Common;
-import cubetech.common.GItem;
 import cubetech.common.ICommand;
+import cubetech.common.items.IItem;
 import cubetech.entities.EntityType;
+import cubetech.entities.Event;
 import cubetech.entities.Func_Door;
 import cubetech.entities.IEntity;
 import cubetech.entities.Info_Player_Goal;
 import cubetech.entities.SharedEntity;
 import cubetech.entities.Info_Player_Spawn;
+import cubetech.entities.Missiles;
 import cubetech.misc.Ref;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -26,8 +28,8 @@ import org.lwjgl.util.vector.Vector3f;
  * @author mads
  */
 public class Game {
-    public static final Vector3f PlayerMins = new Vector3f(-12,-12,-28);
-    public static final Vector3f PlayerMaxs = new Vector3f(12,12,28);
+    public static final Vector3f PlayerMins = new Vector3f(-12,-12,-12);
+    public static final Vector3f PlayerMaxs = new Vector3f(12,12,12);
     CVar sv_speed;
     CVar sv_gravity;
     CVar sv_jumpmsec;
@@ -254,6 +256,11 @@ public class Game {
             if(!ent.r.linked && ent.neverfree)
                 continue;
 
+            if(ent.s.eType == EntityType.MISSILE) {
+                Missiles.runMissile(ent);
+                continue;
+            }
+
             if(ent.s.eType == EntityType.ITEM || ent.physicsObject) {
                 ent.runItem();
                 continue;
@@ -284,7 +291,7 @@ public class Game {
             CheckEditMode();
         }
 
-
+        Ref.cm.cubemap.update();
     }
 
     /**
@@ -471,7 +478,7 @@ public class Game {
         }
 
         // check item spawn functions
-        GItem item = Ref.common.items.findItemByClassname(ent.classname);
+        IItem item = Ref.common.items.findItemByClassname(ent.classname);
         if(item != null) {
             spawnItem(ent, item);
             return true;
@@ -496,7 +503,7 @@ public class Game {
      * @param ent
      * @param item
      */
-    void spawnItem(Gentity ent, GItem item) {
+    void spawnItem(Gentity ent, IItem item) {
         ent.item = item;
 
         // some movers spawn on the second frame, so delay item
@@ -508,8 +515,8 @@ public class Game {
     }
 
     // Adds an event+parm and twiddles the event counter
-    public void AddEvent(Gentity ent, int evt, int evtParms) {
-        if(evt == 0) {
+    public void AddEvent(Gentity ent, Event evt, int evtParms) {
+        if(evt == Event.NONE) {
             Common.LogDebug("Zero event added for entity " + ent.s.ClientNum);
             return;
         }
@@ -520,13 +527,13 @@ public class Game {
             GameClient cl = ent.getClient();
             bits = cl.ps.externalEvent & Common.EV_EVENT_BITS;
             bits = (bits + Common.EV_EVENT_BIT1) & Common.EV_EVENT_BITS;
-            cl.ps.externalEvent = evt | bits;
+            cl.ps.externalEvent = evt.ordinal() | bits;
             cl.ps.externalEventParam = evtParms;
             cl.ps.externalEventTime = level.time;
         } else {
             bits = ent.s.evt & Common.EV_EVENT_BITS;
             bits = (bits + Common.EV_EVENT_BIT1) & Common.EV_EVENT_BITS;
-            ent.s.evt = evt | bits;
+            ent.s.evt = evt.ordinal() | bits;
             ent.s.evtParams = evtParms;
         }
         ent.eventTime = level.time;

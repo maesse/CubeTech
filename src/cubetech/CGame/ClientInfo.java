@@ -37,11 +37,12 @@ public class ClientInfo {
     // when clientinfo is changed, the loading of models/skins/sounds
     // can be deferred until you are dead, to prevent hitches in
     // gameplay
-//    public String			modelName;
+    public String			modelName;
 
     public static ClientInfo Parse(String s) {
         ClientInfo info = new ClientInfo();
         info.name = Info.ValueForKey(s, "n");
+        info.modelName = "data/" + Info.ValueForKey(s, "model") + ".iqm";
         info.infoValid = true;
         return info;
     }

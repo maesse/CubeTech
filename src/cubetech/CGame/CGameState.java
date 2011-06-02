@@ -10,9 +10,11 @@ import cubetech.client.CLSnapshot;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Content;
+import cubetech.common.ICommand;
 import cubetech.common.Move;
 import cubetech.common.MoveQuery;
 import cubetech.common.PlayerState;
+import cubetech.common.items.Weapon;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityState;
 import cubetech.input.PlayerInput;
@@ -64,6 +66,9 @@ public class CGameState {
     public int scoresRequestTime = 0;
 
     public float autoAngle;
+
+    public Weapon weaponSelect = Weapon.NONE;
+    public float zoomSensitivity = 1.0f;
     
 
 
@@ -74,7 +79,26 @@ public class CGameState {
         for (int i= 0; i < scores.length; i++) {
             scores[i] = new Score();
         }
+
     }
+
+    public static ICommand cg_SwitchWeapon_f = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(Ref.cgame == null || Ref.cgame.cg == null) return;
+            CGameState cg = Ref.cgame.cg;
+            if(cg.snap == null) return;
+
+            int num = Integer.parseInt(args[1]);
+            if(num <= 0 || num >= Weapon.values().length) return;
+
+//            cg.weaponSelectTime = cg.time;
+
+            Weapon w = Weapon.values()[num];
+            if(!cg.snap.ps.stats.hasWeapon(w)) return;
+
+            cg.weaponSelect = w;
+        }
+    };
 
     /*
     ============
@@ -512,7 +536,7 @@ public class CGameState {
                 // or the server told us to play another event instead of a predicted event we already issued
                 // or something the server told us changed our prediction causing a different event
                 || (i > ops.eventSequence - Common.MAX_PS_EVENTS && ps.events[i & (Common.MAX_PS_EVENTS-1)] != ops.events[i & (Common.MAX_PS_EVENTS -1)])) {
-                int evt = ps.events[i & (Common.MAX_PS_EVENTS-1)];
+                int evt = ps.events[i & (Common.MAX_PS_EVENTS-1)].ordinal();
                 cent.currentState.evt = evt;
                 cent.currentState.evtParams = ps.eventParams[i & (Common.MAX_PS_EVENTS-1)];
                 //Ref.cgame.EntityEvent(cent, cent.lerpOrigin);

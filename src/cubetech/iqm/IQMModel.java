@@ -61,18 +61,16 @@ public class IQMModel {
     CubeTexture envMap = null;
 
     IQMModel() {
-        try {
-            envMap = Ref.ResMan.loadCubemap("data/ibl_sky");
+
+            envMap = Ref.ResMan.LoadTexture("data/ibl_sky", true);
             //envMap = Ref.ResMan.LoadTexture("data/sky_up.png");
             envMap.textureSlot = 1;
-        } catch (IOException ex) {
-            Common.Log("Couldn't load envmap for IQMModel");
-        }
+
         modelMatrix.setIdentity();
     }
 
     public void animate(int frame, int oldframe, float backlerp) {
-        if(header.num_frames == 0) return;
+        if(header.num_frames <= 5) return;
 //        currentAnim = anims[0];
 
         int frame1 = oldframe;
@@ -152,44 +150,33 @@ public class IQMModel {
 
     }    
 
-    public void render(Vector3f position, Vector3f[] axis) {
-        //Vector3f position = new Vector3f(0,0,800);
-
+    public void render(Vector3f position, Vector3f[] axis, Vector4f color) {
         glPushMatrix();
-//        glRotatef(Ref.cgame.cg.time/10f, 0, 0, 1);
         glTranslatef(position.x, position.y, position.z);
 
         Shader shader = Ref.glRef.getShader("litobjectpixel");
-        shader.mapTextureUniform("envmap", 1);
+        
         Ref.glRef.PushShader(shader);
+        
+        
         envMap.textureSlot = 1;
         envMap.Bind();
-//        shader.setUniform("envmap", envMap.GetID());
-        shader.setUniform("eye", Ref.cgame.cg.refdef.Origin);
-//        Vector3f[] axis = Helper.AnglesToAxis(new Vector3f(0, angle, 0));
-//        axis[0].scale(-1);
-//        axis[1].scale(-1);
         FloatBuffer viewbuffer = Ref.glRef.matrixBuffer;
 
         viewbuffer.position(0);
-        viewbuffer.put(axis[0].x);viewbuffer.put(axis[1].x); viewbuffer.put(axis[2].x);
-        viewbuffer.put(axis[0].y);viewbuffer.put(axis[1].y); viewbuffer.put(axis[2].y);
-        viewbuffer.put(axis[0].z);viewbuffer.put(axis[1].z); viewbuffer.put(axis[2].z);
+        viewbuffer.put(axis[0].x);viewbuffer.put(axis[0].y);viewbuffer.put(axis[0].z);
+        viewbuffer.put(axis[1].x);viewbuffer.put(axis[1].y);viewbuffer.put(axis[1].z);
+        viewbuffer.put(axis[2].x); viewbuffer.put(axis[2].y); viewbuffer.put(axis[2].z);
         viewbuffer.flip();
+        
         shader.setUniformMat3("Modell", viewbuffer);
+        
         Ref.glRef.setLIght();
 
-        
-        
-//        Ref.ResMan.LoadTexture("data/tile.png").Bind();
-//
-//        envMap.Bind();
-        glDisable(GL_CULL_FACE);
+        if(color != null) Helper.col(color);
         for (int i= 0; i < header.num_meshes; i++) {
             IQMMesh mesh = meshes[i];
             mesh.bindTexture();
-
-            //glFrontFace(GL_CCW);
 
             glCullFace(GL_FRONT);
             glBegin(GL_TRIANGLES);
@@ -201,19 +188,24 @@ public class IQMModel {
                     Vector2f coords = in_texcoord[indice];
                     Helper.tex(coords.x, 1-coords.y);
 
-                    Vector3f normal = out_normal[indice];
+                    Vector3f normal;
+                    Vector3f pos;
+                    if(header.num_frames <= 5) {
+                        // assume un-animated
+                        normal = in_normal[indice];
+                        pos = in_position[indice];
+                    } else {
+                        normal = out_normal[indice];
+                        pos = out_position[indice];
+                    }
+
                     glNormal3f(normal.x, normal.y, normal.z);
-                    
-                    Vector3f pos = out_position[indice];
                     glVertex3f(pos.x, pos.y, pos.z);
-                    
                 }
             }
             glEnd();
             glCullFace(GL_BACK);
         }
-        glEnable(GL_CULL_FACE);
-
         Ref.glRef.PopShader();
 
         // Draw BBOx
@@ -230,20 +222,51 @@ public class IQMModel {
             glBegin(GL_LINES);
             for (IQMMesh mesh : meshes) {
                 for (int i= 0; i < mesh.num_vertexes; i++) {
-                    Vector3f start = out_position[i];
-                    Vector3f dir = out_normal[i];
-                    dir.normalise();
+                    Vector3f normal;
+                    Vector3f pos;
+                    if(header.num_frames <= 5) {
+                        // assume un-animated
+                        normal = in_normal[i];
+                        pos = in_position[i];
+                    } else {
+                        normal = out_normal[i];
+                        pos = out_position[i];
+                    }
+                    
+                    normal.normalise();
 
-                    glVertex3f(start.x, start.y, start.z);
-                    glVertex3f(start.x + dir.x * normalSize,
-                            start.y + dir.y * normalSize,
-                            start.z + dir.z * normalSize);
+                    glVertex3f(pos.x, pos.y, pos.z);
+                    glVertex3f(pos.x + normal.x * normalSize,
+                            pos.y + normal.y * normalSize,
+                            pos.z + normal.z * normalSize);
                 }
             }
             glEnd();
         }        
         
         glPopMatrix();
+
+        // Draw axis vectors
+        if(false) {
+            glDisable(GL_DEPTH_TEST);
+            Ref.ResMan.getWhiteTexture().Bind();
+            
+            float lineSize = 20;
+            glBegin(GL_LINES);
+            for (int i= 0; i < 3; i++) {
+                if(i == 0) Helper.col(1, 0, 0);
+                if(i == 1) Helper.col(0, 1, 0);
+                if(i == 2) Helper.col(0, 0, 1);
+                glVertex3f(position.x, position.y, position.z);
+                glVertex3f(position.x + axis[i].x * lineSize,
+                        position.y + axis[i].y * lineSize,
+                        position.z + axis[i].z * lineSize);
+            }
+
+            glEnd();
+
+            glEnable(GL_DEPTH_TEST);
+        }
     }
 
     

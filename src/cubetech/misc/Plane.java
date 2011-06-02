@@ -30,6 +30,17 @@ public class Plane {
         return this;
     }
 
+    public float findIntersection(Vector3f start, Vector3f delta) {
+        // n dot u
+        float dist = delta.x * a + delta.y * b + delta.z * c;
+        if(dist == 0f) return 0f;
+
+        float scalar = (d - (start.x * a + start.y * b + start.z * c)) / dist;
+        if(scalar > 1.0f) scalar = 1.0f;
+            if(scalar < 0) scalar = 0;
+        return scalar;
+    }
+
     public float testPoint(float x, float y, float z) {
         float dist = a * x + b * y + c * z - d;
         return dist;

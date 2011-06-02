@@ -1,9 +1,11 @@
 package cubetech.CGame;
 
 import cubetech.common.CS;
+import cubetech.common.CVarFlags;
 import cubetech.common.Common;
 import cubetech.common.Info;
 import cubetech.misc.Ref;
+import java.util.EnumSet;
 import java.util.HashMap;
 
 /**
@@ -35,6 +37,8 @@ public final class CGameStatic {
 
         if(Ref.common.sv_running.iValue == 1)
             localServer = true; // running local server
+
+        Ref.cvars.Get("model", "cubeguyTextured", EnumSet.of(CVarFlags.ARCHIVE, CVarFlags.USER_INFO));
 
         levelStartTime = Integer.parseInt(ConfigString(CS.CS_LEVEL_START_TIME));
         ParseServerInfo();
