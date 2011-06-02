@@ -293,6 +293,7 @@ public class SpriteManager {
 
     public void DrawHUD() {
         CubeTexture tex = Ref.ResMan.getWhiteTexture();
+        Ref.glRef.PushShader(Ref.glRef.getShader("sprite"));
         tex.Bind();
         for (int i= 0; i < HUDSpriteOffset; i++) {
             int index = HUDSprites[i];
@@ -311,6 +312,7 @@ public class SpriteManager {
                 
             Sprites[index].Draw();
         }
+        Ref.glRef.PopShader();
     }
 
     public void Reset() {

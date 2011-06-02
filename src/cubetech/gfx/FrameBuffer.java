@@ -57,12 +57,11 @@ public class FrameBuffer {
             }
         }
 
+
         useColor = color;
         useDepth = depth;
         this.w = w;
         this.h = h;
-//        this.w = 512;
-//        this.h = 512;
         InitFBO();
     }
 
@@ -148,7 +147,8 @@ public class FrameBuffer {
         if(useDepth && !useColor && id != 0) {
             glDrawBuffer(GL_NONE);
             glReadBuffer(GL_NONE);
-        } else if(useColor && id != 0) {
+        }
+        else if(useColor && id != 0) {
             glDrawBuffer(EXTFramebufferObject.GL_COLOR_ATTACHMENT0_EXT);
             glReadBuffer(EXTFramebufferObject.GL_COLOR_ATTACHMENT0_EXT);
         } else if(!useColor && id == 0) {
@@ -192,32 +192,33 @@ public class FrameBuffer {
                     TexRect, // textarget
                     fboColorId, // texture
                     0); // level
-            Bind();
+//            Bind();
             GLRef.checkError();
         }
 
         if(useDepth && useColor) {
-            depthId = Ref.ResMan.CreateEmptyDepthTexture(w, h, TexRect);
-            glBindTexture(TexRect, 0);
-            GLRef.checkError();
-            // Attach it
-            EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
-                    EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT, // attachment
-                    TexRect, // textarget
-                    depthId, // texture
-                    0); // level
-//            depthId = EXTFramebufferObject.glGenRenderbuffersEXT(); GLRef.checkError();
-//            EXTFramebufferObject.glBindRenderbufferEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT, depthId );
-//            GLRef.checkError();
+                depthId = Ref.ResMan.CreateEmptyDepthTexture(w, h, TexRect);
+                glBindTexture(TexRect, 0);
+                GLRef.checkError();
+                // Attach it
+                EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
+                        EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT, // attachment
+                        TexRect, // textarget
+                        depthId, // texture
+                        0); // level
+
+//                depthId = EXTFramebufferObject.glGenRenderbuffersEXT(); GLRef.checkError();
+//                EXTFramebufferObject.glBindRenderbufferEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT, depthId );
+//                GLRef.checkError();
 //
-//            EXTFramebufferObject.glRenderbufferStorageEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT,
-//                    GL_DEPTH_COMPONENT24,
-//                    w, h); GLRef.checkError();
-//            // attach depth buffer to fbo
-//            EXTFramebufferObject.glFramebufferRenderbufferEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT,
-//                    EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT,
-//                    EXTFramebufferObject.GL_RENDERBUFFER_EXT,
-//                    depthId); GLRef.checkError();
+//                EXTFramebufferObject.glRenderbufferStorageEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT,
+//                        GL_DEPTH_COMPONENT24,
+//                        512, 512); GLRef.checkError();
+//                // attach depth buffer to fbo
+//                EXTFramebufferObject.glFramebufferRenderbufferEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT,
+//                        EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT,
+//                        EXTFramebufferObject.GL_RENDERBUFFER_EXT,
+//                        depthId); GLRef.checkError();
         } else if(useDepth) {
             fboColorId = Ref.ResMan.CreateEmptyDepthTexture(w, h, GL_TEXTURE_2D);
             glBindTexture(GL_TEXTURE_2D, 0);
@@ -232,6 +233,7 @@ public class FrameBuffer {
             glDrawBuffer(GL_NONE);
             glReadBuffer(GL_NONE);
         }
+        
 
         GLRef.checkError();
 
@@ -240,7 +242,7 @@ public class FrameBuffer {
         } catch(RuntimeException ex) {
             // clean up
             destroy();
-            
+
             throw ex;
         }
         GLRef.checkError();

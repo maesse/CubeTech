@@ -1,5 +1,6 @@
-#version 120
-//#extension GL_ARB_texture_rectangle : require
+#version 140
+#extension GL_EXT_texture_rectangle : enable
+#extension GL_ARB_texture_rectangle : enable
 uniform sampler2DRect tex;
 
 varying vec2 coords;

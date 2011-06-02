@@ -499,7 +499,7 @@ public class Move {
         pm.ps.velocity.scale(vel);
 
         // don't do anything if standing still
-        if(pm.ps.velocity.x == 0 && pm.ps.velocity.y == 0) {
+        if(pm.ps.velocity.x == 0 && pm.ps.velocity.y == 0 && pm.ps.velocity.z == 0) {
             return;
         }
 

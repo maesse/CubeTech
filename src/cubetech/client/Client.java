@@ -1110,7 +1110,7 @@ public class Client {
     private void BeginFrame() {
         if(Ref.ui.IsFullscreen())
             GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
-//       GL11.glClearDepth(1000);
+//       GL11.glClearDepth(1);
 //       GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
 //       GL11.glClearDepth(1000);
        Ref.SpriteMan.Reset();

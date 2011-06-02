@@ -224,8 +224,12 @@ public class GLRef {
         
 
 //        glDisable(GL_CULL_FACE);
-        
-        srgbBuffer = new FrameBuffer(true, true, (int)GetResolution().x, (int)GetResolution().y);
+//        try {
+//            srgbBuffer = new FrameBuffer(true, true, (int)GetResolution().x, (int)GetResolution().y);
+//        } catch(Exception ex) {
+//            // Aww man..
+            Ref.ResMan.autoSrgb  = false; // don't set SRGB flag on textures
+//        }
 //        srgbBuffer.Bind();
         //InitFBO();
         Ref.render = new Render();

@@ -138,14 +138,16 @@ public class Common {
             String exString = getExceptionString(ex);
             System.out.println("Fatal crash: " + exString);
 
+            if(Ref.glRef != null)
+                Ref.glRef.Destroy();
+            Display.destroy();
+
             if(Ref.glRef != null && Ref.glRef.isApplet())
                 RunBrowserURL("javascript:handleError(\"CubeTech suffered a fatal crash :(\\r\\nCrashlog: " + exString + "\")");
             else
                 JOptionPane.showMessageDialog(parentDisplay, "CubeTech suffered a fatal crash :(\nCrashlog: " + exString, "Fatal Crash", JOptionPane.ERROR_MESSAGE);
 
-            if(Ref.glRef != null)
-                Ref.glRef.Destroy();
-            Display.destroy();
+            
             System.exit(-1);
         }
 

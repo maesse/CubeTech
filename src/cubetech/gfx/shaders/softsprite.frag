@@ -1,4 +1,6 @@
-#version 120
+#version 140
+#extension GL_EXT_texture_rectangle : enable
+#extension GL_ARB_texture_rectangle : enable
 uniform sampler2D tex;
 uniform sampler2DRect depth;
 uniform vec2 res = vec2(1024.0, 768.0);

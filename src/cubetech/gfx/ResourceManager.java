@@ -741,17 +741,18 @@ public final class ResourceManager {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
         ByteBuffer nullBuffer = null;
-        ByteBuffer buf = ByteBuffer.allocateDirect(width*height*4);
-            buf.order(ByteOrder.nativeOrder());
-            for (int i= 0; i < width*height; i++) {
-                buf.put((byte)125);
-                buf.put((byte)0);
-                buf.put((byte)255);
-                buf.put((byte)255);
-            }
-            buf.flip();
+//        ByteBuffer buf = ByteBuffer.allocateDirect(width*height*4);
+//            buf.order(ByteOrder.nativeOrder());
+//            for (int i= 0; i < width*height; i++) {
+//                buf.put((byte)125);
+//                buf.put((byte)0);
+//                buf.put((byte)255);
+//                buf.put((byte)255);
+//            }
+//            buf.flip();
             
-        glTexImage2D(target, 0, GL_DEPTH_COMPONENT32, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, buf);
+        glTexImage2D(target, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullBuffer);
+        GLRef.checkError();
         return textureId;
     }
 

@@ -33,19 +33,21 @@ public class SkyBox {
     }
 
     public void Render(ViewParams view) {
-        
+        Ref.glRef.PushShader(Ref.glRef.getShader("sprite"));
    
         // Render thyme!
         Vector4f tx = new Vector4f(0,0,1,1);
         float radius = (int) (view.farDepth * 0.55f);
         GL11.glCullFace(GL11.GL_FRONT);
+
         GL11.glDepthFunc(GL11.GL_ALWAYS);
-        //GL11.glDisable(GL11.GL_DEPTH_TEST);
+//        GL11.glDisable(GL11.GL_DEPTH_TEST);
         GL11.glDisable(GL11.GL_BLEND);
         //GL11.glDepthMask(false);
         float offset = 0.05f;
         view.Origin.z += radius*offset;
         // Top: Z+
+        Helper.col(1, 1, 1);
         up.Bind();
         GL11.glBegin(GL11.GL_QUADS);
         {
@@ -59,6 +61,9 @@ public class SkyBox {
             GL11.glVertex3f(view.Origin.x - radius,view.Origin.y + radius,view.Origin.z + radius);
         }
         GL11.glEnd();
+
+        
+        
 
         // Bottom: Z-
         dn.Bind();
@@ -90,6 +95,8 @@ public class SkyBox {
         }
         GL11.glEnd();
 
+        
+
         // Y-
         lf.Bind();
         GL11.glBegin(GL11.GL_QUADS);
@@ -120,6 +127,8 @@ public class SkyBox {
         }
         GL11.glEnd();
 
+        
+
         // X-
         bk.Bind();
         GL11.glBegin(GL11.GL_QUADS);
@@ -134,13 +143,11 @@ public class SkyBox {
             GL11.glVertex3f(view.Origin.x - radius ,view.Origin.y + radius,view.Origin.z - radius);
         }
         GL11.glEnd();
-        //GL11.glDepthMask(true);
-        //GL11.glEnable(GL11.GL_DEPTH_TEST);
-        GL11.glDepthFunc(GL11.GL_LEQUAL);
         GL11.glEnable(GL11.GL_BLEND);
+        GL11.glDepthFunc(GL11.GL_LEQUAL);
         view.Origin.z -= radius*offset;
         GL11.glCullFace(GL11.GL_BACK);
-        GLRef.checkError();
+        Ref.glRef.PopShader();
     }
 
 }
