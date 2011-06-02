@@ -166,7 +166,7 @@ public class Collision {
         delta.scale(-1f);
 
         // query the cube map
-        ChunkAreaQuery area = Ref.cm.cubemap.getCubesInVolume(cmmin, cmmax, server?Ref.cm.cubemap.chunks:Ref.cgame.map.chunks, server);
+        ChunkAreaQuery area = CubeMap.getCubesInVolume(cmmin, cmmax, server?Ref.cm.cubemap.chunks:Ref.cgame.map.chunks, server);
         //int[] cubePosition = new int[3];
 
         Vector3f.sub(maxs, mins, cextent).scale(0.5f);
