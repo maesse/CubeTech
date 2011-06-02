@@ -7,6 +7,7 @@ import cubetech.common.Info;
 import cubetech.misc.Ref;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * The client game static (cgs) structure hold everything
@@ -46,9 +47,14 @@ public final class CGameStatic {
 
     public void ParseServerInfo() {
         String info = ConfigString(CS.CS_SERVERINFO);
+        Map<String, String> varMap = Info.GetPairs(info);
+        for (String key : varMap.keySet()) {
+            String value = varMap.get(key);
+            Ref.cvars.Set2(key, value, false);
+        }
         gametype = Integer.parseInt(Info.ValueForKey(info, "g_gametype"));
-        Ref.cvars.Set2("g_gametype", ""+gametype, true);
-        Ref.cvars.Set2("sv_speed", Info.ValueForKey(info, "sv_speed"), true);
+//        Ref.cvars.Set2("g_gametype", ""+gametype, true);
+//        Ref.cvars.Set2("sv_speed", Info.ValueForKey(info, "sv_speed"), true);
         maxclients = Integer.parseInt(Info.ValueForKey(info, "sv_maxclients"));
         mapname = Info.ValueForKey(info, "mapname");
     }
@@ -95,7 +101,7 @@ public final class CGameStatic {
 
     void SetConfigValues() {
         try {
-        levelStartTime = Integer.parseInt(gameState.get(CS.CS_LEVEL_START_TIME));
+            levelStartTime = Integer.parseInt(gameState.get(CS.CS_LEVEL_START_TIME));
         } catch(NumberFormatException ex) {
             Common.LogDebug(ex.getMessage());
             Ref.common.Error(Common.ErrorCode.DROP, "SetConfigValues: Couldn't parse levelstarttime: " + gameState.get(CS.CS_LEVEL_START_TIME));

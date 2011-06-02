@@ -278,20 +278,21 @@ public class CGameState {
                     Vector3f.sub(oldPlayerState.origin, predictedPlayerState.origin, delta);
                     float len = delta.length();
                     if(len > 0.1f) {
-//                        Ref.cgame.Print("Prediction miss: " + len);
+                        Ref.cgame.Print("Prediction miss: " + len);
                         if(Ref.cgame.cg_errorDecay.iValue > 0) {
                             int t = time - predictedErrorTime;
                             float f = (Ref.cgame.cg_errorDecay.fValue - t) / Ref.cgame.cg_errorDecay.fValue;
                             if(f < 0)
                                 f = 0;
-                            predictedError.x *= f;
+                            predictedError.scale(f);
                             if(Float.isInfinite(predictedError.x) || Float.isNaN(predictedError.x))
                                 predictedError.x = 0f;
-                            predictedError.y *= f;
                             if(Float.isInfinite(predictedError.y) || Float.isNaN(predictedError.y))
                                 predictedError.y = 0f;
-                        } else
-                            predictedError = new Vector3f();
+                            if(Float.isInfinite(predictedError.z) || Float.isNaN(predictedError.z))
+                                predictedError.z = 0f;
+                        } else predictedError = new Vector3f();
+                            
                         Vector3f.add(predictedError, delta, predictedError);
                         predictedErrorTime = oldTime;
                     }
