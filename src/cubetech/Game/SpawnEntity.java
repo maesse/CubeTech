@@ -16,30 +16,30 @@ public class SpawnEntity {
     public Vector3f origin = new Vector3f();
     private boolean spawned = false;
     private Gentity ent = null;
-    private Block editBlock = null;
+//    private Block editBlock = null;
 
     public SpawnEntity(String className, Vector3f position) {
         if(className == null || className.isEmpty())
             Ref.common.Error(Common.ErrorCode.FATAL, "SpawnEntity(): className == null");
         this.className = className;
         origin.set(position);
-        editBlock = new Block(-1, new Vector2f(position.x - 6, position.y - 6), new Vector2f(12,12), false);
-        editBlock.setLayer(-20); // make sure entities are the first to be selected in the editor
-        editBlock.spawnEntity = this;
-        if(className.startsWith("item"))
-            editBlock.Material.setTexture(Ref.common.items.findItemByClassname(className).icon);
-        else {
-            IEntity sent = Ref.game.findSpawnEntityFromClassName(className);
-            if(sent != null)
-                editBlock.Material.setTexture(sent.getIcon());
-            else
-                editBlock.Material.setTexture(Ref.ResMan.LoadTexture("data/tile.png"));
-        }
+//        editBlock = new Block(-1, new Vector2f(position.x - 6, position.y - 6), new Vector2f(12,12), false);
+//        editBlock.setLayer(-20); // make sure entities are the first to be selected in the editor
+//        editBlock.spawnEntity = this;
+//        if(className.startsWith("item"))
+//            editBlock.Material.setTexture(Ref.common.items.findItemByClassname(className).icon);
+//        else {
+//            IEntity sent = Ref.game.findSpawnEntityFromClassName(className);
+//            if(sent != null)
+//                editBlock.Material.setTexture(sent.getIcon());
+//            else
+//                editBlock.Material.setTexture(Ref.ResMan.LoadTexture("data/tile.png"));
+//        }
     }
 
-    public Block getBlock() {
-        return editBlock;
-    }
+//    public Block getBlock() {
+//        return editBlock;
+//    }
 
     public boolean isSpawned() {
         return spawned && ent != null;

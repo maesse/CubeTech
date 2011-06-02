@@ -871,34 +871,7 @@ public class DebugUI extends javax.swing.JFrame implements LogEventListener {
         clientFrametime.setText(""+Ref.client.frametime);
         clientRealtime.setText(""+Ref.client.realtime);
         clientServername.setText(""+Ref.client.servername);
-        String state = "N/A";
-        switch(Ref.client.state) {
-            case ConnectState.ACTIVE:
-                state = "Active";
-                break;
-            case ConnectState.CHALLENGING:
-                state = "Challenging";
-                break;
-            case ConnectState.CONNECTED:
-                state = "Connected";
-                break;
-            case ConnectState.CONNECTING:
-                state = "Connecting";
-                break;
-            case ConnectState.DISCONNECTED:
-                state = "Disconnected";
-                break;
-            case ConnectState.LOADING:
-                state = "Loading";
-                break;
-            case ConnectState.PRIMED:
-                state = "Primed";
-                break;
-            case ConnectState.UNINITIALIZED:
-                state = "Uninitialized";
-                break;
-        }
-        clientState.setText(state);
+        clientState.setText(Ref.client.state.toString());
     }
 
     

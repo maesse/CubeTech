@@ -1,5 +1,6 @@
 package cubetech.common;
 
+import cubetech.common.items.ItemList;
 import cubetech.gfx.ResourceManager;
 import cubetech.misc.Event;
 import cubetech.misc.ExitException;

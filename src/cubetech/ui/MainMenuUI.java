@@ -80,7 +80,7 @@ public class MainMenuUI implements IMenu {
     }
 
     public void Show() {
-        continueButton.setVisible(Ref.client.state > ConnectState.DISCONNECTED);
+        continueButton.setVisible(Ref.client.state.ordinal() > ConnectState.DISCONNECTED.ordinal());
     }
 
     public void GotMouseEvent(MouseEvent evt) {

@@ -1,6 +1,7 @@
 package cubetech.gfx;
 
 import cubetech.CGame.ViewParams;
+import cubetech.common.Helper;
 import cubetech.misc.Ref;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -33,25 +34,28 @@ public class SkyBox {
 
     public void Render(ViewParams view) {
         
-
+   
         // Render thyme!
         Vector4f tx = new Vector4f(0,0,1,1);
         float radius = (int) (view.farDepth * 0.55f);
         GL11.glCullFace(GL11.GL_FRONT);
-        GL11.glDepthMask(false);
+        GL11.glDepthFunc(GL11.GL_ALWAYS);
+        //GL11.glDisable(GL11.GL_DEPTH_TEST);
+        GL11.glDisable(GL11.GL_BLEND);
+        //GL11.glDepthMask(false);
         float offset = 0.05f;
         view.Origin.z += radius*offset;
         // Top: Z+
         up.Bind();
         GL11.glBegin(GL11.GL_QUADS);
         {
-            tex(tx.z, tx.y);
+            Helper.tex(tx.z, tx.y);
             GL11.glVertex3f(view.Origin.x - radius,view.Origin.y - radius,view.Origin.z + radius);
-            tex(tx.x, tx.y);
+            Helper.tex(tx.x, tx.y);
             GL11.glVertex3f(view.Origin.x + radius,view.Origin.y - radius,view.Origin.z + radius);
-            tex(tx.x, tx.w);
+            Helper.tex(tx.x, tx.w);
             GL11.glVertex3f(view.Origin.x + radius,view.Origin.y + radius,view.Origin.z + radius);
-            tex(tx.z, tx.w);
+            Helper.tex(tx.z, tx.w);
             GL11.glVertex3f(view.Origin.x - radius,view.Origin.y + radius,view.Origin.z + radius);
         }
         GL11.glEnd();
@@ -60,13 +64,13 @@ public class SkyBox {
         dn.Bind();
         GL11.glBegin(GL11.GL_QUADS);
         {
-            tex(tx.x, tx.y);
+            Helper.tex(tx.x, tx.y);
             GL11.glVertex3f(view.Origin.x - radius,view.Origin.y - radius,view.Origin.z - radius );
-            tex(tx.x, tx.w);
+            Helper.tex(tx.x, tx.w);
             GL11.glVertex3f(view.Origin.x - radius,view.Origin.y + radius,    view.Origin.z - radius);
-            tex(tx.z, tx.w);
+            Helper.tex(tx.z, tx.w);
             GL11.glVertex3f(view.Origin.x + radius,view.Origin.y + radius,    view.Origin.z - radius );
-            tex(tx.z, tx.y);
+            Helper.tex(tx.z, tx.y);
             GL11.glVertex3f(view.Origin.x + radius,view.Origin.y - radius,view.Origin.z - radius);
         }
         GL11.glEnd();
@@ -75,13 +79,13 @@ public class SkyBox {
         rt.Bind();
         GL11.glBegin(GL11.GL_QUADS);
         {
-            tex(tx.x, tx.y);
+            Helper.tex(tx.x, tx.y);
             GL11.glVertex3f(view.Origin.x - radius,view.Origin.y + radius,     view.Origin.z - radius );
-            tex(tx.x, tx.w);
+            Helper.tex(tx.x, tx.w);
             GL11.glVertex3f(view.Origin.x - radius,view.Origin.y + radius,    view.Origin.z + radius);
-            tex(tx.z, tx.w);
+            Helper.tex(tx.z, tx.w);
             GL11.glVertex3f(view.Origin.x + radius,view.Origin.y + radius,    view.Origin.z + radius);
-            tex(tx.z, tx.y);
+            Helper.tex(tx.z, tx.y);
             GL11.glVertex3f(view.Origin.x + radius,view.Origin.y + radius,     view.Origin.z - radius);
         }
         GL11.glEnd();
@@ -90,13 +94,13 @@ public class SkyBox {
         lf.Bind();
         GL11.glBegin(GL11.GL_QUADS);
         {
-            tex(tx.z, tx.y);
+            Helper.tex(tx.z, tx.y);
             GL11.glVertex3f(view.Origin.x - radius,view.Origin.y - radius,     view.Origin.z - radius );
-            tex(tx.x, tx.y);
+            Helper.tex(tx.x, tx.y);
             GL11.glVertex3f(view.Origin.x + radius,view.Origin.y - radius,     view.Origin.z - radius);
-            tex(tx.x, tx.w);
+            Helper.tex(tx.x, tx.w);
             GL11.glVertex3f(view.Origin.x + radius,view.Origin.y - radius ,    view.Origin.z + radius);
-            tex(tx.z, tx.w);
+            Helper.tex(tx.z, tx.w);
             GL11.glVertex3f(view.Origin.x - radius,view.Origin.y - radius,    view.Origin.z + radius);
         }
         GL11.glEnd();
@@ -105,13 +109,13 @@ public class SkyBox {
         fw.Bind();
         GL11.glBegin(GL11.GL_QUADS);
         {
-            tex(tx.z, tx.y);
+            Helper.tex(tx.z, tx.y);
             GL11.glVertex3f(view.Origin.x + radius, view.Origin.y - radius,view.Origin.z - radius );
-            tex(tx.x, tx.y);
+            Helper.tex(tx.x, tx.y);
             GL11.glVertex3f(view.Origin.x + radius ,view.Origin.y + radius,view.Origin.z - radius);
-            tex(tx.x, tx.w);
+            Helper.tex(tx.x, tx.w);
             GL11.glVertex3f(view.Origin.x + radius ,view.Origin.y + radius,view.Origin.z + radius);
-            tex(tx.z, tx.w);
+            Helper.tex(tx.z, tx.w);
             GL11.glVertex3f(view.Origin.x + radius, view.Origin.y - radius,view.Origin.z + radius);
         }
         GL11.glEnd();
@@ -120,26 +124,23 @@ public class SkyBox {
         bk.Bind();
         GL11.glBegin(GL11.GL_QUADS);
         {
-            tex(tx.x, tx.y);
+            Helper.tex(tx.x, tx.y);
             GL11.glVertex3f(view.Origin.x - radius, view.Origin.y - radius,view.Origin.z - radius );
-            tex(tx.x, tx.w);
+            Helper.tex(tx.x, tx.w);
             GL11.glVertex3f(view.Origin.x - radius, view.Origin.y - radius,view.Origin.z + radius);
-            tex(tx.z, tx.w);
+            Helper.tex(tx.z, tx.w);
             GL11.glVertex3f(view.Origin.x - radius ,view.Origin.y + radius,view.Origin.z + radius);
-            tex(tx.z, tx.y);
+            Helper.tex(tx.z, tx.y);
             GL11.glVertex3f(view.Origin.x - radius ,view.Origin.y + radius,view.Origin.z - radius);
         }
         GL11.glEnd();
-        GL11.glDepthMask(true);
+        //GL11.glDepthMask(true);
+        //GL11.glEnable(GL11.GL_DEPTH_TEST);
+        GL11.glDepthFunc(GL11.GL_LEQUAL);
+        GL11.glEnable(GL11.GL_BLEND);
         view.Origin.z -= radius*offset;
         GL11.glCullFace(GL11.GL_BACK);
         GLRef.checkError();
     }
 
-    private void tex(float x, float y) {
-        if(Ref.glRef.isShadersSupported())
-            GL20.glVertexAttrib2f(2, x, y);
-        else
-            GL11.glTexCoord2f(x, y);
-    }
 }

@@ -1,9 +1,9 @@
 package cubetech.CGame;
 
 import cubetech.common.Common;
-import cubetech.common.GItem;
 import cubetech.common.Helper;
 import cubetech.common.Trajectory;
+import cubetech.common.items.IItem;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
@@ -39,6 +39,7 @@ public class CEntity {
     // exact interpolated position of entity on this frame
     public Vector3f lerpOrigin = new Vector3f();
     public Vector3f lerpAngles = new Vector3f();
+    public int trailTime;
 
     void ResetEntity() {
         // if the previous snapshot this entity was updated in is at least
@@ -47,6 +48,7 @@ public class CEntity {
             previousEvent = 0;
         lerpOrigin = new Vector3f(currentState.origin);
         lerpAngles = new Vector3f(currentState.Angles);
+        trailTime = Ref.cgame.cg.snap.serverTime;
         if(currentState.eType == EntityType.PLAYER)
             ResetPlayerEntity();
     }
@@ -179,48 +181,48 @@ public class CEntity {
     }
 
     public void Event() {
-        int event = currentState.evt & ~Common.EV_EVENT_BITS;
+        Event event = Event.values()[currentState.evt & ~Common.EV_EVENT_BITS];
 
-        if(event == 0) {
+        if(event == Event.NONE) {
             // Can happen when a player has respawned
             Common.LogDebug("Zero event");
             return;
         }
 
         switch(event) {
-            case Event.FOOTSTEP:
+            case FOOTSTEP:
                 Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.cgame.cgs.media.s_footStep, 0.5f);
                 break;
-            case Event.STEP:
+            case STEP:
                 
 
                 break;
-            case Event.ITEM_PICKUP:
+            case ITEM_PICKUP:
                 int index = currentState.evtParams;
                 if(index < 0 || index >= Ref.common.items.getItemCount()) {
                     Common.LogDebug("Invalid ITEM_PICKUP GItem index: " + index);
                     break;
                 }
-                GItem item = Ref.common.items.getItem(index);
-                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound(item.pickupSound), 1.0f);
+                IItem item = Ref.common.items.getItem(index);
+                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound(item.getPickupSound()), 1.0f);
                 break;
-            case Event.ITEM_RESPAWN:
+            case ITEM_RESPAWN:
                 Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.cgame.cgs.media.s_itemRespawn, 1.0f);
                 break;
-            case Event.DIED:
+            case DIED:
                 Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/die.wav"), 1.0f);
                 break;
-            case Event.GOAL:
+            case GOAL:
                 Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/ouch.wav"), 1.0f);
                 break;
-            case Event.HIT_WALL:
+            case HIT_WALL:
                 Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/ouch.wav"), 1.0f);
                 break;
-            case Event.JUMP:
+            case JUMP:
                 Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/hop.wav"), 1.0f);
                 break;
             default:
-                Common.LogDebug("Unknown event: " + event);
+                Common.LogDebug("Unhandled CGame event: " + event);
                 break;
         }
     }

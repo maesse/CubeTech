@@ -215,17 +215,17 @@ public class Bone {
         {
             if(Ref.glRef.isShadersSupported()) {
                 // Fancy pants shaders
-                GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y);
-                GL20.glVertexAttrib4Nub(1, b,hw,b,w);
-                GL20.glVertexAttrib3f(0, 0, -lineSize, depth);
+                GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x, TexOffset.y);
+                GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, b,hw,b,w);
+                GL20.glVertexAttrib3f(Shader.INDICE_POSITION, 0, -lineSize, depth);
 
-                GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y);
-                GL20.glVertexAttrib4Nub(1, hw,b,b,w);
-                GL20.glVertexAttrib3f(0, lenght, 0, depth);
+                GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x+TexSize.x, TexOffset.y);
+                GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, hw,b,b,w);
+                GL20.glVertexAttrib3f(Shader.INDICE_POSITION, lenght, 0, depth);
 
-                GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y+TexSize.y);
-                GL20.glVertexAttrib4Nub(1, b,hw,b,w);
-                GL20.glVertexAttrib3f(0, 0, lineSize, depth);
+                GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x, TexOffset.y+TexSize.y);
+                GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, b,hw,b,w);
+                GL20.glVertexAttrib3f(Shader.INDICE_POSITION, 0, lineSize, depth);
             } else {
                 // Good ol' fixed function
                 GL11.glTexCoord2f(TexOffset.x, TexOffset.y);
@@ -287,21 +287,21 @@ public class Bone {
 //                GL20.glVertexAttrib3f(0, -cornerSize, cornerSize, depth);
 
                 // Second corner
-                GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y);
-                GL20.glVertexAttrib4Nub(1, w,w,w,w);
-                GL20.glVertexAttrib3f(0, -cornerSize + lenght, -cornerSize, depth);
+                GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x, TexOffset.y);
+                GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, w,w,w,w);
+                GL20.glVertexAttrib3f(Shader.INDICE_POSITION, -cornerSize + lenght, -cornerSize, depth);
 
-                GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y);
-                GL20.glVertexAttrib4Nub(1, w,w,w,w);
-                GL20.glVertexAttrib3f(0, cornerSize + lenght, -cornerSize, depth);
+                GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x+TexSize.x, TexOffset.y);
+                GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, w,w,w,w);
+                GL20.glVertexAttrib3f(Shader.INDICE_POSITION, cornerSize + lenght, -cornerSize, depth);
 
-                GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
-                GL20.glVertexAttrib4Nub(1, w,w,w,w);
-                GL20.glVertexAttrib3f(0, cornerSize + lenght, cornerSize, depth);
+                GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
+                GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, w,w,w,w);
+                GL20.glVertexAttrib3f(Shader.INDICE_POSITION, cornerSize + lenght, cornerSize, depth);
 
-                GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y+TexSize.y);
-                GL20.glVertexAttrib4Nub(1, w,w,w,w);
-                GL20.glVertexAttrib3f(0, -cornerSize + lenght, cornerSize, depth);
+                GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x, TexOffset.y+TexSize.y);
+                GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, w,w,w,w);
+                GL20.glVertexAttrib3f(Shader.INDICE_POSITION, -cornerSize + lenght, cornerSize, depth);
             } else {
                 // Good ol' fixed function
                 GL11.glTexCoord2f(TexOffset.x, TexOffset.y);

@@ -310,21 +310,21 @@ public class Sprite {
         {
             if(Ref.glRef.isShadersSupported()) {
                 // Fancy pants shaders
-                GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y);
-                GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                GL20.glVertexAttrib3f(0, -Extent.x, -Extent.y, depth);
+                GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x, TexOffset.y);
+                GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                GL20.glVertexAttrib3f(Shader.INDICE_POSITION, -Extent.x, -Extent.y, depth);
 
-                GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y);
-                GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                GL20.glVertexAttrib3f(0, Extent.x, -Extent.y, depth);
+                GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x+TexSize.x, TexOffset.y);
+                GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                GL20.glVertexAttrib3f(Shader.INDICE_POSITION, Extent.x, -Extent.y, depth);
 
-                GL20.glVertexAttrib2f(2, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
-                GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                GL20.glVertexAttrib3f(0, Extent.x, Extent.y, depth);
+                GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
+                GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                GL20.glVertexAttrib3f(Shader.INDICE_POSITION, Extent.x, Extent.y, depth);
 
-                GL20.glVertexAttrib2f(2, TexOffset.x, TexOffset.y+TexSize.y);
-                GL20.glVertexAttrib4Nub(1, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-                GL20.glVertexAttrib3f(0, -Extent.x, Extent.y, depth);
+                GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x, TexOffset.y+TexSize.y);
+                GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+                GL20.glVertexAttrib3f(Shader.INDICE_POSITION, -Extent.x, Extent.y, depth);
             } else {
                 // Good ol' fixed function
                 GL11.glTexCoord2f(TexOffset.x, TexOffset.y);

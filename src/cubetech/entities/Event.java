@@ -9,14 +9,19 @@ package cubetech.entities;
  *
  * @author mads
  */
-public class Event {
-    public static final int FOOTSTEP = 1;
-    public static final int ITEM_PICKUP = 2;
-    public static final int ITEM_RESPAWN = 3;
-    public static final int GENERAL_SOUND = 4;
-    public static final int STEP = 5;
-    public static final int HIT_WALL = 6;
-    public static final int DIED = 7;
-    public static final int JUMP = 8;
-    public static final int GOAL = 9;
-}
+public enum Event {
+    NONE,
+     FOOTSTEP,
+     ITEM_PICKUP ,
+     ITEM_RESPAWN,
+     GENERAL_SOUND,
+     STEP,
+     HIT_WALL,
+     DIED,
+     JUMP,
+     GOAL,
+     FIRE_WEAPON,
+     FIRE_WEAPON_ALT, // alternative fire
+     NO_AMMO,
+     CHANGE_WEAPON
+,   MISSILE_MISS}

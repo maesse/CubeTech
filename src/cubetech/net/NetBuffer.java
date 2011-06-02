@@ -2,6 +2,7 @@ package cubetech.net;
 
 import cubetech.common.Common;
 import cubetech.common.Helper;
+import cubetech.common.items.Weapon;
 import cubetech.misc.Ref;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
@@ -254,4 +255,22 @@ public class NetBuffer {
     public int ReadInt() {
         return buffer.getInt();
     }
+
+    public <T extends Enum<T>> void WriteEnum(T t) {
+        if(t == null) WriteByte(-1);
+        else WriteByte(t.ordinal());
+    }
+
+    public <T extends Enum> T ReadEnum(Class<T> c) {
+        byte b = ReadByte();
+        if(b < 0)return null;
+        return c.getEnumConstants()[b];
+    }
+
+//    public <T extends Enum<T>> T ReadEnum(T t) {
+//        byte b = ReadByte();
+//        if(b < 0)return null;
+//        return t.getDeclaringClass().getEnumConstants()[b];
+//    }
+
 }

@@ -1,10 +1,14 @@
 package cubetech.common;
 
+import cubetech.Game.ClientPersistant;
+import cubetech.common.items.Weapon;
+import cubetech.common.items.WeaponState;
 import cubetech.Game.Gentity;
 import cubetech.common.Move.MoveType;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
+import cubetech.entities.Event;
 import cubetech.input.Input;
 import cubetech.input.PlayerInput;
 import cubetech.misc.Ref;
@@ -25,7 +29,7 @@ public class PlayerState {
     public int entityEventSequence;
     public int eventSequence;
     public int[] eventParams = new int[Common.MAX_PS_EVENTS];
-    public int[] events = new int[Common.MAX_PS_EVENTS];
+    public Event[] events = new Event[Common.MAX_PS_EVENTS];
     public int externalEvent;
     public int externalEventParam;
     public int externalEventTime;
@@ -49,9 +53,16 @@ public class PlayerState {
 
     public int maptime = 0;
 
+    public Weapon weapon = Weapon.NONE; // copied to entityState_t->weapon
+    public int weaponTime;
+    public WeaponState weaponState = WeaponState.READY;
+
     // Animation
     public int animation = 0;
     public int animTime = 0;
+
+    // from game -> server, tells server what map data to send
+    public ClientPersistant pers = null;
 
     public PlayerState() {
         delta_angles[0] = -16000;
@@ -67,7 +78,7 @@ public class PlayerState {
         entityEventSequence = 0;
         eventSequence = 0;
         eventParams[0] = eventParams[1] = 0;
-        events[0] = events[1] = 0;
+        events[0] = events[1] = Event.NONE;
         externalEvent = 0;
         externalEventParam = 0;
         externalEventTime = 0;
@@ -86,6 +97,9 @@ public class PlayerState {
         maptime = 0;
         animation = 0;
         animTime = 0;
+        weapon = Weapon.NONE;
+        weaponTime = 0;
+        weaponState = WeaponState.READY;
         stats = new PlayerStats();
     }
 
@@ -159,6 +173,10 @@ public class PlayerState {
         ps.maptime = maptime;
         ps.animTime = animTime;
         ps.animation = animation;
+        ps.weapon = weapon;
+        ps.weaponTime = weaponTime;
+        ps.weaponState = weaponState;
+        ps.pers = pers;
         System.arraycopy(powerups, 0, ps.powerups, 0, NUM_POWERUPS);
         return ps;
 //        }
@@ -184,6 +202,8 @@ public class PlayerState {
         // set the trDelta for flag direction
         s.pos.delta.set(velocity);
 
+        s.weapon = weapon;
+
         s.apos.type = Trajectory.INTERPOLATE;
         s.apos.base.set(viewangles);
         s.eFlags = eFlags;
@@ -199,7 +219,7 @@ public class PlayerState {
                 entityEventSequence = eventSequence - Common.MAX_PS_EVENTS;
 
             int seq = entityEventSequence & (Common.MAX_PS_EVENTS-1);
-            s.evt = events[seq] | ((entityEventSequence & 3) << 8);
+            s.evt = events[seq].ordinal() | ((entityEventSequence & 3) << 8);
             s.evtParams = eventParams[seq];
             entityEventSequence++;
         }
@@ -213,7 +233,7 @@ public class PlayerState {
             // create a temporary entity for this event which is sent to everyone
             // except the client who generated the event
             int seq = entityEventSequence & (Common.MAX_PS_EVENTS-1);
-            int evt = events[seq] | ((entityEventSequence & 3) << 8);
+            int evt = events[seq].ordinal() | ((entityEventSequence & 3) << 8);
             int extEvt = externalEvent;
             externalEvent = 0;
             Gentity t = Ref.game.TempEntity(origin, evt);
@@ -245,8 +265,8 @@ public class PlayerState {
         msg.WriteDelta(ps.entityEventSequence, entityEventSequence);
         msg.WriteDelta(ps.eventParams[0], eventParams[0]);
         msg.WriteDelta(ps.eventParams[1],  eventParams[1]);
-        msg.WriteDelta(ps.events[0], events[0]);
-        msg.WriteDelta(ps.events[1], events[1]);
+        msg.WriteEnum(events[0]);
+        msg.WriteEnum(events[1]);
         msg.WriteDelta(ps.externalEvent, externalEvent);
         msg.WriteDelta(ps.externalEventParam, externalEventParam);
         msg.WriteDelta(ps.externalEventTime, externalEventTime);
@@ -260,7 +280,10 @@ public class PlayerState {
         msg.Write(applyPull);
         msg.Write(jumpDown);
         msg.Write(canDoubleJump);
-        msg.Write(ps.animation);
+        msg.WriteDelta(animation, ps.animation);
+        msg.WriteEnum(weapon);
+        msg.WriteDelta(ps.weaponTime, weaponTime);
+        msg.WriteEnum(weaponState);
         msg.WriteDelta(ps.maptime, maptime);
         for (int i= 0; i < NUM_POWERUPS; i++) {
             msg.WriteDelta(ps.powerups[i], powerups[i]);
@@ -282,8 +305,9 @@ public class PlayerState {
         entityEventSequence = msg.ReadDeltaInt(ps.entityEventSequence);
         eventParams[0] = msg.ReadDeltaInt(ps.eventParams[0]);
         eventParams[1] = msg.ReadDeltaInt(ps. eventParams[1]);
-        events[0] = msg.ReadDeltaInt(ps.events[0]);
-        events[1] = msg.ReadDeltaInt(ps.events[1]);
+
+        events[0] = msg.ReadEnum(Event.class);
+        events[1] = msg.ReadEnum(Event.class);
         externalEvent = msg.ReadDeltaInt(ps.externalEvent);
         externalEventParam = msg.ReadDeltaInt(ps.externalEventParam);
         externalEventTime = msg.ReadDeltaInt(ps.externalEventTime);
@@ -297,7 +321,10 @@ public class PlayerState {
         applyPull = msg.ReadBool();
         jumpDown = msg.ReadBool();
         canDoubleJump = msg.ReadBool();
-        animation = msg.ReadInt();
+        animation = msg.ReadDeltaInt(ps.animation);
+        weapon = msg.ReadEnum(Weapon.class);
+        weaponTime = msg.ReadDeltaInt(ps.weaponTime);
+        weaponState = msg.ReadEnum(WeaponState.class);
         maptime = msg.ReadDeltaInt(ps.maptime);
         for (int i= 0; i < NUM_POWERUPS; i++) {
             powerups[i] = msg.ReadDeltaInt(ps.powerups[i]);
@@ -306,7 +333,7 @@ public class PlayerState {
         stats.ReadDelta(msg, ps.stats);
     }
 
-    public void AddPredictableEvent(int event, int eventParam) {
+    public void AddPredictableEvent(Event event, int eventParam) {
         events[eventSequence & (Common.MAX_PS_EVENTS-1)] = event;
         eventParams[eventSequence & (Common.MAX_PS_EVENTS-1)] = eventParam;
         eventSequence++;

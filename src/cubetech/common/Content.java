@@ -15,4 +15,5 @@ public  class Content {
     public static final int TRIGGER = 4;
     public static final int PLAYERCLIP = 8;
     public static final int MASK_PLAYERSOLID = SOLID;
+    public static final int MASK_SHOT = SOLID | BODY | PLAYERCLIP;
 }

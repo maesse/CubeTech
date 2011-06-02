@@ -5,8 +5,10 @@
 
 package cubetech.common;
 
+import cubetech.gfx.Shader;
 import cubetech.input.Input;
 import cubetech.misc.Ref;
+import java.nio.FloatBuffer;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.util.vector.Matrix3f;
@@ -116,16 +118,23 @@ public class Helper {
 
     public static void tex(float x, float y) {
         if(Ref.glRef.isShadersSupported())
-            GL20.glVertexAttrib2f(2, x, y);
+            GL20.glVertexAttrib2f(Shader.INDICE_COORDS, x, y);
         else
             GL11.glTexCoord2f(x, y);
     }
 
     public static void col(float r, float g, float b) {
         if(Ref.glRef.isShadersSupported())
-            GL20.glVertexAttrib3f(1, r,g,b);
+            GL20.glVertexAttrib3f(Shader.INDICE_COLOR, r,g,b);
         else
             GL11.glColor3f(r,g,b);
+    }
+
+    public static void col(Vector4f color) {
+        if(Ref.glRef.isShadersSupported())
+            GL20.glVertexAttrib4f(Shader.INDICE_COLOR, color.x/255f,color.y/255f,color.z/255f,color.w/255f);
+        else
+            GL11.glColor4f(color.x/255f,color.y/255f,color.z/255f,color.w/255f);
     }
     
 
@@ -283,6 +292,129 @@ public class Helper {
         return (float)len;
     }
 
+    public static void rotateAroundDirection(Vector3f[] axis, float yaw) {
+        // create an arbitrary axis[1]
+        perpendicularVector(axis[0], axis[1]);
+
+        // rotate it around axis[0] by yaw
+        if(yaw != 0) {
+            Vector3f temp = new Vector3f(axis[1]);
+            rotatePointAroundVector(axis[1], axis[0], temp, yaw);
+        }
+
+        // cross to get axis[2]
+        Vector3f.cross(axis[0], axis[1], axis[2]);
+    }
+
+    public static Vector3f rotatePointAroundVector(Vector3f dest, Vector3f dir, Vector3f point, float deg) {
+        if(dest == null) dest = new Vector3f();
+        Vector3f vr = perpendicularVector(dir, null);
+        Vector3f vup = Vector3f.cross(vr, dir, null);
+
+        float m[] = new float[3*3];
+        m[0 * 3 + 0] = vr.x;
+        m[1 * 3 + 0] = vr.y;
+        m[2 * 3 + 0] = vr.z;
+
+        m[0 * 3 + 1] = vup.x;
+        m[1 * 3 + 1] = vup.y;
+        m[2 * 3 + 1] = vup.z;
+
+        m[0 * 3 + 2] = dir.x;
+        m[1 * 3 + 2] = dir.y;
+        m[2 * 3 + 2] = dir.z;
+
+        float im[] = new float[3*3]; // inverse
+        im[0 * 3 + 0] = m[0 * 3 + 0];
+        im[0 * 3 + 1] = m[1 * 3 + 0];
+        im[0 * 3 + 2] = m[2 * 3 + 0];
+        im[1 * 3 + 0] = m[0 * 3 + 1];
+        im[1 * 3 + 1] = m[1 * 3 + 1];
+        im[1 * 3 + 2] = m[2 * 3 + 1];
+        im[2 * 3 + 0] = m[0 * 3 + 2];
+        im[2 * 3 + 1] = m[1 * 3 + 2];
+        im[2 * 3 + 2] = m[2 * 3 + 2];
+
+        float zrot[] = new float[9];
+        zrot[0] = zrot[1 * 3 + 1] = zrot[2 * 3 + 2] = 1f;
+
+        float rad = (float) ((deg * Math.PI) / 180f);
+        zrot[0 * 3 + 0] = (float) Math.cos(rad);
+        zrot[0 * 3 + 1] = (float) Math.sin(rad);
+        zrot[1 * 3 + 0] = (float) -Math.sin(rad);
+        zrot[1 * 3 + 1] = (float) Math.cos(rad);
+
+        float[] tmpmat = new float[9];
+        float[] rot = new float[9];
+        matrixMult(m, zrot, tmpmat);
+        matrixMult(tmpmat, im, rot);
+
+        dest.x = rot[0 * 3 + 0] * point.x + rot[0 * 3 + 1] * point.y + rot[0 * 3 + 2] * point.z;
+        dest.y = rot[1 * 3 + 0] * point.x + rot[1 * 3 + 1] * point.y + rot[1 * 3 + 2] * point.z;
+        dest.z = rot[2 * 3 + 0] * point.x + rot[2 * 3 + 1] * point.y + rot[2 * 3 + 2] * point.z;
+        return dest;
+    }
+
+    public static void matrixMult(float[] in1, float[] in2, float[] out) {
+        out[0 * 3 + 0] = in1[0 * 3 + 0] * in2[0 * 3 + 0] + in1[0 * 3 + 1] * in2[1 * 3 + 0] +
+				in1[0 * 3 + 2] * in2[2 * 3 + 0];
+	out[0 * 3 + 1] = in1[0 * 3 + 0] * in2[0 * 3 + 1] + in1[0 * 3 + 1] * in2[1 * 3 + 1] +
+				in1[0 * 3 + 2] * in2[2 * 3 + 1];
+	out[0 * 3 + 2] = in1[0 * 3 + 0] * in2[0 * 3 + 2] + in1[0 * 3 + 1] * in2[1 * 3 + 2] +
+				in1[0 * 3 + 2] * in2[2 * 3 + 2];
+	out[1 * 3 + 0] = in1[1 * 3 + 0] * in2[0 * 3 + 0] + in1[1 * 3 + 1] * in2[1 * 3 + 0] +
+				in1[1 * 3 + 2] * in2[2 * 3 + 0];
+	out[1 * 3 + 1] = in1[1 * 3 + 0] * in2[0 * 3 + 1] + in1[1 * 3 + 1] * in2[1 * 3 + 1] +
+				in1[1 * 3 + 2] * in2[2 * 3 + 1];
+	out[1 * 3 + 2] = in1[1 * 3 + 0] * in2[0 * 3 + 2] + in1[1 * 3 + 1] * in2[1 * 3 + 2] +
+				in1[1 * 3 + 2] * in2[2 * 3 + 2];
+	out[2 * 3 + 0] = in1[2 * 3 + 0] * in2[0 * 3 + 0] + in1[2 * 3 + 1] * in2[1 * 3 + 0] +
+				in1[2 * 3 + 2] * in2[2 * 3 + 0];
+	out[2 * 3 + 1] = in1[2 * 3 + 0] * in2[0 * 3 + 1] + in1[2 * 3 + 1] * in2[1 * 3 + 1] +
+				in1[2 * 3 + 2] * in2[2 * 3 + 1];
+	out[2 * 3 + 2] = in1[2 * 3 + 0] * in2[0 * 3 + 2] + in1[2 * 3 + 1] * in2[1 * 3 + 2] +
+				in1[2 * 3 + 2] * in2[2 * 3 + 2];
+    }
+
+    public static Vector3f perpendicularVector(Vector3f src, Vector3f dest) {
+        if(dest == null) dest = new Vector3f();
+        /*
+	** find the smallest magnitude axially aligned vector
+	*/
+
+        float min = 1f;
+        Vector3f temp = new Vector3f();
+        int pos = 0;
+        if(Math.abs(src.x) < min) {
+            pos = 0; min = Math.abs(src.x);
+        }
+        if(Math.abs(src.y) < min) {
+            pos = 1; min = Math.abs(src.y);
+        }
+        if(Math.abs(src.z) < min) {
+            pos = 2; min = Math.abs(src.z);
+        }
+        VectorSet(temp, pos, 1);
+        /*
+	** project the point onto the plane defined by src
+	*/
+        
+        projectPointOnPlane(dest, temp, src);
+
+        Normalize(dest);
+        return dest;
+    }
+
+    public static void projectPointOnPlane(Vector3f dst, Vector3f p, Vector3f normal) {
+        float inv_denom = Vector3f.dot(normal, normal);
+        inv_denom = 1.0f / inv_denom;
+        float d = Vector3f.dot(normal, p) * inv_denom;
+
+        dst.x = p.x - d * normal.x * inv_denom;
+        dst.y = p.y - d * normal.y * inv_denom;
+        dst.z = p.z - d * normal.z * inv_denom;
+    }
+
     public static Vector2f CreateVector(float angle, float lenght, Vector2f dest) {
         if(dest == null)
             dest = new Vector2f();
@@ -419,6 +551,28 @@ public class Helper {
         matnorm.m12 = dest.m20 * dest.m01 - dest.m00 * dest.m21;
         matnorm.m22 = dest.m00 * dest.m11 - dest.m10 * dest.m01;
         return matnorm;
+    }
+
+    public static float VectorDistance(Vector3f cameraOrigin, Vector3f entityOrigin) {
+        // Delta
+        float x = cameraOrigin.x - entityOrigin.x;
+        float y = cameraOrigin.y - entityOrigin.y;
+        float z = cameraOrigin.z - entityOrigin.z;
+        // Lenght of delta
+        return (float) Math.sqrt(x * x + y * y + z * z);
+    }
+
+    public static void multMatrix(float[] a, float[] b, FloatBuffer d) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                d.put(i * 4 + j,
+                        a[i * 4 + 0] * b[0 * 4 + j]
+                        + a[i * 4 + 1] * b[1 * 4 + j]
+                        + a[i * 4 + 2] * b[2 * 4 + j]
+                        + a[i * 4 + 3] * b[3 * 4 + j]
+                        );
+            }
+        }
     }
 
 

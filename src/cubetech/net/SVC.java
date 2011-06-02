@@ -20,4 +20,5 @@ public class SVC {
     public static final int OPS_EOF = 6;
     public static final int OPS_BASELINE = 7;
     public static final int OPS_DOWNLOAD = 8;
+    public static final int OPS_CUBEEXT = 9;
 }
