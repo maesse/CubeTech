@@ -28,10 +28,12 @@ public class Render {
         for (int i= 0; i < MAX_RENDER_ENTITIES; i++) {
             entities[i] = new RenderEntity();
         }
-        softSprite = Ref.glRef.getShader("softsprite");
-        softSprite.mapTextureUniform("tex", 0);
-        softSprite.mapTextureUniform("depth", 1);
-        softSprite.validate();
+        if(Ref.glRef.srgbBuffer != null) {
+            softSprite = Ref.glRef.getShader("softsprite");
+            softSprite.mapTextureUniform("tex", 0);
+            softSprite.mapTextureUniform("depth", 1);
+            softSprite.validate();
+        }
     }
 
     public void renderAll() {
@@ -86,16 +88,22 @@ public class Render {
     }
 
     private void AddQuadStampExt(Vector3f origin, Vector3f left, Vector3f up, Vector4f color, float s1, float t1, float s2, float t2) {
-        // use soft particle shader
-        Ref.glRef.PushShader(softSprite);
-        softSprite.setUniform("res", Ref.glRef.GetResolution());
+        // soft particles disabled when no fbo or r_softparticles isn't true
+        boolean useSoftSprites = Ref.glRef.srgbBuffer != null && Ref.glRef.r_softparticles.isTrue();
+        CubeTexture tex = null; // depth
+        
+        if(useSoftSprites) {
+            // use soft particle shader
+            Ref.glRef.PushShader(softSprite);
+            softSprite.setUniform("res", Ref.glRef.GetResolution());
 
-        // Bind depth from FBO
-        int depth = Ref.glRef.srgbBuffer.getDepthTextureId();
-        CubeTexture tex = new CubeTexture(Ref.glRef.srgbBuffer.getTarget(), depth, null);
-        tex.textureSlot = 1;
-        tex.loaded = true;
-        tex.Bind();
+            // Bind depth from FBO
+            int depth = Ref.glRef.srgbBuffer.getDepthTextureId();
+            tex = new CubeTexture(Ref.glRef.srgbBuffer.getTarget(), depth, null);
+            tex.textureSlot = 1;
+            tex.loaded = true;
+            tex.Bind();
+        }
 
         GL11.glDepthMask(false); // dont write to depth
         GL11.glBegin(GL11.GL_QUADS);
@@ -128,9 +136,13 @@ public class Render {
         GL11.glEnd();
         GL11.glDepthMask(true);
 
-        tex.Unbind();
+        
 
-        Ref.glRef.PopShader();
+        if(useSoftSprites) {
+            tex.Unbind();
+            Ref.glRef.PopShader();
+        }
+        
     }
 
     public void reset() {

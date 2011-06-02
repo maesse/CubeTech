@@ -63,6 +63,7 @@ public class GLRef {
     private CVar r_refreshrate; // A hint for selecting modes
     private CVar r_toggleRes;
     public CVar r_fill;
+    public CVar r_softparticles;
     private Vector2f resolution;
 
     public Shader shader = null; // current shader
@@ -224,13 +225,14 @@ public class GLRef {
         
 
 //        glDisable(GL_CULL_FACE);
-//        try {
-//            srgbBuffer = new FrameBuffer(true, true, (int)GetResolution().x, (int)GetResolution().y);
-//        } catch(Exception ex) {
+        try {
+            srgbBuffer = new FrameBuffer(true, true, (int)GetResolution().x, (int)GetResolution().y);
+//             srgbBuffer.Bind();
+        } catch(Exception ex) {
 //            // Aww man..
             Ref.ResMan.autoSrgb  = false; // don't set SRGB flag on textures
-//        }
-//        srgbBuffer.Bind();
+        }
+//       
         //InitFBO();
         Ref.render = new Render();
 
@@ -290,6 +292,7 @@ public class GLRef {
         r_refreshrate = Ref.cvars.Get("r_refreshrate", "60", EnumSet.of(CVarFlags.ARCHIVE));
         r_toggleRes = Ref.cvars.Get("r_toggleRes", "0", EnumSet.of(CVarFlags.NONE));
         r_fill = Ref.cvars.Get("r_fill", "1", EnumSet.of(CVarFlags.ARCHIVE));
+        r_softparticles = Ref.cvars.Get("r_softparticles", "1", EnumSet.of(CVarFlags.ARCHIVE));
         
         Ref.commands.AddCommand("listmodes", Cmd_listmodes);
         
