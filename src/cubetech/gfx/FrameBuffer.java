@@ -297,7 +297,8 @@ public class FrameBuffer {
         glDisable(GL_DEPTH_TEST);
         glEnable(TexRect);
         glBindTexture(TexRect, fboColorId);
-        glEnable(EXTFramebufferSRGB.GL_FRAMEBUFFER_SRGB_EXT);
+        glDisable(EXTFramebufferSRGB.GL_FRAMEBUFFER_SRGB_EXT);
+//        
         //Ref.ResMan.getWhiteTexture().Bind();
 
         Vector2f res = Ref.glRef.GetResolution();
@@ -356,7 +357,8 @@ public class FrameBuffer {
          glEnd();
 
         glPopAttrib();
-        glDisable(EXTFramebufferSRGB.GL_FRAMEBUFFER_SRGB_EXT);
+//
+        glEnable(EXTFramebufferSRGB.GL_FRAMEBUFFER_SRGB_EXT);
         glBindTexture(TexRect, 0);
         glDisable(TexRect);
         glEnable(GL_TEXTURE_2D);

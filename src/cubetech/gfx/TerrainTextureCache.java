@@ -16,7 +16,7 @@ import org.lwjgl.util.vector.Vector4f;
 public class TerrainTextureCache {
     private static final float imgSize = 256;
     private static final int count = 16;
-    private static final float textureEpsilon = 0.0003f;
+    private static final float textureEpsilon = 0.00015f;
     
     private static Vector4f[] offsets = new Vector4f[count*count];
     private static boolean initialized = false;

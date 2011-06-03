@@ -664,8 +664,11 @@ public class ChunkRender {
         ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS, 2, GL11.GL_FLOAT, false, stride, 4*4);
         CubeTexture tex = Ref.ResMan.LoadTexture("data/terrain.png");
         tex.setFiltering(false, GL11.GL_NEAREST);
-        tex.setAnisotropic(4);
+//        tex.setAnisotropic(0);
         tex.setWrap(GL12.GL_CLAMP_TO_EDGE);
+        GL11.glTexParameteri(tex.getTarget(), GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST_MIPMAP_LINEAR);
+        GL11.glTexParameteri(tex.getTarget(), GL12.GL_TEXTURE_MIN_LOD, 0);
+        GL11.glTexParameteri(tex.getTarget(), GL12.GL_TEXTURE_MAX_LOD, 3);
     }
 
     public static void postVbo() {

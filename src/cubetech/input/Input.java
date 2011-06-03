@@ -113,6 +113,7 @@ public class Input {
         binds.BindKey("4", "weapon 4");
         binds.BindKey("5", "weapon 5");
         binds.BindKey("mouse1", "+button0");
+        binds.BindKey("mouse2", "+button1");
         
     }
 

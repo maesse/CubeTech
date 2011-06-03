@@ -106,4 +106,8 @@ public class CubeTexture {
         mat.setTexture(this);
         return mat;
     }
+
+    public int getTarget() {
+        return Target;
+    }
 }

@@ -317,7 +317,8 @@ public final class ResourceManager {
     {
         int dstFormat = autoSrgb?EXTTextureSRGB.GL_SRGB_ALPHA_EXT:GL_RGBA;
         if(res.target == GL_TEXTURE_CUBE_MAP) dstFormat = GL_RGB; // don't need alpha for cubemaps
-        CubeTexture tex = getTexture(res.Name, res.target, dstFormat, GL_LINEAR, GL_LINEAR, (CubeTexture)res.Data);
+        int minFilter = res.target == GL_TEXTURE_CUBE_MAP?GL_LINEAR:GL_LINEAR_MIPMAP_LINEAR;
+        CubeTexture tex = getTexture(res.Name, res.target, dstFormat, minFilter, GL_LINEAR, (CubeTexture)res.Data);
         res.Data = tex;
         return tex;
     }
@@ -358,6 +359,9 @@ public final class ResourceManager {
             glTexParameteri(target, GL_TEXTURE_MAG_FILTER, magFilter);
             texture.minfilter = minFilter;
             texture.magfilter = magFilter;
+            if(minFilter == GL_LINEAR_MIPMAP_LINEAR || minFilter == GL_LINEAR_MIPMAP_NEAREST) {
+                glTexParameteri(target, GL_GENERATE_MIPMAP, GL_TRUE);
+            }
         }
 
         

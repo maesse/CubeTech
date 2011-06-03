@@ -1,28 +1,10 @@
 package cubetech.collision;
 
-import cubetech.CGame.ViewParams;
-import cubetech.common.Common;
-import cubetech.gfx.CubeTexture;
-import cubetech.gfx.CubeType;
-import cubetech.gfx.FrameBuffer;
-import cubetech.gfx.GLRef;
-import cubetech.gfx.Shader;
-import cubetech.gfx.Sprite;
-import cubetech.gfx.SpriteManager.Type;
-import cubetech.gfx.TerrainTextureCache;
-import cubetech.iqm.IQMLoader;
-import cubetech.iqm.IQMModel;
-import cubetech.misc.Plane;
 import cubetech.misc.Ref;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Queue;
-import java.util.Random;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Vector3f;
-import org.lwjgl.util.vector.Vector4f;
 
 /**
  *
@@ -31,7 +13,7 @@ import org.lwjgl.util.vector.Vector4f;
 public class CubeMap {
     public static final int MIN_Z = -2; // how many chunks to allow to grow downward
     public static final int MAX_Z = 6;
-    public static final int DEFAULT_GROW_DIST = 4;
+    public static final int DEFAULT_GROW_DIST = 12;
 
     // Chunks
     public HashMap<Long, CubeChunk> chunks = new HashMap<Long, CubeChunk>();
