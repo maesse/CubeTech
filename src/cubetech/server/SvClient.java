@@ -902,7 +902,8 @@ public class SvClient {
 
             downloadSize = download.GetBuffer().limit();
 
-            Common.LogDebug("[Server] Starting file-upload: " + downloadName);
+            if(!downloadName.startsWith("@")) Common.LogDebug("[Server] Starting file-upload: " + downloadName);
+            
             downloadCurrentBlock = downloadCount = downloadXmitBlock = downloadClientBlock = 0;
             downloadEOF = false;
         }
@@ -1014,7 +1015,7 @@ public class SvClient {
 
             // Find out if we are done.  A zero-length block indicates EOF
             if(downloadBlockSize[downloadClientBlock % MAX_DOWNLOAD_WINDOW] == 0) {
-                Common.LogDebug("File " + downloadName + " complete.");
+//                Common.LogDebug("File " + downloadName + " complete.");
                 CloseDownload();
                 return;
             }

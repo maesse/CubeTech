@@ -685,7 +685,7 @@ public class Move {
         if(spd < 1) {
             pm.ps.velocity.set(0,0,0);
         } else {
-            float fric = friction * 1.5f;
+            float fric = friction * 0.5f;
             float control = spd < stopspeed ? stopspeed : spd;
             float drop = control * fric * frametime;
 
@@ -715,13 +715,13 @@ public class Move {
 
         Helper.Normalize(wishvel);
 
-        Accelerate(pm, wishvel, speed, acceleration);
+        Accelerate(pm, wishvel, speed*4, acceleration);
 
         Vector3f delta = new Vector3f(pm.ps.velocity);
         delta.scale(frametime);
         Vector3f.add(delta, pm.ps.origin, delta);
-        if(pm.Trace(pm.ps.origin, delta, new Vector3f(-5,-5,-5), new Vector3f(5,5,5), 0,0).hit)
-            return;
+//        if(pm.Trace(pm.ps.origin, delta, new Vector3f(-5,-5,-5), new Vector3f(5,5,5), 0,0).hit)
+//            return;
 
         Helper.VectorMA(pm.ps.origin, frametime, pm.ps.velocity, pm.ps.origin);
     }

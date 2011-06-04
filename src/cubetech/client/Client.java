@@ -1501,7 +1501,7 @@ public class Client {
             }
             String filename = buf.ReadString();
             if(filename.equals("@cube")) {
-                Common.Log("Recieving cubechunk");
+//                Common.LogDebug("Recieving cubechunk");
                 clc.downloadBlock = 0;
                 clc.downloadCount = 0;
                 clc.downloadTime = realtime;

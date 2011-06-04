@@ -82,6 +82,9 @@ public class Server implements ITrace {
 
     public HashMap<String, ICommand> ucmds = new HashMap<String, ICommand>();
 
+    public Server() {
+        Init();
+    }
     
     public PlayerState GameClientNum(int id) {
         return sv.gameClients[id].ps;

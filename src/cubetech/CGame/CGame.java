@@ -516,6 +516,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Common.Log("--- CGAME SHUTDOWN ---");
         Ref.Input.RemoveKeyEventListener(this, Input.KEYCATCH_CGAME);
         Ref.Input.RemoveMouseEventListener(this, Input.KEYCATCH_CGAME);
+        map.dispose();
+        map = null;
     }
 
 

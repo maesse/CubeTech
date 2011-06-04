@@ -52,6 +52,8 @@ public class CubeChunk {
     public HashMap<Long, CubeChunk> chunks;
     public ChunkRender render;
 
+    public int nCubes = 0;
+
     public int version = 0;
     int[] versionData = new int[32]; // remember the last 32 changes
 
@@ -80,6 +82,8 @@ public class CubeChunk {
 
     public void setCubeType(int x, int y, int z, byte type, boolean notify) {
         int index = getIndex(x, y, z);
+        if(blockType[index] == 0 && type != 0) nCubes++;
+        else if(blockType[index] != 0 && type == 0) nCubes--;
         blockType[index] = type;
 
         if(render != null) {
@@ -232,7 +236,7 @@ public class CubeChunk {
         int compressionLevel = 4; // this seems like a good tradeoff
         byte[] dest = new byte[size<60?60:size];
         int wrote = compressData(data, dest, compressionLevel);
-        Common.LogDebug("Wrote %db cubedata to client (p:%d,%d,%d)", wrote,p[0],p[1],p[2]);
+//        Common.LogDebug("Wrote %db cubedata to client (p:%d,%d,%d)", wrote,p[0],p[1],p[2]);
         
         buf = ByteBuffer.wrap(dest, 0, wrote);
         return buf;

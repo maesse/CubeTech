@@ -7,6 +7,7 @@ import cubetech.misc.ExitException;
 import cubetech.misc.FrameException;
 import cubetech.misc.Ref;
 import cubetech.net.Packet;
+import cubetech.server.Server;
 import java.applet.Applet;
 import java.awt.Canvas;
 import java.io.File;
@@ -101,7 +102,8 @@ public class Common {
         useSysTimer = com_timer.iValue == 1;
         errorMessage.modified = false;
         // Init client and server
-        Ref.server.Init();
+        Ref.server = new Server();
+//        Ref.server.Init();
         Ref.client.Init();
     }
 
@@ -219,13 +221,15 @@ public class Common {
             msec = ModifyMsec(msec);
             
 
-        
             // Server Frame
-            Ref.server.Frame(msec);
+            if(Ref.server != null) {
+                Ref.server.Frame(msec);
+                // Allow server packets to arrive instantly if running server
+                EventLoop();
+                Ref.commands.Execute(); // Pump commands
+            }
 
-            // Allow server packets to arrive instantly if running server
-            EventLoop();
-            Ref.commands.Execute(); // Pump commands
+            
 
             // Client Frame
             Ref.client.Frame(msec);

@@ -749,8 +749,9 @@ public class GLRef {
     void destroyVBO(int vboId) {
         // Remove cached index & vertex buffers
         Integer bufferID = (vboId+1) << 1;
-        cachedBuffers.remove(bufferID++);
         cachedBuffers.remove(bufferID);
+        cachedBuffers.remove(bufferID++);
+        
 
         ARBVertexBufferObject.glDeleteBuffersARB(vboId);
         GLRef.checkError();

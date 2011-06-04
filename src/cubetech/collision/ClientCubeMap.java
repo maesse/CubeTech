@@ -13,9 +13,12 @@ import cubetech.misc.Ref;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.HashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.zip.DataFormatException;
+import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Vector3f;
@@ -41,16 +44,78 @@ public class ClientCubeMap {
     CubeTexture depthTex = null;
 
     Shader shader = null;
+    public ExecutorService exec = Executors.newSingleThreadExecutor();
+    public ByteBuffer[] buildBuffer = new ByteBuffer[4];
+    public int[] bufferRelations = new int[buildBuffer.length];
+    public int currentWrite = 0;
+    public int currentRead = 0;
+    private static final int SANE_QUEUE = 10;
+
+    public void dispose() {
+        exec.shutdownNow();
+        exec = null;
+        depthTex = null;
+        if(derp != null) derp.destroy();
+        for (CubeChunk cubeChunk : chunks.values()) {
+            cubeChunk.render.destroy();
+        }
+    }
+
+    //
+    // Intermediate buffer handling
+    //
+    public boolean bufferAvailable() {
+        return currentWrite - currentRead <= buildBuffer.length || currentWrite - currentRead > SANE_QUEUE;
+    }
+
+    public ByteBuffer grabBuffer() {
+        // Find oldest
+        int lowest = Integer.MAX_VALUE;
+        int lowestI = 0;
+        for (int i= 0; i < bufferRelations.length; i++) {
+            if(bufferRelations[i] < lowest) {
+                lowest = bufferRelations[i];
+                lowestI = i;
+            }
+        }
+
+        // Take it
+        currentWrite++;
+        bufferRelations[lowestI] = currentWrite;
+        return buildBuffer[lowestI];
+    }
+
+    public ByteBuffer getBuffer(int index) {
+        for (int i= 0; i < bufferRelations.length; i++) {
+            if(bufferRelations[i] == index) {
+                return buildBuffer[i];
+            }
+        }
+        return null;
+    }
+
+    public void releaseBuffer(int index) {
+        for (int i= 0; i < bufferRelations.length; i++) {
+            if(bufferRelations[i] == index) {
+                bufferRelations[i] = 0; // make it lowest
+                break;
+            }
+        }
+        if(currentRead < index) currentRead = index;
+    }
 
     public ClientCubeMap() {
+        for (int i= 0; i < buildBuffer.length; i++) {
+            buildBuffer[i] = BufferUtils.createByteBuffer(CubeChunk.PLANE_SIZE * CubeChunk.CHUNK_SIZE /2);
+        }
         shader = Ref.glRef.getShader("WorldFog");
         shader.mapTextureUniform("tex", 0);
         shader.validate();
         buildLight();
-        derp = new FrameBuffer(false, true, 512, 512);
-        GLRef.checkError();
-        depthTex = new CubeTexture(GL11.GL_TEXTURE_2D, derp.getTextureId(), "depth");
-        GLRef.checkError();
+//        derp = new FrameBuffer(false, true, 512, 512);
+//        GLRef.checkError();
+//        depthTex = new CubeTexture(GL11.GL_TEXTURE_2D, derp.getTextureId(), "depth");
+//        GLRef.checkError();
     }
 
     private void buildLight() {
@@ -67,6 +132,11 @@ public class ClientCubeMap {
         sideColor[3] = new Vector3f(138, 140, 136);
         sideColor[4] = new Vector3f(138, 144, 152);
         sideColor[5] = new Vector3f(145, 140, 129);
+
+        float ambScale = 0.8f;
+        for (int i= 0; i < sideColor.length; i++) {
+            sideColor[i].scale(ambScale);
+        }
 
         // Add in sun
         Vector3f sunColor = new Vector3f(255, 255, 255);
@@ -89,6 +159,8 @@ public class ClientCubeMap {
             // ColorShiftLightingBytes from quake
             int max = r > g ? r : g;
             max = max > b ? max : b;
+
+            if(max < 255) max = 255;
 
             r = r * 255 / max;
             g = g * 255 / max;
@@ -124,8 +196,8 @@ public class ClientCubeMap {
 
                     chunk.render.Render();
 
-                    nSides += chunk.render.nSides;
-                    if(chunk.render.nSides > 0) nChunks++; // don't count empty chunks
+                    nSides += chunk.render.sidesRendered;
+                    if(chunk.render.sidesRendered > 0) nChunks++; // don't count empty chunks
                 }
             }
         }
@@ -249,6 +321,7 @@ public class ClientCubeMap {
                 }
                 c.setCubeType(delta[0], delta[1], delta[2], type, true);
             }
+//            c.render.notifyChange();
         } else if(control == 2) {
             // Fill chunk
             for (int z= 0; z < CubeChunk.SIZE; z++) {
@@ -259,9 +332,11 @@ public class ClientCubeMap {
                     }
                 }
             }
+            // notify all neighbours
+            c.render.notifyChange();
         }
         
-        c.render.notifyChange();
+        
     }
 
 

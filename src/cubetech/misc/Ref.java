@@ -78,7 +78,7 @@ public class Ref {
 //        Ref.StateMan = new StateManager(); // old game system
         Ref.glRef = new GLRef(); // OpenGL/Window manager
         Ref.client = new Client(); // Client subsystem
-        Ref.server = new Server(); // Server subsystem
+//        Ref.server = new Server(); // Server subsystem
 
         Ref.Console = new Console(); // Set up the console
         Ref.ui = new UI();

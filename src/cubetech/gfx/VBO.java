@@ -77,4 +77,10 @@ public class VBO {
     public void unbind() {
         Ref.glRef.unbindVBO(target);
     }
+
+    public void destroy() {
+        if(TotalBytes == 0) return;
+        Ref.glRef.destroyVBO(vboId);
+        TotalBytes = 0;
+    }
 }
