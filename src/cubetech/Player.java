@@ -1,8 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech;
 
 import cubetech.collision.Collision;
@@ -15,9 +10,7 @@ import cubetech.gfx.TextManager.Align;
 import cubetech.misc.Ref;
 import cubetech.spatial.SpatialQuery;
 import org.lwjgl.util.vector.Vector2f;
-import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
-import org.openmali.FastMath;
 
 /**
  *

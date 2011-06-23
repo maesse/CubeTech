@@ -11,3 +11,7 @@ nbproject/private/
 *.DS_Store
 *.swp
 *.out
+dist/
+build/
+build/built-jar.properties
+built-jar.properties

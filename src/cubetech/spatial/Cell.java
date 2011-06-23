@@ -5,8 +5,6 @@
 
 package cubetech.spatial;
 
-import org.openmali.FastMath;
-import org.openmali.vecmath2.Vector2i;
 
 /**
  *
@@ -18,11 +16,11 @@ public class Cell {
     private int x, y;
 
     public static int GetMinCell(float value) {
-        return (int)FastMath.floor(value/CELLSIZEF) ;
+        return (int)Math.floor(value/CELLSIZEF) ;
     }
 
     public static int GetMaxCell(float value) {
-        return (int)FastMath.ceil(value/CELLSIZEF);
+        return (int)Math.ceil(value/CELLSIZEF);
     }
 
     public Cell(int x, int y) {

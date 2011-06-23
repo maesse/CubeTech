@@ -10,7 +10,7 @@ import cubetech.entities.Entity;
 import cubetech.misc.Ref;
 import cubetech.spatial.SpatialQuery;
 import org.lwjgl.util.vector.Vector2f;
-import org.openmali.FastMath;
+
 
 /**
  *
@@ -217,7 +217,7 @@ public class Collision {
 
             // Hit world
             if(res.Hit) {
-                float lenght = FastMath.sqrt(res.HitAxis.x * res.HitAxis.x + res.HitAxis.y * res.HitAxis.y);
+                float lenght = (float)Math.sqrt(res.HitAxis.x * res.HitAxis.x + res.HitAxis.y * res.HitAxis.y);
                 if(lenght != 0f) {
                     res.HitAxis.x /= lenght;
                     res.HitAxis.y /= lenght;

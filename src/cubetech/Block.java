@@ -7,7 +7,6 @@ import cubetech.misc.Ref;
 import cubetech.spatial.SpatialHandle;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector4f;
-import org.openmali.FastMath;
 
 /**
  * Static block
@@ -126,10 +125,10 @@ public class Block {
     // Calculate non-normalized direction vectors
     public void SetAngle(float angle) {
         Angle = angle;
-        Axis[0].x = FastMath.cos(angle);
-        Axis[0].y = FastMath.sin(angle);
-        Axis[1].x = FastMath.cos(angle+FastMath.PI_HALF);
-        Axis[1].y = FastMath.sin(angle+FastMath.PI_HALF);
+        Axis[0].x = (float)Math.cos(angle);
+        Axis[0].y = (float)Math.sin(angle);
+        Axis[1].x = (float)Math.cos(angle+Math.PI/2f);
+        Axis[1].y = (float)Math.sin(angle+Math.PI/2f);
         UpdateSpatial();
     }
 
