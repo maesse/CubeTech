@@ -29,8 +29,6 @@ public class Ref {
     public static Console Console;
     public static StateManager StateMan;
     public static Random rnd;
-    public static Common common;
-    public static Net net;
     public static Collision collision;
     public static World world;
     public static SoundManager soundMan;

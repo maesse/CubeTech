@@ -7,8 +7,6 @@ package cubetech;
 
 import cubetech.misc.Console;
 import cubetech.misc.SoundManager;
-import cubetech.misc.Common;
-import cubetech.misc.Net;
 import cubetech.collision.Collision;
 import cubetech.state.HagserState;
 import java.util.Random;
@@ -64,8 +62,6 @@ public class GameLoop {
             System.exit(-1);
         }
         Ref.StateMan = new StateManager();
-        Ref.net = new Net();
-        Ref.common = new Common();
         Ref.collision = new Collision();
         Ref.soundMan = new SoundManager();
         Ref.soundMan.initialize(12);
@@ -80,7 +76,6 @@ public class GameLoop {
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         mode = Display.getDisplayMode();
-        Ref.common.Init();
     }
     
     public void RunFrame() throws Exception {

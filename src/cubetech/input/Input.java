@@ -1,11 +1,5 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.input;
 
-import cubetech.client.Client;
 import cubetech.misc.Ref;
 import javax.swing.event.EventListenerList;
 import org.lwjgl.LWJGLException;
@@ -204,10 +198,4 @@ public class Input {
         
     }
 
-    public void SendCommand() {
-        if(Ref.common.client.state != Client.State.CONNECTED)
-            return;
-
-        // Write packet
-    }
 }

@@ -1,8 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.state;
 
 import cubetech.World;
@@ -31,7 +26,6 @@ public class HagserState implements IGameState {
 
     public void RunFrame(int msec) {
         try {
-            Ref.common.Frame();
             world.Render(msec);
             if (Ref.Input.GetKey(Keyboard.KEY_ESCAPE).Changed && Ref.Input.GetKey(Keyboard.KEY_ESCAPE).Pressed) {
                 Ref.StateMan.SetState("menu");
