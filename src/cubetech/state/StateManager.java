@@ -6,6 +6,7 @@
 package cubetech.state;
 
 
+import cubetech.game.HagserState;
 import java.util.ArrayList;
 
 /**

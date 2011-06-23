@@ -5,6 +5,7 @@ import javax.swing.event.EventListenerList;
 import org.lwjgl.LWJGLException;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
+import org.lwjgl.opengl.Display;
 import org.lwjgl.util.vector.Vector2f;
 
 
@@ -83,6 +84,7 @@ public class Input {
         mouseDelta = new Vector2f();
     }
     public void Update() {
+        Display.processMessages();
         MouseUpdate();
         KeyboardUpdate();
         UpdateUserInput();
@@ -104,6 +106,7 @@ public class Input {
 
     void MouseUpdate() {
         // Update mouse
+        
        //Mouse.poll();
 
         if(playerInput.Mouse1Diff)

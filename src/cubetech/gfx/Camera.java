@@ -1,6 +1,6 @@
-package cubetech;
+package cubetech.gfx;
 
-import cubetech.gfx.Graphics;
+
 import org.lwjgl.util.vector.Vector2f;
 import static org.lwjgl.opengl.GL11.*;
 
@@ -9,8 +9,9 @@ import static org.lwjgl.opengl.GL11.*;
  * @author mads
  */
 public class Camera {
-    private Vector2f Position;
-    private Vector2f VisibleSize;
+    private Vector2f Position = new Vector2f();
+    private Vector2f VisibleSize = new Vector2f();
+    public boolean centered; // Is the position given as a center or corner?
     
     public Camera(Vector2f position, float width) {
         this.Position = position;
@@ -21,8 +22,8 @@ public class Camera {
     }
 
     public Camera(Vector2f position, float width, float height) {
-        this.Position = position;
-        this.VisibleSize = new Vector2f(width, height);
+        this.Position.set(position);
+        this.VisibleSize.set(width, height);
     }
 
     /**
@@ -38,14 +39,19 @@ public class Camera {
      * @param position
      */
     public void setPosition(Vector2f position) {
-        this.Position = position;
+        this.Position.set(position);
     }
 
     /**
      * Applies the currently set position in OpenGL
      */
     public void applyCameraPosition() {
-        positionCameraCorner(VisibleSize.x, VisibleSize.y, Position);
+        if(centered) {
+            positionCameraCentered(VisibleSize.x, VisibleSize.y, Position);
+        } else {
+            positionCameraCorner(VisibleSize.x, VisibleSize.y, Position);
+        }
+        
     }
 
     // Method for setting up the GAME camera position and viewsize

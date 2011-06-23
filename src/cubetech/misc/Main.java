@@ -23,10 +23,10 @@ public class Main {
         }
         
         
-        GameLoop loop = new GameLoop();
+        
         try {
             while(true) {
-                loop.RunFrame();
+                Ref.loop.RunFrame();
             }
         } catch (Exception ex) {
             ex.printStackTrace();

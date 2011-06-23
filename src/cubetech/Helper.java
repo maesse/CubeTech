@@ -165,6 +165,7 @@ public class Helper {
 
         return -1;
     }
+    
 
     public static float Normalize(Vector2f v) {
         double len = Math.sqrt(v.x * v.x + v.y * v.y);

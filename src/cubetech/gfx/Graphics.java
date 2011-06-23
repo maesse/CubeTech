@@ -18,6 +18,7 @@ public class Graphics {
     private static DisplayMode desktopMode;
     private static DisplayMode currentMode = null;
     private static Canvas appletCanvas = null;
+    private static Camera gameCamera = new Camera(new Vector2f(), 80);
 
     public static void clearScreen() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -43,6 +44,10 @@ public class Graphics {
 
         // Create and show
         Display.create();
+
+        try {
+            Display.setVSyncEnabled(true);
+        } catch (Exception ex) {}
 
         glEnable(GL_TEXTURE_2D);
         glEnable(GL_BLEND);
@@ -108,6 +113,21 @@ public class Graphics {
             System.out.println("Invalid displaymode: " + width + ", " + height);
             System.out.println("LWJGL error: " + ex);
         }
+    }
+
+    // For controlling the game camera
+    public static Camera getCamera() {
+        return gameCamera;
+    }
+
+    /**
+     * Should only be used if you want to override the camera, else
+     * just modify the regular camera
+     * @param cam
+     */
+    public static void setCamera(Camera cam) {
+        if(cam == null) throw new NullPointerException("Can't call setCamera with a null value");
+        gameCamera = cam;
     }
 
     public static float getWidth() {

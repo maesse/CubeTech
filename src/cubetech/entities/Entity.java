@@ -13,12 +13,12 @@ import org.lwjgl.util.vector.Vector2f;
  * @author mads
  */
 public interface Entity {
-    public Vector2f GetPosition();
-    public Vector2f GetSize();
-    public void Update(int msec);
-    public void Render();
-    public void Collide(Entity other);
-    public void Hurt(int damage);
-    public int GetType();
-    public boolean ToRemove();
+    public Vector2f getPosition();
+    public Vector2f getSize();
+    public void update(int msec);
+    public void render();
+    public void touches(Entity other); // called when the entity touches another entity
+    public void hurt(int damage); // apply damage to an entity
+    public Entities GetType();
+    public boolean toRemove();
 }
