@@ -6,6 +6,7 @@
 package cubetech.state;
 
 import cubetech.gfx.CubeTexture;
+import cubetech.gfx.Graphics;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
 import cubetech.gfx.TextManager.Align;
@@ -42,24 +43,27 @@ public class IntroState implements IGameState {
         int prLine = (int)((float)particles.length/15f);
         
         // Bottom
-        Vector2f fPos = new Vector2f(0.2f,0.2f);
+        Vector2f fPos = new Vector2f(0.2f*Graphics.getWidth(),0.2f*Graphics.getHeight());
         float xprParticle = 0.5f/(float)(prLine*2);
+        xprParticle *= Graphics.getWidth();
         for (int i= 0; i < prLine*2; i++) {
             Vector2f pos = new Vector2f(Ref.rnd.nextFloat(), Ref.rnd.nextFloat());
             Vector2f finalPos = new Vector2f(fPos.x+xprParticle*(float)i, fPos.y);
             particles[i] = new CubeParticle(pos, finalPos);
         }
         // Left
-        fPos = new Vector2f(0.2f,0.2f);
+        fPos = new Vector2f(0.2f*Graphics.getWidth(),0.2f*Graphics.getHeight());
         xprParticle = 0.5f/(float)(prLine*2);
+        xprParticle *= Graphics.getWidth();
         for (int i= 0; i < prLine*2; i++) {
             Vector2f pos = new Vector2f(Ref.rnd.nextFloat(), Ref.rnd.nextFloat());
             Vector2f finalPos = new Vector2f(fPos.x, fPos.y+xprParticle*(float)i);
             particles[prLine*2+i] = new CubeParticle(pos, finalPos);
         }
         // Right
-        fPos = new Vector2f(0.7f,0.2f);
+        fPos = new Vector2f(0.7f*Graphics.getWidth(),0.2f*Graphics.getHeight());
         xprParticle = 0.5f/(float)(prLine*2);
+        xprParticle *= Graphics.getWidth();
         for (int i= 0; i < prLine*2; i++) {
             Vector2f pos = new Vector2f(Ref.rnd.nextFloat(), Ref.rnd.nextFloat());
             Vector2f finalPos = new Vector2f(fPos.x, fPos.y+xprParticle*(float)i);
@@ -67,8 +71,9 @@ public class IntroState implements IGameState {
         }
 
         // Top
-        fPos = new Vector2f(0.2f,0.7f);
+        fPos = new Vector2f(0.2f*Graphics.getWidth(),0.7f*Graphics.getHeight());
         xprParticle = 0.5f/(float)(prLine*2);
+        xprParticle *= Graphics.getWidth();
         for (int i= 0; i < prLine*2; i++) {
             Vector2f pos = new Vector2f(Ref.rnd.nextFloat(), Ref.rnd.nextFloat());
             Vector2f finalPos = new Vector2f(fPos.x+xprParticle*(float)i, fPos.y);
@@ -76,47 +81,52 @@ public class IntroState implements IGameState {
         }
 
         // Top 2
-        fPos = new Vector2f(0.35f,0.85f);
+        fPos = new Vector2f(0.35f*Graphics.getWidth(),0.85f*Graphics.getHeight());
         xprParticle = 0.5f/(float)(prLine*2);
+        xprParticle *= Graphics.getWidth();
         for (int i= 0; i < prLine*2; i++) {
             Vector2f pos = new Vector2f(Ref.rnd.nextFloat(), Ref.rnd.nextFloat());
             Vector2f finalPos = new Vector2f(fPos.x+xprParticle*(float)i, fPos.y);
             particles[prLine*8+i] = new CubeParticle(pos, finalPos);
         }
         // Right 2
-        fPos = new Vector2f(0.85f,0.35f);
+        fPos = new Vector2f(0.85f*Graphics.getWidth(),0.35f*Graphics.getHeight());
         xprParticle = 0.5f/(float)(prLine*2);
+        xprParticle *= Graphics.getWidth();
         for (int i= 0; i < prLine*2; i++) {
             Vector2f pos = new Vector2f(Ref.rnd.nextFloat(), Ref.rnd.nextFloat());
             Vector2f finalPos = new Vector2f(fPos.x, fPos.y+xprParticle*(float)i);
             particles[prLine*10+i] = new CubeParticle(pos, finalPos);
         }
         // Slash1
-        fPos = new Vector2f(0.2f,0.7f);
+        fPos = new Vector2f(0.2f*Graphics.getWidth(),0.7f*Graphics.getHeight());
         xprParticle = 0.5f/(float)(prLine*2);
+        xprParticle *= Graphics.getWidth();
         for (int i= 0; i < prLine/2+1; i++) {
             Vector2f pos = new Vector2f(Ref.rnd.nextFloat(), Ref.rnd.nextFloat());
             Vector2f finalPos = new Vector2f(fPos.x+xprParticle*(float)i, fPos.y+xprParticle*(float)i);
             particles[prLine*12+i] = new CubeParticle(pos, finalPos);
         }
         // Slash2
-        fPos = new Vector2f(0.7f,0.7f);
+        fPos = new Vector2f(0.7f*Graphics.getWidth(),0.7f*Graphics.getHeight());
         xprParticle = 0.5f/(float)(prLine*2);
+        xprParticle *= Graphics.getWidth();
         for (int i= 0; i < prLine/2+2; i++) {
             Vector2f pos = new Vector2f(Ref.rnd.nextFloat(), Ref.rnd.nextFloat());
             Vector2f finalPos = new Vector2f(fPos.x+xprParticle*(float)i, fPos.y+xprParticle*(float)i);
             particles[prLine*12+i+(prLine/2)+1] = new CubeParticle(pos, finalPos);
         }
         // Slash3
-        fPos = new Vector2f(0.7f,0.2f);
+        fPos = new Vector2f(0.7f*Graphics.getWidth(),0.2f*Graphics.getHeight());
         xprParticle = 0.5f/(float)(prLine*2);
+        xprParticle *= Graphics.getWidth();
         for (int i= 0; i < prLine/2+1; i++) {
             Vector2f pos = new Vector2f(Ref.rnd.nextFloat(), Ref.rnd.nextFloat());
             Vector2f finalPos = new Vector2f(fPos.x+xprParticle*(float)i, fPos.y+xprParticle*(float)i);
             particles[prLine*13+i+3] = new CubeParticle(pos, finalPos);
         }
 
-        tex = (CubeTexture)(Ref.ResMan.LoadResource("data/particle.png")).Data;
+        tex = Ref.ResMan.LoadTexture("data/particle.png");
     }
 
     public void Exit() {
@@ -160,8 +170,8 @@ public class IntroState implements IGameState {
 
 
             Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-            spr.Set(pos, 0.02f,tex);
-            spr.SetColor(color);
+            spr.setFromCenter(pos, 15f,tex);
+            spr.setColor(color);
             //spr.Color = color;
         }
 
@@ -173,14 +183,14 @@ public class IntroState implements IGameState {
         // Show text after 1500 msec
         if(process > 1500) {
             if(process > 2000) { // Fully faded in after 2000 msec
-                if(actual > 4500)
-                    Ref.textMan.AddText(new Vector2f(0.5f, 0.1f), "CubeTech.", Align.CENTER, new Vector4f(1,1,1,(5000f-actual)/500f));
-                else
-                    Ref.textMan.AddText(new Vector2f(0.5f, 0.1f), "CubeTech.", Align.CENTER);
+//                if(actual > 4500)
+//                    Ref.textMan.AddText(new Vector2f(0.5f, 0.1f), "CubeTech.", Align.CENTER,  new Vector4f(1,1,1,(5000f-actual)/500f));
+//                else
+                    Ref.textMan.AddText(new Vector2f(0.5f*Graphics.getWidth(), 0.1f*Graphics.getHeight()), "CubeTech.", Align.CENTER, SpriteManager.Type.HUD);
             
             }
-            else // Handle fading from 1500-2000
-                Ref.textMan.AddText(new Vector2f(0.5f, 0.1f), "CubeTech.", Align.CENTER, new Vector4f(1, 1,1,1f-(float)(2000-process)/500f));
+//            else // Handle fading from 1500-2000
+//                Ref.textMan.AddText(new Vector2f(0.5f, 0.1f), "CubeTech.", Align.CENTER, new Vector4f(1, 1,1,1f-(float)(2000-process)/500f));
         }
     }
 

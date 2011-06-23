@@ -12,17 +12,22 @@ import java.util.ArrayList;
  *
  * @author mads
  */
-public class StateManager {
+public final class StateManager {
     ArrayList<IGameState> gamestates = new ArrayList<IGameState>();
     IGameState currentState = null;
 
-    public StateManager() {
-        IGameState state = new IntroState();
+    public StateManager() throws Exception {
+        // register states we're going to use
+        registerState(new IntroState());
+        registerState(new MenuState());
+        registerState(new HagserState());
+
+        // Set initial state
+        SetState("intro");
+    }
+
+    private void registerState(IGameState state) {
         gamestates.add(state);
-        SetState(state);
-        state = new MenuState();
-        gamestates.add(state);
-        gamestates.add(new HagserState());
     }
 
     // Runs a frame of the current state

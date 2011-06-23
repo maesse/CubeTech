@@ -6,6 +6,7 @@
 package cubetech.misc;
 
 import cubetech.GameLoop;
+import cubetech.gfx.Graphics;
 import cubetech.misc.Ref;
 import java.awt.Canvas;
 import java.util.logging.Level;
@@ -27,39 +28,19 @@ public class GameLoopApplet extends Thread {
     public void run() {
         System.err.println("GameLoopApplet Running");
         running = true;
-//        try {
-            
-            try {
-                // get modes
-                DisplayMode use = new DisplayMode(800, 600);
-
-                        Display.setDisplayMode(use);
-                        Display.setParent(displayParent);
-            Display.create();
-//            Display.
-            Display.setVSyncEnabled(true);
-//                DisplayMode[] dm = org.lwjgl.util.Display.getAvailableDisplayModes(800, 600, -1, -1, -1, -1, -1, -1);
-//
-//                org.lwjgl.util.Display.setDisplayMode(dm, new String[] { "width=" + 800, "height=" + 600, "freq=" + 60,
-//                                "bpp=" + org.lwjgl.opengl.Display.getDisplayMode().getBitsPerPixel()});
-                //return true;
-            } catch (Exception e) {
-                running = false;
-                System.err.println(e);
-                    e.printStackTrace();
-            }
-           // initGL();
-//        } catch(LWJGLException ex) {
-//            System.err.println(ex.toString());
-//            ex.printStackTrace();
-//        }
-        GameLoop.InitRef();
-        System.err.println("Starting GameLoop");
-        GameLoop();
+        
+        try {
+            Graphics.init(displayParent);
+            Ref.InitRef();
+            System.err.println("Starting GameLoop");
+            GameLoop();
+        } catch (Exception ex) {
+            Logger.getLogger(GameLoopApplet.class.getName()).log(Level.SEVERE, null, ex);
+            running = false;
+        }
     }
 
     public void GameLoop() {
-        Ref.loop.Init();
         try {
             while(running) {
                 Ref.loop.RunFrame();

@@ -8,6 +8,7 @@ package cubetech.misc;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
+import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
 import cubetech.input.KeyEventListener;
 import org.lwjgl.util.Rectangle;
@@ -28,7 +29,7 @@ public class Button {
     public Button(String Text, Vector2f pos, Vector2f size, CubeTexture tex) {
         this.Text = Text;
         this.Texture = tex;
-        this.Rect = new Rectangle((int)(pos.x*1000f), (int)(pos.y*1000f), (int)(size.x * 1000f), (int)(size.y*1000f));
+        this.Rect = new Rectangle((int)(pos.x), (int)(pos.y), (int)(size.x), (int)(size.y));
     }
 
     public void Render() {
@@ -38,24 +39,24 @@ public class Button {
 
             // Render actual bg with a bit of alpha -- this will brighten up the texture due to the white background
             Sprite  spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-            spr.Set(new Vector2f(Rect.getX()/1000f, Rect.getY()/1000f), new Vector2f(Rect.getWidth()/1000f, Rect.getHeight()/1000f), Texture, new Vector2f(0,0), new Vector2f(1,1));
+            spr.setFromCorner(new Vector2f(Rect.getX(), Rect.getY()), new Vector2f(Rect.getWidth(), Rect.getHeight()), Texture, new Vector2f(0,0), new Vector2f(1,1));
             
 
             // White background
             spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-            spr.Set(new Vector2f(Rect.getX()/1000f, Rect.getY()/1000f), new Vector2f(Rect.getWidth()/1000f, Rect.getHeight()/1000f), null, new Vector2f(0,0), new Vector2f(1,1));
-            spr.SetColor(new Vector4f(1,1,1,0.2f));
+            spr.setFromCorner(new Vector2f(Rect.getX(), Rect.getY()), new Vector2f(Rect.getWidth(), Rect.getHeight()), null, new Vector2f(0,0), new Vector2f(1,1));
+            spr.setColor(new Vector4f(1,1,1,0.2f));
             //spr.Color = new Vector4f(1,1,1,0.2f);
         } else {
             // no mouse over, just display background as normal
             Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-            spr.Set(new Vector2f(Rect.getX()/1000f, Rect.getY()/1000f), new Vector2f(Rect.getWidth()/1000f, Rect.getHeight()/1000f), Texture, new Vector2f(0,0), new Vector2f(1,1));
+            spr.setFromCorner(new Vector2f(Rect.getX(), Rect.getY()), new Vector2f(Rect.getWidth(), Rect.getHeight()), Texture, new Vector2f(0,0), new Vector2f(1,1));
         }
 
         Vector2f textCenter = new Vector2f(Rect.getX()+ Rect.getWidth()/2f, Rect.getY()+3);
-        textCenter.x /= 1000f;
-        textCenter.y /= 1000f;
-        Ref.textMan.AddText(textCenter, Text, Align.CENTER);
+//        textCenter.x /= 1000f;
+//        textCenter.y /= 1000f;
+        Ref.textMan.AddText(textCenter, Text, Align.CENTER, Type.HUD);
         
         // Reset mouse over
         Hover = false;
@@ -68,9 +69,9 @@ public class Button {
 
     
 
-    public boolean Intersects(Vector2f point) {
+    public boolean Intersects(Vector2f test) {
         // Scale to rect ints
-        Vector2f test = new Vector2f(point.x * 1000f, point.y * 1000f);
+        
         
         
         if(test.x >= Rect.getX() && test.x <= Rect.getX() + Rect.getWidth()) // inside x coords

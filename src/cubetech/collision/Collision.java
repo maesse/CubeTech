@@ -209,7 +209,7 @@ public class Collision {
                     continue; // duplicate
                 block.LastQueryNum = queryNum;
 
-                if(block.CustomVal != 0 || !block.Collidable)
+                if( !block.Collidable)
                     continue;
 
                 Test(pos, extent, v, block, res);
@@ -228,41 +228,41 @@ public class Collision {
 
         }
         
-        // Trace against player
-        if((tracemask & MASK_PLAYER) == MASK_PLAYER) {
-            Vector2f ppos = Ref.world.player.position;
-            Vector2f pextent = new Vector2f(Ref.world.player.extent.x, Ref.world.player.extent.y);
-
-            pextent.x += extent.x;
-            pextent.y += extent.y;
-            if(pos.x >= ppos.x - pextent.x && pos.x <= ppos.x + pextent.x)
-                if(pos.y >= ppos.y - pextent.y && pos.y <= ppos.y + pextent.y) {
-                    res.frac = 0f;
-                    res.Hit = true;
-                    res.hitObject = Ref.world.player;
-                    res.hitmask = MASK_PLAYER;
-                }
-        }
+//        // Trace against player
+//        if((tracemask & MASK_PLAYER) == MASK_PLAYER) {
+//            Vector2f ppos = Ref.world.player.position;
+//            Vector2f pextent = new Vector2f(Ref.world.player.extent.x, Ref.world.player.extent.y);
+//
+//            pextent.x += extent.x;
+//            pextent.y += extent.y;
+//            if(pos.x >= ppos.x - pextent.x && pos.x <= ppos.x + pextent.x)
+//                if(pos.y >= ppos.y - pextent.y && pos.y <= ppos.y + pextent.y) {
+//                    res.frac = 0f;
+//                    res.Hit = true;
+//                    res.hitObject = Ref.world.player;
+//                    res.hitmask = MASK_PLAYER;
+//                }
+//        }
 
         // Trace against entities
-        for (int i= 0; i < Ref.world.Entities.size(); i++) {
-            Entity ent = Ref.world.Entities.get(i);
-
-            int type = ent.GetType();
-            if((type & tracemask) == 0)
-                continue;
-
-            Vector2f entPos = ent.GetPosition();
-            Vector2f entSize = ent.GetSize();
-            
-            if(pos.x >= entPos.x - entSize.x && pos.x <= entPos.x + entSize.x)
-                if(pos.y >= entPos.y - entSize.y && pos.y <= entPos.y + entSize.y) {
-                    res.frac = 0f;
-                    res.Hit = true;
-                    res.hitObject = ent;
-                    res.hitmask = ent.GetType();
-                }
-        }
+//        for (int i= 0; i < Ref.world.Entities.size(); i++) {
+//            Entity ent = Ref.world.Entities.get(i);
+//
+//            int type = ent.GetType();
+//            if((type & tracemask) == 0)
+//                continue;
+//
+//            Vector2f entPos = ent.GetPosition();
+//            Vector2f entSize = ent.GetSize();
+//
+//            if(pos.x >= entPos.x - entSize.x && pos.x <= entPos.x + entSize.x)
+//                if(pos.y >= entPos.y - entSize.y && pos.y <= entPos.y + entSize.y) {
+//                    res.frac = 0f;
+//                    res.Hit = true;
+//                    res.hitObject = ent;
+//                    res.hitmask = ent.GetType();
+//                }
+//        }
         return res;
     }
 

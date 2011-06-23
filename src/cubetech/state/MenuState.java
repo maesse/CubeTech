@@ -1,6 +1,8 @@
 package cubetech.state;
 
 import cubetech.gfx.CubeTexture;
+import cubetech.gfx.Graphics;
+import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
 import cubetech.misc.Button;
 import cubetech.misc.Ref;
@@ -22,10 +24,10 @@ public class MenuState implements IGameState {
     public void Enter() {
         if(newGame != null)
             return;
-        CubeTexture buttonBg = (CubeTexture)(Ref.ResMan.LoadResource("data/menubutton.png").Data);
-        contGame = new Button("Continue", new Vector2f(0.4f, 0.75f), new Vector2f(0.2f, 0.07f), buttonBg);
-        newGame = new Button("New Game", new Vector2f(0.4f, 0.67f), new Vector2f(0.2f, 0.07f), buttonBg);
-        exit = new Button("Exit", new Vector2f(0.4f, 0.59f), new Vector2f(0.2f, 0.07f), buttonBg);
+        CubeTexture buttonBg = Ref.ResMan.LoadTexture("data/menubutton.png");
+        contGame = new Button("Continue", new Vector2f(0.4f*Graphics.getWidth(), 300), new Vector2f(200, 40), buttonBg);
+        newGame = new Button("New Game", new Vector2f(0.4f*Graphics.getWidth(), 260), new Vector2f(200, 40), buttonBg);
+        exit = new Button("Exit", new Vector2f(0.4f*Graphics.getWidth(), 220), new Vector2f(200, 40), buttonBg);
     }
 
     public void Exit() {
@@ -35,10 +37,8 @@ public class MenuState implements IGameState {
 
     public void RunFrame(int msec) {
         boolean gameRunning = false;
-        if(Ref.world != null) {
-            gameRunning = true;
-        }
-        Ref.textMan.AddText(new Vector2f(0.5f,0.85f), "Cubetronic", Align.CENTER);
+
+        Ref.textMan.AddText(new Vector2f(0.5f*Graphics.getWidth(),0.85f*Graphics.getHeight()), "Cubetronic", Align.CENTER, Type.HUD);
         Vector2f mousePos = Ref.Input.playerInput.MousePos;
         if(gameRunning) {
             if((contGame.Intersects(mousePos) && Ref.Input.playerInput.Mouse1) || (Ref.Input.GetKey(Keyboard.KEY_ESCAPE).Pressed && Ref.Input.GetKey(Keyboard.KEY_ESCAPE).Changed)) {
@@ -54,11 +54,7 @@ public class MenuState implements IGameState {
         }
         if(newGame.Intersects(mousePos) && Ref.Input.playerInput.Mouse1) {
             try {
-                // Start new game
-                if(Ref.world != null) {
-//                    Ref.world.StartNewEmptyGame();
-                    Ref.world.LoadWorld("map0.map");
-                    }
+
                 Ref.StateMan.SetState("hagser");
                 return;
             } catch (Exception ex) {

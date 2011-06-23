@@ -4,18 +4,19 @@ import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
 import cubetech.misc.Ref;
+import cubetech.spatial.Cell;
 import cubetech.spatial.SpatialHandle;
 import org.lwjgl.util.vector.Vector2f;
-import org.lwjgl.util.vector.Vector4f;
 
 /**
- * Static block
+ * Static blockdmi
  * @author mads
  */
 public class Block {
-    public CubeTexture Texture;
+    private static final int DEPTH_MULTIPLIER = 1;
+    public CubeTexture tex;
     // lower left corner
-    private Vector2f Position;
+    private Vector2f Position = new Vector2f();
     // center of block
     private Vector2f Center = new Vector2f(); // auto-set when position is set
     // direction vectors
@@ -27,23 +28,48 @@ public class Block {
     // block absolute half-size
     private Vector2f AbsExtent = new Vector2f();
     // block handle -- id
-    public int Handle;
+    public final int Handle;
     // current angle (changes Axis[])
     private float Angle;
 
     // Texture info
-    public Vector2f TexOffset;
-    public Vector2f TexSize;
+//    public Vector2f TexOffset;
+//    public Vector2f TexSize;
 
     // Collidable?
     public boolean Collidable;
     SpatialHandle spaceHandle = null; // this blocks handle to the spatial system
     public int LastQueryNum = 0; // spatial optimization
 
-    // Custom value, used for monsters, spawn, etc..
-    public int CustomVal;
+    private boolean removed = false;
 
-    
+    @Override
+    public Block clone() {
+        Block b = new Block(Handle, Position, Size, false);
+        b.SetAngle(Angle);
+        b.Collidable = Collidable;
+        b.tex = tex;
+//        b.Texture = Texture;
+//        b.TexOffset = TexOffset;
+//        b.TexSize = TexSize;
+        
+        return b;
+    }
+
+
+    public Vector2f getAbsExtent() {
+        return AbsExtent;
+    }
+
+    public boolean equals(Block other, boolean ignorePosition) {
+        if(Angle == other.Angle && Helper.Equals(Size, Size) 
+                && Collidable == other.Collidable && (ignorePosition || Helper.Equals(Position, Position))
+                && tex == other.tex)
+            return true;
+        return false;
+        
+    }
+
     // constructor
     public Block(int Handle, Vector2f Position, Vector2f Size, boolean hookupSpatial) {
         Axis = new Vector2f[2];
@@ -53,14 +79,24 @@ public class Block {
         SetPosition(Position);
         this.Handle = Handle;
         this.SetSize(Size);
-        this.Texture = (CubeTexture)(Ref.ResMan.LoadResource("data/tile.png").Data);
-        this.TexOffset = new Vector2f(0, 0);
-        this.TexSize = new Vector2f(1, 1);
+        tex = Ref.ResMan.LoadTexture("data/tile.png");
 
         if(hookupSpatial) {
             // We start off with no angle, so this is fine
             spaceHandle = Ref.spatial.Create(Position.x, Position.y, Position.x + Size.x, Position.y + Size.y, this);
         }
+    }
+
+
+    public void SpatialHandleChanged(Cell cell, int newIndex) {
+        spaceHandle.CellIndexChanged(cell, newIndex);
+    }
+
+    public Vector2f getAbsSize() {
+        float sin = (float)Math.abs(Math.sin(Angle));
+        float cos = (float)Math.abs(Math.cos(Angle));
+        Vector2f absSize = new Vector2f(cos * Size.x + sin * Size.y, cos * Size.y + sin * Size.x);
+        return absSize;
     }
 
     private void UpdateSpatial() {
@@ -71,6 +107,16 @@ public class Block {
             return;
 
         Ref.spatial.Update(spaceHandle, Center.x - AbsExtent.x, Center.y - AbsExtent.y, Center.x + AbsExtent.x, Center.y + AbsExtent.y);
+    }
+
+    public void SetCentered(Vector2f center, Vector2f extents) {
+        this.Center = new Vector2f(center);
+        this.Extent = new Vector2f(extents);
+        Size.x = Extent.x*2f;
+        Size.y = Extent.y*2f;
+        Position.x = center.x - extents.x;
+        Position.y = center.y - extents.y;
+        UpdateSpatial();
     }
 
     public void Set(Vector2f position, Vector2f size) {
@@ -99,24 +145,36 @@ public class Block {
     }
 
     public void Render() {
-        Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
-        spr.Set(Position, Size, Texture, TexOffset, TexSize);
-        spr.SetAngle(Angle);
+        if(removed)
+            return;
+        Sprite spr = Ref.SpriteMan.GetGameSprite();
+        spr.setFromCenter(Position, Size, tex);
+        spr.setAngle(Angle);
 
         // Non-collidables are slightly transparent
         if(!Collidable) {
-            spr.SetColor(new Vector4f(1, 1, 1, 0.7f));
+            spr.setColor(255,255,255,200);
         }
+        
+    }
+
+    public boolean isLinked() {
+        return spaceHandle != null;
     }
 
     // Important to call this, or the block will be removed but still colliable
     public void Remove() {
         if(spaceHandle != null)
             Ref.spatial.Remove(spaceHandle);
+        removed = true;
+    }
+
+    public boolean isRemoved() {
+        return removed;
     }
 
     public final void SetPosition(Vector2f position) {
-        this.Position = position;
+        this.Position.set(position);
         this.Center.x = position.x + Size.x/2f;
         this.Center.y = position.y + Size.y/2f;
         UpdateSpatial();
@@ -125,10 +183,12 @@ public class Block {
     // Calculate non-normalized direction vectors
     public void SetAngle(float angle) {
         Angle = angle;
-        Axis[0].x = (float)Math.cos(angle);
-        Axis[0].y = (float)Math.sin(angle);
-        Axis[1].x = (float)Math.cos(angle+Math.PI/2f);
-        Axis[1].y = (float)Math.sin(angle+Math.PI/2f);
+        Axis[0].x = (float) Math.cos(angle);
+        Axis[0].y = (float) Math.sin(angle);
+        Helper.Normalize(Axis[0]);
+        Axis[1].x = (float) Math.cos(angle+Math.PI/2f);
+        Axis[1].y = (float) Math.sin(angle+Math.PI/2f);
+        Helper.Normalize(Axis[1]);
         UpdateSpatial();
     }
 
@@ -145,8 +205,11 @@ public class Block {
     // NOTE: Outdated, doesn't take angle into account
     public boolean Intersects(Vector2f point) {
         // Scale to rect ints
-        if(point.x >= Position.x && point.x <= Position.x + Size.x) // inside x coords
-            if(point.y >= Position.y && point.y <= Position.y + Size.y) // inside y coords {
+        if(removed)
+            return false;
+        
+        if(point.x >= Center.x - AbsExtent.x && point.x <= Center.x + AbsExtent.x ) // inside x coords
+            if(point.y >= Center.y - AbsExtent.y && point.y <= Center.y + AbsExtent.y ) // inside y coords {
                 return true;
         
         return false;
@@ -158,6 +221,20 @@ public class Block {
 
     public Vector2f GetExtents() {
         return Extent;
+    }
+
+    public void setHalfWidth(float hw) {
+        Extent.x = hw;
+        Size.x = hw * 2f;
+        Position.x = Center.x - Extent.x;
+         UpdateSpatial();
+    }
+
+    public void setHalfHeight(float hh) {
+        Extent.y = hh;
+        Size.y = hh * 2f;
+        Position.y = Center.y - Extent.y;
+        UpdateSpatial();
     }
 
     public Vector2f[] GetAxis() {

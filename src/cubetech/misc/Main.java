@@ -1,11 +1,8 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.misc;
 
-import cubetech.misc.Window;
+import cubetech.GameLoop;
+import cubetech.gfx.Graphics;
+import org.lwjgl.LWJGLException;
 
 /**
  *
@@ -17,12 +14,23 @@ public class Main {
      * @param args the command line arguments
      */
     public static void main(String[] args) {
-        Window wct = new Window();
-		if (wct.initialize()) {
-			wct.execute();
-			wct.destroy();
-		}
-		System.exit(0);
+        try {
+            Graphics.init(null);
+            Ref.InitRef();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            System.exit(-1);
+        }
+        
+        
+        GameLoop loop = new GameLoop();
+        try {
+            while(true) {
+                loop.RunFrame();
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
     }
 
 }

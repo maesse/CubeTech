@@ -5,6 +5,7 @@
 
 package cubetech.misc;
 
+import cubetech.gfx.Graphics;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager;
 import cubetech.gfx.TextManager;
@@ -72,18 +73,18 @@ public class Console implements KeyEventListener {
 
         // Background
         Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-        spr.Set(new Vector2f(0.5f,0.5f), 0.5f);
-        spr.SetColor(new Vector4f(0,0,0,0.5f));
+        spr.setFromCenter(new Vector2f(0.5f,0.5f), 0.5f, null);
+        spr.setColor(new Vector4f(0,0,0,0.5f));
         //spr.Color = new Vector4f(0,0,0,0.5f);
 
         // Commandline
-        Ref.textMan.AddText(new Vector2f(0,0), cmdLine, TextManager.Align.LEFT);
+        Ref.textMan.AddText(new Vector2f(0,0), cmdLine, TextManager.Align.LEFT, SpriteManager.Type.HUD);
 
         // Log
-        int maxLines = Ref.loop.mode.getHeight()/32;
+        int maxLines = (int) (Graphics.getHeight() / 32);
         int currLine = 1;
         for (int i = Log.size()-1; i >= 0; i--) {
-            Ref.textMan.AddText(new Vector2f(0, (currLine*32f)/(float)Ref.loop.mode.getHeight()), Log.get(i), TextManager.Align.LEFT);
+            Ref.textMan.AddText(new Vector2f(0, (currLine*32f)/(float)Graphics.getHeight()), Log.get(i), TextManager.Align.LEFT, SpriteManager.Type.HUD);
 
             
             

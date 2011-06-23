@@ -122,17 +122,13 @@ public class Input {
             delta.y += Mouse.getEventDY();
 
             // Set Position
-            float mousex = (float)Mouse.getEventX() / (float)Ref.loop.mode.getWidth();
-            float mousey = (float)Mouse.getEventY() / (float)Ref.loop.mode.getHeight();
+            float mousex = (float)Mouse.getEventX();
+            float mousey = (float)Mouse.getEventY();
             
             if(!Float.isInfinite(mousey) && !Float.isInfinite(mousex)) {
                 playerInput.MousePos.x = mousex;
                 playerInput.MousePos.y = mousey;
             }
-
-            // Clamp to 0->1
-            playerInput.MousePos.x = (float)Math.max(Math.min(playerInput.MousePos.x, 1f),0f);
-            playerInput.MousePos.y = (float)Math.max(Math.min(playerInput.MousePos.y, 1f),0f);
 
             playerInput.WheelDelta += Mouse.getEventDWheel();
 

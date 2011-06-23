@@ -1,8 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.gfx;
 
 /**
@@ -10,9 +5,11 @@ package cubetech.gfx;
  * @author mads
  */
 public class SpriteManager {
-    public Sprite[] Sprites = new Sprite[10000];
-    public int[] NormalSprites = new int[10000];
-    public int[] HUDSprites = new int[10000];
+    private static final int MAX_SPRITES = 10000;
+
+    public Sprite[] Sprites = new Sprite[MAX_SPRITES];
+    public int[] NormalSprites = new int[MAX_SPRITES];
+    public int[] HUDSprites = new int[MAX_SPRITES];
     public int SpriteOffset = 0;
     public int HUDSpriteOffset = 0;
     public int NormalSpriteOffset = 0;
@@ -26,6 +23,14 @@ public class SpriteManager {
         for (int i= 0; i < Sprites.length; i++) {
             Sprites[i] = new Sprite();
         }
+    }
+
+    public Sprite GetHUDSprite() {
+        return GetSprite(Type.HUD);
+    }
+
+    public Sprite GetGameSprite() {
+        return GetSprite(Type.GAME);
     }
 
     public Sprite GetSprite(Type type) {
@@ -47,19 +52,13 @@ public class SpriteManager {
     }
 
     public void DrawNormal() {
-
         Sprite spr;
         for (int i= 0; i < NormalSpriteOffset; i++) {
             spr = Sprites[NormalSprites[i]];
-//            if(!Cull(spr))
                 spr.Draw();
         }
-        
     }
 
-//    boolean Cull(Sprite sprite) {
-//
-//    }
     public void DrawHUD() {
         for (int i= 0; i < HUDSpriteOffset; i++) {
             Sprites[HUDSprites[i]].Draw();
@@ -67,6 +66,10 @@ public class SpriteManager {
     }
 
     public void Reset() {
+        // Clear all sprite values, so stuff dont carry over to next frame
+        for (int i= 0; i < SpriteOffset; i++) {
+            Sprites[i].reset();
+        }
         SpriteOffset = 0;
         HUDSpriteOffset = 0;
         NormalSpriteOffset = 0;
