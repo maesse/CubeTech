@@ -43,10 +43,12 @@ public class EntityState {
     public int frame; 
     public Vector3f origin = new Vector3f();
     public Vector3f Angles = new Vector3f();
+    public Vector3f Angles2 = new Vector3f();
     public int time;
 
     public void Clear() {
         Angles = new Vector3f();
+        Angles2 = new Vector3f();
         origin = new Vector3f();
         evt = 0;
         evtParams = 0;
@@ -67,7 +69,7 @@ public class EntityState {
         if(ClientNum == s.ClientNum && time == s.time
                 && evtParams == s.evtParams && evt == s.evt
                 && pos.IsEqual(s.pos) && apos.IsEqual(s.apos)
-                && Helper.Equals(s.Angles, Angles) && Helper.Equals(origin, s.origin)
+                && Helper.Equals(s.Angles, Angles) && Helper.Equals(Angles2, s.Angles2) && Helper.Equals(origin, s.origin)
                 && eType == s.eType && eFlags == s.eFlags
                 && frame == s.frame && otherEntityNum == s.otherEntityNum && solid == s.solid
                 && modelindex == s.modelindex && s.weapon == weapon)
@@ -101,6 +103,7 @@ public class EntityState {
 
         ClientNum = newnum;
         Angles = buf.ReadDeltaVector(from.Angles);
+        Angles2 = buf.ReadDeltaVector(from.Angles2);
         origin = buf.ReadDeltaVector(from.origin);
         evt = buf.ReadDeltaInt(from.evt);
         evtParams = buf.ReadDeltaInt(from.evtParams);
@@ -133,6 +136,8 @@ public class EntityState {
         buf.Write(true); // got delta
 
         buf.WriteDelta(b.Angles, Angles);
+        buf.WriteDelta(b.Angles2, Angles2);
+
         buf.WriteDelta(b.origin, origin);
         buf.WriteDelta(b.evt, evt);
         buf.WriteDelta(b.evtParams, evtParams);
@@ -149,8 +154,9 @@ public class EntityState {
     }
 
     public EntityState Clone(EntityState st) {
-        st.Angles = new Vector3f(Angles);
-        st.origin = new Vector3f(origin);
+        st.Angles.set(Angles);
+        st.Angles2.set(Angles2);
+        st.origin.set(origin);
         st.evt = evt;
         st.evtParams = evtParams;
         st.eType = eType;

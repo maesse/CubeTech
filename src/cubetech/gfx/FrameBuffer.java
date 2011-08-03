@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import cubetech.common.Helper;
 import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.Color;
@@ -11,6 +12,7 @@ import org.lwjgl.opengl.EXTFramebufferObject;
 import cubetech.misc.Ref;
 import org.lwjgl.opengl.EXTFramebufferSRGB;
 import org.lwjgl.opengl.EXTRescaleNormal;
+import org.lwjgl.opengl.EXTTextureArray;
 import org.lwjgl.opengl.NVTextureRectangle;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
@@ -37,27 +39,48 @@ public class FrameBuffer {
     private int TexRect = EXTTextureRectangle.GL_TEXTURE_RECTANGLE_EXT;
 
     Shader shader = null;
+    private boolean npot = false; // non-power-of-two
+    private int depthBitResolution = 24;
+    private int arrayLevels = 1;
 
+    public FrameBuffer(int depthSize, int nLevels, int nBits) {
+        useColor = false;
+        useDepth = true;
+        TexRect = EXTTextureArray.GL_TEXTURE_2D_ARRAY_EXT;
+        this.w = depthSize;
+        this.h = depthSize;
+        arrayLevels = nLevels;
+        depthBitResolution = nBits;
+        InitFBO();
+    }
     
     public FrameBuffer(boolean color, boolean depth, int w, int h) {
-        shader = Ref.glRef.getShader("RectBlit");
-        shader.mapTextureUniform("tex", 0);
-        shader.validate();
-        
-        if(!Ref.glRef.caps.GL_EXT_texture_rectangle) { // aint got no ext?
-            if(Ref.glRef.caps.GL_NV_texture_rectangle) { // try nvidia
-                TexRect = NVTextureRectangle.GL_TEXTURE_RECTANGLE_NV;
-            } else if( Ref.glRef.caps.GL_ARB_texture_rectangle) { // try arb
-                TexRect = ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB;
-            } else {
-                TexRect = GL_TEXTURE_2D; 
-                // give up
-                // fix: do gamma correction in software
-                Ref.common.Error(Common.ErrorCode.FATAL, "Your graphics card doesn't support NPOT textures :/");
-            }
+        if(w != h || Helper.get2Fold(w) != w)
+        {
+            npot = true;
         }
 
+        if(npot) {
+            shader = Ref.glRef.getShader("RectBlit");
+            shader.mapTextureUniform("tex", 0);
+            shader.validate();
 
+            if(!Ref.glRef.caps.GL_EXT_texture_rectangle) { // aint got no ext?
+                if(Ref.glRef.caps.GL_NV_texture_rectangle) { // try nvidia
+                    TexRect = NVTextureRectangle.GL_TEXTURE_RECTANGLE_NV;
+                } else if( Ref.glRef.caps.GL_ARB_texture_rectangle) { // try arb
+                    TexRect = ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB;
+                } else {
+                    TexRect = GL_TEXTURE_2D;
+                    // give up
+                    // fix: do gamma correction in software
+                    Ref.common.Error(Common.ErrorCode.FATAL, "Your graphics card doesn't support NPOT textures :/");
+                }
+            }
+        } else {
+            TexRect = GL_TEXTURE_2D; 
+        }
+        
         useColor = color;
         useDepth = depth;
         this.w = w;
@@ -65,54 +88,60 @@ public class FrameBuffer {
         InitFBO();
     }
 
+    public int getTextureTarget() {
+        return TexRect;
+    }
+
     public void resize(int x, int y) {
         if(x == w && y == h) return; // no change
         
         this.w = x; this.h = y;
         Bind();
-        // Create the color texture
-        GL11.glDeleteTextures(fboColorId);
-        fboColorId = Ref.ResMan.CreateEmptyTexture(w,h,TexRect,false);
-        glBindTexture(TexRect, 0);
-        GLRef.checkError();
-        // Attach it
-        EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
-                EXTFramebufferObject.GL_COLOR_ATTACHMENT0_EXT, // attachment
-                TexRect, // textarget
-                fboColorId, // texture
-                0); // level
 
-        GL11.glDeleteTextures(depthId);
-        depthId = Ref.ResMan.CreateEmptyDepthTexture(w, h, TexRect);
-        glBindTexture(TexRect, 0);
-        GLRef.checkError();
-        // Attach it
-        EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
-                EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT, // attachment
-                TexRect, // textarget
-                depthId, // texture
-                0); // level
-//        EXTFramebufferObject.glDeleteRenderbuffersEXT(depthId);
-//        depthId = EXTFramebufferObject.glGenRenderbuffersEXT(); GLRef.checkError();
-//            EXTFramebufferObject.glBindRenderbufferEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT, depthId );
-//            GLRef.checkError();
-//
-//            EXTFramebufferObject.glRenderbufferStorageEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT,
-//                    GL_DEPTH_COMPONENT24,
-//                    w, h); GLRef.checkError();
-//            // attach depth buffer to fbo
-//            EXTFramebufferObject.glFramebufferRenderbufferEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT,
-//                    EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT,
-//                    EXTFramebufferObject.GL_RENDERBUFFER_EXT,
-//                    depthId); GLRef.checkError();
+        if(useColor && useDepth) {
+            // Create the color texture
+            GL11.glDeleteTextures(fboColorId);
+            fboColorId = Ref.ResMan.CreateEmptyTexture(w,h,TexRect,false);
+            glBindTexture(TexRect, 0);
+            GLRef.checkError();
+            // Attach it
+            EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
+                    EXTFramebufferObject.GL_COLOR_ATTACHMENT0_EXT, // attachment
+                    TexRect, // textarget
+                    fboColorId, // texture
+                    0); // level
 
+            GL11.glDeleteTextures(depthId);
+            depthId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, TexRect);
+            glBindTexture(TexRect, 0);
+            GLRef.checkError();
+            // Attach it
+            EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
+                    EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT, // attachment
+                    TexRect, // textarget
+                    depthId, // texture
+                    0); // level
+        } else if(useDepth) {
+            GL11.glDeleteTextures(fboColorId);
+            if(TexRect == EXTTextureArray.GL_TEXTURE_2D_ARRAY_EXT) {
+                fboColorId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, TexRect, arrayLevels);
+            } else {
+                fboColorId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, TexRect);
+            }
+            glTexParameteri(TexRect, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(TexRect, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glBindTexture(TexRect, 0);
+            GLRef.checkError();
+            // Attach it
+            EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
+                    EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT, // attachment
+                    TexRect, // textarget
+                    fboColorId, // texture
+                    0); // level
+        }
 
         validate();
         GLRef.checkError();
-//        Unbind();
-        //destroy();
-        //InitFBO();
-        //Bind();
     }
 
     public void destroy() {
@@ -124,6 +153,9 @@ public class FrameBuffer {
             GL11.glDeleteTextures(fboColorId);
             fboColorId = 0;
             depthId = 0;
+        } else if(useDepth) {
+            GL11.glDeleteTextures(fboColorId);
+            fboColorId = 0;
         }
 
         EXTFramebufferObject.glDeleteFramebuffersEXT(fboId);
@@ -197,7 +229,7 @@ public class FrameBuffer {
         }
 
         if(useDepth && useColor) {
-                depthId = Ref.ResMan.CreateEmptyDepthTexture(w, h, TexRect);
+                depthId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, TexRect);
                 glBindTexture(TexRect, 0);
                 GLRef.checkError();
                 // Attach it
@@ -206,29 +238,31 @@ public class FrameBuffer {
                         TexRect, // textarget
                         depthId, // texture
                         0); // level
-
-//                depthId = EXTFramebufferObject.glGenRenderbuffersEXT(); GLRef.checkError();
-//                EXTFramebufferObject.glBindRenderbufferEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT, depthId );
-//                GLRef.checkError();
-//
-//                EXTFramebufferObject.glRenderbufferStorageEXT(EXTFramebufferObject.GL_RENDERBUFFER_EXT,
-//                        GL_DEPTH_COMPONENT24,
-//                        512, 512); GLRef.checkError();
-//                // attach depth buffer to fbo
-//                EXTFramebufferObject.glFramebufferRenderbufferEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT,
-//                        EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT,
-//                        EXTFramebufferObject.GL_RENDERBUFFER_EXT,
-//                        depthId); GLRef.checkError();
         } else if(useDepth) {
-            fboColorId = Ref.ResMan.CreateEmptyDepthTexture(w, h, GL_TEXTURE_2D);
-            glBindTexture(GL_TEXTURE_2D, 0);
+            if(TexRect == EXTTextureArray.GL_TEXTURE_2D_ARRAY_EXT) {
+                fboColorId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, TexRect, arrayLevels);
+            } else {
+                fboColorId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, TexRect);
+            }
+            
+            glTexParameteri(TexRect, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(TexRect, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glBindTexture(TexRect, 0);
             GLRef.checkError();
             // Attach it
-            EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
-                    EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT, // attachment
-                    GL_TEXTURE_2D, // textarget
-                    fboColorId, // texture
-                    0); // level
+            if(TexRect != EXTTextureArray.GL_TEXTURE_2D_ARRAY_EXT) {
+                EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
+                        EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT, // attachment
+                        TexRect, // textarget
+                        fboColorId, // texture
+                        0); // level
+            } else {
+                EXTTextureArray.glFramebufferTextureLayerEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
+                        EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT, // attachment
+                        fboColorId, // texture
+                        0,  // mip level
+                        0); // array index
+            }
 
             glDrawBuffer(GL_NONE);
             glReadBuffer(GL_NONE);

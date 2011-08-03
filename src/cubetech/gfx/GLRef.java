@@ -1,6 +1,8 @@
 package cubetech.gfx;
 
+import cubetech.common.Helper;
 import cubetech.CGame.Render;
+import cubetech.CGame.ViewParams;
 import java.nio.FloatBuffer;
 import java.util.Stack;
 import org.lwjgl.opengl.ARBShaderObjects;
@@ -41,6 +43,8 @@ import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.DisplayMode;
 import org.lwjgl.opengl.EXTTextureFilterAnisotropic;
 import org.lwjgl.opengl.EXTTextureRectangle;
+import org.lwjgl.util.vector.Matrix4f;
+import org.lwjgl.util.vector.Vector3f;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL13.*;
 import static org.lwjgl.opengl.GL20.*;
@@ -135,7 +139,7 @@ public class GLRef {
         // Set vsync
         try {
             Display.setVSyncEnabled(r_vsync.iValue == 1);
-        } catch (Exception ex) {};
+        } catch (Exception ex) {}
 
         initialized = true;
         // Get max vertices
@@ -249,9 +253,11 @@ public class GLRef {
         checkError();
     }
 
+    private Vector3f lightDir = new Vector3f(-0.8f, 0.8f, 1f);
     public void setLIght() {
+        lightDir.normalise();
         floatBuff16.position(0);
-        floatBuff16.put(-0.8f).put(0.8f).put(1f).put(0f);
+        floatBuff16.put(lightDir.x).put(lightDir.y).put(lightDir.z).put(0f);
         floatBuff16.flip();
         glLight(GL_LIGHT0, GL_POSITION, floatBuff16);
         floatBuff16.position(0);
@@ -259,11 +265,48 @@ public class GLRef {
         floatBuff16.flip();
         glLight(GL_LIGHT0, GL_DIFFUSE, floatBuff16);
         floatBuff16.position(0);
-        floatBuff16.put(1f).put(1f).put(1f).put(1f);
+        floatBuff16.put(0.2f).put(0.2f).put(0.2f).put(1f);
         floatBuff16.flip();
         glLightModel(GL_LIGHT_MODEL_AMBIENT, floatBuff16);
         //glLight(GL_LIGHT0, GL_AMBIENT, floatBuff16);
-        glMaterialf(GL_FRONT, GL_SHININESS, 64.0f);
+        glMaterialf(GL_FRONT, GL_SHININESS, 4.0f);
+    }
+    
+    public Vector3f getLightAngle() 
+    {
+        return lightDir;
+    }
+
+    // Returns a view matrix for the global directional light
+    public Matrix4f getLightViewMatrix() {
+        lightDir.set(-1,0,0.3f);
+        lightDir.x = (float)Math.sin(Ref.cgame.cg.time/10000f);
+        lightDir.y = (float)Math.cos(Ref.cgame.cg.time/10000f);
+        lightDir.x = -0.25f;
+        lightDir.y = -1.0f;
+        Vector3f dir = lightDir;
+        dir.normalise();
+        Vector3f angle = new Vector3f(0f, (float)(180f/Math.PI *  Math.atan2(dir.y, dir.x)), lightDir.z*90f);
+
+        Vector3f[] axis = Helper.AnglesToAxis(angle);
+       
+        float temp = lightDir.x;
+        lightDir.x = lightDir.y;
+        lightDir.y = -temp;
+
+        for (int i= 0; i < 3; i++) {
+            axis[i].normalise();
+        }
+        float[] data = Helper.fillMatrixBuffer(axis, null);
+
+        // this should be ok
+        floatBuff16.clear();
+        Helper.toFloatBuffer(data, floatBuff16);
+//        Helper.multMatrix(data, ViewParams.flipMatrix, floatBuff16);
+        //floatBuff16.position(0);
+        Matrix4f m = (Matrix4f) new Matrix4f().load(floatBuff16);
+        
+        return m;
     }
 
     
@@ -287,7 +330,7 @@ public class GLRef {
     // Set up cvars
     private void Init() {
         r_vsync = Ref.cvars.Get("r_vsync", "1", EnumSet.of(CVarFlags.ARCHIVE));
-        r_mode = Ref.cvars.Get("r_mode", "1024x768", EnumSet.of(CVarFlags.ARCHIVE));
+        r_mode = Ref.cvars.Get("r_mode", "1280x800", EnumSet.of(CVarFlags.ARCHIVE));
         r_fullscreen = Ref.cvars.Get("r_fullscreen", "0", EnumSet.of(CVarFlags.ARCHIVE));
         r_refreshrate = Ref.cvars.Get("r_refreshrate", "60", EnumSet.of(CVarFlags.ARCHIVE));
         r_toggleRes = Ref.cvars.Get("r_toggleRes", "0", EnumSet.of(CVarFlags.NONE));
@@ -355,13 +398,32 @@ public class GLRef {
         if(screenHasFocus != Display.isActive()) {
             screenHasFocus = !screenHasFocus;
             Ref.cvars.Set2("com_unfocused", screenHasFocus?"0":"1", true);
-            if(Ref.common.developer.iValue == 0) {
-                if(!screenHasFocus)
-                    Ref.ui.SetActiveMenu(MENU.MAINMENU);
-            }
+            
             if(!screenHasFocus && Ref.Input != null) {
+                if(Ref.common.developer.iValue == 0) {
+                    Ref.ui.SetActiveMenu(MENU.MAINMENU);
+                }
                 // Clear keys when loosing focus..
                 Ref.Input.ClearKeys();
+
+                if(r_fullscreen.isTrue()) {
+                    System.out.println("Leaving fullscreen while unfocussed");
+//                    try {
+//                        //
+//
+//                    } catch (LWJGLException ex) {
+//                        Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
+//                    }
+                }
+            } else if(r_fullscreen.isTrue()) {
+                System.out.println("Bringing back dat fullscreen");
+                try {
+                    Display.setFullscreen(false);
+                    Display.setFullscreen(true);
+
+                } catch (LWJGLException ex) {
+                    Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
+                }
             }
         }
 
@@ -611,8 +673,14 @@ public class GLRef {
             
             shad = Ref.glRef.getShader("litobjectpixel");
             shad.mapTextureUniform("tex", 0);
-            shad.mapTextureUniform("envmap", 1);
+            shad.mapTextureUniform("shadows", 1);
+            shad.mapTextureUniform("envmap", 2);
             shad.validate();
+
+            shad = Ref.glRef.getShader("unlitObject");
+            shad.validate();
+
+            Ref.glRef.getShader("ShadowRender");
 
             setShader("sprite");
         } catch (Exception ex) {
@@ -818,7 +886,7 @@ public class GLRef {
         int t = BufferTargetToOpenGL(target);
         ARBVertexBufferObject.glBindBufferARB(t, bufferid);
         GLRef.checkError();
-        ARBVertexBufferObject.glBufferDataARB(t, size, ARBVertexBufferObject.GL_DYNAMIC_DRAW_ARB);
+        ARBVertexBufferObject.glBufferDataARB(t, size, ARBVertexBufferObject.GL_STATIC_DRAW_ARB);
         GLRef.checkError();
     }
 

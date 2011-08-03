@@ -16,6 +16,10 @@ import cubetech.input.Input;
 import cubetech.input.PlayerInput;
 import cubetech.misc.FinishedUpdatingListener;
 import cubetech.misc.MasterServer;
+import cubetech.misc.PngEncoder;
+import cubetech.misc.Profiler;
+import cubetech.misc.Profiler.Sec;
+import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
 import cubetech.net.*;
 import cubetech.net.NetChan.*;
@@ -23,6 +27,11 @@ import cubetech.ui.DebugUI;
 import cubetech.ui.ServerListUI;
 import cubetech.ui.ServerListUI.ServerSource;
 import cubetech.ui.UI;
+import java.awt.image.BufferedImage;
+import java.awt.image.DataBuffer;
+import java.awt.image.Raster;
+import java.awt.image.WritableRaster;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
@@ -33,6 +42,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.AbstractMap;
 import java.util.EnumSet;
+import java.util.Hashtable;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -57,6 +67,7 @@ public class Client {
     CVar cl_timenudge;
     CVar cl_debugui;
     CVar cl_showfps;
+    public CVar cl_demorecord;
     public CVar cl_netquality; // 0, less lag more jitter - ~50-100, more lag, less time jitter
     public CVar cl_nodelta;
     public CVar cl_cmdbackup;
@@ -65,6 +76,7 @@ public class Client {
     
 
     public int frametime;
+    public int framecount;
     public int realtime;
     public ConnectState state = ConnectState.DISCONNECTED;
 
@@ -80,7 +92,7 @@ public class Client {
     protected FinishedUpdatingListener updateListener = null;
     private boolean cgameStarted;
 
-    
+    public DemoRecorder demo;
 
     int lastFpsUpdateTime = 0;
     int nFrames = 0;
@@ -143,12 +155,17 @@ public class Client {
         cl_showfps  = Ref.cvars.Get("cl_showfps", "0", EnumSet.of(CVarFlags.ARCHIVE));
         cl_netquality = Ref.cvars.Get("cl_netquality", "50", EnumSet.of(CVarFlags.ARCHIVE)); // allow 50ms cgame delta
 
+        cl_demorecord = Ref.cvars.Get("cl_demorecord", "0", EnumSet.of(CVarFlags.NONE));
+
         Ref.commands.AddCommand("connect", new cmd_Connect());
         Ref.commands.AddCommand("disconnect", new cmd_Disconnect());
         Ref.commands.AddCommand("cmd", new cmd_Cmd());
         Ref.commands.AddCommand("localservers", new cmd_LocalServers());
         Ref.commands.AddCommand("internetservers", new cmd_InternetServers());
         Ref.commands.AddCommand("downloadfile",cmd_downloadfile);
+        Ref.commands.AddCommand("screenshot", cmd_screenshot);
+
+        demo = new DemoRecorder(this);
 
         Ref.cvars.Set2("cl_running", "1", true);
 
@@ -267,6 +284,8 @@ public class Client {
 
         if(updateListener != null)
             updateListener.FinishedUpdating();
+
+        framecount++;
     }
 
     public void PacketEvent(Packet data) {
@@ -300,7 +319,15 @@ public class Client {
         clc.serverMessageSequence = buf.getInt();
         buf.position(currPos);
 
-        ParseServerMessage(data);
+        ParseServerMessage(data.buf);
+
+        //
+	// we don't know if it is ok to save a demo message until
+	// after we have parsed the frame
+	//
+        if(demo.isRecording()) {
+            demo.writeMessage(data, currPos);
+        }
     }
 
     public void MapLoading() {
@@ -333,16 +360,16 @@ public class Client {
         }
     }
 
-    void ParseServerMessage(Packet packet) {
+    void ParseServerMessage(NetBuffer buf) {
         // get the reliable sequence acknowledge number
-        clc.reliableAcknowlege = packet.buf.ReadInt();
+        clc.reliableAcknowlege = buf.ReadInt();
         if(clc.reliableAcknowlege < clc.reliableSequence - 64) {
             clc.reliableSequence = clc.reliableAcknowlege;
         }
 
         // parse the message
         while(true) {
-            int cmd = packet.buf.ReadInt();
+            int cmd = buf.ReadInt();
             
             if(cmd == SVC.OPS_EOF)
                 break;
@@ -351,16 +378,16 @@ public class Client {
                 case SVC.OPS_NOP:
                     break;
                 case SVC.OPS_SERVERCOMMAND:
-                    clc.ParseCommandString(packet.buf);
+                    clc.ParseCommandString(buf);
                     break;
                 case SVC.OPS_GAMESTATE:
-                    ParseGameState(packet.buf);
+                    ParseGameState(buf);
                     break;
                 case SVC.OPS_SNAPSHOT:
-                    ParseSnapshot(packet.buf);
+                    ParseSnapshot(buf);
                     break;
                 case SVC.OPS_DOWNLOAD:
-                    if(!ParseDownload(packet.buf))
+                    if(!ParseDownload(buf))
                         return;
                     break;
                 default:
@@ -489,7 +516,7 @@ public class Client {
         if(cmd.charAt(0) == '-')
             return;
 
-        if(state.ordinal() < ConnectState.CONNECTED.ordinal() || cmd.charAt(0) == '+')
+        if(state.ordinal() < ConnectState.CONNECTED.ordinal() || cmd.charAt(0) == '+' || demo.isPlaying())
         {
             Common.Log("Unknown command " + cmd);
             return;
@@ -580,6 +607,8 @@ public class Client {
     }
 
     private void CheckForResend() {
+        if(demo.isPlaying()) return;
+
         // resend if we haven't gotten a reply yet
         if(state != ConnectState.CONNECTING && state != ConnectState.CHALLENGING)
             return;
@@ -644,7 +673,7 @@ public class Client {
                 case LOADING:
                 case PRIMED:
                     // draw the game information screen and loading progress
-                    Ref.cgame.DrawActiveFrame(cl.serverTime);
+                    Ref.cgame.DrawActiveFrame(cl.serverTime, demo.isPlaying());
 
                     // also draw the connection information, so it doesn't
                     // flash away too briefly on local or lan games
@@ -652,7 +681,7 @@ public class Client {
                     Ref.ui.DrawConnectScreen(true);
                     break;
                 case ACTIVE:
-                    Ref.cgame.DrawActiveFrame(cl.serverTime);
+                    Ref.cgame.DrawActiveFrame(cl.serverTime, demo.isPlaying());
                     break;
             }
         }
@@ -738,6 +767,10 @@ public class Client {
     }
 
     private boolean ReadyToSendPacket() {
+        if(demo.isPlaying()) {
+            return false;
+        }
+
 //        if(Ref.client.clc.downloadName != null && clc.reliableAcknowlege < clc.reliableSequence) {
 //            return true;
 ////            System.out.println("Sending: " + clc.reliableCommands[i & 63]);
@@ -784,6 +817,10 @@ public class Client {
     */
     PlayerInput nullstate = new PlayerInput();
     public void WritePacket() {
+        if(demo.isPlaying()) {
+            return;
+        }
+
         NetBuffer msg = NetBuffer.GetNetBuffer(false, false); // Netchan will add the magic
 
         // write the current serverId so the server
@@ -826,7 +863,7 @@ public class Client {
         PlayerInput old = nullstate;
         if(count >= 1) {
             // begin a client move command
-            if(!cl.snap.valid
+            if(!cl.snap.valid || demo.isAwaitingFullSnapshot()
                     || clc.serverMessageSequence != cl.snap.messagenum
                     || cl_nodelta.iValue > 0)
                 msg.Write(CLC.OPS_MOVENODELTA);
@@ -939,10 +976,11 @@ public class Client {
         newsnap.messagenum = clc.serverMessageSequence;
         
         int deltaNum = buf.ReadInt();
-        if(deltaNum <= 0)
+        if(deltaNum <= 0) {
             newsnap.deltanum = -1;
-        else
+        }else {
             newsnap.deltanum = newsnap.messagenum - deltaNum;
+        }
         newsnap.snapFlag = buf.ReadInt();
 
         // If the frame is delta compressed from data that we
@@ -951,6 +989,7 @@ public class Client {
         // message
         if(newsnap.deltanum <= 0) {
             newsnap.valid = true; // uncompressed frame
+            demo.recievedFullSnapshot();
         } else {
             oldsnap = cl.snapshots[newsnap.deltanum & 31];
             if(!oldsnap.valid) {
@@ -998,11 +1037,13 @@ public class Client {
         // copy to the current good spot
         cl.snap = newsnap;
         cl.snap.ping = 999;
-        for (int i= 0; i < 32; i++) {
-            int packNum = (clc.netchan.outgoingSequence - 1 - i) & 31;
-            if(cl.snap.ps.commandTime >= cl.outPackets[packNum].servertime) {
-                cl.snap.ping = realtime - cl.outPackets[packNum].realtime;
-                break;
+        if(clc.netchan != null) {
+            for (int i= 0; i < 32; i++) {
+                int packNum = (clc.netchan.outgoingSequence - 1 - i) & 31;
+                if(cl.snap.ps.commandTime >= cl.outPackets[packNum].servertime) {
+                    cl.snap.ping = realtime - cl.outPackets[packNum].realtime;
+                    break;
+                }
             }
         }
 
@@ -1108,7 +1149,7 @@ public class Client {
     }
 
     private void BeginFrame() {
-        if(Ref.ui.IsFullscreen())
+        if(Ref.ui.IsFullscreen() || true)
             GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
 //       GL11.glClearDepth(1);
 //       GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
@@ -1117,6 +1158,7 @@ public class Client {
     }
 
     private void EndFrame() {
+        SecTag s = Profiler.EnterSection(Sec.RENDER);
         nFrames++;
         if(realtime >= lastFpsUpdateTime + 1000) {
             currentFPS = nFrames;
@@ -1130,7 +1172,7 @@ public class Client {
         // Render normal sprites
         Ref.SpriteMan.DrawNormal();
 
-        Ref.render.renderAll();
+        Ref.render.renderAll(false);
         Ref.render.reset();
 
         
@@ -1160,17 +1202,90 @@ public class Client {
 
 
         if(Ref.glRef.srgbBuffer != null) Ref.glRef.srgbBuffer.BlitFBO();
+
+        if(cl.screenshot || (demo.isPlaying() && Ref.cvars.Find("cl_demorecord").isTrue())) {
+            takeScreenshot();
+        }
         
         //Ref.glRef.srgbBuffer.Unbind();
         // Display frame
 //        Display.sync(60);
         updateScreen();
 //        GL11.glGetError();
+        s.ExitSection();
     }
 
+    ICommand cmd_screenshot = new ICommand() {
+        public void RunCommand(String[] args) {
+            cl.screenshot = true;
+        }
+    };
+
+
+    private void takeScreenshot() {
+        cl.screenshot = false;
+
+        // Are we taking pictures of a demo?
+        boolean video = (demo.isPlaying() && Ref.cvars.Find("cl_demorecord").isTrue());
+
+        
+
+        int width = (int)Ref.glRef.GetResolution().x;
+        int height = (int)Ref.glRef.GetResolution().y;
+
+        // Copy backbuffer
+        ByteBuffer buffer = ByteBuffer.allocateDirect(3*width*height);
+        GL11.glReadPixels(0, 0, width, height, GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, buffer);
+
+        // Encode as png
+        PngEncoder enc = new PngEncoder(buffer, false,PngEncoder.FILTER_NONE, 4, width, height);
+        byte[] ddata = enc.pngEncode();
+
+        // Figure out destination
+        String directory = "screenshots\\"; // default screenshot direction
+        if(video) {
+            // screenshots for demos goes into the demo folder
+            directory = "demos\\" + demo.getDemoName();
+        }
+        File folder = new File(directory);
+        if(!folder.exists() || !folder.isDirectory()) {
+            boolean created = folder.mkdir();
+            if(!created) {
+                Common.Log("Can't create destination directory %s", directory);
+                return;
+            }
+        }
+
+        // Write it
+        int number =  framecount;
+        if(video) {
+            number = clc.timeDemoFrames;
+        }
+        String filename = directory + "\\" + number;
+        File f = new File(filename + ".png");
+        try {
+            boolean created = f.createNewFile();
+            if(!created || !f.canWrite()) {
+                Common.Log("Couldn't create file %s for screenshot", filename+".png");
+                return;
+            }
+            FileChannel fc = new FileOutputStream(f).getChannel();
+            ByteBuffer data = ByteBuffer.wrap(ddata);
+            fc.write(data);
+            fc.close();
+            if(!video) {
+                Common.Log("Saved screenshot as %s.png (%.1fMB)", filename, ddata.length / (1024*1024f));
+            }
+        } catch (IOException ex) {
+            Common.Log(Common.getExceptionString(ex));
+        }
+
+    }
 
     private void updateScreen() {
+        SecTag s = Profiler.EnterSection(Sec.RENDERWAIT);
         Display.update();
+        s.ExitSection();
     }
 
     // CGame tells us what weapon we're using and if we should scale mouse sens (when cgame is zooming for instance)
@@ -1205,6 +1320,11 @@ public class Client {
     public String GetServerCommand(int commandNumber) {
         // if we have irretrievably lost a reliable command, drop the connection
         if(commandNumber <= clc.serverCommandSequence - 64) {
+            // when a demo record was started after the client got a whole bunch of
+            // reliable commands then the client never got those first reliable commands
+            if(demo.isPlaying()) {
+                return null;
+            }
             Ref.common.Error(Common.ErrorCode.DROP, "GetServerCommand: A reliable command was cycled");
             return null;
         }
@@ -1217,6 +1337,10 @@ public class Client {
 
         String cmd = clc.serverCommands[commandNumber & 63];
         clc.lastExecutedServerCommand = commandNumber;
+
+        if(cmd == null && demo.isPlaying()) {
+            return null;
+        }
 
         Common.LogDebug("ServerCommand: " + cmd);
 
@@ -1563,7 +1687,7 @@ public class Client {
         clc.download.position(0);
         try {
             if(clc.downloadName.equals("@cube")) {
-                Ref.cgame.map.parseCubeData(clc.download);
+                Ref.cgame.map.parseCubeData(clc.download, -1);
             }
             else if(clc.downloadName.equalsIgnoreCase("map")) {
                 // load map
@@ -1732,7 +1856,7 @@ public class Client {
     // Console commands
     private class cmd_Cmd implements ICommand {
         public void RunCommand(String[] args) {
-            if(state != ConnectState.ACTIVE) {
+            if(state != ConnectState.ACTIVE || demo.isPlaying()) {
                 Common.Log("Not connected to a server.");
                 return;
             }

@@ -6,7 +6,7 @@ import cubetech.entities.SharedEntity;
 import cubetech.entities.SvEntity;
 import java.util.ArrayList;
 import java.util.LinkedList;
-import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  * Builds an uniformly subdivided tree with some given bounds
@@ -45,7 +45,7 @@ public final class WorldSector {
         return entities.remove(ent);
     }
 
-    public SectorQuery AreaEntities(Vector2f mins, Vector2f maxs) {
+    public SectorQuery AreaEntities(Vector3f mins, Vector3f maxs) {
         SectorQuery results = new SectorQuery(mins, maxs, new ArrayList<Integer>());
         AreaEntities_Recursive(results, this);
         return results;
@@ -56,10 +56,13 @@ public final class WorldSector {
         for(SvEntity ent : node.entities) {
             SharedEntity sent = ent.GetSharedEntity();
 
-            if(sent.r.absmin.x > result.maxs.x
+            if(    sent.r.absmin.x > result.maxs.x
                 || sent.r.absmin.y > result.maxs.y
+                || sent.r.absmin.z > result.maxs.z
                 || sent.r.absmax.x < result.mins.x
-                || sent.r.absmax.y < result.mins.y)
+                || sent.r.absmax.y < result.mins.y
+                || sent.r.absmax.z < result.mins.z
+                )
                 continue;
 
             result.List.add(ent.id);
@@ -76,7 +79,7 @@ public final class WorldSector {
     }
 
     // Create a new worldsector with the given parameters
-    public static WorldSector CreateWorldSector(Vector2f mins, Vector2f maxs, int maxdepth) {
+    public static WorldSector CreateWorldSector(Vector3f mins, Vector3f maxs, int maxdepth) {
         int nNodes = 0;
         for (int i= 0; i <= maxdepth; i++) nNodes += Math.pow(2, i);
         Common.LogDebug("WorldSector: New worldsector will have " + nNodes + " nodes in total.");
@@ -93,7 +96,7 @@ public final class WorldSector {
     }
 
     // internal recursive method for splitting and creating child nodes
-    private static WorldSector CreateWorldSector_Recursive(int depth, Vector2f mins, Vector2f maxs) {
+    private static WorldSector CreateWorldSector_Recursive(int depth, Vector3f mins, Vector3f maxs) {
         WorldSector node = new WorldSector();
         createNodeCount++;
         // Leaf
@@ -103,19 +106,18 @@ public final class WorldSector {
         }
 
         // Figure out what axis to split
-        Vector2f size = new Vector2f();
-        Vector2f.sub(maxs, mins, size);
-        if(size.x > size.y)
-            node.Axis = 0;
-        else
-            node.Axis = 1;
+        Vector3f size = new Vector3f();
+        Vector3f.sub(maxs, mins, size);
+        if(size.x > size.y) node.Axis = 0;
+        else if(size.y > size.z) node.Axis = 1;
+        else node.Axis = 2;
 
         // Where to split
         node.Distance = 0.5f * (Helper.VectorGet(maxs, node.Axis) + Helper.VectorGet(mins, node.Axis));
-        Vector2f mins1 = new Vector2f(mins);
-        Vector2f mins2 = new Vector2f(mins);
-        Vector2f maxs1 = new Vector2f(maxs);
-        Vector2f maxs2 = new Vector2f(maxs);
+        Vector3f mins1 = new Vector3f(mins);
+        Vector3f mins2 = new Vector3f(mins);
+        Vector3f maxs1 = new Vector3f(maxs);
+        Vector3f maxs2 = new Vector3f(maxs);
 
         Helper.VectorSet(maxs1, node.Axis, node.Distance);
         Helper.VectorSet(mins2, node.Axis, node.Distance);
@@ -127,7 +129,7 @@ public final class WorldSector {
 
     
 
-    public WorldSector FindCrossingNode(Vector2f absmin, Vector2f absmax) {
+    public WorldSector FindCrossingNode(Vector3f absmin, Vector3f absmax) {
         WorldSector node = this;
         while(true) {
             if(node.Axis == -1)

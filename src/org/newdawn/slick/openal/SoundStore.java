@@ -1,5 +1,9 @@
 package org.newdawn.slick.openal;
 
+import org.lwjgl.openal.ALCdevice;
+import java.nio.ByteBuffer;
+import cubetech.snd.ALChannel;
+import cubetech.snd.SoundLoop;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,9 +19,10 @@ import org.lwjgl.Sys;
 import org.lwjgl.openal.AL;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.OpenALException;
+import org.lwjgl.util.vector.Vector3f;
 
 import org.newdawn.slick.loading.ResourceLoader;
-
+import static org.lwjgl.openal.ALC10.*;
 /**
  * Responsible for holding and playing the sounds used in the game.
  * 
@@ -25,10 +30,9 @@ import org.newdawn.slick.loading.ResourceLoader;
  * @author Rockstar setVolume cleanup 
  */
 public class SoundStore {
-	
+
     /** The single instance of this class */
     private static SoundStore store = new SoundStore();
-
     /** True if sound effects are turned on */
     private boolean sounds;
     /** True if music is turned on */
@@ -38,7 +42,7 @@ public class SoundStore {
     /** The number of sound sources enabled - default 8 */
     private int sourceCount;
     /** The map of references to IDs of previously loaded sounds */
-    private HashMap<Object,Object> loaded = new HashMap<Object, Object>();
+    private HashMap<Object, Object> loaded = new HashMap<Object, Object>();
     /** The ID of the buffer containing the music currently being played */
     private int currentMusic = -1;
     /** The OpenGL AL sound sources in use */
@@ -49,32 +53,26 @@ public class SoundStore {
     private boolean inited = false;
     /** The MODSound to be updated */
     private MODSound mod;
-    /** The stream to be updated */
-    private OpenALStreamPlayer stream;
-
     /** The global music volume setting */
     private float musicVolume = 1.0f;
     /** The global sound fx volume setting */
     private float soundVolume = 1.0f;
     /** The volume given for the last current music */
     private float lastCurrentMusicVolume = 1.0f;
-
     /** True if the music is paused */
     private boolean paused;
     /** True if we're returning deferred versions of resources */
     private boolean deferred;
-
     /** The buffer used to set the velocity of a source */
-    private FloatBuffer sourceVel = BufferUtils.createFloatBuffer(3).put(new float[] { 0.0f, 0.0f, 0.0f });
+    private FloatBuffer sourceVel = BufferUtils.createFloatBuffer(3).put(new float[]{0.0f, 0.0f, 0.0f});
     /** The buffer used to set the position of a source */
     private FloatBuffer sourcePos = BufferUtils.createFloatBuffer(3);
-    private float listenerPosX, listenerPosY;
+    private float listenerPosX, listenerPosY, listenerPosZ;
     /** The maximum number of sources */
     private int maxSources = 64;
     private float minDistance = 1f; // used as REFERENCE_DISTANCE
     private float maxDistance = Float.MAX_VALUE;
     private float rollOff = 0.5f;
-
 
     public void setDopplerSpeed(float val) {
         AL10.alDopplerVelocity(val);
@@ -108,7 +106,6 @@ public class SoundStore {
         this.rollOff = rollOff;
     }
 
-
     /**
      * Create a new sound store
      */
@@ -119,16 +116,16 @@ public class SoundStore {
      * Clear out the sound store contents
      */
     public void clear() {
-            store = new SoundStore();
+        store = new SoundStore();
     }
 
     /**
      * Disable use of the Sound Store
      */
     public void disable() {
-            inited = true;
+        inited = true;
     }
-	
+
     /**
      * True if we should only record the request to load in the intention
      * of loading the sound later
@@ -136,16 +133,16 @@ public class SoundStore {
      * @param deferred True if the we should load a token
      */
     public void setDeferredLoading(boolean deferred) {
-    	this.deferred = deferred;
+        this.deferred = deferred;
     }
-    
+
     /**
      * Check if we're using deferred loading
      * 
      * @return True if we're loading deferred sounds
      */
     public boolean isDeferredLoading() {
-    	return deferred;
+        return deferred;
     }
 
     /**
@@ -154,15 +151,15 @@ public class SoundStore {
      * @param music True if music should be played
      */
     public void setMusicOn(boolean music) {
-            if (soundWorks) {
-                    this.music = music;
-                    if (music) {
-                            restartLoop();
-                            setMusicVolume(musicVolume);
-                    } else {
-                            pauseLoop();
-                    }
+        if (soundWorks) {
+            this.music = music;
+            if (music) {
+                restartLoop();
+                setMusicVolume(musicVolume);
+            } else {
+                pauseLoop();
             }
+        }
     }
 
     /**
@@ -171,7 +168,7 @@ public class SoundStore {
      * @return True if music is currently playing
      */
     public boolean isMusicOn() {
-            return music;
+        return music;
     }
 
     /**
@@ -180,17 +177,17 @@ public class SoundStore {
      * @param volume The volume for music
      */
     public void setMusicVolume(float volume) {
-            if (volume < 0) {
-                    volume = 0;
-            }
-            if (volume > 1) {
-                    volume = 1;
-            }
+        if (volume < 0) {
+            volume = 0;
+        }
+        if (volume > 1) {
+            volume = 1;
+        }
 
-            musicVolume = volume;
-            if (soundWorks) {
-                    AL10.alSourcef(sources.get(0), AL10.AL_GAIN, lastCurrentMusicVolume * musicVolume);
-            }
+        musicVolume = volume;
+        if (soundWorks) {
+            AL10.alSourcef(sources.get(0), AL10.AL_GAIN, lastCurrentMusicVolume * musicVolume);
+        }
     }
 
     /**
@@ -199,7 +196,7 @@ public class SoundStore {
      * @return The volume of the music currently playing
      */
     public float getCurrentMusicVolume() {
-            return lastCurrentMusicVolume;
+        return lastCurrentMusicVolume;
     }
 
     /**
@@ -208,17 +205,17 @@ public class SoundStore {
      * @param volume The volume for the current playing music
      */
     public void setCurrentMusicVolume(float volume) {
-            if (volume < 0) {
-                    volume = 0;
-            }
-            if (volume > 1) {
-                    volume = 1;
-            }
+        if (volume < 0) {
+            volume = 0;
+        }
+        if (volume > 1) {
+            volume = 1;
+        }
 
-            if (soundWorks) {
-                    lastCurrentMusicVolume = volume;
-                    AL10.alSourcef(sources.get(0), AL10.AL_GAIN, lastCurrentMusicVolume * musicVolume);
-            }
+        if (soundWorks) {
+            lastCurrentMusicVolume = volume;
+            AL10.alSourcef(sources.get(0), AL10.AL_GAIN, lastCurrentMusicVolume * musicVolume);
+        }
     }
 
     /**
@@ -227,10 +224,10 @@ public class SoundStore {
      * @param volume The volume for sound fx
      */
     public void setSoundVolume(float volume) {
-            if (volume < 0) {
-                    volume = 0;
-            }
-            soundVolume = volume;
+        if (volume < 0) {
+            volume = 0;
+        }
+        soundVolume = volume;
     }
 
     /**
@@ -239,7 +236,7 @@ public class SoundStore {
      * @return True if sound works at all
      */
     public boolean soundWorks() {
-            return soundWorks;
+        return soundWorks;
     }
 
     /**
@@ -248,7 +245,7 @@ public class SoundStore {
      * @return True if music is currently enabled
      */
     public boolean musicOn() {
-            return music;
+        return music;
     }
 
     /**
@@ -257,7 +254,7 @@ public class SoundStore {
      * @return The volume for sounds
      */
     public float getSoundVolume() {
-            return soundVolume;
+        return soundVolume;
     }
 
     /**
@@ -266,7 +263,7 @@ public class SoundStore {
      * @return The volume for music
      */
     public float getMusicVolume() {
-            return musicVolume;
+        return musicVolume;
     }
 
     /**
@@ -276,13 +273,13 @@ public class SoundStore {
      * @return The ID of the given source
      */
     public int getSource(int index) {
-            if (!soundWorks) {
-                    return -1;
-            }
-            if (index < 0) {
-                    return -1;
-            }
-            return sources.get(index);
+        if (!soundWorks) {
+            return -1;
+        }
+        if (index < 0) {
+            return -1;
+        }
+        return sources.get(index);
     }
 
     /**
@@ -291,9 +288,9 @@ public class SoundStore {
      * @param sounds True if sound effects should be played
      */
     public void setSoundsOn(boolean sounds) {
-            if (soundWorks) {
-                    this.sounds = sounds;
-            }
+        if (soundWorks) {
+            this.sounds = sounds;
+        }
     }
 
     /**
@@ -302,7 +299,7 @@ public class SoundStore {
      * @return True if sound effects are currently enabled
      */
     public boolean soundsOn() {
-            return sounds;
+        return sounds;
     }
 
     /**
@@ -312,7 +309,26 @@ public class SoundStore {
      * @param max The maximum number of sound effects/music to mix
      */
     public void setMaxSources(int max) {
-            this.maxSources = max;
+        this.maxSources = max;
+    }
+
+    private void enumerateDevices() {
+        if(!alcIsExtensionPresent(null, "ALC_ENUMERATION_EXT"))
+            return;
+
+        IntBuffer buf = BufferUtils.createIntBuffer(1);
+        alcGetInteger(null, ALC_MAJOR_VERSION,buf);
+        int major = buf.get(0); buf.position(0);
+        alcGetInteger(null, ALC_MINOR_VERSION,buf);
+        int minor = buf.get(0);
+
+        System.out.println(String.format("AL Version: %s.%s", major, minor));
+        
+        String str =alcGetString(null, ALC_DEVICE_SPECIFIER);
+        String[] devices = str.split("\0");
+        for (String string : devices) {
+            System.out.println("Audio device: " + string);
+        }
     }
 
     /**
@@ -321,29 +337,33 @@ public class SoundStore {
      */
     public void init() {
         if (inited) {
-                return;
+            return;
         }
         System.out.println("Initialising sounds..");
         inited = true;
 
         AccessController.doPrivileged(new PrivilegedAction<Object>() {
-        public Object run() {
-            try {
+
+            public Object run() {
+                try {
+                    
                     AL.create();
+                    enumerateDevices();
                     soundWorks = true;
                     sounds = true;
                     music = true;
                     System.out.println("- Sound works");
-            } catch (Exception e) {
+                } catch (Exception e) {
                     System.err.println("Sound initialisation failure.");
                     System.err.println(e);
                     soundWorks = false;
                     sounds = false;
                     music = false;
-            }
+                }
 
-            return null;
-        }});
+                return null;
+            }
+        });
 
         if (soundWorks) {
             sourceCount = 0;
@@ -357,7 +377,7 @@ public class SoundStore {
                     if (AL10.alGetError() == AL10.AL_NO_ERROR) {
                         sourceCount++;
                         sources.put(temp.get(0));
-                        if (sourceCount > maxSources-1) {
+                        if (sourceCount > maxSources - 1) {
                             break;
                         }
                     }
@@ -366,7 +386,7 @@ public class SoundStore {
                     break;
                 }
             }
-            System.out.println("- "+sourceCount+" OpenAL source available");
+            System.out.println("- " + sourceCount + " OpenAL source available");
 
             if (AL10.alGetError() != AL10.AL_NO_ERROR) {
                 sounds = false;
@@ -375,11 +395,11 @@ public class SoundStore {
                 System.err.println("- AL init failed");
             } else {
                 FloatBuffer listenerOri = BufferUtils.createFloatBuffer(6).put(
-                                new float[] { 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f });
+                        new float[]{0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f});
                 FloatBuffer listenerVel = BufferUtils.createFloatBuffer(3).put(
-                                new float[] { 0.0f, 0.0f, 0.0f });
+                        new float[]{0.0f, 0.0f, 0.0f});
                 FloatBuffer listenerPos = BufferUtils.createFloatBuffer(3).put(
-                                new float[] { 0.0f, 0.0f, 0.0f });
+                        new float[]{0.0f, 0.0f, 0.0f});
                 listenerPos.flip();
                 listenerVel.flip();
                 listenerOri.flip();
@@ -392,13 +412,19 @@ public class SoundStore {
         }
     }
 
+    public void setListener(FloatBuffer origin, FloatBuffer velocity, FloatBuffer orientation) {
+        AL10.alListener(AL10.AL_POSITION, origin);
+        AL10.alListener(AL10.AL_VELOCITY, velocity);
+        AL10.alListener(AL10.AL_ORIENTATION, orientation);
+    }
+
     /**
      * Stop a particular sound source
      *
      * @param index The index of the source to stop
      */
     void stopSource(int index) {
-            AL10.alSourceStop(sources.get(index));
+        AL10.alSourceStop(sources.get(index));
     }
 
     /**
@@ -411,8 +437,58 @@ public class SoundStore {
      * @param loop True if the sound should loop
      * @return source The source that will be used
      */
-    int playAsSound(int buffer,float pitch,float gain,boolean loop) {
-            return playAsSoundAt(buffer, pitch, gain, loop, 0, 0, 0,0, true);
+    int playAsSound(int buffer, float pitch, float gain, boolean loop) {
+        return playAsSoundAt(buffer, pitch, gain, loop, 0, 0, 0, 0, 0, 0, true);
+    }
+    Vector3f velocity = new Vector3f();
+
+    public void updateALSound(ALChannel[] chans, SoundLoop[] entities) {
+        for (int i = 0; i < chans.length; i++) {
+            ALChannel ch = chans[i];
+
+            // Detect end of playback so channel can be freed
+            if (ch.source_playing && !isPlaying(ch.chanIndex)) {
+                ch.source_playing = false;
+                ch.sfx = null;
+            }
+
+            Vector3f origin = ch.origin;
+            if (origin == null || !ch.fixed_origin) {
+                origin = entities[ch.entNum].origin;
+                velocity.set(entities[ch.entNum].velocity);
+            } else {
+                velocity.set(0, 0, 0);
+            }
+
+            if (ch.dirty) {
+                if (ch.sfx != null) {
+                    // Start
+
+                    int result = playAsSoundAt(ch.sfx.getBufferID(), ch.chanIndex, 1.0f, 1.0f, false,
+                            origin.x, origin.y, origin.z, velocity.x, velocity.y, velocity.z, false);
+
+                    if (result == -1) {
+                        ch.source_playing = false;
+                        ch.sfx = null;
+                    } else {
+                        ch.source_playing = true;
+                    }
+
+                } else {
+                    if (ch.source_playing && ch.sfx == null) {
+                        // Stop
+                        stopSource(ch.chanIndex);
+                        ch.source_playing = false;
+                    }
+                }
+                ch.dirty = false;
+            } else {
+                if (ch.source_playing) {
+                    // Update source position & velocity
+                    updateSource(ch.chanIndex, origin.x, origin.y, origin.z, velocity.x, velocity.y, velocity.z);
+                }
+            }
+        }
     }
 
     /**
@@ -428,7 +504,7 @@ public class SoundStore {
      * @param z The z position to play the sound from
      * @return source The source that will be used
      */
-    int playAsSoundAt(int buffer,float pitch,float gain,boolean loop,float x, float y, float vx, float vy, boolean localsound) {
+    int playAsSoundAt(int buffer, float pitch, float gain, boolean loop, float x, float y, float z, float vx, float vy, float vz, boolean localsound) {
         gain *= soundVolume;
         if (gain == 0) {
             gain = 0.001f;
@@ -437,16 +513,15 @@ public class SoundStore {
             if (sounds) {
                 int nextSource = findFreeSource();
                 if (nextSource == -1) {
-                        return -1;
+                    return -1;
                 }
 
                 AL10.alSourceStop(sources.get(nextSource));
                 AL10.alSourcef(sources.get(nextSource), AL10.AL_REFERENCE_DISTANCE, minDistance);
-                if(localsound) {
+                if (localsound) {
                     AL10.alSourcei(sources.get(nextSource), AL10.AL_SOURCE_RELATIVE, AL10.AL_TRUE);
                     AL10.alSourcef(sources.get(nextSource), AL10.AL_ROLLOFF_FACTOR, 0.0f);
-                }
-                else {
+                } else {
                     AL10.alSourcei(sources.get(nextSource), AL10.AL_SOURCE_RELATIVE, AL10.AL_FALSE);
                     AL10.alSourcef(sources.get(nextSource), AL10.AL_ROLLOFF_FACTOR, rollOff);
                 }
@@ -457,8 +532,8 @@ public class SoundStore {
 
                 sourcePos.clear();
                 sourceVel.clear();
-                sourceVel.put(new float[] { vx, vy, 0 });
-                sourcePos.put(new float[] { x, y, 0 });
+                sourceVel.put(new float[]{vx, vy, vz});
+                sourcePos.put(new float[]{x, y, z});
                 sourcePos.flip();
                 sourceVel.flip();
                 AL10.alSource(sources.get(nextSource), AL10.AL_POSITION, sourcePos);
@@ -473,11 +548,66 @@ public class SoundStore {
         return -1;
     }
 
+    void updateSource(int source, float x, float y, float z, float vx, float vy, float vz) {
+        sourcePos.clear();
+        sourceVel.clear();
+        sourceVel.put(new float[]{vx, vy, vz});
+        sourcePos.put(new float[]{x, y, z});
+        sourcePos.flip();
+        sourceVel.flip();
+        AL10.alSource(sources.get(source), AL10.AL_POSITION, sourcePos);
+        AL10.alSource(sources.get(source), AL10.AL_VELOCITY, sourceVel);
+    }
+
+    int playAsSoundAt(int buffer, int source, float pitch, float gain, boolean loop, float x, float y, float z, float vx, float vy, float vz, boolean localsound) {
+        gain *= soundVolume;
+        if (gain == 0) {
+            gain = 0.001f;
+        }
+        if (soundWorks) {
+            if (sounds) {
+
+                if (source == -1) {
+                    return -1;
+                }
+
+                AL10.alSourceStop(sources.get(source));
+                AL10.alSourcef(sources.get(source), AL10.AL_REFERENCE_DISTANCE, minDistance);
+                if (localsound) {
+                    AL10.alSourcei(sources.get(source), AL10.AL_SOURCE_RELATIVE, AL10.AL_TRUE);
+                    AL10.alSourcef(sources.get(source), AL10.AL_ROLLOFF_FACTOR, 0.0f);
+                } else {
+                    AL10.alSourcei(sources.get(source), AL10.AL_SOURCE_RELATIVE, AL10.AL_FALSE);
+                    AL10.alSourcef(sources.get(source), AL10.AL_ROLLOFF_FACTOR, rollOff);
+                }
+                AL10.alSourcei(sources.get(source), AL10.AL_BUFFER, buffer);
+                AL10.alSourcef(sources.get(source), AL10.AL_PITCH, pitch);
+                AL10.alSourcef(sources.get(source), AL10.AL_GAIN, gain);
+                AL10.alSourcei(sources.get(source), AL10.AL_LOOPING, loop ? AL10.AL_TRUE : AL10.AL_FALSE);
+
+                sourcePos.clear();
+                sourceVel.clear();
+                sourceVel.put(new float[]{vx, vy, vz});
+                sourcePos.put(new float[]{x, y, z});
+                sourcePos.flip();
+                sourceVel.flip();
+                AL10.alSource(sources.get(source), AL10.AL_POSITION, sourcePos);
+                AL10.alSource(sources.get(source), AL10.AL_VELOCITY, sourceVel);
+
+                AL10.alSourcePlay(sources.get(source));
+
+                return source;
+            }
+        }
+
+        return -1;
+    }
+
     public void UpdateListener(float x, float y, float z, float vx, float vy, float vz) {
         FloatBuffer listenerVel = BufferUtils.createFloatBuffer(3).put(
-                        new float[] { vx, vy, vz});
+                new float[]{vx, vy, vz});
         FloatBuffer listenerPos = BufferUtils.createFloatBuffer(3).put(
-                        new float[] { x, y, z });
+                new float[]{x, y, z});
         listenerPos.flip();
         listenerVel.flip();
         AL10.alListener(AL10.AL_POSITION, listenerPos);
@@ -504,7 +634,7 @@ public class SoundStore {
      * @return The index of the free sound source
      */
     private int findFreeSource() {
-        for (int i=1;i<sourceCount-1;i++) {
+        for (int i = 1; i < sourceCount - 1; i++) {
             int state = AL10.alGetSourcei(sources.get(i), AL10.AL_SOURCE_STATE);
 
             if ((state != AL10.AL_PLAYING) && (state != AL10.AL_PAUSED)) {
@@ -523,14 +653,14 @@ public class SoundStore {
      * @param gain The gaing to play the music at
      * @param loop True if we should loop the music
      */
-    void playAsMusic(int buffer,float pitch,float gain, boolean loop) {
+    void playAsMusic(int buffer, float pitch, float gain, boolean loop) {
         paused = false;
 
-        setMOD(null);
+
 
         if (soundWorks) {
             if (currentMusic != -1) {
-                    AL10.alSourceStop(sources.get(0));
+                AL10.alSourceStop(sources.get(0));
             }
 
             getMusicSource();
@@ -542,9 +672,9 @@ public class SoundStore {
             currentMusic = sources.get(0);
 
             if (!music) {
-                    pauseLoop();
+                pauseLoop();
             } else {
-                    AL10.alSourcePlay(sources.get(0));
+                AL10.alSourcePlay(sources.get(0));
             }
         }
     }
@@ -573,7 +703,7 @@ public class SoundStore {
      * Pause the music loop that is currently playing
      */
     public void pauseLoop() {
-        if ((soundWorks) && (currentMusic != -1)){
+        if ((soundWorks) && (currentMusic != -1)) {
             paused = true;
             AL10.alSourcePause(currentMusic);
         }
@@ -583,21 +713,10 @@ public class SoundStore {
      * Restart the music loop that is currently paused
      */
     public void restartLoop() {
-        if ((music) && (soundWorks) && (currentMusic != -1)){
+        if ((music) && (soundWorks) && (currentMusic != -1)) {
             paused = false;
             AL10.alSourcePlay(currentMusic);
         }
-    }
-
-    /**
-     * Check if the supplied player is currently being polled by this
-     * sound store.
-     *
-     * @param player The player to check
-     * @return True if this player is currently in use by this sound store
-     */
-    boolean isPlaying(OpenALStreamPlayer player) {
-        return stream == player;
     }
 
     /**
@@ -655,7 +774,6 @@ public class SoundStore {
         return getAIF(ref, ResourceLoader.getResourceAsStream(ref));
     }
 
-
     /**
      * Get the Sound based on a specified AIF file
      *
@@ -679,46 +797,44 @@ public class SoundStore {
         in = new BufferedInputStream(in);
 
         if (!soundWorks) {
-                return new NullAudio();
+            return new NullAudio();
         }
         if (!inited) {
-                throw new RuntimeException("Can't load sounds until SoundStore is init(). Use the container init() method.");
+            throw new RuntimeException("Can't load sounds until SoundStore is init(). Use the container init() method.");
         }
         if (deferred) {
-                return new DeferredSound(ref, in, DeferredSound.AIF);
+            return new DeferredSound(ref, in, DeferredSound.AIF);
         }
 
         int buffer = -1;
 
         if (loaded.get(ref) != null) {
-                buffer = ((Integer) loaded.get(ref)).intValue();
+            buffer = ((Integer) loaded.get(ref)).intValue();
         } else {
-                try {
-                        IntBuffer buf = BufferUtils.createIntBuffer(1);
+            try {
+                IntBuffer buf = BufferUtils.createIntBuffer(1);
 
-                        AiffData data = AiffData.create(in);
-                        AL10.alGenBuffers(buf);
-                        AL10.alBufferData(buf.get(0), data.format, data.data, data.samplerate);
+                AiffData data = AiffData.create(in);
+                AL10.alGenBuffers(buf);
+                AL10.alBufferData(buf.get(0), data.format, data.data, data.samplerate);
 
-                        loaded.put(ref,new Integer(buf.get(0)));
-                        buffer = buf.get(0);
-                } catch (Exception e) {
-                        System.err.println(e);
-                        IOException x = new IOException("Failed to load: "+ref);
-                        x.initCause(e);
+                loaded.put(ref, new Integer(buf.get(0)));
+                buffer = buf.get(0);
+            } catch (Exception e) {
+                System.err.println(e);
+                IOException x = new IOException("Failed to load: " + ref);
+                x.initCause(e);
 
-                        throw x;
-                }
+                throw x;
+            }
         }
 
         if (buffer == -1) {
-                throw new IOException("Unable to load: "+ref);
+            throw new IOException("Unable to load: " + ref);
         }
 
         return new AudioImpl(this, buffer);
     }
-
-
 
     /**
      * Get the Sound based on a specified WAV file
@@ -752,203 +868,41 @@ public class SoundStore {
      */
     public Audio getWAV(String ref, InputStream in) throws IOException {
         if (!soundWorks) {
-                return new NullAudio();
+            return new NullAudio();
         }
         if (!inited) {
-                throw new RuntimeException("Can't load sounds until SoundStore is init(). Use the container init() method.");
+            throw new RuntimeException("Can't load sounds until SoundStore is init(). Use the container init() method.");
         }
         if (deferred) {
-                return new DeferredSound(ref, in, DeferredSound.WAV);
+            return new DeferredSound(ref, in, DeferredSound.WAV);
         }
 
         int buffer = -1;
 
         if (loaded.get(ref) != null) {
-                buffer = ((Integer) loaded.get(ref)).intValue();
+            buffer = ((Integer) loaded.get(ref)).intValue();
         } else {
-                try {
-                        IntBuffer buf = BufferUtils.createIntBuffer(1);
+            try {
+                IntBuffer buf = BufferUtils.createIntBuffer(1);
 
-                        WaveData data = WaveData.create(in);
-                        AL10.alGenBuffers(buf);
-                        AL10.alBufferData(buf.get(0), data.format, data.data, data.samplerate);
+                WaveData data = WaveData.create(in);
+                AL10.alGenBuffers(buf);
+                AL10.alBufferData(buf.get(0), data.format, data.data, data.samplerate);
 
-                        loaded.put(ref,new Integer(buf.get(0)));
-                        buffer = buf.get(0);
-                } catch (Exception e) {
-                        System.err.println(e);
-                        IOException x = new IOException("Failed to load: "+ref);
-                        x.initCause(e);
+                loaded.put(ref, new Integer(buf.get(0)));
+                buffer = buf.get(0);
+            } catch (Exception e) {
+                System.err.println(e);
 
-                        throw x;
-                }
+                throw new IOException("Failed to load: " + ref, e);
+            }
         }
 
         if (buffer == -1) {
-                throw new IOException("Unable to load: "+ref);
+            throw new IOException("Unable to load: " + ref);
         }
 
         return new AudioImpl(this, buffer);
-    }
-
-    /**
-     * Get the Sound based on a specified OGG file
-     *
-     * @param ref The reference to the OGG file in the classpath
-     * @return The Sound read from the OGG file
-     * @throws IOException Indicates a failure to load the OGG
-     */
-    public Audio getOggStream(String ref) throws IOException {
-        if (!soundWorks) {
-                return new NullAudio();
-        }
-
-        setMOD(null);
-        setStream(null);
-
-        if (currentMusic != -1) {
-            AL10.alSourceStop(sources.get(0));
-        }
-
-        getMusicSource();
-        currentMusic = sources.get(0);
-
-        return new StreamSound(new OpenALStreamPlayer(currentMusic, ref));
-    }
-
-    /**
-     * Get the Sound based on a specified OGG file
-     *
-     * @param ref The reference to the OGG file in the classpath
-     * @return The Sound read from the OGG file
-     * @throws IOException Indicates a failure to load the OGG
-     */
-    public Audio getOggStream(URL ref) throws IOException {
-        if (!soundWorks) {
-                return new NullAudio();
-        }
-
-        setMOD(null);
-        setStream(null);
-
-        if (currentMusic != -1) {
-                AL10.alSourceStop(sources.get(0));
-        }
-
-        getMusicSource();
-        currentMusic = sources.get(0);
-
-        return new StreamSound(new OpenALStreamPlayer(currentMusic, ref));
-    }
-
-    /**
-     * Get the Sound based on a specified OGG file
-     *
-     * @param ref The reference to the OGG file in the classpath
-     * @return The Sound read from the OGG file
-     * @throws IOException Indicates a failure to load the OGG
-     */
-    public Audio getOgg(String ref) throws IOException {
-            return getOgg(ref, ResourceLoader.getResourceAsStream(ref));
-    }
-
-    /**
-     * Get the Sound based on a specified OGG file
-     *
-     * @param in The stream to the OGG to load
-     * @return The Sound read from the OGG file
-     * @throws IOException Indicates a failure to load the OGG
-     */
-    public Audio getOgg(InputStream in) throws IOException {
-            return getOgg(in.toString(), in);
-    }
-
-    /**
-     * Get the Sound based on a specified OGG file
-     *
-     * @param ref The reference to the OGG file in the classpath
-     * @param in The stream to the OGG to load
-     * @return The Sound read from the OGG file
-     * @throws IOException Indicates a failure to load the OGG
-     */
-    public Audio getOgg(String ref, InputStream in) throws IOException {
-            if (!soundWorks) {
-                    return new NullAudio();
-            }
-            if (!inited) {
-                    throw new RuntimeException("Can't load sounds until SoundStore is init(). Use the container init() method.");
-            }
-            if (deferred) {
-                    return new DeferredSound(ref, in, DeferredSound.OGG);
-            }
-
-            int buffer = -1;
-
-            if (loaded.get(ref) != null) {
-                    buffer = ((Integer) loaded.get(ref)).intValue();
-            } else {
-                    try {
-                            IntBuffer buf = BufferUtils.createIntBuffer(1);
-
-                            OggDecoder decoder = new OggDecoder();
-                            OggData ogg = decoder.getData(in);
-
-                            AL10.alGenBuffers(buf);
-                            AL10.alBufferData(buf.get(0), ogg.channels > 1 ? AL10.AL_FORMAT_STEREO16 : AL10.AL_FORMAT_MONO16, ogg.data, ogg.rate);
-
-                            loaded.put(ref,new Integer(buf.get(0)));
-
-                            buffer = buf.get(0);
-                    } catch (Exception e) {
-                            System.err.println(e);
-                            Sys.alert("Error","Failed to load: "+ref+" - "+e.getMessage());
-                            throw new IOException("Unable to load: "+ref);
-                    }
-            }
-
-            if (buffer == -1) {
-                    throw new IOException("Unable to load: "+ref);
-            }
-
-            return new AudioImpl(this, buffer);
-    }
-
-    /**
-     * Set the mod thats being streamed if any
-     *
-     * @param sound The mod being streamed
-     */
-    void setMOD(MODSound sound) {
-            if (!soundWorks) {
-                    return;
-            }
-
-            currentMusic = sources.get(0);
-            stopSource(0);
-
-            this.mod = sound;
-            if (sound != null) {
-                    this.stream = null;
-            }
-            paused = false;
-    }
-
-    /**
-     * Set the stream being played
-     *
-     * @param stream The stream being streamed
-     */
-    void setStream(OpenALStreamPlayer stream) {
-            if (!soundWorks) {
-                    return;
-            }
-
-            currentMusic = sources.get(0);
-            this.stream = stream;
-            if (stream != null) {
-                    this.mod = null;
-            }
-            paused = false;
     }
 
     /**
@@ -957,33 +911,12 @@ public class SoundStore {
      * @param delta The amount of time passed since last poll (in milliseconds)
      */
     public void poll(int delta) {
-            if (!soundWorks) {
-                    return;
-            }
-            if (paused) {
-                    return;
-            }
-
-            if (music) {
-                    if (mod != null) {
-                            try {
-                                    mod.poll();
-                            } catch (OpenALException e) {
-                                    System.err.println("Error with OpenGL MOD Player on this this platform");
-                                    System.err.println(e);
-                                    mod = null;
-                            }
-                    }
-                    if (stream != null) {
-                            try {
-                                    stream.update();
-                            } catch (OpenALException e) {
-                                    System.err.println("Error with OpenGL Streaming Player on this this platform");
-                                    System.err.println(e);
-                                    mod = null;
-                            }
-                    }
-            }
+        if (!soundWorks) {
+            return;
+        }
+        if (paused) {
+            return;
+        }
     }
 
     /**
@@ -991,14 +924,13 @@ public class SoundStore {
      *
      * @return True if the music is playing
      */
-    public boolean isMusicPlaying()
-    {
-            if (!soundWorks) {
-                    return false;
-            }
+    public boolean isMusicPlaying() {
+        if (!soundWorks) {
+            return false;
+        }
 
-            int state = AL10.alGetSourcei(sources.get(0), AL10.AL_SOURCE_STATE);
-            return ((state == AL10.AL_PLAYING) || (state == AL10.AL_PAUSED));
+        int state = AL10.alGetSourcei(sources.get(0), AL10.AL_SOURCE_STATE);
+        return ((state == AL10.AL_PLAYING) || (state == AL10.AL_PAUSED));
     }
 
     /**
@@ -1007,7 +939,7 @@ public class SoundStore {
      * @return The single instnace of this class
      */
     public static SoundStore get() {
-            return store;
+        return store;
     }
 
     /**
@@ -1018,7 +950,7 @@ public class SoundStore {
      * @param id The ID of the underlying OpenAL source as returned from playAsSoundEffect
      */
     public void stopSoundEffect(int id) {
-            AL10.alSourceStop(id);
+        AL10.alSourceStop(id);
     }
 
     /**
@@ -1028,6 +960,6 @@ public class SoundStore {
      * @return The number of sources available
      */
     public int getSourceCount() {
-            return sourceCount;
+        return sourceCount;
     }
 }

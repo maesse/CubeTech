@@ -3,6 +3,7 @@ package cubetech.input;
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
 import cubetech.common.Commands.ExecType;
+import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.gfx.GLRef;
 import cubetech.misc.Ref;
@@ -32,7 +33,6 @@ public class Input {
 
     private int KeyCatcher = 0;
 
-    public int frame_msec = 0;
 
     public final static int KEYCATCH_NONE = 0;
     public final static int KEYCATCH_UI = 1;
@@ -60,14 +60,19 @@ public class Input {
 
     private CVar sens;
     private CVar in_mouselook;
+    private CVar in_debug;
+    private boolean initialized = false;
 
     public Input() {
         binds = new Binds(this);
-        InitButtons();
         viewangles[0] = 90;
     }
 
-    private void InitButtons() {
+    public void initialize() {
+        if(initialized) return;
+
+        in_debug = Ref.cvars.Get("in_debug", "0", EnumSet.of(CVarFlags.NONE));
+
         in_forward = new ButtonState();
         in_back = new ButtonState();
         in_left = new ButtonState();
@@ -104,6 +109,7 @@ public class Input {
         binds.BindKey("LEFT", "+left");
         binds.BindKey("RIGHT", "+right");
         binds.BindKey("F10", "console");
+        binds.BindKey("BACKSLASH", "console");
         binds.BindKey("TAB", "+scores");
         binds.BindKey("RETURN", "message");
         binds.BindKey("y", "message");
@@ -114,7 +120,9 @@ public class Input {
         binds.BindKey("5", "weapon 5");
         binds.BindKey("mouse1", "+button0");
         binds.BindKey("mouse2", "+button1");
-        
+        binds.BindKey("LCONTROL", "+button2");
+        binds.BindKey("F11", "screenshot");
+        initialized = true;
     }
 
     public void SetKeyCatcher(int catcher) {
@@ -404,6 +412,9 @@ public class Input {
                 currKey.Changed = true;
                 currKey.Time = msec;
                 currKey.Char = c;
+                
+                if(in_debug.isTrue()) Common.LogDebug("Key %s: %s", pressed?"Pressed":"Released", binds.KeyToString(key));
+
                 if(pressed) {
                     // Special case handling for escape
                     // Toggle console
@@ -516,21 +527,25 @@ public class Input {
         viewangles[ANGLE_YAW] -= 0.022f * mx;
         viewangles[ANGLE_PITCH] -= 0.022f * my;
 
-        if(viewangles[ANGLE_PITCH] > 180f)
-            viewangles[ANGLE_PITCH] = 180f;
-        else if(viewangles[ANGLE_PITCH] < 0f)
-            viewangles[ANGLE_PITCH] = 0f;
+        if(viewangles[ANGLE_PITCH] > 168f)
+            viewangles[ANGLE_PITCH] = 168f;
+        else if(viewangles[ANGLE_PITCH] < 1f)
+            viewangles[ANGLE_PITCH] = 1f;
 
         // Ensure angles have not been wrapped
         cmd.angles[0] = Helper.Angle2Short(viewangles[0]);
         cmd.angles[1] = Helper.Angle2Short(viewangles[1]);
         cmd.angles[2] = Helper.Angle2Short(viewangles[2]);
+        
     }
+
+
 
     public PlayerInput CreateCmd() {
         System.arraycopy(viewangles, 0, oldangles, 0, viewangles.length);
         PlayerInput cmd = playerInput.Clone();
-        MouseMove(cmd);
+        MouseMove(playerInput);
+        
         for (int i= 0; i < in_buttons.length; i++) {
             int state = (int) in_buttons[i].KeyState();
             cmd.buttons[i] = state != 0;

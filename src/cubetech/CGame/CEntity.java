@@ -4,11 +4,13 @@ import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.common.Trajectory;
 import cubetech.common.items.IItem;
+import cubetech.common.items.Weapon;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
 import cubetech.entities.Event;
 import cubetech.misc.Ref;
+import cubetech.snd.SoundChannel;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 
@@ -191,7 +193,7 @@ public class CEntity {
 
         switch(event) {
             case FOOTSTEP:
-                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.cgame.cgs.media.s_footStep, 0.5f);
+                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.cgame.cgs.media.s_footStep, SoundChannel.AUTO, 0.5f);
                 break;
             case STEP:
                 
@@ -204,22 +206,28 @@ public class CEntity {
                     break;
                 }
                 IItem item = Ref.common.items.getItem(index);
-                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound(item.getPickupSound()), 1.0f);
+                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound(item.getPickupSound()), SoundChannel.ITEM, 1.0f);
                 break;
             case ITEM_RESPAWN:
-                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.cgame.cgs.media.s_itemRespawn, 1.0f);
+                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.cgame.cgs.media.s_itemRespawn, SoundChannel.AUTO, 1.0f);
                 break;
             case DIED:
-                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/die.wav"), 1.0f);
+                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/die.wav"), SoundChannel.AUTO, 1.0f);
                 break;
             case GOAL:
-                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/ouch.wav"), 1.0f);
+                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/ouch.wav"), SoundChannel.AUTO, 1.0f);
                 break;
             case HIT_WALL:
-                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/ouch.wav"), 1.0f);
+                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/ouch.wav"), SoundChannel.AUTO, 1.0f);
                 break;
             case JUMP:
-                Ref.soundMan.playEntityEffect(currentState.ClientNum, Ref.soundMan.AddWavSound("data/hop.wav"), 1.0f);
+                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/hop.wav"), SoundChannel.AUTO, 1.0f);
+                break;
+            case FIRE_WEAPON:
+                Ref.cgame.weapons.fireWeaponEvent(this);
+                break;
+            case MISSILE_MISS:
+                Ref.cgame.weapons.missileHitWall(currentState.weapon, 0, lerpOrigin, null);
                 break;
             default:
                 Common.LogDebug("Unhandled CGame event: " + event);

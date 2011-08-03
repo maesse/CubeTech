@@ -1,5 +1,10 @@
 package cubetech.iqm;
 
+import java.util.EnumMap;
+import java.util.HashMap;
+import cubetech.CGame.ViewParams;
+import cubetech.common.Animations;
+import cubetech.gfx.GLRef;
 import java.nio.FloatBuffer;
 import cubetech.gfx.Shader;
 import cubetech.common.Common;
@@ -56,36 +61,37 @@ public class IQMModel {
     Vector3f[] out_bitangent;
 
     IQMAnim currentAnim = null;
-    private int currentFrameIndex = 0;
     Matrix3f modelMatrix = new Matrix3f();
     CubeTexture envMap = null;
+    EnumMap<Animations, IQMAnim> animationMap = new EnumMap<Animations, IQMAnim>(Animations.class);
+    Vector3f min = new Vector3f(-32,-32,-32);
+    Vector3f max = new Vector3f(32,32,32);
+
+    IQMJoint[] thighJoints = null;
+
 
     IQMModel() {
-
-            envMap = Ref.ResMan.LoadTexture("data/ibl_sky", true);
-            //envMap = Ref.ResMan.LoadTexture("data/sky_up.png");
-            envMap.textureSlot = 1;
-
+        envMap = Ref.ResMan.LoadTexture("data/ibl_sky", true);
+        envMap.textureSlot = 1;
         modelMatrix.setIdentity();
+    }
+
+    public IQMAnim getAnimation(Animations animations) {
+        return animationMap.get(animations);
+    }
+
+    public void destroy() {
+//        envMap = null;
     }
 
     public void animate(int frame, int oldframe, float backlerp) {
         if(header.num_frames <= 5) return;
-//        currentAnim = anims[0];
+
 
         int frame1 = oldframe;
         int frame2 = frame;
         float frameOffset = 1f-backlerp;
-//        if(currentAnim == null) {
-//            frame1 %= header.num_frames;
-//            frame2 %= header.num_frames;
-//        } else {
-//            frame1 %= currentAnim.num_frames;
-//            frame2 %= currentAnim.num_frames;
-//            frame1 += currentAnim.first_frame;
-//            frame2 += currentAnim.first_frame;
-//        }
-        currentFrameIndex = frame1;
+
         int mat1 = frame1 * header.num_joints;
         int mat2 = frame2 * header.num_joints;
 
@@ -142,7 +148,6 @@ public class IQMModel {
             out_tangent[i] = Helper.transform(matnorm, in_tangent[i], out_tangent[i]);
             out_bitangent[i] = Vector3f.cross(out_normal[i], out_tangent[i], out_bitangent[i]);
             out_bitangent[i].scale(in_tangent[i].w);
-//            out_position[i].y *= -1f;
 
             iIndex += 4;
             iWeight += 4;
@@ -150,40 +155,75 @@ public class IQMModel {
 
     }    
 
-    public void render(Vector3f position, Vector3f[] axis, Vector4f color) {
-        glPushMatrix();
-        glTranslatef(position.x, position.y, position.z);
-
-        Shader shader = Ref.glRef.getShader("litobjectpixel");
+    public void render(Vector3f position, Vector3f[] axis, Vector4f color, boolean shadowPass) {
+        Shader shader = null;
+        if(shadowPass) {
+            shader = Ref.glRef.getShader("unlitObject");
+        } else {
+            shader = Ref.glRef.getShader("litobjectpixel");
+        }
         
         Ref.glRef.PushShader(shader);
-        
-        
-        envMap.textureSlot = 1;
-        envMap.Bind();
-        FloatBuffer viewbuffer = Ref.glRef.matrixBuffer;
 
+
+        if(!shadowPass) {
+            // Bind environmentmap
+            envMap.textureSlot = 2;
+            envMap.Bind();
+            // Set light
+            Ref.glRef.setLIght();
+            CubeTexture depth = Ref.cgame.shadowMan.getDepthTexture();
+            depth.textureSlot = 1;
+            depth.Bind();
+            Matrix4f[] shadowmat = Ref.cgame.shadowMan.getShadowViewProjections(4);
+            shader.setUniform("shadowMatrix", shadowmat);
+            Vector4f[] shadowDepths = Ref.cgame.shadowMan.getCascadeDepths();
+
+            shader.setUniform("cascadeDistances", shadowDepths[0]);
+
+//            shader.setUniform("cascadeColors", Ref.cgame.shadowMan.getCascadeColors());
+//            shader.setUniform("fog_factor", 1f/(view.farDepth));
+//            shader.setUniform("fog_color", (Vector4f)new Vector4f(95,87,67,255).scale(1/255f)); // 145, 140, 129
+            shader.setUniform("shadow_bias", Ref.cvars.Find("shadow_bias").fValue);
+
+            shader.setUniform("pcfOffsets", Ref.cgame.shadowMan.getPCFoffsets());
+            shader.setUniform("lightDirection", Ref.glRef.getLightAngle());
+            GLRef.checkError();
+        }
+
+        // Set rotation matrix
+        FloatBuffer viewbuffer = Ref.glRef.matrixBuffer;
         viewbuffer.position(0);
-        viewbuffer.put(axis[0].x);viewbuffer.put(axis[0].y);viewbuffer.put(axis[0].z);
-        viewbuffer.put(axis[1].x);viewbuffer.put(axis[1].y);viewbuffer.put(axis[1].z);
-        viewbuffer.put(axis[2].x); viewbuffer.put(axis[2].y); viewbuffer.put(axis[2].z);
+        viewbuffer.put(axis[0].x);viewbuffer.put(axis[1].x);viewbuffer.put(axis[2].x);viewbuffer.put(0);
+        viewbuffer.put(axis[0].y);viewbuffer.put(axis[1].y);viewbuffer.put(axis[2].y); viewbuffer.put(0);
+        viewbuffer.put(axis[0].z); viewbuffer.put(axis[1].z); viewbuffer.put(axis[2].z);viewbuffer.put(0);
+        viewbuffer.put(0);
+        viewbuffer.put(0);
+        viewbuffer.put(0);
+        viewbuffer.put(1);
         viewbuffer.flip();
-        
-        shader.setUniformMat3("Modell", viewbuffer);
-        
-        Ref.glRef.setLIght();
+        Matrix4f mMatrix = (Matrix4f) new Matrix4f().load(viewbuffer);
+        mMatrix.invert();
+         mMatrix.m30 = position.x;
+        mMatrix.m31 = position.y;
+        mMatrix.m32 = position.z;
+        shader.setUniform("Modell", mMatrix);
+        viewbuffer.clear();
+
 
         if(color != null) Helper.col(color);
         for (int i= 0; i < header.num_meshes; i++) {
             IQMMesh mesh = meshes[i];
-            mesh.bindTexture();
-
-            glCullFace(GL_FRONT);
+            if(mesh.name.startsWith("@")) continue; // dont draw control-meshes
+            if(!shadowPass) {
+                mesh.bindTexture();
+                glCullFace(GL_FRONT);
+            }
             glBegin(GL_TRIANGLES);
             for (int j= 0; j < mesh.num_triangles; j++) {
                 IQMTriangle tri = triangles[mesh.first_triangle+j];
                 for (int k= 0; k < tri.vertex.length; k++) {
-                    int indice = tri.vertex[k]-1;
+                    int indice = tri.vertex[k];
                     if(indice < 0) continue;
                     Vector2f coords = in_texcoord[indice];
                     Helper.tex(coords.x, 1-coords.y);
@@ -204,14 +244,17 @@ public class IQMModel {
                 }
             }
             glEnd();
-            glCullFace(GL_BACK);
+            if(!shadowPass) glCullFace(GL_BACK);
         }
         Ref.glRef.PopShader();
 
         // Draw BBOx
-        if(bounds != null && false) {
-            IQMBounds b = bounds[currentFrameIndex];
-            Helper.renderBBoxWireframe(b.bbmins[0],b.bbmins[1],b.bbmins[2], b.bbmaxs[0], b.bbmaxs[1], b.bbmaxs[2]);
+        if( false) {
+//            IQMBounds b = bounds[currentFrameIndex];
+            glPushMatrix();
+            glTranslatef(position.x, position.y, position.z);
+            Helper.renderBBoxWireframe(min.x, min.y, min.z, max.x, max.y, max.z);
+            glPopMatrix();
         }
 
         // Draw normals
@@ -244,7 +287,7 @@ public class IQMModel {
             glEnd();
         }        
         
-        glPopMatrix();
+//        glPopMatrix();
 
         // Draw axis vectors
         if(false) {
@@ -268,6 +311,10 @@ public class IQMModel {
             glEnable(GL_DEPTH_TEST);
         }
     }
+
+    
+
+    
 
     
 

@@ -1,37 +1,23 @@
 package cubetech.CGame;
 
 import cubetech.Block;
-import cubetech.Game.Game;
-import cubetech.collision.BlockModel;
-import cubetech.collision.ClientCubeMap;
-import cubetech.collision.ClipmapException;
-import cubetech.collision.CollisionResult;
-import cubetech.collision.CubeCollision;
-import cubetech.collision.CubeMap;
-import cubetech.collision.SingleCube;
+import cubetech.Game.Gentity;
+import cubetech.collision.*;
 import cubetech.common.*;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
-import cubetech.gfx.CubeTexture;
-import cubetech.gfx.CubeType;
-import cubetech.gfx.Shader;
-import cubetech.gfx.SkyBox;
-import cubetech.gfx.SkyDome;
-import cubetech.gfx.Sprite;
-import cubetech.gfx.SpriteManager;
+import cubetech.gfx.*;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.input.*;
-import cubetech.iqm.IQMLoader;
-import cubetech.iqm.IQMModel;
+import cubetech.misc.Profiler;
+import cubetech.misc.Profiler.Sec;
+import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
-import cubetech.spatial.Bin;
 import cubetech.spatial.SpatialQuery;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 
@@ -44,43 +30,25 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_nopredict = Ref.cvars.Get("cg_nopredict", "0", EnumSet.of(CVarFlags.TEMP));
     CVar cg_smoothclients = Ref.cvars.Get("cg_smoothclients", "0", EnumSet.of(CVarFlags.TEMP));
     CVar cg_errorDecay = Ref.cvars.Get("cg_errorDecay", "100", EnumSet.of(CVarFlags.TEMP));
+    CVar cg_showmiss = Ref.cvars.Get("cg_showmiss", "0", EnumSet.of(CVarFlags.TEMP));
     CVar cg_viewsize = Ref.cvars.Get("cg_viewsize", "100", EnumSet.of(CVarFlags.TEMP));
     CVar cg_fov = Ref.cvars.Get("cg_fov", "90", EnumSet.of(CVarFlags.ARCHIVE));
     CVar cg_chattime = Ref.cvars.Get("cg_chattime", "5000", EnumSet.of(CVarFlags.ARCHIVE)); // show text for this long
     CVar cg_chatfadetime = Ref.cvars.Get("cg_chatfadetime", "500", EnumSet.of(CVarFlags.ARCHIVE)); // + this time for fading out
     CVar cg_drawSolid = Ref.cvars.Get("cg_drawSolid", "0", EnumSet.of(CVarFlags.NONE));
     CVar cg_depthnear = Ref.cvars.Get("cg_depthnear", "1", EnumSet.of(CVarFlags.CHEAT));
-    CVar cg_depthfar = Ref.cvars.Get("cg_depthfar", "3000", EnumSet.of(CVarFlags.CHEAT));
+    CVar cg_depthfar = Ref.cvars.Get("cg_depthfar", "8000", EnumSet.of(CVarFlags.CHEAT));
     CVar cg_viewmode = Ref.cvars.Get("cg_viewmode", "1", EnumSet.of(CVarFlags.NONE));
     CVar cg_drawentities = Ref.cvars.Get("cg_drawentities", "0", EnumSet.of(CVarFlags.ROM));
     CVar cg_drawbin = Ref.cvars.Get("cg_drawbin", "0", EnumSet.of(CVarFlags.NONE));
-
-    CVar cg_viewheight = Ref.cvars.Get("cg_viewheight", "15", EnumSet.of(CVarFlags.ARCHIVE));
-
-    // zoom to this fov
-    CVar camera_maxfov = Ref.cvars.Get("camera_maxfov", "1500", EnumSet.of(CVarFlags.ARCHIVE));
-    // at this speed
-    CVar camera_maxspeed = Ref.cvars.Get("camera_maxspeed", "600", EnumSet.of(CVarFlags.ARCHIVE));
-
-    // allow for smooth zooming
-    CVar camera_zoomspeed = Ref.cvars.Get("camera_zoomspeed", "10", EnumSet.of(CVarFlags.ARCHIVE));
-
-    // player centering
-    CVar camera_hplayerpos = Ref.cvars.Get("camera_hplayerpos", "0.3", EnumSet.of(CVarFlags.ARCHIVE));
-    CVar camera_vplayerpos = Ref.cvars.Get("camera_vplayerpos", "0.5", EnumSet.of(CVarFlags.ARCHIVE));
-    
-    // Move camera in vertical direction when vertical velocity > this
-    CVar camera_vsnapmin = Ref.cvars.Get("camera_vsnapmin", "140", EnumSet.of(CVarFlags.ARCHIVE));
-    CVar camera_vsnapmax = Ref.cvars.Get("camera_vsnapmax", "300", EnumSet.of(CVarFlags.ARCHIVE));
+    CVar cg_swingspeed = Ref.cvars.Get("cg_swingspeed", "0.3", EnumSet.of(CVarFlags.CHEAT));
+    CVar cg_freecam = Ref.cvars.Get("cg_freecam", "0", EnumSet.of(CVarFlags.CHEAT));
 
     CVar cg_tps = Ref.cvars.Get("cg_tps", "0", EnumSet.of(CVarFlags.NONE));
 
-    public Vector3f rayStart = new Vector3f();
-    public Vector3f rayEnd = new Vector3f();
-    public int rayTime = 0;
-
     public CGameState cg;
     CGameStatic cgs;
+    public CGWeapons weapons = new CGWeapons();
     public ClientCubeMap map = new ClientCubeMap();
     public CGameRender cgr;
     public LagOMeter lag;
@@ -93,16 +61,12 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     public CEntity[] cg_solidEntities = new CEntity[256];
     public CEntity[] cg_triggerEntities = new CEntity[256];
     private HashMap<String, ICommand> commands = new HashMap<String, ICommand>();
-    CubeTexture playerTexture;
     public float speed;
-    public float lastFov = cg_fov.fValue;
-    public float lastVleft = camera_vplayerpos.fValue;
+    public Marks marks;
 
     SkyBox skyBox = new SkyBox("data/sky");
-
+    public ShadowManager shadowMan = new ShadowManager();
     
-
-
     /**
     *=================
     *CG_Init
@@ -114,9 +78,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     public void Init(int serverMessageSequence, int serverCommandSequence, int ClientNum) {
         cgr = new CGameRender(this);
         lag = new LagOMeter();
-        playerTexture = Ref.ResMan.LoadTexture("data/enemy1.png");
-        commands.put("+scores", new Cmd_ScoresDown());
-        commands.put("-scores", new Cmd_ScoresUp());
+        ParticleSystem.init();
+        marks = new Marks();
         Ref.cvars.Set2("cg_editmode", "0", true);
 
         for (int i= 0; i < chatLines.length; i++) {
@@ -130,23 +93,14 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         for (int i= 0; i < cg_entities.length; i++) {
             cg_entities[i] = new CEntity();
         }
-        
-        Ref.commands.AddCommand("say", null); // re-direct to server
-        Ref.commands.AddCommand("block", null);
-        Ref.commands.AddCommand("weapon", CGameState.cg_SwitchWeapon_f);
 
-        LoadingString("Collision Map");
-        if(!Ref.client.servername.equalsIgnoreCase("localhost")) {
-            Ref.cm.EmptyCubeMap();
-        }
-//        try {
-//            if(Ref.client.clc.mapdata != null)
-//                Ref.cm.LoadBlockMap(Ref.client.clc.mapdata, true);
-//            else
-//                Ref.cm.LoadBlockMap(cgs.mapname, true);
-//        } catch (ClipmapException ex) {
-//            Ref.common.Error(Common.ErrorCode.DROP, "Couldn't load map:_" + Common.getExceptionString(ex));
-//        }
+        commands.put("+scores", new Cmd_ScoresDown());
+        commands.put("-scores", new Cmd_ScoresUp());
+        commands.put("testgun", cg.cg_testgun_f);
+        commands.put("testmodel", cg.cg_testmodel_f);
+        commands.put("nextframe", cg.cg_testmodelNextFrame_f);
+        commands.put("prevframe", cg.cg_testmodelPrevFrame_f);
+        commands.put("weapon", CGameState.cg_SwitchWeapon_f);
 
         cg.loading = true; // Dont defer now
 
@@ -177,9 +131,10 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         
     }
 
-    public void DrawActiveFrame(int serverTime) {
+    public void DrawActiveFrame(int serverTime, boolean isDemo) {
         // UpdateCVars
         cg.time = serverTime;
+        cg.playingdemo = isDemo;
         // if we are only updating the screen as a loading
 	// pacifier, don't even try to read snapshots
         if(!cg.infoScreenText.isEmpty()) {
@@ -205,41 +160,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg.PredictPlayerState();
 
         CalcViewValues();
-        //SkyDome.RenderDome(cg.refdef.Origin, 8000, false);
 
-        // Highlight block
-        if(Ref.cm.cubemap != null) {
-            Vector3f dir = new Vector3f(cg.refdef.ViewAxis[0]);
-            Helper.Normalize(dir);
-            CubeCollision col = CubeMap.TraceRay(cg.predictedPlayerEntity.lerpOrigin, dir, 6, map.chunks);
-            if(col != null) {
-                SingleCube cube = new SingleCube(col);
-                cgr.lookingAtCube = cube;
-            } else
-            {
-                cgr.lookingAtCube = null;
-            }
-        }
-
-        if(Ref.cm.cubemap != null && cgr.lookingAtCube != null && cgr.lookingAtCube.highlightSide != 0 && false) {
-            if(Ref.Input.playerInput.Mouse1 && Ref.Input.playerInput.Mouse1Diff) {
-                cgr.lookingAtCube.getHightlightside().putBlock(CubeType.GRASS);
-                //Ref.cm.cubemap.putBlock(cgr.highlightCube, CubeType.GRASS);
-            } else if(Ref.Input.playerInput.Mouse2 && Ref.Input.playerInput.Mouse2Diff) {
-                cgr.lookingAtCube.removeBlock();
-            }
-//            Vector3f dir = new Vectoraf(cg.refdef.ViewAxis[0]);
-//            Helper.Normalize(dir);
-//            dir.scale(-1f);
-//            Ref.cm.cubemap.TraceRay(cg.refdef.Origin, dir, 64);
-//            rayTime = cg.time + 8000;
-//            rayStart.set(cg.refdef.Origin);
-//            rayEnd.set(dir);
-//            rayEnd.scale(1000);
-//            Vector3f.add(rayEnd, rayStart, rayEnd);
-        }
-
-        Ref.soundMan.Respatialize(cg.refdef.Origin, cg.predictedPlayerState.velocity);
+        Ref.soundMan.Respatialize(cg.predictedPlayerState.clientNum, cg.refdef.Origin, cg.predictedPlayerState.velocity, cg.refdef.ViewAxis);
 //        AddLocalEntities();
         
 //        cg.refdef.time = cg.time;
@@ -249,64 +171,168 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg.oldTime = cg.time;
         lag.AddFrameInfo();
 
-        // Time to do some drawing
-//        if(cg_editmode.iValue == 0)
-//            cgr.RenderClouds();
-
         if(cg_drawbin.iValue == 1) {
             cgr.DrawBin();
             return;
         }
-
         
-            // Normal render
-            
-            if(Ref.cm.cubemap != null) {
-                //Shader shad = Ref.glRef.getShader("GroundFromAtmosphere");
-                //Ref.glRef.PushShader(shad);
-                //SkyDome.updateShader(shad, true);
-//                if(cg.refdef.planes[0] != null) {
-//                    cg.refdef.planes[0].DebugRender(cg.refdef.Origin);
-//                }
-                skyBox.Render(cg.refdef);
-                map.Render(cg.refdef);
-                
-                //Ref.glRef.PopShader();
-                
-            }
+        AddPacketEntities();
+        cg.addTestModel();
 
-            cgr.RenderClientEffects();
-            
-            //cgr.RenderScene(cg.refdef);
-            AddPacketEntities();
-            cgr.DrawEntities();
-            LocalEntities.addLocalEntities();
+        shadowMan.renderShadowCascades(cg.refdef, new IThinkMethod() {
+            public void think(Gentity ent) {
+                if(map != null) {
+                    map.Render(cg.refdef);
+                    Ref.render.renderAll(true);
+                }
+            }
+        });
+        
+        CVar shadow_view = Ref.cvars.Find("shadow_view");
+        if(shadow_view != null && shadow_view.isTrue()) {
+            int level = shadow_view.iValue;
+            shadowMan.applyShadowProjection(level);
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            Matrix4f viewM = Matrix4f.load(Ref.glRef.getLightViewMatrix(), null);
+            viewM.store(Ref.glRef.matrixBuffer);
+            Ref.glRef.matrixBuffer.position(0);
+            GL11.glLoadMatrix(Ref.glRef.matrixBuffer);
+            Ref.glRef.matrixBuffer.clear();
+        }
+        
+        SecTag s = Profiler.EnterSection(Sec.RENDER);
+
+        if(map != null) {
+            skyBox.Render(cg.refdef);
+            map.Render(cg.refdef);
+        }
+         
+        
+        cgr.renderViewModel(cg.predictedPlayerState);
+        marks.addMarks();
+        
+        //cgr.RenderScene(cg.refdef);
+
+        ParticleSystem.update();
+        
+//        cgr.DrawEntities();
+        LocalEntities.addLocalEntities();
+
+        drawSolid();
         
         // UI
         cgr.Draw2D();
+        s.ExitSection();
     }
 
-    float getPullAccel() {
-        try {
-        float pullstep = Ref.cvars.Find("sv_pullstep").fValue;
-        float accel = Ref.cvars.Find("sv_pullacceleration").fValue;
-        float spd = Math.abs(cg.predictedPlayerState.velocity.x);
-        if(spd > Ref.cvars.Find("sv_pull1").fValue)
-            accel *= pullstep;
-        if(spd > Ref.cvars.Find("sv_pull2").fValue)
-            accel *= pullstep;
-        if(spd > Ref.cvars.Find("sv_pull3").fValue)
-            accel *= pullstep;
-        if(spd > Ref.cvars.Find("sv_pull4").fValue)
-            accel *= pullstep;
-        if(spd > Ref.cvars.Find("sv_pull5").fValue)
-            accel *= pullstep;
-        if(spd > Ref.cvars.Find("sv_pull6").fValue)
-            accel *= pullstep;
-        return accel;
-        } catch(NullPointerException ex) {
-            return 10;
+    private float WheelAccelerate(float velocity, float dir, float wishspeed, float accel) {
+        float currentSpeed = velocity * dir;
+        float addspeed = wishspeed - currentSpeed;
+        if(addspeed <= 0) return velocity;
+        float accelspeed = accel * wishspeed * (Ref.common.framemsec / 1000f);
+        if(accelspeed > addspeed) accelspeed = addspeed;
+        return velocity + dir * accelspeed;
+    }
+
+    private void MouseAccelerate(Vector2f velocity, Vector2f mouseDir, float wishspeed, float accel) {
+        // Determine veer amount
+        float currentSpeed = Vector2f.dot(velocity, mouseDir);
+
+        // See how much to add
+        float addSpeed = wishspeed  - currentSpeed;
+
+        // If not adding any, done.
+        if(addSpeed <= 0f)
+            return;
+
+        // Determine acceleration speed after acceleration
+        float accelspeed = accel * (Ref.common.framemsec/1000f) * wishspeed;
+
+        // Cap it
+        if(accelspeed > addSpeed)
+            accelspeed = addSpeed;
+
+        // Adjust pmove vel.
+        Helper.VectorMA(velocity, accelspeed, mouseDir, velocity);
+    }
+
+    private float WheelFriction(float wheelSpeed, float friction) {
+        float wspeed = wheelSpeed;
+        if(wspeed < 0) wspeed = -wspeed;
+        if(wspeed < 0.1f) {
+            wheelSpeed = 0f;
+            return wheelSpeed;
         }
+
+        float drop = wspeed * friction * (Ref.common.framemsec / 1000f);
+        float newspeed = wspeed - drop;
+        if(newspeed < 0) newspeed = 0;
+        newspeed /= wspeed;
+        return wheelSpeed * newspeed;
+    }
+
+    private void MouseFriction(Vector2f velocity, float friction) {
+       float speed2 = velocity.length();
+       if(speed2 < 0.1f) {
+           velocity.set(0,0);
+           return;
+       }
+
+       // Apply ground friction
+       float drop = speed2 * friction * (Ref.common.framemsec / 1000f);
+
+
+       float newspeed = speed2 - drop;
+       if(newspeed < 0)
+           newspeed = 0;
+
+       newspeed /= speed2;
+
+       velocity.scale(newspeed);
+   }
+
+    private void WeightedMouseMove(PlayerInput cmd) {
+        // Cast to float // Multiply by sensitivity
+        float sens = Ref.cvars.Find("sensitivity").fValue;
+        float mx = cmd.MouseDelta[0] * sens;
+        float my = cmd.MouseDelta[1] * sens;
+
+        MouseFriction(cg.mouseVelocity, 4f);
+        Vector2f mouseDir = new Vector2f(mx, my);
+        float len = Helper.Normalize(mouseDir);
+        if(len != 0) {
+            MouseAccelerate(cg.mouseVelocity, mouseDir, len * 200, 2f);
+        }
+
+        float[] viewangles = cg.demoangles;
+        float frameFrac = Ref.common.framemsec / 1000f;
+        viewangles[Input.ANGLE_YAW] -= 0.022f * cg.mouseVelocity.x * frameFrac;
+        viewangles[Input.ANGLE_PITCH] -= 0.022f * cg.mouseVelocity.y * frameFrac;
+
+        if(viewangles[Input.ANGLE_PITCH] > 180f)
+            viewangles[Input.ANGLE_PITCH] = 180f;
+        else if(viewangles[Input.ANGLE_PITCH] < 0f)
+            viewangles[Input.ANGLE_PITCH] = 0f;
+
+        // Ensure angles have not been wrapped
+        cmd.angles[0] = Helper.Angle2Short(viewangles[0]);
+        cmd.angles[1] = Helper.Angle2Short(viewangles[1]);
+        cmd.angles[2] = Helper.Angle2Short(viewangles[2]);
+
+        cg.demofovVel = WheelFriction(cg.demofovVel, 5f);
+        if(cmd.WheelDelta != 0) {
+            float wDir = Math.signum(cmd.WheelDelta)*-1f;
+            cg.demofovVel = WheelAccelerate(cg.demofovVel, wDir, 200f, 5f);
+        }
+        cg.demofov += cg.demofovVel * frameFrac;
+        if(cg.demofov < 10) {
+            cg.demofov = 10;
+            cg.demofovVel = 0;
+        } else if(cg.demofov > 220) {
+            cg.demofov = 220;
+            cg.demofovVel = 0;
+        }
+
     }
 
     private void CalcViewValues() {
@@ -315,25 +341,46 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg.refdef = new ViewParams();
         cg.refdef.CalcVRect();
 
-        Helper.VectorCopy(cg.predictedPlayerState.origin, cg.refdef.Origin);
-        
-        Helper.VectorCopy(cg.predictedPlayerState.viewangles, cg.refdef.Angles);
+        if(cg_freecam.isTrue() && cg.playingdemo) {
+            // Do a fake playerstate for freecamming in demos
+            if(cg.demoPlayerState == null) {
+                cg.demoPlayerState = cg.predictedPlayerState.Clone(null);
+                cg.demoPlayerState.moveType = Move.MoveType.NOCLIP;
+                cg.demoPlayerState.velocity.set(0,0,0); // clear velocity
+            }
+            WeightedMouseMove(Ref.Input.playerInput);
+            Ref.Input.playerInput.serverTime = Ref.common.framemsec;
+            cg.demoPlayerState.UpdateViewAngle(Ref.Input.playerInput);
+            cg.demoPlayerState.commandTime = 0;
 
-        if(cg_errorDecay.fValue > 0f) {
-            int t = cg.time - cg.predictedErrorTime;
-            float f = (cg_errorDecay.fValue - t) / cg_errorDecay.fValue;
-            if(f > 0 && f < 1)
-                Helper.VectorMA(cg.refdef.Origin, f, cg.predictedError, cg.refdef.Origin);
-            else
-                cg.predictedErrorTime = 0;
-        }
-        
-//        cg.refdef.Origin.z += cg_viewheight.fValue;
-
-        if(cg_tps.isTrue()) {
-            cg.refdef.offsetThirdPerson();
+            MoveQuery move = new MoveQuery(this);
+            move.cmd = Ref.Input.playerInput;
+            move.ps = cg.demoPlayerState;
+            Move.Move(move);
+            Helper.VectorCopy(cg.demoPlayerState.origin, cg.refdef.Origin);
+            Helper.VectorCopy(cg.demoPlayerState.viewangles, cg.refdef.Angles);
         } else {
 
+            Helper.VectorCopy(cg.predictedPlayerState.origin, cg.refdef.Origin);
+
+            Helper.VectorCopy(cg.predictedPlayerState.viewangles, cg.refdef.Angles);
+
+            if(cg_errorDecay.fValue > 0f) {
+                int t = cg.time - cg.predictedErrorTime;
+                float f = (cg_errorDecay.fValue - t) / cg_errorDecay.fValue;
+                if(f > 0 && f < 1)
+                    Helper.VectorMA(cg.refdef.Origin, f, cg.predictedError, cg.refdef.Origin);
+                else
+                    cg.predictedErrorTime = 0;
+            }
+
+            cg.refdef.Origin.z += cg.predictedPlayerState.viewheight;
+
+            if(cg_tps.isTrue()) {
+                cg.refdef.offsetThirdPerson();
+            } else {
+
+            }
         }
 
         cg.refdef.SetupProjection();
@@ -366,6 +413,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Ref.commands.AddCommand("noclip", null);
         Ref.commands.AddCommand("notarget", null);
         Ref.commands.AddCommand("follow", null);
+        Ref.commands.AddCommand("block", null);
     }
 
     private void ParseScores(String[] tokens) {
@@ -406,6 +454,11 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             cgr.AddCEntity(cent);
         }
 
+        
+
+    }
+
+    private void drawSolid() {
         // Draw bounding boxes for solid entities
         if(cg_drawSolid.iValue > 0) {
             for (int i = 0; i < cg_numSolidEntities; i++) {
@@ -432,10 +485,16 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
                     if(x == 0 || y == 0)
                         continue;
-                    
-                    Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-                    spr.Set(new Vector2f(cent.lerpOrigin.x - x, cent.lerpOrigin.y - y), new Vector2f(x*2, y*2), null, null, null);
-                    spr.SetColor(0, 0, 255, 80);
+
+                    int zmin = (pack >> 24) & 127;
+                    int zmax = ((pack >> 16) & 255)-zmin;
+
+                    GL11.glDepthFunc(GL11.GL_ALWAYS);
+                    Ref.glRef.PushShader(Ref.glRef.getShader("sprite"));
+                    Helper.renderBBoxWireframe(cent.lerpOrigin.x-x, cent.lerpOrigin.y-y, cent.lerpOrigin.z-zmin,
+                            cent.lerpOrigin.x + x, cent.lerpOrigin.y + y, cent.lerpOrigin.z+zmax);
+                    Ref.glRef.PopShader();
+                    GL11.glDepthFunc(GL11.GL_LEQUAL);
                 }
             }
         }
@@ -468,26 +527,6 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                     spr.SetColor(255, 255, 0, 100);
             }
         }
-
-    }
-
-    // Server says we need to update a block
-    private void SetBlock(String[] tokens) {
-        if(tokens.length != 3)
-        {
-            Common.Log("SetBlock: Invalid arg count");
-            return;
-        }
-
-        int blockIndex = Integer.parseInt(tokens[1]);
-        String blockCmd = tokens[2];
-        if(blockCmd.isEmpty() || blockIndex < 0) {
-            Common.Log("Invalid setblock args");
-            return;
-        }
-
-        Block b = Ref.cm.cm.GetBlock(blockIndex);
-        b.LoadString(blockCmd);
     }
 
     public void KeyPressed(KeyEvent evt) {
@@ -517,7 +556,11 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Ref.Input.RemoveKeyEventListener(this, Input.KEYCATCH_CGAME);
         Ref.Input.RemoveMouseEventListener(this, Input.KEYCATCH_CGAME);
         map.dispose();
+        Ref.ResMan.cleanupModels();
         map = null;
+        System.gc();
+        System.gc();
+        System.gc();
     }
 
 
@@ -596,10 +639,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             return;
         }
 
-        if(cmd.equalsIgnoreCase("setblock")) {
-            SetBlock(tokens);
-            return;
-        }
+
 
         if(cmd.equalsIgnoreCase("map_restart"))
         {
@@ -684,12 +724,12 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         }
 
 
-        ClipMoveToEntities(new Vector2f(start), new Vector2f(end), new Vector2f(mins), new Vector2f(maxs), passEntityNum, tracemask, worldResult);
+        ClipMoveToEntities(start, end, mins, maxs, passEntityNum, tracemask, worldResult);
 
         return worldResult;
     }
 
-    private void ClipMoveToEntities(Vector2f start, Vector2f end, Vector2f mins, Vector2f maxs, int passEntityNum, int tracemask, CollisionResult worldResult) {
+    private void ClipMoveToEntities(Vector3f start, Vector3f end, Vector3f mins, Vector3f maxs, int passEntityNum, int tracemask, CollisionResult worldResult) {
         for (int i= 0; i < cg_numSolidEntities; i++) {
             CEntity cent = cg_solidEntities[i];
             EntityState ent = cent.currentState;
@@ -707,15 +747,26 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                 Vector3f origin = new Vector3f();
                 ent.pos.Evaluate(cg.physicsTime, origin);
 
-                Ref.collision.SetSubModel(index, new Vector2f(origin.x, origin.y)); // FIXFIX
+                Ref.collision.SetSubModel(index, origin);
             } else {
                 int x = pack & 255;
                 int y = (pack >> 8) & 255;
+                int height = (pack >> 16) & 255;
+                int zminLen = (pack >> 24) & 127;
 
-                if(x == 0 || y == 0)
+                if(x == 0 || y == 0 || height == 0) {
+                    Common.Log("Invalid entity bbox for unpacking");
                     continue;
+                }
+
+                // zmin = 10, height = 30
+                float z = height/2f;
+                Vector3f origin = new Vector3f(cent.lerpOrigin);
                 
-                Ref.collision.SetBoxModel(new Vector2f(x, y), new Vector2f(cent.lerpOrigin)); // FIX HAX
+
+                float leftover = ((height-zminLen)-zminLen) / 2f;
+                origin.z += leftover;
+                Ref.collision.SetBoxModel(new Vector3f(x, y, z), origin);
             }
 
             

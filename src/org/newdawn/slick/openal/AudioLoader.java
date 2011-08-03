@@ -53,9 +53,6 @@ public class AudioLoader {
 		if (format.equals(WAV)) {
 			return SoundStore.get().getWAV(in);
 		}
-		if (format.equals(OGG)) {
-			return SoundStore.get().getOgg(in);
-		}
 		
 		throw new IOException("Unsupported format for non-streaming Audio: "+format);
 	}
@@ -72,9 +69,6 @@ public class AudioLoader {
 	public static Audio getStreamingAudio(String format, URL url) throws IOException {
 		init();
 		
-		if (format.equals(OGG)) {
-			return SoundStore.get().getOggStream(url);
-		}
 		if (format.equals(MOD)) {
 			return SoundStore.get().getMOD(url.openStream());
 		}

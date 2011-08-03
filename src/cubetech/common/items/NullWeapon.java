@@ -67,4 +67,9 @@ public class NullWeapon extends WeaponItem {
         return 0;
     }
 
+    @Override
+    public void renderClientEffects() {
+        
+    }
+
 }

@@ -44,7 +44,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import org.lwjgl.util.vector.Quaternion;
 
-import org.lwjgl.util.vector.Vector2f;
+
 import org.lwjgl.util.vector.Vector3f;
 
 /**
@@ -480,9 +480,9 @@ public class Server implements ITrace {
         int droppoint = time - 1000 * sv_timeout.iValue;
         int zombiepoint = time - 1000 * sv_zombietime.iValue;
         for (int i= 0; i < clients.length; i++) {
-            if(clients[i].state == ClientState.FREE || clients[i].state == ClientState.ZOMBIE)
-                continue;
-            clients[i].CheckTimeout(droppoint, zombiepoint);
+            SvClient cl = clients[i];
+            if(cl.lastPacketTime > time) cl.lastPacketTime = time;
+            cl.CheckTimeout(droppoint, zombiepoint);
         }
     }
 
@@ -726,22 +726,17 @@ public class Server implements ITrace {
 
     // Clear and recreate worldsector
     private void ClearWorld() {
-        Vector2f mins = new Vector2f(), maxs = new Vector2f();
+        Vector3f mins = new Vector3f(), maxs = new Vector3f();
         GetWorldBounds(mins, maxs);
         sv_worldSector = WorldSector.CreateWorldSector(mins, maxs, 2);
     }
 
-    private void GetWorldBounds(Vector2f mins, Vector2f maxs) {
-        if(Ref.cm.cm == null) {
-            Common.Log("GetWorldBounds: Cannot return valid result, not map loaded.");
-            maxs.x = 1000;
-            maxs.y = 1000;
-            return;
-        }
-        mins.x = Ref.cm.cm.mins.x;
-        mins.y = Ref.cm.cm.mins.y;
-        maxs.x = Ref.cm.cm.maxs.x;
-        maxs.y = Ref.cm.cm.maxs.y;
+    private void GetWorldBounds(Vector3f mins, Vector3f maxs) {
+        // FIX - There is no world bounds! (well..maybe?)
+        float max = 10000;
+        maxs.set(max, max, max);
+        mins.set(maxs);
+        mins.scale(-1f);
     }
 
     public void LinkEntity(SharedEntity gent) {
@@ -753,17 +748,12 @@ public class Server implements ITrace {
         if(gent.r.bmodel)
             gent.s.solid = EntityState.SOLID_BMODEL;
         else if((gent.r.contents & (Content.BODY | Content.SOLID)) > 0) {
-            int x = (int) gent.r.maxs.x;
-            if(x < 1)
-                x = 1;
-            if(x > 255)
-                x = 255;
-            int y = (int) gent.r.maxs.y;
-            if(y < 1)
-                y = 1;
-            if(y > 255)
-                y = 255;
-            gent.s.solid = (y<<8) | x;
+            int x = Helper.Clamp((int) gent.r.maxs.x, 1, 255);
+            int y = Helper.Clamp((int) gent.r.maxs.y, 1, 255);
+            int height = Helper.Clamp((int)(gent.r.maxs.z - gent.r.mins.z), 1, 255);
+            int minzLenght = Helper.Clamp((int)(- gent.r.mins.z), 0, 127);
+
+            gent.s.solid = (minzLenght<<24) | (height<<16) | (y<<8) | x;
         } else
             gent.s.solid = 0;
 
@@ -781,7 +771,7 @@ public class Server implements ITrace {
 
         // find the first world sector node that the ent's box crosses
         // FIX FIX FIX
-        WorldSector node = sv_worldSector.FindCrossingNode(new Vector2f(gent.r.absmin), new Vector2f(gent.r.absmax));
+        WorldSector node = sv_worldSector.FindCrossingNode(gent.r.absmin, gent.r.absmax);
 
         // link it in
         node.LinkEntity(ent);
@@ -813,35 +803,33 @@ public class Server implements ITrace {
 
         Vector3f.sub(end, start, delta);
         // clip to world
-        // FIX FIX
         CollisionResult worldResult = Ref.collision.traceCubeMap(start, delta, mins, maxs, true);
-        //CollisionResult worldResult = Ref.collision.TestMovement(new Vector2f(start), new Vector2f(delta), new Vector2f(maxs), tracemask);
         if(worldResult.frac == 0.0f)
             return worldResult; // Blocked instantl by world
 
-//            // create the bounding box of the entire move
-            
-            for (int i= 0; i < 2; i++) {
-                if(Helper.VectorGet(end, i) > Helper.VectorGet(start, i)) {
-                    Helper.VectorSet(boxmins, i, Helper.VectorGet(start, i) + Helper.VectorGet(mins, i) - 1);
-                    Helper.VectorSet(boxmaxs, i, Helper.VectorGet(end, i) + Helper.VectorGet(maxs, i) + 1);
-                } else {
-                    Helper.VectorSet(boxmins, i, Helper.VectorGet(end, i) + Helper.VectorGet(mins, i) - 1);
-                    Helper.VectorSet(boxmaxs, i, Helper.VectorGet(start, i) + Helper.VectorGet(maxs, i) + 1);
-                }
+        // create the bounding box of the entire move
+        float padding = 0.1f;
+        for (int i= 0; i < 3; i++) {
+            if(Helper.VectorGet(end, i) > Helper.VectorGet(start, i)) {
+                Helper.VectorSet(boxmins, i, Helper.VectorGet(start, i) + Helper.VectorGet(mins, i) - padding);
+                Helper.VectorSet(boxmaxs, i, Helper.VectorGet(end, i) + Helper.VectorGet(maxs, i) + padding);
+            } else {
+                Helper.VectorSet(boxmins, i, Helper.VectorGet(end, i) + Helper.VectorGet(mins, i) - padding);
+                Helper.VectorSet(boxmaxs, i, Helper.VectorGet(start, i) + Helper.VectorGet(maxs, i) + padding);
             }
+        }
 
-            ClipMoveToEntities(worldResult, start, end, mins, maxs, boxmins, boxmaxs, tracemask, passEntityNum);
+        ClipMoveToEntities(worldResult, start, end, mins, maxs, boxmins, boxmaxs, tracemask, passEntityNum);
         return worldResult;
     }
 
-    public SectorQuery EntitiesInBox(Vector2f mins, Vector2f maxs) {
+    public SectorQuery EntitiesInBox(Vector3f mins, Vector3f maxs) {
         return sv_worldSector.AreaEntities(mins, maxs);
     }
 
-    public boolean EntityContact(Vector2f mins, Vector2f maxs, SharedEntity gEnt) {
+    public boolean EntityContact(Vector3f mins, Vector3f maxs, SharedEntity gEnt) {
         // check for exact collision
-        Vector2f origin = new Vector2f(gEnt.r.currentOrigin);
+        Vector3f origin = new Vector3f(gEnt.r.currentOrigin);
         // TODO: Take account for angles
 
         Vector3f halfSize = new Vector3f();
@@ -849,8 +837,8 @@ public class Server implements ITrace {
         halfSize.scale(0.5f);
 //        Vector2f.sub(gEnt.r.maxs, delta, origin);
 
-        Ref.collision.SetBoxModel(new Vector2f(halfSize), origin); // FIX
-        CollisionResult res = Ref.collision.TransformedBoxTrace(new Vector2f(), null, mins, maxs, -1);
+        Ref.collision.SetBoxModel(halfSize, origin); // FIX
+        CollisionResult res = Ref.collision.TransformedBoxTrace(new Vector3f(), null, mins, maxs, -1);
 
         return res.startsolid;
     }
@@ -858,7 +846,7 @@ public class Server implements ITrace {
     private void ClipMoveToEntities(CollisionResult clip, Vector3f start, Vector3f end, Vector3f mins, Vector3f maxs,
         Vector3f boxmins, Vector3f boxmaxs, int tracemask, int passEntityNum) {
 
-        SectorQuery entityList = sv_worldSector.AreaEntities(new Vector2f(boxmins), new Vector2f(boxmaxs)); // FIX
+        SectorQuery entityList = sv_worldSector.AreaEntities(boxmins, boxmaxs); // FIX
 
         int passOwnerNum = -1;
         if(passEntityNum != Common.ENTITYNUM_NONE) {
@@ -868,7 +856,8 @@ public class Server implements ITrace {
         }
 
         for (Integer entIndex : entityList.List) {
-            // TODO:  If allsolid, return ?
+            // Starting solid, no need to check any further
+            if(clip.startsolid) return;
 
             SharedEntity touch = sv.gentities[entIndex];
             // see if we should ignore this entity
@@ -889,10 +878,7 @@ public class Server implements ITrace {
             // might intersect, so do an exact clip
             ClipHandleForEntity(touch);
 
-            // FIX FIX
-            CollisionResult res = Ref.collision.TransformedBoxTrace(new Vector2f(start), new Vector2f(end), new Vector2f(mins), new Vector2f(maxs)
-                    , tracemask);
-            //if()
+            CollisionResult res = Ref.collision.TransformedBoxTrace(start, end, mins, maxs, tracemask);
             if(res.frac  < clip.frac) {
                 clip.frac = res.frac;
                 clip.hit = res.hit;
@@ -900,8 +886,9 @@ public class Server implements ITrace {
                 clip.hitAxis = res.hitAxis;
                 clip.hitmask = res.hitmask;
 
-                if(res.frac < 0)
+                if(res.frac < 0) {
                     res.frac = 0;
+                }
 
                 if(res.frac == 0f)
                     break;
@@ -1109,9 +1096,13 @@ public class Server implements ITrace {
 
     private void ClipHandleForEntity(SharedEntity touch) {
         if(touch.r.bmodel) {
-            Ref.collision.SetSubModel(touch.s.modelindex, new Vector2f(touch.r.currentOrigin));
-        } else
-            Ref.collision.SetBoxModel(new Vector2f(touch.r.maxs), new Vector2f(touch.r.currentOrigin));
+            Ref.collision.SetSubModel(touch.s.modelindex, touch.r.currentOrigin);
+        } else {
+            
+            Ref.collision.SetBoxModel(touch.r.mins, touch.r.maxs, touch.r.currentOrigin);
+        }
     }
+
+
     
 }

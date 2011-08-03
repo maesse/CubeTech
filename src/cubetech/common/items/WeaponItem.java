@@ -74,11 +74,12 @@ public abstract class WeaponItem implements IItem {
 
     public static Vector3f getMuzzlePoint(GameClient gc) {
         Vector3f p = new Vector3f(gc.s.pos.base);
-        //p.z += gc.ps.viewheight; fix
+        p.z += gc.ps.viewheight;
 
-        // extent along forward vector
-        Helper.VectorMA(p, 14f, gc.getForwardVector(), p);
+        
         return p;
     }
+
+    public abstract void renderClientEffects();
 
 }

@@ -175,6 +175,29 @@ public class Shader {
         GLRef.checkError();
     }
 
+     public void setUniform(String name, Vector4f[] values) {
+        int index = getUniformIndex(name);
+//        if(index < 0)
+//            return;
+
+        // We've got an index, yay
+        FloatBuffer buf = Ref.glRef.matrixBuffer;
+        if(values.length > 4) {
+            buf = BufferUtils.createFloatBuffer(4*values.length);
+        }
+        buf.position(0);
+         for (int i= 0; i < values.length; i++) {
+             buf.put(values[i].x);
+             buf.put(values[i].y);
+             buf.put(values[i].z);
+             buf.put(values[i].w);
+         }
+        buf.position(0);
+
+        ARBShaderObjects.glUniform4ARB(index, buf);
+        GLRef.checkError();
+    }
+
      public void setUniform(String name, Matrix4f value) {
         int index = getUniformIndex(name);
 //        if(index < 0)
@@ -183,14 +206,41 @@ public class Shader {
         // We've got an index, yay
         Ref.glRef.matrixBuffer.position(0);
         value.store(Ref.glRef.matrixBuffer);
+        Ref.glRef.matrixBuffer.position(0);
         ARBShaderObjects.glUniformMatrix4ARB(index, false, Ref.glRef.matrixBuffer);
         
+        GLRef.checkError();
+    }
+
+     public void setUniform(String name, Matrix4f[] values) {
+        int index = getUniformIndex(name);
+//        if(index < 0)
+//            return;
+
+        // We've got an index, yay
+        FloatBuffer arrayBuffer = BufferUtils.createFloatBuffer(16*values.length);
+        arrayBuffer.position(0);
+         for (int i= 0; i < values.length; i++) {
+             if(values[i] == null) break; // Stop when hitting empty values
+             
+             values[i].store(arrayBuffer);
+         }
+        
+        arrayBuffer.position(0);
+        
+        ARBShaderObjects.glUniformMatrix4ARB(index, false, arrayBuffer);
+
         GLRef.checkError();
     }
 
      public void setUniformMat3(String string, FloatBuffer viewbuffer) {
         int index = getUniformIndex(string);
         ARBShaderObjects.glUniformMatrix3ARB(index, false, viewbuffer);
+        GLRef.checkError();
+    }
+     public void setUniformMat4(String string, FloatBuffer viewbuffer) {
+        int index = getUniformIndex(string);
+        ARBShaderObjects.glUniformMatrix4ARB(index, false, viewbuffer);
         GLRef.checkError();
     }
 
@@ -216,7 +266,7 @@ public class Shader {
             // Handle error
             GLRef.checkError();
             if(pos < 0) {
-                Common.LogDebug("Warning: Shader.setAttribute(): Attribute '%s' doesn't exist in %s", name, shaderName);
+                Common.LogDebug("Warning: Shader.getUniformIndex(): Uniform '%s' doesn't exist in %s - get index %d", name, shaderName, pos);
             }
             // cache it
             index = pos;

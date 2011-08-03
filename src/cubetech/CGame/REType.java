@@ -11,5 +11,7 @@ package cubetech.CGame;
  */
 public enum REType {
     MODEL,
-    SPRITE
-}
+    SPRITE,
+    BBOX, 
+    BEAM,
+    NONE, POLY}

@@ -10,8 +10,10 @@ import cubetech.Game.Game;
 import cubetech.Game.Gentity;
 import cubetech.collision.BlockModel;
 import cubetech.collision.CubeChunk;
+import cubetech.collision.CubeCollision;
 import cubetech.collision.CubeMap;
 import cubetech.collision.SingleCube;
+import cubetech.common.Animations;
 import cubetech.common.Common;
 import cubetech.common.Content;
 import cubetech.common.Helper;
@@ -37,10 +39,9 @@ import cubetech.input.Input;
 import cubetech.iqm.IQMAdjacency;
 import cubetech.iqm.IQMAnim;
 import cubetech.iqm.IQMModel;
+import cubetech.misc.Profiler;
 import cubetech.misc.Ref;
 import cubetech.spatial.Bin;
-import cubetech.spatial.SpatialQuery;
-import java.sql.NClob;
 import java.util.ArrayList;
 import java.util.Locale;
 import org.lwjgl.opengl.GL11;
@@ -58,71 +59,12 @@ public class CGameRender {
     private CGame game;
 
     
-    
-    // Player
-    private CubeMaterial c_head;
-    private CubeMaterial c_arm;
-    private CubeMaterial c_body;
-    private CubeMaterial c_legs;
-    // Sun effect
-    public Vector2f sunPositionOnScreen = new Vector2f();
-    public Color sunColor = (Color) Color.WHITE;
-    // Cloud effect
-    private Cloud[] clouds = new Cloud[16];
+
     SingleCube lookingAtCube;
 
     public CGameRender(CGame game) {
         this.game = game;
 
-        try {
-            c_head = CubeMaterial.Load("data/c_head.mat", true);
-            c_arm = CubeMaterial.Load("data/c_arm.mat", true);
-            c_legs = CubeMaterial.Load("data/c_legs.mat", true);
-            c_body = CubeMaterial.Load("data/c_body.mat", true);
-        } catch (Exception ex) {
-            Common.Log(Common.getExceptionString(ex));
-        }
-
-        for (int i= 0; i < clouds.length; i++) {
-            clouds[i] = new Cloud(new Vector2f());
-        }
-    }
-    
-
-    //
-    // CMap
-    //
-    void RenderScene(ViewParams refdef) {
-        SpatialQuery result = Ref.spatial.Query(refdef.Origin.x - refdef.FovX, refdef.Origin.y - refdef.FovY, refdef.Origin.x + refdef.FovX, refdef.Origin.y + refdef.FovY);
-        int queryNum = result.getQueryNum();
-        Object object;
-
-        int near = -game.cg_depthnear.iValue, far = -game.cg_depthfar.iValue;
-
-        if(Ref.cvars.Find("cg_editmode").iValue == 1) {
-            near = -Ref.cvars.Find("edit_nearlayer").iValue;
-            far = -Ref.cvars.Find("edit_farlayer").iValue;
-        }
-
-        while((object = result.ReadNext()) != null) {
-            if(object.getClass() != Block.class)
-                continue;
-            Block block = (Block)object;
-            if(block.LastQueryNum == queryNum)
-                continue; // duplicate
-            block.LastQueryNum = queryNum;
-
-//            if(!BlockVisible(block))
-//                continue;
-
-            int layer = block.getLayer();
-
-            if(layer > near || layer < far)
-                continue;
-            block.Render();
-        }
-
-        
     }
 
 
@@ -137,7 +79,7 @@ public class CGameRender {
         // calculate the current origin
         cent.CalcLerpPosition();
         cent.Effects();
-        if(cent == Ref.cgame.cg.predictedPlayerEntity && !Ref.cgame.cg_tps.isTrue()) return;
+        if(cent == Ref.cgame.cg.predictedPlayerEntity && !Ref.cgame.cg_tps.isTrue() && (!Ref.cgame.cg_freecam.isTrue() || !Ref.cgame.cg.playingdemo)) return;
         switch(cent.currentState.eType) {
             case EntityType.PLAYER:
                 Player(cent);
@@ -157,6 +99,8 @@ public class CGameRender {
     private void missile(CEntity cent) {
         WeaponItem w = WeaponItem.get(cent.currentState.weapon);
         cent.lerpAngles.set(cent.currentState.Angles);
+
+        
 
         // add trails
         Vector3f o = cent.lerpOrigin;
@@ -181,8 +125,21 @@ public class CGameRender {
     //        ent.axis = Helper.AnglesToAxis(ent.axis[0]);
             Ref.render.addRefEntity(ent);
 
+            if(wi.missileSound != null && !wi.missileSound.isEmpty()) {
+                Vector3f vel = cent.currentState.pos.delta;
+                
+                Ref.soundMan.addLoopingSound(cent.currentState.ClientNum, cent.lerpOrigin, vel, Ref.soundMan.AddWavSound(wi.missileSound));
+            }
+
             wi.missileTrailFunc.run(cent);
+
+//            if(wi.missileSound != null && !wi.missileSound.isEmpty()) {
+//                int buffer = Ref.soundMan.AddWavSound(wi.missileSound);
+//                Ref.soundMan.playEntityEffectLoop(cent.currentState.ClientNum, buffer, 1.0f);
+//            }
         }
+
+
 
         
         //Helper.renderBBoxWireframe(o.x - 10, o.y - 10, o.z - 10, o.x + 10, o.y + 10, o.z + 10);
@@ -218,6 +175,55 @@ public class CGameRender {
 
     }
 
+    public void renderViewModel(PlayerState ps) {
+        // no gun if in third person view or a camera is active
+        if (Ref.cgame.cg_tps.isTrue() || (Ref.cgame.cg_freecam.isTrue() && Ref.cgame.cg.playingdemo)) return;
+
+        // don't draw if testing a gun model
+        if(Ref.cgame.cg.testGun) return;
+
+        RenderEntity ent = Ref.render.createEntity(REType.MODEL);
+        // get clientinfo for animation map
+        WeaponItem wi = Ref.common.items.getWeapon(ps.weapon);
+        if(wi == null) return;
+        
+        // Let weapon render any effects
+        wi.renderClientEffects();
+
+        
+        WeaponInfo winfo = wi.getWeaponInfo();
+        if(winfo == null || winfo.viewModel == null) return;
+        ent.model = winfo.viewModel;
+
+        Vector3f angles = new Vector3f();
+        CalculateWeaponPosition(ent.origin, angles);
+        ent.axis = Helper.AnglesToAxis(angles);
+
+        Helper.VectorMA(ent.origin, game.cg.cg_gun_x.fValue, ent.axis[0], ent.origin);
+        Helper.VectorMA(ent.origin, game.cg.cg_gun_y.fValue, ent.axis[1], ent.origin);
+        Helper.VectorMA(ent.origin, game.cg.cg_gun_z.fValue, ent.axis[2], ent.origin);
+        
+        if(ent.model.anims != null && ent.model.anims.length > 0) {
+            int max = ent.model.anims[0].num_frames;
+            float left = (Ref.cgame.cg.time/50f) - (Ref.cgame.cg.time/50);
+            ent.backlerp = 1f-left;
+            ent.frame = (Ref.cgame.cg.time/50) % max;
+            ent.oldframe = ent.frame - 1;
+            if(ent.oldframe < 0) ent.oldframe = max-1;
+        }
+
+        Ref.render.addRefEntity(ent);
+
+        
+    }
+
+    private void CalculateWeaponPosition(Vector3f position, Vector3f angles) {
+        position.set(game.cg.refdef.Origin);
+        angles.set(game.cg.refdef.Angles);
+
+        
+    }
+
     // Render a player
     private void Player(CEntity cent) {
         ClientInfo ci = game.cgs.clientinfo[cent.currentState.ClientNum];
@@ -229,29 +235,36 @@ public class CGameRender {
         // set origin & angles
         ent.origin.set(cent.lerpOrigin);
         ent.origin.z += Game.PlayerMins.z;
-        Vector3f deltaMove = cent.currentState.pos.delta;
+//        Vector3f deltaMove = cent.currentState.pos.delta;
 
-        Vector3f angles;
-        if(deltaMove.lengthSquared() > 0.1f) {
-            angles = new Vector3f(deltaMove);
-            angles.y = (float) (180/Math.PI * Math.atan2(-deltaMove.y, deltaMove.x) + Math.PI / 2f);
-        }
-        else {
-            angles = new Vector3f(cent.lerpAngles);
-            angles.y *= -1f;
-            angles.x *= -1f;
-        }
+        Vector3f angles = new Vector3f();
+//        if(deltaMove.lengthSquared() > 0.1f) {
+//            angles = new Vector3f(deltaMove);
+//            angles.y = (float) (180/Math.PI * Math.atan2(-deltaMove.y, deltaMove.x) + Math.PI / 2f);
+//        }
+//        else {
+//            angles = new Vector3f(cent.lerpAngles);
+//            angles.y *= -1f;
+//            angles.x *= -1f;
+//        }
+//
+//        Vector3f velNorm = new Vector3f(deltaMove);
+//        if(Helper.Normalize(velNorm) == 0) {
+//            velNorm.set(0,0,1);
+//        }
+//        angles.x = 0;
+//        angles.z = 0;
+//        angles.set(0,90,0);
+//        ent.axis[0].set(1,0,0);
+//        Helper.rotateAroundDirection(ent.axis, game.cg.time/10f);
 
-        Vector3f velNorm = new Vector3f(deltaMove);
-        if(Helper.Normalize(velNorm) == 0) {
-            velNorm.set(0,0,1);
-        }
-        angles.x = 0;
-        angles.z = 0;
-        angles.set(0,90,0);
-        ent.axis[0].set(1,0,0);
-        Helper.rotateAroundDirection(ent.axis, game.cg.time/10f);
-        ent.axis = Helper.AnglesToAxis(cent.lerpAngles);
+        angles.set(cent.lerpAngles);
+        if(angles.x > 1) angles.x = 1;
+        if(angles.x < -25) angles.x = -25;
+        ent.axis = Helper.AnglesToAxis(angles);
+
+        playerAngles(cent, ent);
+        
         //ent.axis = Helper.AnglesToAxis(angles);
 //        for (int i= 0; i < 3; i++) {
 //            ent.axis[i].normalise();
@@ -286,6 +299,8 @@ public class CGameRender {
         
         ClientInfo ci = Ref.cgame.cgs.clientinfo[cent.currentState.ClientNum];
 
+        
+
         runLerpFrame(ci, cent.pe.torso, cent.currentState.frame, speedScale);
 
         ent.oldframe = cent.pe.torso.oldFrame;
@@ -308,30 +323,7 @@ public class CGameRender {
     // UI
     //
     void Draw2D() {
-//        Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-//        spr.Set(new Vector2f(), Ref.glRef.GetResolution(), Ref.ResMan.LoadTexture("data/hags.png"), null, null);
-
-        // Render mapeditor if in editmode
-//        if(game.cg_editmode.iValue == 1) {
-//            game.mapEditor.Render();
-//
-//        }
-
-//        float speeds = Math.abs(game.cg.snap.ps.velocity.x);
-//        float maxspeed = 600;
-//        float frac = speeds / maxspeed;
-//        if(game.cg_editmode.iValue == 0) {
-//            spr = Ref.SpriteMan.GetSprite(Type.HUD);
-//            Vector2f size = new Vector2f(Ref.glRef.GetResolution().x * 0.75f, 64);
-//            Vector2f position = new Vector2f(Ref.glRef.GetResolution().x/2f - size.x / 2f , Ref.glRef.GetResolution().y - size.y - 32 );
-//            size.x *= frac;
-//            spr.Set(position, size, Ref.ResMan.LoadTexture("data/energybar.png"), null, new Vector2f(1, 1));
-//        }
-
-
         DrawChat();
-
-
         game.lag.Draw();
 
 
@@ -342,22 +334,22 @@ public class CGameRender {
 //            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Pull accel: " + game.getPullAccel(), Align.LEFT, Type.HUD);
 //            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "v: " + game.cg.predictedPlayerState.delta_angles[0], Align.LEFT, Type.HUD);
             Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Total VBO size: " + VBO.TotalBytes/(1024*1024) + "mb", Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*3), "Quads: " + Ref.cm.cubemap.nSides + " (VBO: "+ (Ref.cm.cubemap.nSides * CubeChunk.PLANE_SIZE)/1024 +" kb)", Align.LEFT, Type.HUD);
-            if(Ref.cm.cubemap.nChunks != 0)
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*3), "cl_chunks/s: " + game.map.chunkPerSecond, Align.LEFT, Type.HUD);
+            if(Ref.cm != null && Ref.cm.cubemap != null && Ref.cm.cubemap.nChunks != 0)
             Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*4), 
                     String.format(Locale.ENGLISH,"Chunks: %d (avg. quads/chunk: %d (%.1fkb))", Ref.cm.cubemap.nChunks, (Ref.cm.cubemap.nSides)/Ref.cm.cubemap.nChunks, (Ref.cm.cubemap.nSides* CubeChunk.PLANE_SIZE )/Ref.cm.cubemap.nChunks/1024f), Align.LEFT, Type.HUD);
-            if(Ref.cgame.cg.refdef.planes[0] != null)
-                Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*5), "near plane: " + game.cg.refdef.planes[0], Align.LEFT, Type.HUD);
+            //if(Ref.cgame.cg.refdef.planes[0] != null)
+                //Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*5), "near plane: " + game.cg.refdef.planes[0], Align.LEFT, Type.HUD);
 //            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*4), "Vv: " + Ref.Input.viewangles[0], Align.LEFT, Type.HUD);
 
-            if(game.rayTime > game.cg.time) {
-                Ref.ResMan.getWhiteTexture().Bind();
-                GL11.glBegin(GL11.GL_LINES);
-                GL11.glColor3f(0, 1, 0);
-                GL11.glVertex3f(game.rayStart.x, game.rayStart.y, game.rayStart.z);
-                GL11.glVertex3f(game.rayEnd.x, game.rayEnd.y, game.rayEnd.z);
-                GL11.glEnd();
-            }
+            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            Vector2f res = Ref.glRef.GetResolution();
+            float width = 14;
+            spr.setLine(new Vector2f(res.x/2f - width / 2f, res.y/2f), new Vector2f(res.x/2f + width / 2f, res.y/2f), 2f);
+            spr.SetColor(255, 0, 0, 255);
+            spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            spr.setLine(new Vector2f(res.x/2f , res.y/2f - width / 2f), new Vector2f(res.x/2f , res.y/2f + width / 2f), 2f);
+            spr.SetColor(255, 0, 0, 255);
         }
 
         if(Ref.net.net_graph.iValue > 0) {
@@ -374,9 +366,16 @@ public class CGameRender {
             Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y/2f), "ESC for menu", Align.CENTER, Type.HUD);
         }
         PlayerState ps = game.cg.snap.ps;
-        Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*7), "^3Weapon: " + ps.weapon + " (" + ps.weaponState + ")", Align.LEFT, Type.HUD);
-        Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*8), "^3Ammo: " + ps.stats.getAmmo(ps.weapon), Align.LEFT, Type.HUD);
+        
 
+        Ref.textMan.AddText(new Vector2f(0, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*2), "HP: " + ps.stats.Health, Align.LEFT, Type.HUD,2f);
+
+        if(ps.weapon != Weapon.NONE) {
+            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*2), "Ammo: " + ps.stats.getAmmo(ps.weapon), Align.RIGHT, Type.HUD,2f);
+            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x/2f, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*2), ""+ps.weapon , Align.CENTER, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x/2f, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*1), "(" + ps.weaponState + ")", Align.CENTER, Type.HUD);
+        }
+        
         // Draw powerups
         
 //        for (int i= 0; i < PlayerState.NUM_POWERUPS; i++) {
@@ -428,6 +427,49 @@ public class CGameRender {
 
 
             DrawClientScore(yOffset - lineHeight * i, score);
+        }
+        drawprofiler();
+    }
+
+    private void drawprofiler() {
+        float[] times = Profiler.getTimes();
+        float[] percentage = new float[times.length];
+
+        float totalTime = Ref.common.framemsec; // this will be 100% usage
+        for (int i= 0; i < times.length; i++) {
+            percentage[i] = Helper.Clamp(times[i] / totalTime, 0, 1);
+        }
+        
+        float spacing = 220;
+        Vector2f res = Ref.glRef.GetResolution();
+        float x = 100;
+        float y = res.y - 100;
+        if(totalTime > 25) {
+            Common.Log("Frame took %d ms. Sub-times:", (int)totalTime);
+        }
+        for (int i= 0; i < times.length; i++) {
+            String section = Profiler.Sec.values()[i].toString();
+            String secTime = String.format("%.2f", times[i]);
+
+            if(totalTime > 25) {
+                // Had a frame-hitch.. print out the times
+                Common.Log("%s: %s (%d%%)", section, secTime, (int)(percentage[i]*100f));
+            }
+            Vector2f position = new Vector2f(x, y);
+
+            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            spr.Set(new Vector2f(position.x+1, res.y - position.y - Ref.textMan.GetCharHeight()),
+                    new Vector2f((spacing-2)*percentage[i], Ref.textMan.GetCharHeight()), null, null, null);
+            spr.SetColor(50,50,200,127);
+
+            Vector2f textSize = Ref.textMan.AddText(position, section, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(x+textSize.x, y), secTime, Align.LEFT, Type.HUD);
+
+            x += spacing;
+            if(x > res.x - spacing) {
+                x = 100;
+                y += textSize.y + 1;
+            }
         }
     }
 
@@ -522,80 +564,6 @@ public class CGameRender {
         Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x - size.x, Ref.glRef.GetResolution().y-size.y), graph_text, Align.LEFT, Type.HUD);
     }
 
-
-    //
-    // Effects
-    //
-    void RenderClouds() {
-        float time = Ref.client.frametime/1000f;
-        ViewParams view = game.cg.refdef;
-        for (int i= 0; i < clouds.length; i++) {
-            if(clouds[i].isOutOfView(view.xmin + view.Origin.x, view.Origin.y))
-                clouds[i].position(new Vector2f(view.xmax + view.Origin.x, view.Origin.y));
-
-            clouds[i].Render(time);
-        }
-    }
-
-    public void DrawSun() {
-        Ref.ResMan.LoadTexture("data/particle.png").Bind();
-
-        ViewParams view = game.cg.refdef;
-        float yfrac;
-        try {
-            yfrac = view.Origin.y / Ref.cvars.Find("g_killheight").fValue;
-        } catch(NullPointerException ex) {
-            yfrac = 0;
-        }
-        if(yfrac < -1f)
-            yfrac = -1f;
-        if(yfrac > 1)
-            yfrac = 1f;
-
-        Vector2f position = new Vector2f(view.Origin.x + view.xmin + view.w * 0.2f
-                ,view.Origin.y + view.ymin + view.h * 0.9f + view.h* yfrac * 0.1f);
-
-        sunPositionOnScreen.set(Ref.glRef.GetResolution());
-        sunPositionOnScreen.x *= 0.2f;
-        sunPositionOnScreen.y *= 0.9f + 0.1f * yfrac;
-        Vector2f TexOffset = new Vector2f();
-        Vector2f TexSize = new Vector2f(1,1);
-        Color color = sunColor;
-        //color.set((byte)182, (byte)126, (byte)91, (byte)30); // sunrise / sunset
-        //color.set((byte)192, (byte)191, (byte)173, (byte)30); // noon
-        color.set((byte)189, (byte)190, (byte)192, (byte)30); // cloud/haze
-        //color.set((byte)174, (byte)183, (byte)190, (byte)30); // overcast
-
-        float scale = view.w / view.h;
-        Vector2f Extent = new Vector2f(0.05f * view.w,0.05f *view.h * scale);
-        float depth = -100;
-
-        GL11.glPushMatrix();
-        GL11.glTranslatef(position.x, position.y, 0);
-
-        GL11.glBegin(GL11.GL_QUADS);
-        {
-            GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x, TexOffset.y);
-            GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, -Extent.x, -Extent.y, depth);
-
-            GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x+TexSize.x, TexOffset.y);
-            GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, Extent.x, -Extent.y, depth);
-
-            GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x+TexSize.x, TexOffset.y+TexSize.y);
-            GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, Extent.x, Extent.y, depth);
-
-            GL20.glVertexAttrib2f(Shader.INDICE_COORDS, TexOffset.x, TexOffset.y+TexSize.y);
-            GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
-            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, -Extent.x, Extent.y, depth);
-        }
-        GL11.glEnd();
-
-        GL11.glPopMatrix();
-    }
-
     public void RenderBackground() {
         Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
 
@@ -643,7 +611,6 @@ public class CGameRender {
             // FIX
             size.x = ent.r.absmax.x - ent.r.absmin.x;
             size.y = ent.r.absmax.y - ent.r.absmin.y;
-            
 
             // Figure out what texture to display
             CubeTexture tex = null;
@@ -694,26 +661,14 @@ public class CGameRender {
         }
     }
 
-    void RenderClientEffects() {
-        if(lookingAtCube != null) {
-            GL11.glDisable(GL11.GL_DEPTH_TEST);
-            GL11.glLineWidth(1f);
-            GL11.glDisable(GL11.GL_CULL_FACE);
-            //GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_LINE);
-            Ref.textMan.AddText(new Vector2f(10, 200), ""+lookingAtCube.highlightSide, Align.LEFT, Type.HUD);
-            lookingAtCube.chunk.render.renderSingleWireframe(lookingAtCube.x, lookingAtCube.y, lookingAtCube.z, CubeType.DIRT);
-            GL11.glEnable(GL11.GL_DEPTH_TEST);
-            GL11.glEnable(GL11.GL_CULL_FACE);
-            //GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
-
-        }
-    }
-
     private void runLerpFrame(ClientInfo ci, LerpFrame lf, int newanimation, float speedScale) {
-
         // see if the animation sequence is switching
         if(newanimation != lf.animationNumber || lf.animation == null) {
             setLerpFrameAnimation(ci, lf, newanimation);
+        }
+
+        if(lf.animation == null) {
+            return; // no animation for you!
         }
 
         // if we have passed the current frame, move it to
@@ -765,25 +720,133 @@ public class CGameRender {
         } else {
             lf.backlerp = 1f - (float)(Ref.cgame.cg.time - lf.oldFrameTime) / (lf.frametime - lf.oldFrameTime);
         }
-
     }
 
     private void setLerpFrameAnimation(ClientInfo ci, LerpFrame lf, int newanimation) {
         lf.animationNumber = newanimation;
+        
+        // Figure out what animation was requested
         newanimation &= ~128;
+        if(newanimation < 0 || newanimation >= Animations.values().length) {
+            Common.LogDebug("Invalid animation %d", newanimation);
+            return;
+        }
+        Animations animation = Animations.values()[newanimation];
+
+
+        // Try to load the model
         IQMModel model = Ref.ResMan.loadModel(ci.modelName);
         if(model == null) {
-            Ref.common.Error(Common.ErrorCode.DROP, "Bad animation number " + newanimation);
+            Common.LogDebug("Can't find model %s", ci.modelName);
+            return;
         }
 
-        if(newanimation < 0 || newanimation >= model.anims.length) {
-            return; // FIX to error
+        // Check if we have a valid animation
+        IQMAnim anim = model.getAnimation(animation);
+        if(anim == null) {
+            //Common.LogDebug("Can't find animation %s in model %s", animation.toString(), ci.modelName);
+            if(model.anims == null) return;
+
+            // Don't have the right animation, just grab the first
+            anim = model.anims[0];
         }
 
-        IQMAnim anim = model.anims[newanimation];
         lf.animation = anim;
         lf.animationTime = lf.frametime + anim.initialLerp;
 
+    }
+
+    private static final int[] moveOffsets = new int[] {0,22,45,-22,0,22,-45,-22};
+    private void playerAngles(CEntity cent, RenderEntity rent) {
+        Vector3f headAngle = new Vector3f(cent.lerpAngles);
+        headAngle.y = Helper.AngleMod(headAngle.y);
+
+        int dir = (int)cent.currentState.Angles2.y;
+        if(dir < 0 || dir > 7) {
+            Common.LogDebug("Invalid movedirection %d", dir);
+            return;
+        }
+        Vector3f torsoAngle = new Vector3f();
+        cent.pe.torso.yawing = true;
+        cent.pe.torso.pitching = true;
+        // yaw
+        torsoAngle.y = headAngle.y + 0.5f * moveOffsets[dir];
+        swingAngles(torsoAngle.y, 25, 90, game.cg_swingspeed.fValue, cent.pe.torso, true); // yaw
+        torsoAngle.y = cent.pe.torso.yawAngle;
+
+        // pitch
+        float dest;
+        if(headAngle.x < 0 ) {
+            dest = (headAngle.x) * 0.75f;
+            if(dest < -30) dest = -30;
+        } else {
+            dest = headAngle.x * 0.75f;
+            if(dest> 30) dest = 30;
+        }
+        swingAngles(dest, 15, 30, 0.1f, cent.pe.torso, false);
+        torsoAngle.x = cent.pe.torso.pitchAngle;
+        
+        rent.axis = Helper.AnglesToAxis(torsoAngle);
+    }
+
+    private void swingAngles(float dest, int swingTolerance, int clampTolerance,
+            float speed, LerpFrame out, boolean isYaw) {
+        boolean swinging = isYaw?out.yawing:out.pitching;
+        float angle = isYaw?out.yawAngle:out.pitchAngle;
+        float swing;
+        if(!swinging) {
+            // see if a swing should be started
+            swing = Helper.AngleSubtract(angle, dest);
+            if(swing > swingTolerance || swing < -swingTolerance) {
+                swinging = true;
+            }
+        }
+
+        if(!swinging) {
+            return;
+        }
+
+        // modify the speed depending on the delta
+	// so it doesn't seem so linear
+        swing = Helper.AngleSubtract(dest, angle);
+        float scale = Math.abs(swing);
+        scale /= swingTolerance;
+        if(scale < 0.05) scale = 0.05f;
+        if(scale > 2.0) scale = 2.0f;
+
+        // swing towards the destination angle
+        float move;
+        if(swing >=0) {
+            move = game.cg.frametime * scale * speed;
+            if(move >= swing) {
+                move = swing;
+                swinging = false;
+            }
+            angle = Helper.AngleMod(angle + move);
+        } else if(swing < 0) {
+            move = game.cg.frametime * scale * -speed;
+            if(move <= swing) {
+                move = swing;
+                swinging = false;
+            }
+            angle = Helper.AngleMod(angle + move);
+        }
+
+        // clamp to no more than tolerance
+        swing = Helper.AngleSubtract(dest, angle);
+        if(swing > clampTolerance) {
+            angle = Helper.AngleMod(dest - (clampTolerance -1));
+        } else if(swing < -clampTolerance) {
+            angle = Helper.AngleMod(dest + (clampTolerance-1));
+        }
+
+        if(isYaw) {
+            out.yawing = swinging;
+            out.yawAngle = angle;
+        } else {
+            out.pitching = swinging;
+            out.pitchAngle = angle;
+        }
     }
 
 

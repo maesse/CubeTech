@@ -5,6 +5,9 @@ import cubetech.gfx.ResourceManager;
 import cubetech.misc.Event;
 import cubetech.misc.ExitException;
 import cubetech.misc.FrameException;
+import cubetech.misc.Profiler;
+import cubetech.misc.Profiler.Sec;
+import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
 import cubetech.net.Packet;
 import cubetech.server.Server;
@@ -66,7 +69,7 @@ public class Common {
     public ItemList items = new ItemList();
     
     private int lasttime; // the time last frame
-    private int framemsec; // delta time between frames
+    public int framemsec; // delta time between frames
     private boolean useSysTimer = true; // Controls the current timer. com_timer sets this.
     private Event tempevt = new Event();
 
@@ -83,7 +86,7 @@ public class Common {
         lasttime = Milliseconds();
         // Set up cvars
         maxfps = Ref.cvars.Get("maxfps", "100", EnumSet.of(CVarFlags.ARCHIVE));
-        developer = Ref.cvars.Get("developer", "1", EnumSet.of(CVarFlags.ARCHIVE));
+        developer = Ref.cvars.Get("developer", "0", EnumSet.of(CVarFlags.ARCHIVE));
         cl_running = Ref.cvars.Get("cl_running", "0", EnumSet.of(CVarFlags.ROM));
         sv_running = Ref.cvars.Get("sv_running", "0", EnumSet.of(CVarFlags.ROM));
         cl_paused = Ref.cvars.Get("cl_paused", "0", EnumSet.of(CVarFlags.ROM));
@@ -174,6 +177,11 @@ public class Common {
     }
 
     public void Frame() {
+        // Update profiler
+        // calculate times from last frame and prepare for a new one
+        Profiler.reset(); 
+
+        // Change timer strategy
         if(com_timer.modified) {
             useSysTimer = com_timer.iValue == 1;
             lasttime = Milliseconds(); // Different timers might use different timebases
@@ -223,7 +231,9 @@ public class Common {
 
             // Server Frame
             if(Ref.server != null) {
+                SecTag ptag = Profiler.EnterSection(Sec.SERVER);
                 Ref.server.Frame(msec);
+                ptag.ExitSection();
                 // Allow server packets to arrive instantly if running server
                 EventLoop();
                 Ref.commands.Execute(); // Pump commands
@@ -232,7 +242,9 @@ public class Common {
             
 
             // Client Frame
+            SecTag ptag = Profiler.EnterSection(Sec.CLIENT);
             Ref.client.Frame(msec);
+            ptag.ExitSection();
         } catch(FrameException ex) {
             // FrameException is a special RuntimeException that only has
             // one purpose - to exit the current frame.

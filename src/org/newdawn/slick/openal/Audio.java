@@ -13,6 +13,9 @@ public interface Audio {
 	 */
 	public void stop();
 
+        public int getLastTimeUsed();
+        public void setLastTimeUsed(int time);
+
 	/**
 	 * Get the ID of the OpenAL buffer holding this data (if any). This method
 	 * is not valid with streaming resources.
@@ -50,7 +53,7 @@ public interface Audio {
 	 * @return The ID of the source playing the sound
 	 */
 	public int playAsSoundEffect(float pitch, float gain, boolean loop,
-			float x, float y, float vx, float vy);
+			float x, float y, float z, float vx, float vy, float vz);
 
 	/**
 	 * Play this sound as music

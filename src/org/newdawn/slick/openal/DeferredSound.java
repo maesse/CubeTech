@@ -68,9 +68,6 @@ public class DeferredSound extends AudioImpl implements DeferredResource {
 		SoundStore.get().setDeferredLoading(false);
 		if (in != null) {
 			switch (type) {
-			case OGG:
-				target = SoundStore.get().getOgg(in);
-				break;
 			case WAV:
 				target = SoundStore.get().getWAV(in);
 				break;
@@ -86,9 +83,6 @@ public class DeferredSound extends AudioImpl implements DeferredResource {
 			}
 		} else {
 			switch (type) {
-			case OGG:
-				target = SoundStore.get().getOgg(ref);
-				break;
 			case WAV:
 				target = SoundStore.get().getWAV(ref);
 				break;
@@ -141,9 +135,9 @@ public class DeferredSound extends AudioImpl implements DeferredResource {
 	 * @param y The y position of the sound
 	 * @param z The z position of the sound
 	 */
-	public int playAsSoundEffect(float pitch, float gain, boolean loop, float x, float y, float vx, float vy) {
+	public int playAsSoundEffect(float pitch, float gain, boolean loop, float x, float y, float z, float vx, float vy, float vz) {
 		checkTarget();
-		return target.playAsSoundEffect(pitch, gain, loop, x, y, vx, vy);
+		return target.playAsSoundEffect(pitch, gain, loop, x, y, z, vx, vy, vz);
 	}
 	
 	/**

@@ -1,26 +1,44 @@
 package cubetech.collision;
 
+import com.bulletphysics.collision.broadphase.BroadphaseInterface;
+import com.bulletphysics.collision.broadphase.DbvtBroadphase;
+import com.bulletphysics.collision.dispatch.CollisionConfiguration;
+import com.bulletphysics.collision.dispatch.CollisionDispatcher;
+import com.bulletphysics.collision.dispatch.DefaultCollisionConfiguration;
+import com.bulletphysics.collision.shapes.BoxShape;
+import com.bulletphysics.dynamics.DiscreteDynamicsWorld;
+import com.bulletphysics.dynamics.RigidBody;
+import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
+import com.bulletphysics.dynamics.constraintsolver.SequentialImpulseConstraintSolver;
+import com.bulletphysics.linearmath.DefaultMotionState;
+import com.bulletphysics.linearmath.Transform;
 import cubetech.CGame.ChunkRender;
 import cubetech.CGame.ViewParams;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.gfx.CubeTexture;
+import cubetech.gfx.CubeType;
 import cubetech.gfx.FrameBuffer;
 import cubetech.gfx.GLRef;
 import cubetech.gfx.Shader;
 import cubetech.misc.Plane;
 import cubetech.misc.Ref;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
 import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.zip.DataFormatException;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.Color;
+import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
@@ -44,12 +62,20 @@ public class ClientCubeMap {
     CubeTexture depthTex = null;
 
     Shader shader = null;
+    Shader shadowShader = null;
     public ExecutorService exec = Executors.newSingleThreadExecutor();
-    public ByteBuffer[] buildBuffer = new ByteBuffer[4];
+    public ByteBuffer[] buildBuffer = new ByteBuffer[8];
     public int[] bufferRelations = new int[buildBuffer.length];
+    public int[] lastTouched = new int[buildBuffer.length];
+    public boolean[] lockedBuffers = new boolean[buildBuffer.length];
+    public final Object bufferLock = new Object();
     public int currentWrite = 0;
     public int currentRead = 0;
-    private static final int SANE_QUEUE = 10;
+    private static final int SANE_QUEUE = 20;
+
+    public int nVBOthisFrame = 0; // vbo's updated this frame
+
+    public DiscreteDynamicsWorld world;
 
     public void dispose() {
         exec.shutdownNow();
@@ -57,50 +83,116 @@ public class ClientCubeMap {
         depthTex = null;
         if(derp != null) derp.destroy();
         for (CubeChunk cubeChunk : chunks.values()) {
-            cubeChunk.render.destroy();
+            cubeChunk.destroy();
         }
+        chunks.clear();
+        buildBuffer = null;
     }
 
     //
     // Intermediate buffer handling
     //
     public boolean bufferAvailable() {
-        return currentWrite - currentRead <= buildBuffer.length || currentWrite - currentRead > SANE_QUEUE;
+        synchronized(bufferLock) {
+            for (int i= 0; i < lastTouched.length; i++) {
+                if(bufferRelations[i] == 0) return true;
+            }
+            
+        }
+        return false;
+//        return freeBuffers > 0 || currentWrite - currentRead > SANE_QUEUE;
+        //return currentWrite - currentRead < buildBuffer.length;// || currentWrite - currentRead > SANE_QUEUE;
     }
 
+    public boolean canGrabOld() {
+        synchronized(bufferLock) {
+            int last = lastTouched[0];
+            int lasti = 0;
+            for (int i= 0; i < lastTouched.length; i++) {
+                if(lastTouched[i] < last)  {
+                    last = lastTouched[i];
+                    lasti = i;
+                }
+            }
+            if(Ref.common.frametime > last + grabTimeout) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private int grabTimeout = 400;
+    private int freeBuffers = buildBuffer.length;
+    private int oldestGrab = Ref.common.frametime;
+
     public ByteBuffer grabBuffer() {
+        
         // Find oldest
         int lowest = Integer.MAX_VALUE;
-        int lowestI = 0;
-        for (int i= 0; i < bufferRelations.length; i++) {
-            if(bufferRelations[i] < lowest) {
-                lowest = bufferRelations[i];
-                lowestI = i;
+        int lowestI = -1;
+
+        int last = lastTouched[0];
+        int lasti = 0;
+        
+        freeBuffers = 0;
+        synchronized(bufferLock) {
+            for (int i= 0; i < lastTouched.length; i++) {
+                if(bufferRelations[i] == 0) {
+                    freeBuffers++;
+                    
+                }
+                
+                if(lastTouched[i] < last)  {
+                    last = lastTouched[i];
+                    lasti = i;
+                }
             }
         }
 
+
+        if(lowestI == -1) {
+            if(Ref.common.frametime < last + grabTimeout) {
+                return null; // All buffers are locked
+            }
+            lowestI = lasti;
+        } 
+        freeBuffers--;
+        
         // Take it
         currentWrite++;
         bufferRelations[lowestI] = currentWrite;
+        lastTouched[lowestI] = Ref.common.frametime;
         return buildBuffer[lowestI];
     }
 
     public ByteBuffer getBuffer(int index) {
+        synchronized(bufferLock) {
         for (int i= 0; i < bufferRelations.length; i++) {
             if(bufferRelations[i] == index) {
+                
+                    lockedBuffers[i] = true;
+                
                 return buildBuffer[i];
             }
+        }
         }
         return null;
     }
 
     public void releaseBuffer(int index) {
+        synchronized(bufferLock) {
         for (int i= 0; i < bufferRelations.length; i++) {
             if(bufferRelations[i] == index) {
                 bufferRelations[i] = 0; // make it lowest
+                lastTouched[i] = 0;
+                
+                    lockedBuffers[i] = false;
+                
+                freeBuffers++;
                 break;
             }
-        }
+        }}
+        
         if(currentRead < index) currentRead = index;
     }
 
@@ -112,10 +204,86 @@ public class ClientCubeMap {
         shader.mapTextureUniform("tex", 0);
         shader.validate();
         buildLight();
-//        derp = new FrameBuffer(false, true, 512, 512);
-//        GLRef.checkError();
-//        depthTex = new CubeTexture(GL11.GL_TEXTURE_2D, derp.getTextureId(), "depth");
-//        GLRef.checkError();
+
+        initPhysics();
+    }
+
+
+    private BoxShape boxShape;
+    private void initPhysics() {
+        // Initalized the bullet physics world
+        CollisionConfiguration collConfig = new DefaultCollisionConfiguration();
+        CollisionDispatcher dispatch = new CollisionDispatcher(collConfig);
+        BroadphaseInterface broadphase = new DbvtBroadphase();
+        SequentialImpulseConstraintSolver solver = new SequentialImpulseConstraintSolver();
+
+        world = new DiscreteDynamicsWorld(dispatch, broadphase, solver, collConfig);
+        float grav = -Ref.cvars.Find("sv_gravity").iValue;
+        world.setGravity(new javax.vecmath.Vector3f(0, 0, grav));
+
+        float boxHalfSize = CubeChunk.BLOCK_SIZE/2;
+        boxShape = new BoxShape(new javax.vecmath.Vector3f(boxHalfSize, boxHalfSize, boxHalfSize));
+        
+        
+    }
+
+    public void changedBlock(CubeChunk c, int x, int y, int z, byte type) {
+        // Update Bullet physics
+        boolean removed = type == CubeType.EMPTY;
+
+        if(removed) {
+            // TODO
+            return;
+        }
+
+        // Create a transform
+        Transform boxTransform = new Transform();
+        boxTransform.setIdentity();
+
+        // Set origin to center of the block
+        int cx = c.p[0] + x * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
+        int cy = c.p[1] + y * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
+        int cz = c.p[2] + z * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
+        boxTransform.origin.set(cx, cy, cz);
+
+        // Create the body
+        DefaultMotionState motionState = new DefaultMotionState(boxTransform);
+        RigidBodyConstructionInfo rbInfo = new RigidBodyConstructionInfo(0, motionState, boxShape);
+        RigidBody body = new RigidBody(rbInfo);
+
+        // Add it to the world
+        world.addRigidBody(body);
+    }
+
+    public void unserialize(ByteBuffer buf) {
+        long count = buf.getLong();
+        Common.Log("Reading %d chunks from demo file", count);
+        int size = buf.position();
+        if(count > 0) {
+            parseCubeData(buf, (int) count);
+        }
+        size = buf.position() - size;
+        Common.Log("Loaded %d bytes of compressed map data", size);
+    }
+
+    public void serializeClientMap(FileChannel out) throws IOException {
+        ByteBuffer tempBuf = ByteBuffer.allocate(8);
+        tempBuf.order(ByteOrder.nativeOrder());
+        // Write chunk count
+        int count = chunks.size();
+        tempBuf.putLong(0, count).position(0);
+        out.write(tempBuf);
+        Common.Log("Writing %d cube chunks to demo file" + count);
+        int totalChunkSize = 0;
+        for (Long key : chunks.keySet()) {
+            CubeChunk chunk = chunks.get(key);
+
+            // write chunk data
+            ByteBuffer chunkData = chunk.createByteBuffer();
+            totalChunkSize += chunkData.limit();
+            out.write(chunkData);
+        }
+        Common.Log("Compressed map data: %d bytes", totalChunkSize);
     }
 
     private void buildLight() {
@@ -171,6 +339,7 @@ public class ClientCubeMap {
     }
 
     private void renderFromOrigin(int orgX, int orgY, int orgZ, int chunkDistance, boolean enqueue, Plane[] frustum) {
+        nVBOthisFrame = 0;
         // Render chunks
         for (int z= -chunkDistance; z <= chunkDistance; z++) {
             for (int y= -chunkDistance; y <= chunkDistance; y++) {
@@ -204,14 +373,46 @@ public class ClientCubeMap {
     }
 
     public void Render(ViewParams view) {
-        
+        if(Ref.cgame.cg.time - 1000 > lastRefresh) {
+            chunkPerSecond = nChunkUpdates;
+            nChunkUpdates = 0;
+            lastRefresh = Ref.cgame.cg.time;
+        }
 
         // Set shader
-        Ref.glRef.PushShader(shader);
-        shader.mapTextureUniform("tex", 0);
-        shader.setUniform("fog_factor", 1f/(view.farDepth/3f));
-        shader.setUniform("fog_color", (Vector4f)new Vector4f(95,87,67,255).scale(1/255f)); // 145, 140, 129
-
+        CubeTexture depth = null;
+        if(!Ref.cgame.shadowMan.isRendering()) {
+            if(shadowShader == null) {
+                shadowShader = Ref.glRef.getShader("WorldFogShadow");
+                shadowShader.mapTextureUniform("tex", 0);
+                shadowShader.mapTextureUniform("shadows", 1);
+                shadowShader.validate();
+            }
+            Ref.glRef.PushShader(shadowShader);
+            depth = Ref.cgame.shadowMan.getDepthTexture();
+            depth.textureSlot = 1;
+            depth.Bind();
+            Matrix4f[] shadowmat = Ref.cgame.shadowMan.getShadowViewProjections(8);
+            shadowShader.setUniform("shadowMatrix", shadowmat);
+            Vector4f[] shadowDepths = Ref.cgame.shadowMan.getCascadeDepths();
+            
+            shadowShader.setUniform("cascadeDistances", shadowDepths);
+            
+//            shadowShader.setUniform("cascadeColors", Ref.cgame.shadowMan.getCascadeColors());
+            shadowShader.setUniform("fog_factor", 1f/(view.farDepth));
+            shadowShader.setUniform("fog_color", (Vector4f)new Vector4f(95,87,67,255).scale(1/255f)); // 145, 140, 129
+            shadowShader.setUniform("shadow_bias", Ref.cvars.Find("shadow_bias").fValue);
+            
+            shadowShader.setUniform("pcfOffsets", Ref.cgame.shadowMan.getPCFoffsets());
+            GLRef.checkError();
+        } else {
+            Ref.glRef.PushShader(shader);
+            shader.setUniform("fog_factor", 1f/(view.farDepth/2f));
+            shader.setUniform("fog_color", (Vector4f)new Vector4f(95,87,67,255).scale(1/255f)); // 145, 140, 129
+        }
+//        shader.mapTextureUniform("tex", 0);
+        GLRef.checkError();
+        
 
         // Set rendermodes
         GL11.glDisable(GL11.GL_BLEND);
@@ -224,7 +425,7 @@ public class ClientCubeMap {
         nChunks = 0;
 
         // chunk render distance
-        int chunkDistance = (int) (view.farDepth * 0.3f / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE))+1;
+        int chunkDistance = (int) (view.farDepth * 1f / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE))+1;
         if(chunkDistance <= 0)
             chunkDistance = 1;
 
@@ -235,57 +436,66 @@ public class ClientCubeMap {
 
         renderFromOrigin(orgX, orgY, orgZ, chunkDistance, true, view.planes);
 
+        if(!Ref.cgame.shadowMan.isRendering()) {
+            depth.Unbind();
+        }
         // Reset shader
         Ref.glRef.PopShader();
-
-        // Shadow mapping
-        //Ref.glRef.PushShader(Ref.glRef.getShader("sprite"));
-
-//        derp.Bind();
-//        GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
-//        GL11.glViewport(0, 0, 512, 512);
-//        GL11.glColorMask(false, false, false, false);
-//        renderFromOrigin(orgX, orgY, orgZ, chunkDistance, false, view.planes);
-//        GL11.glColorMask(true, true, true, true);
-//        derp.Unbind();
-//        GL11.glViewport(0, 0, (int)Ref.glRef.GetResolution().x, (int)Ref.glRef.GetResolution().y);
-//
-//        //Ref.glRef.PopShader();
-//        Ref.glRef.srgbBuffer.Bind();
 
         // Clear rendermodes
         GL11.glEnable(GL11.GL_BLEND);
         if(!Ref.glRef.r_fill.isTrue()) {
             GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
         }
-
-
-
-        // Render test model
-//        model.animate(Ref.cgame.cg.time*25/1000f);
-//        model.render(Ref.cgame.cg.predictedPlayerState.origin, (float) (-Ref.cgame.cg.predictedPlayerState.viewangles.y + 180));
-
-//        Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-//        spr.Set(0, 0, 256, depthTex);
     }
 
-    public void parseCubeData(ByteBuffer download) {
+    
+
+    int nChunkUpdates = 0;
+    int lastRefresh = 0;
+    public int chunkPerSecond = 0;
+    public void parseCubeData(ByteBuffer download, int count) {
         // need a backing array
         if(!download.hasArray()) {
             Ref.common.Error(ErrorCode.FATAL, "parseCubeDatas underlying download bytebuffer doesn't have a backing array");
         }
-        // uncompress data
         byte[] src = download.array();
-        byte[] dest = new byte[CubeChunk.CHUNK_SIZE + 1 + 8]; // max size
+        download.order(ByteOrder.nativeOrder());
+        int offset = download.position();
+        // Handle multiple chunks in one stream
+        while(offset < src.length && (count > 0 || count == -1)) {
+            download.position(offset);
+            int chunkSize = download.getInt();
+            offset += 4; // move past the size
+            
+            // uncompress data
+            ByteBuffer data = uncompressCubeData(src, offset, chunkSize);
+            parseSingleCubeData(data);
+            nChunkUpdates++;
+
+            // move offset to next data
+            offset += chunkSize;
+            if(count > 0) count--;
+        }
+        // there might be more in this file, so ensure that buffer is positioned correctly
+        if(offset < src.length) download.position(offset);
+
+    }
+
+    private ByteBuffer uncompressCubeData(byte[] src, int offset, int lenght) {
+        byte[] dest = new byte[CubeChunk.CHUNK_SIZE + 1 + 8]; // max possible size
         int len = 0;
         try {
-            len = CubeChunk.uncompressData(src, dest);
+            len = CubeChunk.uncompressData(src, offset, lenght, dest);
         } catch (DataFormatException ex) {
             Common.Log("Got a chunkError:" + Common.getExceptionString(ex));
         }
-        download = ByteBuffer.wrap(dest, 0, len);
+        ByteBuffer download = ByteBuffer.wrap(dest, 0, len);
         download.order(ByteOrder.nativeOrder());
+        return download;
+    }
 
+    private void parseSingleCubeData(ByteBuffer download) {
         // Check control byte
         byte control = download.get();
         if(control != 1 && control != 2) return; // problem
@@ -303,7 +513,7 @@ public class ClientCubeMap {
 
         if(control == 1) {
             // get entry count
-            
+
             int startVersion = download.getInt();
             byte count = download.get();
             if(download.limit() - download.position() < count * 4) {
@@ -320,8 +530,8 @@ public class ClientCubeMap {
                     int derp2 = 2;
                 }
                 c.setCubeType(delta[0], delta[1], delta[2], type, true);
+                changedBlock(c, delta[0], delta[1], delta[2], type);
             }
-//            c.render.notifyChange();
         } else if(control == 2) {
             // Fill chunk
             for (int z= 0; z < CubeChunk.SIZE; z++) {
@@ -329,14 +539,13 @@ public class ClientCubeMap {
                     for (int x= 0; x < CubeChunk.SIZE; x++) {
                         byte b = download.get();
                         c.setCubeType(x, y, z, b, false);
+                        changedBlock(c, x, y, z, b);
                     }
                 }
             }
             // notify all neighbours
             c.render.notifyChange();
         }
-        
-        
     }
 
 

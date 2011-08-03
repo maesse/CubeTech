@@ -1,6 +1,7 @@
 package cubetech.common;
 
 import cubetech.Game.ClientPersistant;
+import cubetech.Game.Game;
 import cubetech.common.items.Weapon;
 import cubetech.common.items.WeaponState;
 import cubetech.Game.Gentity;
@@ -60,9 +61,24 @@ public class PlayerState {
     // Animation
     public int animation = 0;
     public int animTime = 0;
+    public int moveDirection = 0;
+
+    // Duck handling
+    public boolean ducking;
+    public boolean ducked;
+    public int ducktime;
+    public boolean[] oldButtons = new boolean[30];
+    public int viewheight = (int)Game.PlayerViewHeight;
 
     // from game -> server, tells server what map data to send
     public ClientPersistant pers = null;
+
+    // Adds in the viewoffset from standing/ducking
+    public Vector3f getViewOrigin() {
+        Vector3f view = new Vector3f(origin);
+        view.z += viewheight;
+        return view;
+    }
 
     public PlayerState() {
         delta_angles[0] = -16000;
@@ -101,6 +117,11 @@ public class PlayerState {
         weaponTime = 0;
         weaponState = WeaponState.READY;
         stats = new PlayerStats();
+        ducking = false;
+        ducked = false;
+        ducktime = 0;
+        oldButtons = new boolean[30];
+         viewheight = (int)Game.PlayerViewHeight;
     }
 
 //    // Use mouse position as a viewangle
@@ -177,7 +198,12 @@ public class PlayerState {
         ps.weaponTime = weaponTime;
         ps.weaponState = weaponState;
         ps.pers = pers;
+        ps.ducked = ducked;
+        ps.ducking = ducking;
+        ps.ducktime = ducktime;
+        ps.viewheight = viewheight;
         System.arraycopy(powerups, 0, ps.powerups, 0, NUM_POWERUPS);
+        System.arraycopy(oldButtons, 0, ps.oldButtons, 0, oldButtons.length);
         return ps;
 //        }
     }
@@ -203,6 +229,7 @@ public class PlayerState {
         s.pos.delta.set(velocity);
 
         s.weapon = weapon;
+        s.Angles2.y = moveDirection;
 
         s.apos.type = Trajectory.INTERPOLATE;
         s.apos.base.set(viewangles);
@@ -265,6 +292,7 @@ public class PlayerState {
         msg.WriteDelta(ps.entityEventSequence, entityEventSequence);
         msg.WriteDelta(ps.eventParams[0], eventParams[0]);
         msg.WriteDelta(ps.eventParams[1],  eventParams[1]);
+        msg.WriteDelta(ps.eventSequence, eventSequence);
         msg.WriteEnum(events[0]);
         msg.WriteEnum(events[1]);
         msg.WriteDelta(ps.externalEvent, externalEvent);
@@ -280,7 +308,7 @@ public class PlayerState {
         msg.Write(applyPull);
         msg.Write(jumpDown);
         msg.Write(canDoubleJump);
-        msg.WriteDelta(animation, ps.animation);
+        msg.WriteDelta(ps.animation, animation);
         msg.WriteEnum(weapon);
         msg.WriteDelta(ps.weaponTime, weaponTime);
         msg.WriteEnum(weaponState);
@@ -290,7 +318,15 @@ public class PlayerState {
         }
         msg.WriteDelta(ps.movetime, movetime);
         stats.WriteDelta(msg, ps.stats);
-
+        msg.Write(ducking);
+        msg.Write(ducked);
+        msg.WriteDelta(ps.ducktime, ducktime);
+        int buttons = 0;
+        for (int i= 0; i < oldButtons.length; i++) {
+            if(oldButtons[i]) buttons |= (1 << i);
+        }
+        msg.Write(buttons);
+        msg.WriteDelta(ps.viewheight, viewheight);
     }
 
     public void ReadDelta(NetBuffer msg, PlayerState ps) {
@@ -304,7 +340,8 @@ public class PlayerState {
         eFlags = msg.ReadDeltaInt(ps.eFlags);
         entityEventSequence = msg.ReadDeltaInt(ps.entityEventSequence);
         eventParams[0] = msg.ReadDeltaInt(ps.eventParams[0]);
-        eventParams[1] = msg.ReadDeltaInt(ps. eventParams[1]);
+        eventParams[1] = msg.ReadDeltaInt(ps.eventParams[1]);
+        eventSequence = msg.ReadDeltaInt(ps.eventSequence);
 
         events[0] = msg.ReadEnum(Event.class);
         events[1] = msg.ReadEnum(Event.class);
@@ -331,6 +368,14 @@ public class PlayerState {
         }
         movetime = msg.ReadDeltaInt(ps.movetime);
         stats.ReadDelta(msg, ps.stats);
+        ducking = msg.ReadBool();
+        ducked = msg.ReadBool();
+        ducktime = msg.ReadDeltaInt(ps.ducktime);
+        int buttons = msg.ReadInt();
+        for (int i= 0; i < oldButtons.length; i++) {
+            oldButtons[i] = (((buttons >> i) & 1) == 1);
+        }
+        viewheight = msg.ReadDeltaInt(ps.viewheight);
     }
 
     public void AddPredictableEvent(Event event, int eventParam) {

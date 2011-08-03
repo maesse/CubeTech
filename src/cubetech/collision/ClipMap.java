@@ -1,18 +1,5 @@
 package cubetech.collision;
 
-//import cubetech.common.Common;
-//import cubetech.common.Common.ErrorCode;
-//import cubetech.common.ICommand;
-//import cubetech.misc.Ref;
-//import cubetech.net.NetBuffer;
-//import java.io.FileNotFoundException;
-//import java.io.FileOutputStream;
-//import java.io.IOException;
-//import java.nio.ByteBuffer;
-//import java.nio.channels.FileChannel;
-//import java.util.Random;
-//import java.util.logging.Level;
-//import java.util.logging.Logger;
 
 /**
  * Contains the currently loaded level. Handles all collision with it
@@ -48,7 +35,9 @@ public class ClipMap {
 
     public void ClearCubeMap() {
         // Maybe save old map?
+        if(cubemap != null)cubemap.destroy();
         cubemap = null;
+        
     }
 
     public void EmptyCubeMap() {

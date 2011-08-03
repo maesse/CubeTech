@@ -45,7 +45,7 @@ public class IQMHeader {
         }
         
         h.version = buffer.getInt();
-        if(h.version != 1) throw new IllegalArgumentException("Invalid version " + h.version + ". Must be 1");
+        if(h.version != 2) throw new IllegalArgumentException("Invalid version " + h.version + ". Must be 2");
         h.filesize = buffer.getInt();
         h.flags = buffer.getInt();
         h.num_text = buffer.getInt();

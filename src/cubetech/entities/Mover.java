@@ -90,36 +90,39 @@ public class Mover {
         Vector3f mins = new Vector3f();
         Vector3f maxs = new Vector3f();
             
-        if ( pusher.r.currentAngles.x != 0 || pusher.r.currentAngles.y != 0
-		|| amove.x != 0|| amove.y != 0 ) {
+        if ( pusher.r.currentAngles.x != 0 || pusher.r.currentAngles.y != 0 || pusher.r.currentAngles.z != 0
+		|| amove.x != 0|| amove.y != 0 || amove.z != 0 ) {
             float radius = Helper.RadiusFromBounds(pusher.r.mins, pusher.r.maxs);
             mins.set(pusher.r.currentOrigin.x + move.x - radius,
-                                        pusher.r.currentOrigin.y + move.y - radius);
+                                        pusher.r.currentOrigin.y + move.y - radius,
+                                        pusher.r.currentOrigin.z + move.z - radius);
             maxs.set(pusher.r.currentOrigin.x + move.x + radius,
-                                        pusher.r.currentOrigin.y + move.y + radius);
+                                        pusher.r.currentOrigin.y + move.y + radius,
+                                        pusher.r.currentOrigin.z + move.z + radius);
             
             Vector3f.sub(mins, move, totalMins);
             Vector3f.sub(maxs, move, totalMaxs);
         } else {
-            mins.set(pusher.r.absmin.x + move.x, pusher.r.absmin.y + move.y);
-            maxs.set(pusher.r.absmax.x + move.x, pusher.r.absmax.y + move.y);
+            mins.set(pusher.r.absmin.x + move.x, pusher.r.absmin.y + move.y, pusher.r.absmin.z + move.z);
+            maxs.set(pusher.r.absmax.x + move.x, pusher.r.absmax.y + move.y, pusher.r.absmax.z + move.z);
 
             totalMins.set(pusher.r.absmin);
             totalMaxs.set(pusher.r.absmax);
-            if(move.x > 0)
-                totalMaxs.x += move.x;
-            else
-                totalMins.x -= move.x;
-            if(move.y > 0)
-                totalMaxs.y += move.y;
-            else
-                totalMins.y -= move.y;
+            if(move.x > 0) totalMaxs.x += move.x;
+            else totalMins.x -= move.x;
+                
+            if(move.y > 0) totalMaxs.y += move.y;
+            else totalMins.y -= move.y;
+
+            if(move.z > 0) totalMaxs.z += move.z;
+            else totalMins.z -= move.z;
+
         }
 
         // unlink the pusher so we don't get it in the entityList
         pusher.Unlink();
 
-        SectorQuery query = Ref.server.EntitiesInBox(new Vector2f(totalMins), new Vector2f(totalMaxs));
+        SectorQuery query = Ref.server.EntitiesInBox(totalMins, totalMaxs);
         // move the pusher to it's final position
         Vector3f.add(pusher.r.currentOrigin, move, pusher.r.currentOrigin);
         Vector3f.add(pusher.r.currentAngles, amove, pusher.r.currentAngles);
@@ -135,8 +138,10 @@ public class Mover {
             // see if the ent needs to be tested
             if(check.r.absmin.x >= maxs.x
                     || check.r.absmin.y >= maxs.y
+                    || check.r.absmin.z >= maxs.z
                     || check.r.absmax.x <= mins.x
-                    || check.r.absmax.y <= mins.y)
+                    || check.r.absmax.y <= mins.y
+                    || check.r.absmax.z <= mins.z)
                 continue;
 
             // see if the ent's bbox is inside the pusher's final position

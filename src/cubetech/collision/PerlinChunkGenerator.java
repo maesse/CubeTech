@@ -42,7 +42,18 @@ public class PerlinChunkGenerator implements IChunkGenerator {
         float maxHeight = 512;
         float groundlevel = -1024;
         float minHeight = CubeChunk.SIZE * CubeChunk.BLOCK_SIZE * CubeMap.MIN_Z;
-        
+
+        int cacheLevel = 4;
+        int noiseSize = (CubeChunk.SIZE / cacheLevel) + 1;
+        double[] noiseLookup = new double[noiseSize*noiseSize*noiseSize];
+        for (int i= 0; i < noiseSize; i++) {
+            for (int j= 0; j < noiseSize; j++) {
+                for (int k= 0; k < noiseSize; k++) {
+                    noiseLookup[i*noiseSize*noiseSize + j*noiseSize + k] =
+                            getNoise(x,y,z,k*cacheLevel,j*cacheLevel,i*cacheLevel, 0.001f, 1f);
+                }
+            }
+        }
         
         for (int i= 0; i < CubeChunk.SIZE; i++) {
             for (int j= 0; j < CubeChunk.SIZE; j++) {

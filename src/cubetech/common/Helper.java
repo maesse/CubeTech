@@ -33,6 +33,32 @@ public class Helper {
         dst.z = src.z;
     }
 
+    /**
+     * Get the closest greater power of 2 to the fold number
+     *
+     * @param fold The target number
+     * @return The power of 2
+     */
+    public static int get2Fold(int fold) {
+        int ret = 2;
+        while (ret < fold) {
+            ret *= 2;
+        }
+        return ret;
+    }
+
+    public static int Clamp(int value, int min, int max) {
+        if(value < min) value = min;
+        if(value > max) value = max;
+        return value;
+    }
+
+    public static float Clamp(float value, float min, float max) {
+        if(value < min) value = min;
+        if(value > max) value = max;
+        return value;
+    }
+
     public static Matrix4f scale(float f, Matrix4f src, Matrix4f dest) {
         if (dest == null) {
             dest = new Matrix4f();
@@ -59,6 +85,13 @@ public class Helper {
         return dest;
     }
 
+    // hermite basis function for smooth interpolation
+    // Similar to Gain() above, but very cheap to call
+    // value should be between 0 & 1 inclusive
+    public static float SimpleSpline(float val) {
+        float valSq = val * val;
+        return 3 * valSq - 2 * valSq * val;
+    }
 
     public static void renderBBoxWireframe(float xmin, float ymin, float zmin, float xmax, float ymax, float zmax) {
         // ready the texture
@@ -123,11 +156,21 @@ public class Helper {
             GL11.glTexCoord2f(x, y);
     }
 
+    /**
+     * Uses normalized 0-1 values
+     * @param r
+     * @param g
+     * @param b
+     */
     public static void col(float r, float g, float b) {
+        col(r,g,b,1);
+    }
+
+    public static void col(float r, float g, float b, float a) {
         if(Ref.glRef.isShadersSupported())
-            GL20.glVertexAttrib3f(Shader.INDICE_COLOR, r,g,b);
+            GL20.glVertexAttrib4f(Shader.INDICE_COLOR, r,g,b,a);
         else
-            GL11.glColor3f(r,g,b);
+            GL11.glColor4f(r,g,b,a);
     }
 
     public static void col(Vector4f color) {
@@ -292,6 +335,11 @@ public class Helper {
         return (float)len;
     }
 
+    public static void clearBounds(Vector3f mins, Vector3f maxs) {
+        if(mins != null) mins.set(99999,99999,99999);
+        if(maxs != null) maxs.set(-99999,-99999,-99999);
+    }
+
     public static void rotateAroundDirection(Vector3f[] axis, float yaw) {
         // create an arbitrary axis[1]
         perpendicularVector(axis[0], axis[1]);
@@ -304,6 +352,32 @@ public class Helper {
 
         // cross to get axis[2]
         Vector3f.cross(axis[0], axis[1], axis[2]);
+    }
+
+    public static float[] fillMatrixBuffer(Vector3f[] axis, Vector3f origin) {
+        float[] view = new float[16];
+        view[0] = axis[0].x;
+        view[4] = axis[0].y;
+        view[8] = axis[0].z;
+
+        view[1] = axis[1].x;
+        view[5] = axis[1].y;
+        view[9] = axis[1].z;
+
+        view[2] = axis[2].x;
+        view[6] = axis[2].y;
+        view[10] = axis[2].z;
+
+        view[3] = view[7] = view[11] = 0;
+        view[15] = 1;
+
+        if(origin != null)
+        {
+            view[12] = -origin.x * view[0] + -origin.y * view[4] + -origin.z * view[8];
+            view[13] = -origin.x * view[1] + -origin.y * view[5] + -origin.z * view[9];
+            view[14] = -origin.x * view[2] + -origin.y * view[6] + -origin.z * view[10];
+        }
+        return view;
     }
 
     public static Vector3f rotatePointAroundVector(Vector3f dest, Vector3f dir, Vector3f point, float deg) {
@@ -451,6 +525,21 @@ public class Helper {
             maxs.z = v.z;
     }
 
+    public static void AddPointToBounds(Vector4f v, Vector3f mins, Vector3f maxs) {
+        if(v.x < mins.x)
+            mins.x = v.x;
+        if(v.x > maxs.x)
+            maxs.x = v.x;
+        if(v.y < mins.y)
+            mins.y = v.y;
+        if(v.y > maxs.y)
+            maxs.y = v.y;
+        if(v.z < mins.z)
+            mins.z = v.z;
+        if(v.z > maxs.z)
+            maxs.z = v.z;
+    }
+
     public static boolean Equals(Vector2f a, Vector2f b) {
 //        return false;
         return (a.x == b.x && a.y == b.y);
@@ -575,7 +664,81 @@ public class Helper {
         }
     }
 
+    public static void toFloatBuffer(float[] input, FloatBuffer dest) {
+        dest.clear();
+        for (int i= 0; i < input.length; i++) {
+            dest.put(input[i]);
+        }
+        dest.position(0);
+    }
 
+    public static void VectorFloor(Vector3f input) {
+       input.x = (float) Math.floor(input.x);
+       input.y = (float) Math.floor(input.y);
+       input.z = (float) Math.floor(input.z);
+    }
+
+    public static Vector3f VectorMult(Vector3f a, Vector3f b, Vector3f dest) {
+        if(dest == null) dest = new Vector3f();
+        dest.x = a.x * b.x;
+        dest.y = a.y * b.y;
+        dest.z = a.z * b.z;
+        return dest;
+    }
+
+    public static Vector4f VectorMult(Vector4f a, Vector4f b, Vector4f dest) {
+        if(dest == null) dest = new Vector4f();
+        dest.x = a.x * b.x;
+        dest.y = a.y * b.y;
+        dest.z = a.z * b.z;
+        dest.w = a.w * b.w;
+        return dest;
+    }
+
+    public static Matrix4f createOthoMatrix(float left, float right, float bottom, float top, float nearPlane, float farPlane) {
+        Matrix4f m = new Matrix4f();
+        m.m00 = 2f / (right-left);
+        m.m11 = 2f / (top-bottom);
+        m.m22 = 1f / (nearPlane - farPlane);
+        m.m33 = 1f;
+        m.m30 = (left+right) / (left-right);
+        m.m31 = (top+bottom) / (bottom-top);
+        m.m32 = nearPlane / (nearPlane - farPlane);
+//        m.m03 = (left+right) / (left-right);
+//        m.m13 = (top+bottom) / (bottom-top);
+//        m.m23 = nearPlane / (nearPlane - farPlane);
+        return m;
+    }
+
+    public static float AngleMod(float a) {
+        a = (360.0f/65536) * ((int)(a*(65536/360.0)) & 65535);
+        return a;
+    }
+
+    public static float AngleSubtract(float a1, float a2) {
+        float a = a1 - a2;
+        while(a > 180) {
+            a -= 360;
+        }
+        while(a < -180) {
+            a += 360;
+        }
+        return a;
+    }
+
+    public static Vector3f LerpAngles(Vector3f from, Vector3f to, Vector3f dest, float frac) {
+        if(dest == null) dest = new Vector3f();
+        dest.x = LerpAngle(from.x, to.x, frac);
+        dest.y = LerpAngle(from.y, to.y, frac);
+        dest.z = LerpAngle(from.z, to.z, frac);
+        return dest;
+    }
+
+    public static float LerpAngle(float from, float to, float frac) {
+        if(to - from > 180) to -= 360;
+        if(to - from < -180) to += 360;
+        return from + frac * (to -from);
+    }
 
     
 }

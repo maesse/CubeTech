@@ -32,6 +32,8 @@ public class MoveQuery {
     Vector3f forward = new Vector3f();
     Vector3f up = new Vector3f();
     Vector3f right = new Vector3f();
+    boolean cropped;
+    Vector3f wishdir;
 
     public MoveQuery(ITrace traceImpl) {
         traceImplementation = traceImpl;

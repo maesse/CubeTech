@@ -2,39 +2,19 @@ package cubetech.collision;
 
 import cubetech.CGame.ChunkRender;
 import cubetech.common.Common;
-import cubetech.common.Common.ErrorCode;
-import cubetech.common.Helper;
-import cubetech.gfx.CubeTexture;
-import cubetech.gfx.CubeType;
-import cubetech.gfx.GLRef.BufferTarget;
-import cubetech.gfx.Shader;
-import cubetech.gfx.TerrainTextureCache;
-import cubetech.gfx.VBO;
-import cubetech.misc.Ref;
-import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
-import org.lwjgl.BufferUtils;
-import org.lwjgl.opengl.ARBVertexShader;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL12;
-import org.lwjgl.opengl.GL20;
-import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Vector3f;
-import org.lwjgl.util.vector.Vector4f;
 
 /**
  *
  * @author mads
  */
 public class CubeChunk {
-    
     public static final int SIZE = 32;
     public static final int CHUNK_SIZE = SIZE*SIZE*SIZE;
     public static final int BLOCK_SIZE = 32;
@@ -43,7 +23,6 @@ public class CubeChunk {
     public static final int PLANE_SIZE = 4*32; // (vertex: 3*4, color: 4*1, tex: 2*4) * 4 points
 
     // block data
-//    private boolean[] visible = new boolean[CHUNK_SIZE*6]; // plane vis data
     public byte[] blockType = new byte[CHUNK_SIZE];
     
     public int[] absmin = new int[3];
@@ -57,13 +36,8 @@ public class CubeChunk {
     public int version = 0;
     int[] versionData = new int[32]; // remember the last 32 changes
 
-    // debug draw
-//    int traceTime = 0;
-//    int[] traceCache = null;
-//    int traceCount = 0;
 
     public int[] p = new int[3]; // Position/Origin. Grows in the positive direction.
-    //int px, py, pz;
     public CubeChunk(HashMap<Long, CubeChunk> chunks, int x, int y, int z) {
         this.chunks = chunks;
         p = new int[] {x,y,z};
@@ -77,8 +51,15 @@ public class CubeChunk {
         fcenter[1] = y * SIZE * BLOCK_SIZE + SIZE/2;
         fcenter[2] = z * SIZE * BLOCK_SIZE + SIZE/2;
     }
-    
-    
+
+    void destroy() {
+        if(render != null) {
+            render.destroy();
+            render = null;
+        }
+        blockType = null;
+        chunks = null;
+    }
 
     public void setCubeType(int x, int y, int z, byte type, boolean notify) {
         int index = getIndex(x, y, z);
@@ -120,8 +101,7 @@ public class CubeChunk {
         return d;
     }
 
-    public byte getCubeType(int index)
-    {
+    public byte getCubeType(int index) {
         return blockType[index];
     }
 
@@ -177,8 +157,6 @@ public class CubeChunk {
         }
         return part;
     }
-
-    
     
     public static int getIndex(int x, int y, int z) {
         return x + y * SIZE + z * SIZE * SIZE;
@@ -234,35 +212,44 @@ public class CubeChunk {
 
         // Compress data
         int compressionLevel = 4; // this seems like a good tradeoff
-        byte[] dest = new byte[size<60?60:size];
-        int wrote = compressData(data, dest, compressionLevel);
+        byte[] dest = new byte[size<64?64:size+4];
+        int wrote = compressData(data, dest, compressionLevel, true);
 //        Common.LogDebug("Wrote %db cubedata to client (p:%d,%d,%d)", wrote,p[0],p[1],p[2]);
         
         buf = ByteBuffer.wrap(dest, 0, wrote);
+        buf.order(ByteOrder.nativeOrder());
+        // Write lenght
+        buf.position(0);
+        buf.putInt(wrote-4);
+        buf.position(0);
         return buf;
     }
 
     private void testCompression(byte[] data, byte[] dest) {
         for (int i= 0; i < 10; i++) {
-            Common.LogDebug("level %d compression: %db", i, compressData(data, dest, i));
+            Common.LogDebug("level %d compression: %db", i, compressData(data, dest, i, true));
         }
     }
 
-    public static int uncompressData(byte[] src, byte[] dst) throws DataFormatException {
+    public static int uncompressData(byte[] src, int offset, int lenght, byte[] dst) throws DataFormatException {
         Inflater unzip = new Inflater();
-        unzip.setInput(src);
+        unzip.setInput(src, offset, lenght);
         int len = unzip.inflate(dst);
         unzip.end();
         return len;
     }
 
-    private static int compressData(byte[] src, byte[] dst, int level) {
+    private static int compressData(byte[] src, byte[] dst, int level, boolean addHeaderSpace) {
         Deflater zip = new Deflater(level);
         zip.setInput(src);
         zip.finish();
-        int len = zip.deflate(dst);
-        return len;
+        int header = 0;
+        if(addHeaderSpace) header = 4; // 4 bytes
+        int len = zip.deflate(dst, header, dst.length-header);
+        return len + header;
     }
+
+
 
     
 }

@@ -6,6 +6,7 @@
 package cubetech.CGame;
 
 import cubetech.common.Info;
+import org.lwjgl.util.vector.Vector3f;
 
 
 /**
@@ -38,6 +39,12 @@ public class ClientInfo {
     // can be deferred until you are dead, to prevent hitches in
     // gameplay
     public String			modelName;
+
+    // Gait frame estimation
+    public int		gaitsequence;
+    public float	gaitframe;
+    public float	gaityaw;
+    public Vector3f	prevgaitorigin = new Vector3f();
 
     public static ClientInfo Parse(String s) {
         ClientInfo info = new ClientInfo();

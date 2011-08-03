@@ -46,7 +46,7 @@ public class NullAudio implements Audio {
 	 * @see org.newdawn.slick.openal.Audio#playAsSoundEffect(float, float, boolean, float, float, float)
 	 */
 	public int playAsSoundEffect(float pitch, float gain, boolean loop,
-			float x, float y, float vx, float vy) {
+			float x, float y, float z, float vx, float vy, float vz) {
 		return 0;
 	}
 
@@ -62,5 +62,12 @@ public class NullAudio implements Audio {
 	 */
 	public void stop() {
 	}
+
+        public int getLastTimeUsed() {
+            return 0;
+        }
+
+        public void setLastTimeUsed(int time) {
+        }
 
 }

@@ -68,9 +68,10 @@ public class IQMAnim {
                 float rx = p.channeloffset[3]; if((p.channelmask&0x08)!=0) rx += model.framedata[framedata++] * p.channelscale[3];
                 float ry = p.channeloffset[4]; if((p.channelmask&0x10)!=0) ry += model.framedata[framedata++] * p.channelscale[4];
                 float rz = p.channeloffset[5]; if((p.channelmask&0x20)!=0) rz += model.framedata[framedata++] * p.channelscale[5];
-                float sx = p.channeloffset[6]; if((p.channelmask&0x40)!=0) sx += model.framedata[framedata++] * p.channelscale[6];
-                float sy = p.channeloffset[7]; if((p.channelmask&0x80)!=0) sy += model.framedata[framedata++] * p.channelscale[7];
-                float sz = p.channeloffset[8]; if((p.channelmask&0x100)!=0) sz += model.framedata[framedata++] * p.channelscale[8];
+                float rw = p.channeloffset[6]; if((p.channelmask&0x40)!=0) rw += model.framedata[framedata++] * p.channelscale[6];
+                float sx = p.channeloffset[7]; if((p.channelmask&0x80)!=0) sx += model.framedata[framedata++] * p.channelscale[7];
+                float sy = p.channeloffset[8]; if((p.channelmask&0x100)!=0) sy += model.framedata[framedata++] * p.channelscale[8];
+                float sz = p.channeloffset[9]; if((p.channelmask&0x200)!=0) sz += model.framedata[framedata++] * p.channelscale[9];
 
                 // Concatenate each pose with the inverse base pose to avoid doing this at animation time.
                 // If the joint has a parent, then it needs to be pre-concatenated with its parent's base pose.
@@ -78,7 +79,8 @@ public class IQMAnim {
                 //   (parentPose * parentInverseBasePose) * (parentBasePose * childPose * childInverseBasePose) =>
                 //   parentPose * (parentInverseBasePose * parentBasePose) * childPose * childInverseBasePose =>
                 //   parentPose * childPose * childInverseBasePose
-                Quaternion q = new Quaternion(rx, ry, rz, (float)-Math.sqrt(Math.max(1- (rx*rx + ry*ry + rz*rz),0)));
+                Quaternion q = new Quaternion(rx, ry, rz, rw);
+                q.normalise();
                 Matrix3x4 mm = new Matrix3x4(q, new Vector3f(sx, sy, sz), new Vector3f(tx, ty, tz));
                 Matrix4f m = new Matrix4f();
                 mm.toMatrix4f(m);

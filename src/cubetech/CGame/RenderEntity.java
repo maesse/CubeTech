@@ -5,6 +5,7 @@
 
 package cubetech.CGame;
 
+import cubetech.CGame.Marks.PolyVert;
 import cubetech.gfx.CubeMaterial;
 import cubetech.iqm.IQMModel;
 import org.lwjgl.util.vector.Vector3f;
@@ -17,6 +18,10 @@ import org.lwjgl.util.vector.Vector4f;
 public class RenderEntity {
     public static final int TYPE_MODEL = 0;
     public static final int TYPE_SPRITE = 1;
+    public static final int TYPE_BEAM = 2;
+
+    public static final int FLAG_SPRITE_AXIS = 1; // use axis[0] and axis[1] as up & right vectors
+    public static final int FLAG_NOSHADOW = 2;
 
     public IQMModel model = null;
     public REType Type = REType.SPRITE;
@@ -31,7 +36,7 @@ public class RenderEntity {
     public int frame;
 
     // previous data for frame interpolation
-    public Vector3f oldOrigin;
+    public Vector3f oldOrigin = new Vector3f();
     public int oldframe;
     public float backlerp;
 
@@ -39,7 +44,13 @@ public class RenderEntity {
     public float shaderTime;
     public CubeMaterial mat;
 
-    RenderEntity() {
+    public int flags = 0;
+
+    public PolyVert[] verts;
+
+    
+    public RenderEntity(REType rEType) {
+        Type = rEType;
         axis[0] = new Vector3f(1,0,0);
         axis[1] = new Vector3f(0,1,0);
         axis[2] = new Vector3f(0,0,1);
@@ -52,6 +63,7 @@ public class RenderEntity {
         axis[1].set(0,1,0);
         axis[2].set(0,0,1);
         frame = 0;
+        flags = 0;
         mat = null;
         Type = null;
     }

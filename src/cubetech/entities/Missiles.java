@@ -40,13 +40,15 @@ public class Missiles {
 
         // trace a line from the previous position to the current position
         CollisionResult res = Ref.server.Trace(ent.r.currentOrigin, origin, ent.r.mins, ent.r.maxs, passEnt, ent.ClipMask);
-        res.getPOI(ent.r.currentOrigin);
+//        res.getPOI(ent.r.currentOrigin);
 
         Ref.server.LinkEntity(ent.shEnt);
 
         if(res.frac != 1) {
             missileImpact(ent, res);
             if(ent.s.eType != EntityType.MISSILE) return; // exploded
+        } else {
+            ent.r.currentOrigin.set(origin);
         }
 
         // check think function after bouncing
@@ -59,7 +61,15 @@ public class Missiles {
         ent.freeAfterEvent = true;
         // change over to a normal entity right at the point of impact
         ent.s.eType = EntityType.GENERAL;
-        ent.SetOrigin(res.getPOI(null));
+        Vector3f endPos = res.getPOI(null);
+        ent.SetOrigin(endPos);
+
+        Gentity other = Ref.game.g_entities[res.entitynum];
+        // Splash damage
+        if(ent.splashDamage > 0) {
+            Ref.game.radiusDamage(endPos, ent.parent, ent.splashDamage, ent.splashRadius, other, ent.splashMeansOfDeath);
+        }
+
         ent.Link();
     }
 }

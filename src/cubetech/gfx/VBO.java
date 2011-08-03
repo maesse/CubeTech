@@ -58,11 +58,16 @@ public class VBO {
                 sizeInBytes = bytes;
             TotalBytes += sizeInBytes;
             //vboId = Ref.glRef.createVBOid();
+            System.out.println("resizing");
             Ref.glRef.sizeVBO(target, vboId, sizeInBytes);
         }
         mappedBuffer = Ref.glRef.mapVBO(target, vboId, bytes);
         mappedBuffer.limit(mappedBuffer.capacity());
         return mappedBuffer;
+    }
+
+    public int getSize() {
+        return sizeInBytes;
     }
 
     public void unmap() {
@@ -79,8 +84,11 @@ public class VBO {
     }
 
     public void destroy() {
-        if(TotalBytes == 0) return;
+        if(sizeInBytes == 0) return;
+        if(mappedBuffer != null) {
+            unbind();
+        }
         Ref.glRef.destroyVBO(vboId);
-        TotalBytes = 0;
+        sizeInBytes = 0;
     }
 }

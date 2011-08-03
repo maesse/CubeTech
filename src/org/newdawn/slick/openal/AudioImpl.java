@@ -19,6 +19,8 @@ public class AudioImpl implements Audio {
 	
 	/** The length of the audio */
 	private float length;
+
+        private int lastTimeUsed; // cubetech custom
 	
 	/**
 	 * Create a new sound
@@ -89,8 +91,8 @@ public class AudioImpl implements Audio {
 	/**
 	 * @see org.newdawn.slick.openal.Audio#playAsSoundEffect(float, float, boolean, float, float, float)
 	 */
-	public int playAsSoundEffect(float pitch, float gain, boolean loop, float x, float y, float vx, float vy) {
-		index = store.playAsSoundAt(buffer, pitch, gain, loop, x, y, vx, vy, false);
+	public int playAsSoundEffect(float pitch, float gain, boolean loop, float x, float y, float z, float vx, float vy, float vz) {
+		index = store.playAsSoundAt(buffer, pitch, gain, loop, x, y, z, vx, vy, vz, false);
 		return store.getSource(index);
 	}
 	
@@ -136,4 +138,13 @@ public class AudioImpl implements Audio {
 	public float getPosition() {
 		return AL10.alGetSourcef(store.getSource(index), AL11.AL_SEC_OFFSET);
 	}
+
+        
+        public int getLastTimeUsed() {
+            return lastTimeUsed;
+        }
+
+        public void setLastTimeUsed(int time) {
+            lastTimeUsed = time;
+        }
 }

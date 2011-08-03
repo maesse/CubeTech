@@ -235,13 +235,6 @@ public class OptionsUI implements IMenu {
         }
     };
 
-    private ButtonEvent setMusic = new ButtonEvent() {
-        public void buttonPressed(CComponent button, MouseEvent evt) {
-            boolean value = ((CCheckbox)button).isSelected();
-            if(value != Ref.soundMan.playmusic)
-                Ref.soundMan.PlayBackgroundMusic(value);
-        }
-    };
 
     private ButtonEvent setName = new ButtonEvent() {
         public void buttonPressed(CComponent button, MouseEvent evt) {

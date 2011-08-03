@@ -1,7 +1,7 @@
 package cubetech.spatial;
 
 import java.util.Collection;
-import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  * Represents a result of a worldSector.AreaEntities() query.
@@ -9,12 +9,12 @@ import org.lwjgl.util.vector.Vector2f;
  * @author mads
  */
 public class SectorQuery {
-    public Vector2f mins, maxs; // Bounds of the query
+    public Vector3f mins, maxs; // Bounds of the query
     public Collection<Integer> List;
 
-    public SectorQuery(Vector2f mins, Vector2f maxs, Collection<Integer> list) {
-        this.mins = new Vector2f(mins);
-        this.maxs = new Vector2f(maxs);
+    public SectorQuery(Vector3f mins, Vector3f maxs, Collection<Integer> list) {
+        this.mins = new Vector3f(mins);
+        this.maxs = new Vector3f(maxs);
         this.List = list;
     }
 }

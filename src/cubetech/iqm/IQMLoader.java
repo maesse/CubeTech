@@ -1,10 +1,14 @@
 package cubetech.iqm;
 
+import cubetech.common.Animations;
+import cubetech.common.Helper;
 import cubetech.gfx.ResourceManager;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  * http://lee.fov120.com/iqm
@@ -33,6 +37,60 @@ public class IQMLoader {
 
         IQMAnim.prepareAnim(model);
 
+        // Custom stuff
+        // Check for a mesh named "@bbox"
+        Vector3f min = new Vector3f(Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE);
+        Vector3f max = new Vector3f(-Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE);
+        for (IQMMesh iQMMesh : model.meshes) {
+            if(!iQMMesh.name.equals("@bbox")) continue;
+
+            // We've got a bbox
+            // Add all vertices to bounds
+            for (int j= 0; j < iQMMesh.num_triangles; j++) {
+                IQMTriangle tri = model.triangles[iQMMesh.first_triangle+j];
+                for (int k= 0; k < tri.vertex.length; k++) {
+                    int indice = tri.vertex[k]-1;
+                    if(indice < 0)  {
+                        min.set(-32,-32,-32);
+                        max.set(32,32,32);
+                        continue;
+                    }
+
+                    Helper.AddPointToBounds(model.in_position[indice], min, max);
+                }
+            }
+
+            // Save off bbox
+            model.min.set(min);
+            model.max.set(max);
+
+            break;
+        }
+
+        // Map known animations
+        if(model.anims != null) {
+            for (IQMAnim iQMAnim : model.anims) {
+                try {
+                    Animations anim = Animations.valueOf(iQMAnim.name.toUpperCase());
+                    // map it
+                    model.animationMap.put(anim, iQMAnim);
+                } catch(IllegalArgumentException ex) {
+                }
+            }
+        }
+
+        if(model.joints != null) {
+            ArrayList<IQMJoint> thighBones = new ArrayList<IQMJoint>();
+            for (IQMJoint iQMJoint : model.joints) {
+                String jointName = iQMJoint.name.toUpperCase();
+                if(jointName.startsWith("thigh_")) {
+                    thighBones.add(iQMJoint);
+                }
+            }
+            if(!thighBones.isEmpty()) {
+                model.thighJoints = (IQMJoint[]) thighBones.toArray();
+            }
+        }
         
         return model;
     }

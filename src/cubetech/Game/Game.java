@@ -7,20 +7,22 @@ import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
 import cubetech.common.Commands.ExecType;
 import cubetech.common.Common;
+import cubetech.common.DamageFlag;
+import cubetech.common.Helper;
 import cubetech.common.ICommand;
+import cubetech.common.MeansOfDeath;
 import cubetech.common.items.IItem;
 import cubetech.entities.EntityType;
 import cubetech.entities.Event;
 import cubetech.entities.Func_Door;
 import cubetech.entities.IEntity;
-import cubetech.entities.Info_Player_Goal;
 import cubetech.entities.SharedEntity;
 import cubetech.entities.Info_Player_Spawn;
 import cubetech.entities.Missiles;
 import cubetech.misc.Ref;
+import cubetech.spatial.SectorQuery;
 import java.util.EnumSet;
 import java.util.HashMap;
-import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 
 /**
@@ -28,8 +30,12 @@ import org.lwjgl.util.vector.Vector3f;
  * @author mads
  */
 public class Game {
-    public static final Vector3f PlayerMins = new Vector3f(-12,-12,-12);
-    public static final Vector3f PlayerMaxs = new Vector3f(12,12,12);
+    public static final Vector3f PlayerMins = new Vector3f(-30,-30,-46);
+    public static final Vector3f PlayerMaxs = new Vector3f(30,30,40);
+    public static final float PlayerViewHeight = 26; // from center
+    public static final Vector3f PlayerDuckedMins = new Vector3f(-30,-30,-46);
+    public static final Vector3f PlayerDuckedMaxs = new Vector3f(30,30,0);
+    public static final float PlayerDuckedHeight = -7; // from center
     CVar sv_speed;
     CVar sv_gravity;
     CVar sv_jumpmsec;
@@ -40,12 +46,14 @@ public class Game {
     CVar g_editmode;
     CVar g_maxclients;
     CVar sv_pullacceleration;
+    CVar sv_airaccelerate;
     CVar sv_acceleration;
     CVar sv_friction;
     CVar sv_stopspeed;
     CVar sv_stepheight;
     CVar sv_movemode;
-    CVar g_killheight;          
+    CVar g_killheight;
+    CVar g_knockback;
 
     CVar sv_pull1;
     CVar sv_pull2;
@@ -64,7 +72,7 @@ public class Game {
     public HashMap<String, IEntity> spawns = new HashMap<String, IEntity>();
 
     public Game() {
-        sv_speed = Ref.cvars.Get("sv_speed", "175", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_speed = Ref.cvars.Get("sv_speed", "200", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         g_cheats = Ref.cvars.Get("g_cheats", "0", EnumSet.of(CVarFlags.NONE));
         g_gametype = Ref.cvars.Get("g_gametype", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.LATCH, CVarFlags.USER_INFO));
         g_restarted = Ref.cvars.Get("g_restarted", "0", EnumSet.of(CVarFlags.ROM));
@@ -74,13 +82,15 @@ public class Game {
 
         
         sv_movemode = Ref.cvars.Get("sv_movemode", "1", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
-        sv_gravity = Ref.cvars.Get("sv_gravity", "550", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_gravity = Ref.cvars.Get("sv_gravity", "800", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         sv_jumpmsec = Ref.cvars.Get("sv_jumpmsec", "200", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_jumpvel = Ref.cvars.Get("sv_jumpvel", "200", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_acceleration = Ref.cvars.Get("sv_acceleration", "6", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_jumpvel = Ref.cvars.Get("sv_jumpvel", "280", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_acceleration = Ref.cvars.Get("sv_acceleration", "7", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_airaccelerate = Ref.cvars.Get("sv_airaccelerate", "20", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         sv_friction = Ref.cvars.Get("sv_friction", "4", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-        sv_stopspeed = Ref.cvars.Get("sv_stopspeed", "50", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        sv_stopspeed = Ref.cvars.Get("sv_stopspeed", "100", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         sv_stepheight = Ref.cvars.Get("sv_stepheight", "4", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
+        g_knockback = Ref.cvars.Get("g_knockback", "1400", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
 //        sv_doublejump = Ref.cvars.Get("sv_doublejump", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
 
         // Add entities to spawn list. All entities that's not items should be added here
@@ -88,7 +98,7 @@ public class Game {
         addEntityToSpawn(ent);
         ent = new Func_Door();
         addEntityToSpawn(ent);
-        addEntityToSpawn(new Info_Player_Goal());
+//        addEntityToSpawn(new Info_Player_Goal());
         spawnEntities = new SpawnEntities();
         
 //        spawnEntities = Ref.cm.cm.spawnEntities;
@@ -101,27 +111,7 @@ public class Game {
     public void Init(int leveltime, int randSeed, boolean restart) {
         Common.Log("--- Game init ---");
         g_cheats = Ref.cvars.Get("g_cheats", "0", EnumSet.of(CVarFlags.NONE));
-        Ref.commands.AddCommand("start", new ICommand() {
-            public void RunCommand(String[] args) {
-                for (int i= 0; i < g_clients.length; i++) {
-                    if(g_clients[i].inuse && g_clients[i].ps != null) {
-                        Ref.cvars.Set2("g_editmode", "0", true);
-                        CheckEditMode();
-                        g_clients[i].respawn();
-                    }
-                }
-            }
-        });
 
-        Ref.commands.AddCommand("stop", new ICommand() {
-            public void RunCommand(String[] args) {
-                for (int i= 0; i < g_clients.length; i++) {
-                    if(g_clients[i].inuse && g_clients[i].ps != null) {
-                        g_clients[i].stopPull();
-                    }
-                }
-            }
-        });
 
         level = new LevelLocal();
         level.time = leveltime;
@@ -381,6 +371,7 @@ public class Game {
 
     public void ShutdownGame(boolean b) {
         Common.Log("--- GAME SHUTDOWN ---");
+        Ref.cm.ClearCubeMap();
     }
 
     public void Client_Begin(int i) {
@@ -596,6 +587,164 @@ public class Game {
                 ent.think.think(ent);
             //}
         }
+    }
+
+    public boolean radiusDamage(Vector3f origin, Gentity attacker, int dmg, int radius, Gentity ignore, MeansOfDeath mod) {
+        if(radius < 1) radius = 1;
+
+        Vector3f mins = Vector3f.sub(origin, new Vector3f(radius, radius, radius), null);
+        Vector3f maxs = Vector3f.add(origin, new Vector3f(radius, radius, radius), null);
+
+        SectorQuery q = Ref.server.EntitiesInBox(mins, maxs);
+        Vector3f v = new Vector3f();
+        boolean hitClient = false;
+        for (Integer integer : q.List) {
+            Gentity ent = g_entities[integer];
+            if(ent == ignore) continue;
+
+            // find the distance from the edge of the bounding box
+
+            for (int i= 0; i < 3; i++) {
+                float org = Helper.VectorGet(origin, i);
+                float min = Helper.VectorGet(ent.r.absmin, i);
+                float max = Helper.VectorGet(ent.r.absmax, i);
+                if(org < min) Helper.VectorSet(v, i, min - org);
+                else if(org > max) Helper.VectorSet(v, i, org - max);
+                else Helper.VectorSet(v, i, 0);
+            }
+
+            float dist = v.length();
+            if(dist >= radius) {
+                continue;
+            }
+
+            float points = dmg * (1f - dist / radius);
+            if(canDamage(ent, origin)) {
+                hitClient = true;
+                Vector3f dir = Vector3f.sub(ent.r.currentOrigin, origin, null);
+                dir.z += 24;
+                damage(ent, null, attacker, dir, origin, (int)points, DamageFlag.RADIUS, mod);
+            }
+            
+            
+        }
+        return hitClient;
+    }
+
+    /**
+    ============
+    T_Damage
+
+    targ		entity that is being damaged
+    inflictor	entity that is causing the damage
+    attacker	entity that caused the inflictor to damage targ
+            example: targ=monster, inflictor=rocket, attacker=player
+
+    dir			direction of the attack for knockback
+    point		point at which the damage is being inflicted, used for headshots
+    damage		amount of damage being inflicted
+    knockback	force to be applied against targ as a result of the damage
+
+    inflictor, attacker, dir, and point can be NULL for environmental effects
+
+    dflags		these flags are used to control how T_Damage works
+            DAMAGE_RADIUS			damage was indirect (from a nearby explosion)
+            DAMAGE_NO_ARMOR			armor does not protect from this damage
+            DAMAGE_NO_KNOCKBACK		do not affect velocity, just view angles
+            DAMAGE_NO_PROTECTION	kills godmode, armor, everything
+    ============
+    **/
+    public void damage(Gentity targ, Gentity inflictor, Gentity attacker, Vector3f dir, Vector3f point, int damage, int dflags, MeansOfDeath mod) {
+        //if(!targ.takedamage) return;
+
+        if(inflictor == null) {
+            inflictor = g_entities[Common.ENTITYNUM_WORLD];
+        }
+
+        if(attacker == null) {
+            attacker = g_entities[Common.ENTITYNUM_WORLD];
+        }
+
+        // shootable doors / buttons don't actually have any health
+        if(targ.s.eType == EntityType.MOVER) {
+//            if(targ.use != null && targ.mover.state == Mover.POS1) {
+//  FIX
+//            }
+            return;
+        }
+
+        GameClient client = targ.getClient();
+        if(client != null) {
+            if(client.noclip) {
+                return;
+            }
+        }
+
+        if(dir == null || dir.length() == 0) {
+            dflags |= DamageFlag.NO_KNOCKBACK;
+        } else {
+            dir.normalise();
+        }
+
+        int knockback = damage;
+        if(knockback > 200) {
+            knockback = 200;
+        }
+
+        // figure momentum add, even if the damage won't be taken
+        if(knockback > 0 && client != null) {
+            float mass = 200;
+
+            Vector3f kvel = new Vector3f(dir);
+            kvel.scale(g_knockback.fValue * (float)knockback / mass);
+            Vector3f.add(client.ps.velocity, kvel, client.ps.velocity);
+
+            // set the timer so that the other client can't cancel
+            // out the movement immediately
+//            if(client.ps.pm_time == 0) {
+//    FIX?
+//            }
+        }
+
+        // check for completely getting out of the damage
+        if((dflags & DamageFlag.NO_PROTECTION) == 0) {
+            // friendly fire, etc..
+            if(targ.isClient() && targ.getClient().godmode) {
+                return;
+            }
+        }
+
+        // always give half damage if hurting self
+	// calculated after knockback, so rocket jumping works
+        if(targ == attacker) {
+            damage *= 0.5f;
+        }
+
+        if(damage < 1) {
+            damage = 1;
+        }
+
+        int take = damage;
+        int save;
+
+        // do it
+        if(take > 0) {
+            if(client != null) {
+                client.ps.stats.Health -= take;
+                if(client.ps.stats.Health <= 0) {
+                    targ.die.die(targ, inflictor, attacker, take, mod);
+                } else if(targ.pain != null) {
+                     targ.pain.pain(targ, attacker, take);
+                }
+            }
+        }
+
+
+
+    }
+
+    private boolean canDamage(Gentity ent, Vector3f origin) {
+        return ent.isClient();
     }
 
 }

@@ -10,5 +10,11 @@ import cubetech.iqm.IQMModel;
  */
 public class WeaponInfo {
     public IQMModel missileModel;
+    public IQMModel viewModel;
     public IMethodCentity missileTrailFunc;
+    public String missileSound;
+    public float trailTime;
+    public float trailRadius;
+    public String fireSound;
+    public String explodeSound;
 }

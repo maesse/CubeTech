@@ -7,9 +7,12 @@ package cubetech.CGame;
 
 
 import cubetech.client.CLSnapshot;
+import cubetech.common.CVar;
+import cubetech.common.CVarFlags;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Content;
+import cubetech.common.Helper;
 import cubetech.common.ICommand;
 import cubetech.common.Move;
 import cubetech.common.MoveQuery;
@@ -20,6 +23,7 @@ import cubetech.entities.EntityState;
 import cubetech.input.PlayerInput;
 import cubetech.misc.Ref;
 import java.util.AbstractMap.SimpleEntry;
+import java.util.EnumSet;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 
@@ -69,8 +73,18 @@ public class CGameState {
 
     public Weapon weaponSelect = Weapon.NONE;
     public float zoomSensitivity = 1.0f;
-    
 
+    // development tool
+    public RenderEntity testModelEntity = new RenderEntity(REType.MODEL); 
+    public String testModelName;
+    public boolean testGun = false;
+    CVar cg_gun_x, cg_gun_y, cg_gun_z;
+    public boolean playingdemo;
+    public PlayerState demoPlayerState = null;
+    public Vector2f mouseVelocity = new Vector2f(0, 0);
+    public float[] demoangles = new float[3];
+    public float demofov = 90f;
+    public float demofovVel = 0f;
 
     public CGameState(int clientnum) {
         this.clientNum = clientnum;
@@ -79,7 +93,78 @@ public class CGameState {
         for (int i= 0; i < scores.length; i++) {
             scores[i] = new Score();
         }
+        cg_gun_x = Ref.cvars.Get("cg_gun_x", "0", EnumSet.of(CVarFlags.NONE));
+        cg_gun_y = Ref.cvars.Get("cg_gun_y", "0", EnumSet.of(CVarFlags.NONE));
+        cg_gun_z = Ref.cvars.Get("cg_gun_z", "0", EnumSet.of(CVarFlags.NONE));
+    }
 
+    public ICommand cg_testmodel_f = new ICommand() {
+        public void RunCommand(String[] args) {
+            // Clear testModelEnt
+            testModelEntity = new RenderEntity(REType.MODEL);
+            if(args.length < 2) {
+                return;
+            }
+
+            testModelName = args[1];
+            testModelEntity.model = Ref.ResMan.loadModel(testModelName);
+
+            if(args.length == 3) {
+                testModelEntity.backlerp = Float.parseFloat(args[2]);
+                testModelEntity.frame = 1;
+                testModelEntity.oldframe = 0;
+            }
+
+            if(testModelEntity.model == null) {
+                Ref.cgame.Print("Can't register model");
+                return;
+            }
+
+            Helper.VectorMA(refdef.Origin, 100, refdef.ViewAxis[0], testModelEntity.origin);
+            Vector3f angles = new Vector3f(0, 180 + refdef.Angles.y, 0);
+            testModelEntity.axis = Helper.AnglesToAxis(angles);
+            testGun = false;
+        }
+    };
+
+    public ICommand cg_testgun_f = new ICommand() {
+        public void RunCommand(String[] args) {
+            cg_testmodel_f.RunCommand(args);
+            testGun = true;
+//            testModelEntity.renderFlags |= RefFlag.FIRST_PERSON;
+        }
+    };
+
+    public ICommand cg_testmodelNextFrame_f = new ICommand() {
+        public void RunCommand(String[] args) {
+            testModelEntity.frame++;
+            Ref.cgame.Print(String.format("frame %d", testModelEntity.frame));
+        }
+    };
+
+    public ICommand cg_testmodelPrevFrame_f = new ICommand() {
+        public void RunCommand(String[] args) {
+            testModelEntity.frame--;
+            if(testModelEntity.frame < 0) testModelEntity.frame = 0;
+            Ref.cgame.Print(String.format("frame %d", testModelEntity.frame));
+        }
+    };
+
+    public void addTestModel() {
+        if(testModelEntity == null || testModelEntity.model == null) return;
+
+        // if testing a gun, set the origin reletive to the view origin
+        if(testGun) {
+            System.arraycopy(refdef.ViewAxis, 0, testModelEntity.axis, 0, 3);
+            testModelEntity.origin.set(refdef.Origin);
+
+            // allow the position to be adjusted
+            Helper.VectorMA(testModelEntity.origin, cg_gun_x.fValue, refdef.ViewAxis[0], testModelEntity.origin);
+            Helper.VectorMA(testModelEntity.origin, cg_gun_y.fValue, refdef.ViewAxis[1], testModelEntity.origin);
+            Helper.VectorMA(testModelEntity.origin, cg_gun_z.fValue, refdef.ViewAxis[2], testModelEntity.origin);
+        }
+
+        Ref.render.addRefEntity(testModelEntity);
     }
 
     public static ICommand cg_SwitchWeapon_f = new ICommand() {
@@ -187,6 +272,32 @@ public class CGameState {
 
     }
 
+    private void InterpolatePlayerState(boolean grabAngles) {
+
+        Snapshot prev = snap;
+        Snapshot next = nextSnap;
+        predictedPlayerState = snap.ps.Clone(predictedPlayerState);
+        PlayerState out = predictedPlayerState;
+
+        // if the next frame is a teleport, we can't lerp to it
+        if(nextFrameTeleport) return;
+
+        if(next == null || next.serverTime <= prev.serverTime) {
+            return;
+        }
+
+        float f = ((float)time - prev.serverTime) / ((float)next.serverTime - prev.serverTime);
+        
+        Vector3f delta = Vector3f.sub(next.ps.origin, prev.ps.origin, null);
+        Helper.VectorMA(prev.ps.origin, f, delta, out.origin);
+        if(!grabAngles) {
+            out.viewangles = Helper.LerpAngles(prev.ps.viewangles, next.ps.viewangles, null, f);
+        }
+        Vector3f.sub(next.ps.velocity, prev.ps.velocity, delta);
+        Helper.VectorMA(prev.ps.velocity, f, delta, out.velocity);
+
+    }
+
     void PredictPlayerState() {
         // if this is the first frame we must guarantee
         // predictedPlayerState is valid even if there is some
@@ -194,6 +305,11 @@ public class CGameState {
         if(!validPPS) {
             validPPS = true;
             predictedPlayerState = snap.ps.Clone(null);
+        }
+
+        if(playingdemo) {
+            InterpolatePlayerState(false);
+            return;
         }
 
         // non-predicting local movement will grab the latest angles
@@ -278,7 +394,9 @@ public class CGameState {
                     Vector3f.sub(oldPlayerState.origin, predictedPlayerState.origin, delta);
                     float len = delta.length();
                     if(len > 0.1f) {
-                        Ref.cgame.Print("Prediction miss: " + len);
+                        if(Ref.cgame.cg_showmiss.isTrue()) {
+                            Ref.cgame.Print("Prediction miss: " + len);
+                        }
                         if(Ref.cgame.cg_errorDecay.iValue > 0) {
                             int t = time - predictedErrorTime;
                             float f = (Ref.cgame.cg_errorDecay.fValue - t) / Ref.cgame.cg_errorDecay.fValue;
@@ -496,8 +614,9 @@ public class CGameState {
 
             // if we are not doing client side movement prediction for any
             // reason, then the client events and view changes will be issued now
-            if(Ref.cgame.cg_nopredict.iValue == 1)
+            if(Ref.cgame.cg_nopredict.iValue == 1 || playingdemo) {
                 TransitionPlayerState(ps, ops);
+            }
         }
 
     }

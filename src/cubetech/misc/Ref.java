@@ -1,5 +1,6 @@
 package cubetech.misc;
 
+import cubetech.snd.SoundManager;
 import cubetech.gfx.GLRef;
 import cubetech.CGame.CGame;
 import cubetech.CGame.Render;
@@ -69,6 +70,7 @@ public class Ref {
         Ref.commands = new Commands(); // command subsystem, a string communication system
         Ref.Input = new Input(); // input subsystem
         Ref.cvars = new CVars(); // init cvar subsystem
+        Ref.Input.initialize();
         Ref.net = new Net(); // init network, creates sockets for client and server
         Ref.collision = new Collision();
         Ref.soundMan = new SoundManager(); // loads, manages and plays sounds

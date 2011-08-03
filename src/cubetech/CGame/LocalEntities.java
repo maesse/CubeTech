@@ -72,6 +72,18 @@ public class LocalEntities {
                 case LocalEntity.TYPE_SCALE_FADE:
                     addScaleFade(le);
                     break;
+                case LocalEntity.TYPE_SCALE_FADE_COLOR:
+                    addScaleFadeColor(le);
+                    break;
+                case LocalEntity.TYPE_SCALE_FADE_MOVE:
+                    addScaleFadeMove(le);
+                    break;
+                case LocalEntity.TYPE_SCALE_DOUBLE_MOVE:
+                    addDoubleMove(le);
+                    break;
+                case LocalEntity.TYPE_FADE:
+                    addFade(le);
+                    break;
                 default:
                     Ref.common.Error(ErrorCode.DROP, "Bad LocalEntity type " + le.Type);
                     break;
@@ -88,12 +100,38 @@ public class LocalEntities {
         allowFree = true;
     }
 
+    private static void addScaleFadeColor(LocalEntity le) {
+        RenderEntity re = le.rEntity;
+
+        // fade / grow time
+        float c = (le.endTime - Ref.cgame.cg.time) * le.lifeRate;
+        float c2 = c - (1f - le.bouncefactor);
+        if(c2 < 0.0) {
+            re.outcolor.x = le.color2.x * 0xff;
+            re.outcolor.y = le.color2.y * 0xff;
+            re.outcolor.z = le.color2.z * 0xff;
+            re.outcolor.w = 0xff * c * le.color2.w;
+        } else {
+            c2 /= le.bouncefactor;
+            re.outcolor.x = 0xff * ((c2 * le.color.x) + (1f - c2) * le.color2.x);
+            re.outcolor.y = 0xff * ((c2 * le.color.y) + (1f - c2) * le.color2.y);
+            re.outcolor.z = 0xff * ((c2 * le.color.z) + (1f - c2) * le.color2.z);
+            re.outcolor.w = 0xff * ((c2 *le.color.w) + (1f - c2) * le.color2.w * c);
+        }
+
+        le.pos.Evaluate(Ref.cgame.cg.time, re.origin);
+
+        re.radius = le.radius * (1f - c) + 4;
+
+        Ref.render.addRefEntity(re);
+    }
+
     private static void addScaleFade(LocalEntity le) {
         // fade / grow time
         float c = (le.endTime - Ref.cgame.cg.time) * le.lifeRate;
         RenderEntity re = le.rEntity;
         re.outcolor.w = 0xff * c * re.color.w;
-        re.radius = le.radius * (1f - c) + 8;
+        re.radius = le.radius * (1f - c) + 16;
 
         // if the view would be "inside" the sprite, kill the sprite
 	// so it doesn't add too much overdraw
@@ -103,6 +141,50 @@ public class LocalEntities {
 //            le.free();
 //            return;
 //        }
+
+        Ref.render.addRefEntity(re);
+    }
+
+    private static void addFade(LocalEntity le) {
+        // fade / grow time
+        float c = (le.endTime - Ref.cgame.cg.time) * le.lifeRate;
+        RenderEntity re = le.rEntity;
+        re.outcolor.w = 0xff * c * re.color.w;
+        re.radius = le.radius;
+
+
+        Ref.render.addRefEntity(re);
+    }
+
+    private static void addScaleFadeMove(LocalEntity le) {
+        // fade / grow time
+        float c = (le.endTime - Ref.cgame.cg.time) * le.lifeRate;
+        RenderEntity re = le.rEntity;
+        re.outcolor.w = 0xff * c * re.color.w;
+        if(le.Flags != LocalEntity.FLAG_DONT_SCALE) {
+            re.radius = le.radius * (1f - c) + 16;
+        } else {
+            re.radius = le.radius;
+        }
+
+        le.pos.Evaluate(Ref.cgame.cg.time, re.origin);
+
+        Ref.render.addRefEntity(re);
+    }
+
+    private static void addDoubleMove(LocalEntity le) {
+        // fade / grow time
+        float c = (le.endTime - Ref.cgame.cg.time) * le.lifeRate;
+        RenderEntity re = le.rEntity;
+        re.outcolor.w = 0xff * c * re.color.w;
+        if(le.Flags != LocalEntity.FLAG_DONT_SCALE) {
+            re.radius = le.radius * (1f - c) + 16;
+        } else {
+            re.radius = le.radius;
+        }
+
+        le.angles.Evaluate(Ref.cgame.cg.time, re.oldOrigin);
+        le.pos.Evaluate(Ref.cgame.cg.time, re.origin);
 
         Ref.render.addRefEntity(re);
     }

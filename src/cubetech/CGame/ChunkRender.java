@@ -11,6 +11,9 @@ import cubetech.gfx.GLRef.BufferTarget;
 import cubetech.gfx.Shader;
 import cubetech.gfx.TerrainTextureCache;
 import cubetech.gfx.VBO;
+import cubetech.misc.Profiler;
+import cubetech.misc.Profiler.Sec;
+import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
@@ -132,9 +135,11 @@ public class ChunkRender {
             try {
                 boolean exitSleep = false;
                 int nWait = 0;
-                while(!exitSleep && !Ref.cgame.map.bufferAvailable() && nWait < 5) {
+//                Common.LogDebug("[Builder] Trying to grab a buffer..");
+                while(!exitSleep && !Ref.cgame.map.bufferAvailable() && nWait < 500 && !Ref.cgame.map.canGrabOld()) {
                     try {
-                        Thread.sleep(1000);
+                        Thread.sleep(100);
+                        //Common.LogDebug("[Builder] Waiting for buffer...");
                         nWait++;
                     } catch (InterruptedException ex) {
                         exitSleep = true;
@@ -142,16 +147,33 @@ public class ChunkRender {
                     }
 
                 }
-                ByteBuffer first = Ref.cgame.map.grabBuffer();
+                ByteBuffer data = Ref.cgame.map.grabBuffer();
+                if(data == null) {
+                    // Couldn't get a buffer..
+                    Common.LogDebug("[Builder] Couldn't get a buffer");
+                    updatingBuffer = false;
+                    return;
+                }
+                
                 Bufferindex = Ref.cgame.map.currentWrite;
-                first.clear();
-                fillBuffer(first);
-                first.flip();
+//                Common.LogDebug("[Builder] Writing to buffer (%d)", Bufferindex);
+                data.clear();
+                fillBuffer(data);
+                data.flip();
+                if(data.limit() > PLANE_SIZE * sidesRendered) {
+                    int test = 2;
+                }
+                if(data.limit() == 0) {
+//                    Common.LogDebug("[Builder] Dropping 0len data (%d)", Bufferindex);
+                    Ref.cgame.map.releaseBuffer(Bufferindex);
+                    Bufferindex = -1;
+                }
                 bufferReady = true;
             } catch(BufferOverflowException ex) {
                 Ref.common.Error(ErrorCode.FATAL,"CubeChunk.fillBuffer: VBO overflow" + Common.getExceptionString(ex));
             }
             updatingBuffer = false;
+//            Common.LogDebug("[Builder] Buffer ready for reading (%d)", Bufferindex);
         }
     };
 
@@ -161,23 +183,31 @@ public class ChunkRender {
         if(!bufferReady) {
             // Start async buffer fill
             if(!updatingBuffer) {
+//                Common.LogDebug("[CR] Queueing buffer-filling");
                 updateBufffer();
             }
 
             return false; // dont clear dirty, we need this method called
         }
 
+        SecTag s = Profiler.EnterSection(Sec.CLIENTCUBES);
+
         if(sidesRendered == 0) {
             bufferReady = false; // untag buffer
-            Ref.cgame.map.releaseBuffer(Bufferindex);
-            Bufferindex = -1;
+            if(Bufferindex != -1) {
+//                Common.LogDebug("[CR] Releasing 0side buffer");
+                Ref.cgame.map.releaseBuffer(Bufferindex);
+                Bufferindex = -1;
+            } else {
+//                Common.LogDebug("[CR] 0side buffer released by builder for us");
+            }
             return true; // clear dirty
         }
 
         // Check if we still have the source buffer
         ByteBuffer src = Ref.cgame.map.getBuffer(Bufferindex);
-        if(src == null) {
-            Common.LogDebug("ByteBuffer data fell out of the circular buffer :/");
+        if(src == null || src.limit() == 0) {
+//            Common.LogDebug("[CR] ByteBuffer data fell out of the circular buffer (%d)0",Bufferindex);
             // We fell out of the queue :/
             setDirty(true, true);
             bufferReady = false;
@@ -185,8 +215,16 @@ public class ChunkRender {
             return false;
         }
 
+        // Check how many vbo's we've updated already this frame
+        if(Ref.cgame.map.nVBOthisFrame >= 1) {
+            return false;
+        }
+
+
+
         // Create a VBO if we don't have one
         long startTime = System.nanoTime();
+        boolean newVBO = vbo == null;
         if(vbo == null) {
             // Start off with an exact vbo size.
             vbo = new VBO(PLANE_SIZE * sidesRendered, BufferTarget.Vertex);
@@ -195,8 +233,14 @@ public class ChunkRender {
         }
         
         // Copy data to VBO
+        boolean vboResized = vbo.getSize() < PLANE_SIZE * sidesRendered;
         ByteBuffer buffer = vbo.map(PLANE_SIZE * sidesRendered);
+        long startTime2 = System.nanoTime();
+        if(buffer.limit()-buffer.position() < src.limit()) {
+            int i = 2;
+        }
         buffer.put(src);
+        
         vbo.unmap();
 
         // Clear state
@@ -204,13 +248,19 @@ public class ChunkRender {
         bufferReady = false;
 
         // Release source buffer
+//        Common.LogDebug("[CR] Releasing buffer");
         Ref.cgame.map.releaseBuffer(Bufferindex);
         Bufferindex = -1;
         
         long endTime = System.nanoTime();
         float ms = (endTime - startTime)/(1000F*1000F);
-        Common.LogDebug("Building Chunk VBO took %fms (%d sides)", ms, sidesRendered);
+        float ms2 = (endTime - startTime2)/(1000F*1000F);
+        float percent = (100f/ms) * ms2;
+        if(ms > 8.0f) Common.LogDebug("[CR] Building Chunk VBO took %.2fms (%d sides) %s(put+unmap %.0f%%)",
+                ms, sidesRendered,newVBO?"(new) ":(vboResized?"(resized) ":" "), percent);
         
+        Ref.cgame.map.nVBOthisFrame++;
+        s.ExitSection();
         return true; // clear dirty
     }
 
@@ -252,7 +302,7 @@ public class ChunkRender {
         int ppx = p[0] * CHUNK_SIDE;
         int ppy = p[1] * CHUNK_SIDE;
         int ppz = p[2] * CHUNK_SIDE;
-        sidesRendered = 0;
+        int tempSidesRendered = 0;
         int[] pos = new int[3];
         
         for (int z= 0; z < SIZE; z++) {
@@ -318,7 +368,7 @@ public class ChunkRender {
                         buffer.putFloat(tx.x).putFloat(tx.w);
                         padd(buffer);
 
-                        sidesRendered++;
+                        tempSidesRendered++;
                     }
 
                     // Bottom: Z-
@@ -358,7 +408,7 @@ public class ChunkRender {
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
                         padd(buffer);
-                        sidesRendered++;
+                        tempSidesRendered++;
                     }
 
                     // Y+
@@ -397,7 +447,7 @@ public class ChunkRender {
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
                         padd(buffer);
-                        sidesRendered++;
+                        tempSidesRendered++;
                     }
 
                     // Y-
@@ -437,7 +487,7 @@ public class ChunkRender {
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
                         padd(buffer);
-                        sidesRendered++;
+                        tempSidesRendered++;
                     }
 
                     // X+
@@ -475,7 +525,7 @@ public class ChunkRender {
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
                         padd(buffer);
-                        sidesRendered++;
+                        tempSidesRendered++;
                     }
 
                     // X-
@@ -513,11 +563,12 @@ public class ChunkRender {
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
                         padd(buffer);
-                        sidesRendered++;
+                        tempSidesRendered++;
                     }
                 }
             }
         }
+        sidesRendered = tempSidesRendered;
     }
     
     
@@ -580,10 +631,10 @@ public class ChunkRender {
         vbo.bind();
         preVbo();
 
-        GL11.glDisable(GL11.GL_BLEND);
+        //GL11.glDisable(GL11.GL_BLEND);
         GL11.glDrawArrays(GL11.GL_QUADS, 0, sidesRendered*4);
         //GL12.glDrawRangeElements(GL11.GL_QUADS, callStart, callEnd-1, callLenght, GL11.GL_UNSIGNED_INT, offset);
-        GL11.glEnable(GL11.GL_BLEND);
+        //GL11.glEnable(GL11.GL_BLEND);
         postVbo();
         vbo.unbind();
     }

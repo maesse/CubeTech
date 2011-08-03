@@ -19,7 +19,6 @@ public class CollisionResult {
     public Vector3f start = new Vector3f();
     public Vector3f delta = new Vector3f();
     public Vector3f extent = new Vector3f();
-    public Vector3f mins = new Vector3f();
     public Vector3f hitAxis = new Vector3f();
 
     public void reset(Vector2f start, Vector2f delta, Vector2f extent) {
@@ -34,7 +33,7 @@ public class CollisionResult {
         hitAxis.set(0,0);
     }
 
-    void reset(Vector3f start, Vector3f delta, Vector3f mins, Vector3f maxs) {
+    void reset(Vector3f start, Vector3f delta, Vector3f extent) {
         hit = false;
         frac = 1;
         hitmask = 0;
@@ -42,8 +41,7 @@ public class CollisionResult {
         entitynum = Common.ENTITYNUM_NONE;
         this.start.set(start);
         this.delta.set(delta);
-        this.extent.set(maxs);
-        this.mins.set(mins);
+        this.extent.set(extent);
     }
 
     public Vector3f getPOI(Vector3f dest) {

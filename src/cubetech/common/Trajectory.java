@@ -68,7 +68,9 @@ public class Trajectory {
                 dest.x = base.x + deltaTime * delta.x;
                 dest.y = base.y + deltaTime * delta.y;
                 dest.z = base.z + deltaTime * delta.z;
-                dest.z -= 0.5f * Common.DEFAULT_GRAVITY * deltaTime * deltaTime; // FIXME: local gravity...
+                int grav = duration;
+                if(grav == 0) grav = Common.DEFAULT_GRAVITY;
+                dest.z -= 0.5f * grav * deltaTime * deltaTime; // FIXME: local gravity...
                 break;
             default:
                 Ref.common.Error(Common.ErrorCode.DROP, "Trajectory.Evaluate(): Unknown type " + type);

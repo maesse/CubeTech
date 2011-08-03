@@ -2,6 +2,7 @@ package cubetech.collision;
 
 import cubetech.gfx.CubeType;
 import cubetech.misc.Ref;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  * Represents a single cube. Since cubes really consist of an chunk+3 bytes for position, this is easier to
@@ -27,6 +28,18 @@ public class SingleCube {
         y = col.y;
         z = col.z;
         highlightSide = col.hitAxis;
+    }
+
+    public Vector3f getOrigin() {
+        Vector3f cube = new Vector3f(x*CubeChunk.BLOCK_SIZE, y*CubeChunk.BLOCK_SIZE, z*CubeChunk.BLOCK_SIZE);
+        cube.x += chunk.absmin[0];
+        cube.y += chunk.absmin[1];
+        cube.z += chunk.absmin[2];
+        return cube;
+    }
+
+    public Vector3f getSize() {
+        return new Vector3f(CubeChunk.BLOCK_SIZE,CubeChunk.BLOCK_SIZE,CubeChunk.BLOCK_SIZE);
     }
 
     /**

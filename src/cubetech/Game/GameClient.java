@@ -10,18 +10,22 @@ import cubetech.common.Common.ErrorCode;
 import cubetech.common.Content;
 import cubetech.common.Helper;
 import cubetech.common.ICommand;
+import cubetech.common.IDieMethod;
 import cubetech.common.Info;
+import cubetech.common.MeansOfDeath;
 import cubetech.common.Move;
 import cubetech.common.Move.MoveType;
 import cubetech.common.MoveQuery;
 import cubetech.common.PlayerState;
 import cubetech.common.items.IItem;
+import cubetech.common.items.Weapon;
 import cubetech.common.items.WeaponItem;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityType;
 import cubetech.entities.Event;
 import cubetech.input.PlayerInput;
 import cubetech.misc.Ref;
+import cubetech.server.SvFlags;
 import cubetech.spatial.SectorQuery;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -50,6 +54,7 @@ public class GameClient extends Gentity {
     private GameClient thisIsSilly = this;
 
     public boolean noclip;
+    public boolean godmode;
 
     void updatePlayerCubes() {
         // Get a list of chunks surrounding the player
@@ -85,8 +90,7 @@ public class GameClient extends Gentity {
         ByteBuffer buf = chunk.createByteBuffer();
 
         // Queue up
-        pers.queuedBytes += buf.limit();
-        pers.queuedChunkData.add(buf);
+        pers.queueChunkData(buf);
 
         // Register last sent
         ChunkEntry en = pers.chunkVersions.get(index);
@@ -112,8 +116,7 @@ public class GameClient extends Gentity {
         ByteBuffer buf = chunk.createByteBuffer(start);
 
         // Queue up
-        pers.queuedBytes += buf.limit();
-        pers.queuedChunkData.add(buf);
+        pers.queueChunkData(buf);
 
         // register in client history
         if(en == null) {
@@ -217,6 +220,8 @@ public class GameClient extends Gentity {
             cmd_NoClip.RunCommand(tokens);
         } else if(cmd.equals("kill")) {
             cmd_Kill.RunCommand(tokens);
+        } else if(cmd.equals("god")) {
+            cmd_God.RunCommand(tokens);
         } else
             SendServerCommand("print \"unknown command " + cmd + "\"");
     }
@@ -268,6 +273,22 @@ public class GameClient extends Gentity {
         }
     };
 
+    private ICommand cmd_God = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(!Ref.game.CheatsOk(thisIsSilly))
+                return;
+
+            godmode = !godmode;
+            String msg;
+            if(!godmode)
+                msg = "godmode OFF";
+            else
+                msg = "godmode ON";
+
+            SendServerCommand("print \""+msg+"\"");
+        }
+    };
+
     // May kill the player
     public void setHealth(int health) {
 //        if(isDead()) {
@@ -276,8 +297,7 @@ public class GameClient extends Gentity {
 //        }
 
         ps.stats.Health = health;
-        if(health <= 0)
-            Die();
+        
     }
 
     public int getHealth() {
@@ -293,7 +313,9 @@ public class GameClient extends Gentity {
             if(isDead())
                 return;
 
+            godmode = false;
             setHealth(-999);
+            player_die.die(thisIsSilly, thisIsSilly, thisIsSilly, 10000, meansOfDeath.SUICIDE);
         }
     };
 
@@ -428,6 +450,7 @@ public class GameClient extends Gentity {
         r.mins = new Vector3f(Game.PlayerMins);
         r.maxs = new Vector3f(Game.PlayerMaxs);
         r.contents = Content.BODY;
+        die = player_die;
         ClipMask = Content.PLAYERCLIP | Content.BODY;
         ps.clientNum = index;
 
@@ -527,16 +550,16 @@ public class GameClient extends Gentity {
 
         // use the snapped origin for linking so it matches client predicted versions
         r.currentOrigin.set(s.pos.base);
-        r.mins = new Vector3f(Game.PlayerMins);
-        r.maxs = new Vector3f(Game.PlayerMaxs);
+        r.mins = new Vector3f(ps.ducked? Game.PlayerDuckedMins: Game.PlayerMins);
+        r.maxs = new Vector3f(ps.ducked? Game.PlayerDuckedMaxs:Game.PlayerMaxs);
 
         // execute client events
         HandleEvents(oldEventSequence);
 
         // link entity now, after any personal teleporters have been used
         Link();
-        if(!noclip)
-            TouchTriggers();
+//        if(!noclip)
+//            TouchTriggers();
 
         // NOTE: now copy the exact origin over otherwise clients can be snapped into solid
         r.currentOrigin.set(ps.origin);
@@ -545,10 +568,14 @@ public class GameClient extends Gentity {
         if(ps.eventSequence != oldEventSequence)
             eventTime = Ref.game.level.time;
 
+        updatePlayerCubes();
+
         // Check for respawning
         if(isDead()) {
-            if(cmd.Mouse1)
+            if(cmd.Mouse1 && Ref.game.level.time > respawnTime) {
                 respawn();
+            }
+            return;
         }
 
         ClientTimerActions(msec);
@@ -557,22 +584,53 @@ public class GameClient extends Gentity {
         if(ps.origin.z < Ref.game.g_killheight.iValue) {
             Die();
         }
-
-        updatePlayerCubes();
     }
 
     
 
-    public void startPull() {
-        Ref.cvars.Set2("g_editmode", "0", true);
-        if(ps != null)
-            ps.applyPull = true;
-    }
+    private IDieMethod player_die = new IDieMethod() {
+        public void die(Gentity self, Gentity inflictor, Gentity attacker, int dmg, MeansOfDeath mod) {
+            if(ps.moveType == MoveType.DEAD) return;
+
+            ps.moveType = MoveType.DEAD;
+
+            int killer;
+            String killerName = "<non-client>";
+            if(attacker != null) {
+                killer = attacker.s.ClientNum;
+                if(attacker.isClient()) {
+                    killerName = attacker.getClient().pers.Name;
+                }
+            } else {
+                killer = Common.ENTITYNUM_WORLD;
+                killerName = "<world>";
+            }
+
+            Common.Log("Kill: %d %d: %s killed %s by %s", killer, self.s.ClientNum, killerName, pers.Name, mod.toString());
+
+            // broadcast the death event to everyone
+            Gentity ent = Ref.game.TempEntity(self.r.currentOrigin, Event.ORBITUARY.ordinal());
+            ent.s.evtParams = mod.ordinal();
+            ent.s.otherEntityNum = self.s.ClientNum;
+            ent.s.frame = killer;
+            ent.r.svFlags.add(SvFlags.BROADCAST);
+
+            self.s.weapon = Weapon.NONE;
+            self.r.contents = Content.CORPSE;
+            respawnTime = Ref.game.level.time + 1000;
+
+            Ref.game.AddEvent(self, Event.DIED, killer);
+
+            Ref.server.LinkEntity(self.shEnt);
+        }
+
+
+    };
 
     public void Die() {
-        stopPull();
+ 
         ps.AddPredictableEvent(Event.DIED, 0);
-        ps.velocity.set(0,0);
+        ps.velocity.set(0,0,0);
         if(!isDead())
             ps.stats.Health = 0;
     }
@@ -581,20 +639,6 @@ public class GameClient extends Gentity {
         return ps.stats.Health <= 0;
     }
 
-    public void reachedGoal(Gentity goal) {
-        if(isDead())
-            return;
-        
-        stopPull();
-        ps.stats.Health = 0; // set health to 0 to get the respawn menu up
-        ps.velocity.set(0,0);
-        ps.AddPredictableEvent(Event.GOAL, 0);
-    }
-
-    public void stopPull() {
-        if(ps != null)
-            ps.applyPull = false;
-    }
 
     
     private void ClientTimerActions(int msec) {
@@ -619,57 +663,57 @@ public class GameClient extends Gentity {
         }
     }
 
-    private void TouchTriggers() {
-        // dead clients don't activate triggers!
-        if(isDead())
-            return;
-
-        Vector2f range = new Vector2f(40,40);
-        Vector2f mins = new Vector2f(ps.origin);
-        Vector2f.sub(mins, range, mins);
-        Vector2f maxs = new Vector2f(ps.origin);
-        Vector2f.add(maxs, range, maxs);
-
-        SectorQuery query = Ref.server.EntitiesInBox(mins, maxs);
-
-        // can't use ent->absmin, because that has a one unit pad
-        mins.x = ps.origin.x + r.mins.x;
-        mins.y = ps.origin.y + r.mins.y;
-        maxs.x = ps.origin.x + r.maxs.x;
-        maxs.y = ps.origin.y + r.maxs.y;
-
-        for (int index : query.List) {
-            Gentity hit = Ref.game.g_entities[index];
-
-            if(hit.touch == null && touch == null)
-                continue;
-
-            if((hit.r.contents & Content.TRIGGER) == 0)
-                continue;
-
-            // use seperate code for determining if an item is picked up
-            // so you don't have to actually contact its bounding box
-            if(hit.s.eType == EntityType.ITEM) {
-                if(!Ref.common.items.playerTouchesItem(ps, hit.s, Ref.game.level.time))
-                    continue;
-            } else {
-                if(!Ref.server.EntityContact(mins, maxs, hit.shEnt))
-                    continue;
-            }
-
-            if(hit.touch != null)
-                hit.touch.touch(hit, this);
-
-            
-        }
-    }
+//    private void TouchTriggers() {
+//        // dead clients don't activate triggers!
+//        if(isDead())
+//            return;
+//
+//        Vector2f range = new Vector2f(40,40);
+//        Vector2f mins = new Vector2f(ps.origin);
+//        Vector2f.sub(mins, range, mins);
+//        Vector2f maxs = new Vector2f(ps.origin);
+//        Vector2f.add(maxs, range, maxs);
+//
+//        SectorQuery query = Ref.server.EntitiesInBox(mins, maxs);
+//
+//        // can't use ent->absmin, because that has a one unit pad
+//        mins.x = ps.origin.x + r.mins.x;
+//        mins.y = ps.origin.y + r.mins.y;
+//        maxs.x = ps.origin.x + r.maxs.x;
+//        maxs.y = ps.origin.y + r.maxs.y;
+//
+//        for (int index : query.List) {
+//            Gentity hit = Ref.game.g_entities[index];
+//
+//            if(hit.touch == null && touch == null)
+//                continue;
+//
+//            if((hit.r.contents & Content.TRIGGER) == 0)
+//                continue;
+//
+//            // use seperate code for determining if an item is picked up
+//            // so you don't have to actually contact its bounding box
+//            if(hit.s.eType == EntityType.ITEM) {
+//                if(!Ref.common.items.playerTouchesItem(ps, hit.s, Ref.game.level.time))
+//                    continue;
+//            } else {
+//                if(!Ref.server.EntityContact(mins, maxs, hit.shEnt))
+//                    continue;
+//            }
+//
+//            if(hit.touch != null)
+//                hit.touch.touch(hit, this);
+//
+//
+//        }
+//    }
 
     public void respawn() {
         
         // TODO: Spawn effect and maybe bodyque
         ClientSpawn();
         Ref.game.respawnAllItems();
-        startPull();
+        
         ps.maptime = 0;
     }
 

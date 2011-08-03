@@ -15,10 +15,17 @@ import cubetech.input.Input;
 import cubetech.input.KeyEventListener;
 import cubetech.input.KeyEvent;
 import cubetech.input.Key;
+import java.awt.Toolkit;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.util.vector.Vector2f;
 
@@ -116,6 +123,19 @@ public class Console implements KeyEventListener, LogEventListener {
         // Console not visible
         if((Ref.Input.GetKeyCatcher() & Input.KEYCATCH_CONSOLE) == 0)
             return;
+
+        if(key.key == Keyboard.KEY_V && Ref.Input.IsKeyPressed(Keyboard.KEY_LCONTROL)) {
+            Transferable t = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
+            if(t != null && t.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+                try {
+                    String s = (String) t.getTransferData(DataFlavor.stringFlavor);
+                    cmdLine += s;
+                    nConsecutiveTabs = 0;
+                    isScrollingCommands = false;
+                    return;
+                } catch (Exception ex) {}
+            }
+        }
 
         // Handle key
         switch(key.key) {

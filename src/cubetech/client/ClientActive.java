@@ -49,6 +49,8 @@ public class ClientActive {
     public Weapon userCmd_weapon = null;
     public float userCmd_sens = 1f;
 
+    public boolean screenshot;
+
     public ClientActive() {
         serverid = Integer.MAX_VALUE;
         for (int i= 0; i < parseEntities.length; i++) {
@@ -72,6 +74,16 @@ public class ClientActive {
         {
             if(Ref.client.state != ConnectState.PRIMED)
                 return;
+
+            if(Ref.client.demo.isPlaying()) {
+                // we shouldn't get the first snapshot on the same frame
+                // as the gamestate, because it causes a bad time skip
+                if(!Ref.client.demo.isFirstFrameSkipped()) {
+                    Ref.client.demo.setFirstFrameSkipped();
+                    return;
+                }
+                Ref.client.demo.readDemoMessage();
+            }
 
             if(newsnapshots) {
                 newsnapshots = false;
@@ -98,34 +110,83 @@ public class ClientActive {
         }
         oldFrameServerTime = snap.serverTime;
 
-        // cl_timeNudge is a user adjustable cvar that allows more
-        // or less latency to be added in the interest of better
-        // smoothness or better responsiveness.
-        int tn = 0;
-        CVar tnvar = Ref.cvars.Find("cl_timenudge");
-        if(tnvar != null)
-            tn = tnvar.iValue;
+        if(!Ref.client.demo.isPlaying() || true) {
 
-        // get our current view of time
-        serverTime = Ref.client.realtime + serverTimeDelta - tn;
+            // cl_timeNudge is a user adjustable cvar that allows more
+            // or less latency to be added in the interest of better
+            // smoothness or better responsiveness.
+            int tn = 0;
+            CVar tnvar = Ref.cvars.Find("cl_timenudge");
+            if(tnvar != null)
+                tn = tnvar.iValue;
 
-        // guarantee that time will never flow backwards, even if
-        // serverTimeDelta made an adjustment or cl_timeNudge was changed
-        if(serverTime < oldServerTime) {
-            serverTime = oldServerTime;
+            // get our current view of time
+            serverTime = Ref.client.realtime + serverTimeDelta - tn;
+
+            // guarantee that time will never flow backwards, even if
+            // serverTimeDelta made an adjustment or cl_timeNudge was changed
+            if(serverTime < oldServerTime) {
+                serverTime = oldServerTime;
+            }
+            oldServerTime = serverTime;
+
+            // note if we are almost past the latest frame (without timeNudge),
+            // so we will try and adjust back a bit when the next snapshot arrives
+            if(Ref.client.realtime + serverTimeDelta >= snap.serverTime - 5)
+                extrapolatedSnapshot = true;
         }
-        oldServerTime = serverTime;
-
-        // note if we are almost past the latest frame (without timeNudge),
-        // so we will try and adjust back a bit when the next snapshot arrives
-        if(Ref.client.realtime + serverTimeDelta >= snap.serverTime - 5 )
-            extrapolatedSnapshot = true;
 
         // if we have gotten new snapshots, drift serverTimeDelta
         // don't do this every frame, or a period of packet loss would
         // make a huge adjustment
         if(newsnapshots)
             AdjustTimeDelta();
+
+        if(Ref.client.demo.isPlaying()) {
+            // if we are playing a demo back, we can just keep reading
+            // messages from the demo file until the cgame definately
+            // has valid snapshots to interpolate between
+
+            // a timedemo will always use a deterministic set of time samples
+            // no matter what speed machine it is run on,
+            // while a normal demo may have different time samples
+            // each time it is played back
+            ClientConnect clc = Ref.client.clc;
+            if(Ref.client.cl_demorecord.isTrue()) {
+                int now = Ref.common.Milliseconds();
+
+                if(clc.timeDemoStart == 0) {
+                    clc.timeDemoStart = clc.timeDemoLastFrame = now;
+                    clc.timeDemoMinDuration = Integer.MAX_VALUE;
+                    clc.timeDemoMaxDuration = 0;
+                }
+                
+                int frameDuration = now - clc.timeDemoLastFrame;
+                
+                // Ignore the first measurement as it'll always be 0
+                if(clc.timeDemoFrames > 0) {
+                    if(frameDuration > clc.timeDemoMaxDuration)
+                        clc.timeDemoMaxDuration = frameDuration;
+                    
+                    if(frameDuration < clc.timeDemoMinDuration)
+                        clc.timeDemoMinDuration = frameDuration;
+                }
+                
+                clc.timeDemoFrames++;
+
+                int frameRate = 1000 / Ref.cvars.Find("maxfps").iValue;
+                serverTime = clc.timeDemoBaseTime + clc.timeDemoFrames * frameRate;
+
+            }
+            while(serverTime >= snap.serverTime) {
+                // feed another messag, which should change
+		// the contents of cl.snap
+                Ref.client.demo.readDemoMessage();
+                if(Ref.client.state != ConnectState.ACTIVE) {
+                    return; // end of demo
+                }
+            }
+        }
     }
 
     /*
@@ -149,6 +210,11 @@ public class ClientActive {
     */
     private void AdjustTimeDelta() {
         newsnapshots = false;
+
+        // the delta never drifts when replaying a demo
+        if(Ref.client.demo.isPlaying()) {
+            return;
+        }
 
         int newdelta = snap.serverTime - Ref.client.realtime;
         int deltaDelta = Math.abs(newdelta - serverTimeDelta);
@@ -191,6 +257,8 @@ public class ClientActive {
         // set the timedelta so we are exactly on this first frame
         serverTimeDelta = snap.serverTime - Ref.client.realtime;
         oldServerTime = snap.serverTime;
+
+        Ref.client.clc.timeDemoBaseTime = snap.serverTime;
     }
 
     /*
@@ -213,6 +281,8 @@ public class ClientActive {
             Common.Log("serverid not included in systeminfo - derp.");
             return;
         }
+
+        if(Ref.client.demo.isPlaying()) return;
 
         // scan through all the variables in the systeminfo and locally set cvars to match
         Map<String, String> map = Info.GetPairs(systeminfo);

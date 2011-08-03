@@ -12,6 +12,8 @@ import java.util.Queue;
  * @author mads
  */
 public class ClientPersistant {
+
+    
     public enum ClientConnected {
         DISCONNECTED,
         CONNECTING,
@@ -27,6 +29,49 @@ public class ClientPersistant {
 
     // Chunk data
     public HashMap<Long, ChunkEntry> chunkVersions = new HashMap<Long, ChunkEntry>();
-    public Queue<ByteBuffer> queuedChunkData = new LinkedList<ByteBuffer>();
-    public int queuedBytes = 0;
+    private Queue<ByteBuffer> queuedChunkData = new LinkedList<ByteBuffer>();
+    private int queuedBytes = 0;
+
+    public ByteBuffer dequeueChunkData() {
+        return dequeueChunkData(0);
+    }
+
+    public boolean isQueueEmpty() {
+        return queuedChunkData.isEmpty();
+    }
+
+    public void queueChunkData(ByteBuffer data) {
+        queuedChunkData.add(data);
+        queuedBytes += data.limit();
+    }
+
+    public ByteBuffer dequeueChunkData(int maxBytes) {
+        ByteBuffer base = queuedChunkData.poll();
+        if(base == null) return null;
+        queuedBytes -= base.limit();
+        
+        int currentBytes = base.limit();
+        // If we're past out max limit, just return the base
+        if(currentBytes >= maxBytes) return base;
+
+        int freeBytes = base.capacity()-base.limit();
+        ByteBuffer next;
+        while((next = queuedChunkData.peek()) != null
+                && freeBytes - next.limit() > 0
+                && currentBytes + next.limit() < maxBytes) {
+            queuedChunkData.poll();
+
+            int addSize = next.limit();
+            // prepare base buffer
+            base.limit(currentBytes + addSize);
+            base.position(currentBytes);
+
+            queuedBytes -= addSize;
+            currentBytes += addSize;
+            freeBytes -= addSize;
+            base.put(next);
+        }
+        base.position(0);
+        return base;
+    }
 }

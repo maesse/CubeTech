@@ -1,5 +1,7 @@
 package cubetech.gfx;
 
+import cubetech.misc.Profiler.SecTag;
+import cubetech.misc.Profiler;
 import java.util.Iterator;
 import cubetech.iqm.IQMLoader;
 import cubetech.iqm.IQMModel;
@@ -11,6 +13,7 @@ import cubetech.common.Common;
 import java.awt.RenderingHints;
 import java.awt.Graphics2D;
 import cubetech.misc.ClassPath;
+import cubetech.misc.Profiler.Sec;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.io.InputStream;
@@ -52,6 +55,7 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import javax.swing.ImageIcon;
+import org.lwjgl.opengl.EXTTextureArray;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
@@ -89,6 +93,10 @@ public final class ResourceManager {
         whiteTexture = LoadTexture("data/white.png");
     }
 
+    public ColorModel getRGBColorModel() {
+        return glColorModel;
+    }
+
     public void SetWhiteTexture() {
         whiteTexture.Bind();
     }
@@ -98,7 +106,19 @@ public final class ResourceManager {
     }
 
     public void Cleanup() {
+        cleanupModels();
+    }
 
+    public void cleanupModels() {
+        Iterator<Resource> it = Ressources.values().iterator();
+        while(it.hasNext()) {
+            Resource res = it.next();
+            if(res.Type == Resource.ResourceType.MODEL) {
+                if(res.Data != null) ((IQMModel)res.Data).destroy();
+                res.Data = null;
+                it.remove();
+            }
+        }
     }
 
     // TODO: Implement delay between updates?
@@ -106,6 +126,8 @@ public final class ResourceManager {
     public void Update() {
         if(unloadedRessources.isEmpty()) return; // nothing to load
         if(Ref.glRef == null || !Ref.glRef.isInitalized()) return; // OpenGL not ready
+
+        SecTag s = Profiler.EnterSection(Sec.TEXMAN);
 
         int nLoaded = 0;
         Iterator<Resource> it = unloadedRessources.iterator();
@@ -127,6 +149,7 @@ public final class ResourceManager {
             it.remove();
             nLoaded++;
         }
+        s.ExitSection();
     }
 
     public IQMModel loadModel(String modelName) {
@@ -134,15 +157,23 @@ public final class ResourceManager {
         if(filename == null || filename.isEmpty()) return null; // no go
         if(Ressources.containsKey(filename)) return (IQMModel)Ressources.get(filename).Data; // cached
 
-        modelName = "src/cubetech/" + modelName;
-
+        String orgName = modelName;
+//        modelName = "src/cubetech/" + modelName;
+        modelName = "C:\\Users\\mads\\Documents\\NetBeansProjects\\CubeTech\\src\\cubetech\\" + modelName;
         // load
         IQMModel model;
         try {
-            model = IQMLoader.LoadModel(modelName);
+            // Try to load it directly
+            model = IQMLoader.LoadModel(orgName);
         } catch (IOException ex) {
-            Common.Log("Couldn't load model " + modelName + ": " + Common.getExceptionString(ex));
-            return null;
+            try {
+                Common.Log("Falling back to dev-path for " + orgName);
+                // Fallback to hard-coded dev path
+                model = IQMLoader.LoadModel(modelName);
+            } catch(IOException ex2) {
+                Common.Log("Couldn't load model " + modelName + ": " + Common.getExceptionString(ex2));
+                return null;
+            }
         }
 
         // Cache it
@@ -150,7 +181,8 @@ public final class ResourceManager {
         res.Data = model;
         res.loaded = true;
         Ressources.put(filename, res);
-        
+
+
         return model;
     }
 
@@ -267,6 +299,7 @@ public final class ResourceManager {
                 throw new IOException("Cannot find: " + path);
             }
         }
+        
 
         // FIX: Don't load RGB as ARGB
         try {
@@ -368,7 +401,7 @@ public final class ResourceManager {
 
         if(target == GL_TEXTURE_CUBE_MAP) {
             // convert that image into a byte buffer of texture data
-            ByteBuffer buf = convertImageData(loadImage(resourceName+"_ft.png"),texture);
+            ByteBuffer buf = convertImageData(loadImage(resourceName+"_ft.png"),texture, false);
             glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X,0,dstPixelFormat,
                           texture.Width,
                           texture.Height,
@@ -378,40 +411,47 @@ public final class ResourceManager {
                           texture.Width,
                           texture.Height,
                           0,GL_RGBA,GL_UNSIGNED_BYTE,
-                           convertImageData(loadImage(resourceName+"_bk.png"),texture) );
+                           convertImageData(loadImage(resourceName+"_bk.png"),texture, false) );
             glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_Y,0,dstPixelFormat,
                           texture.Width,
                           texture.Height,
                           0,GL_RGBA,GL_UNSIGNED_BYTE,
-                           convertImageData(loadImage(resourceName+"_rt.png"),texture) );
+                           convertImageData(loadImage(resourceName+"_rt.png"),texture, false) );
             glTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,0,dstPixelFormat,
                           texture.Width,
                           texture.Height,
                           0,GL_RGBA,GL_UNSIGNED_BYTE,
-                           convertImageData(loadImage(resourceName+"_lf.png"),texture) );
+                           convertImageData(loadImage(resourceName+"_lf.png"),texture, false) );
             glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_Z,0,dstPixelFormat,
                           texture.Width,
                           texture.Height,
                           0,GL_RGBA,GL_UNSIGNED_BYTE,
-                           convertImageData(loadImage(resourceName+"_up.png"),texture) );
+                           convertImageData(loadImage(resourceName+"_up.png"),texture, false) );
             glTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,0,dstPixelFormat,
                           texture.Width,
                           texture.Height,
                           0,GL_RGBA,GL_UNSIGNED_BYTE,
-                           convertImageData(loadImage(resourceName+"_dn.png"),texture) );
+                           convertImageData(loadImage(resourceName+"_dn.png"),texture, false) );
         } else {
             // load image data
-            BufferedImage bufferedImage = loadImage(resourceName);
+            BufferedImage bufferedImage = null;
+            boolean flipY = true;
+            if(resourceName.toLowerCase().endsWith(".tga")) {
+                bufferedImage = TargaReader.getImage(resourceName);
+                flipY = false;
+            } else {
+                bufferedImage = loadImage(resourceName);
+            }
             texture.Width = bufferedImage.getWidth();
             texture.Height = bufferedImage.getHeight();
 
             // convert that image into a byte buffer of texture data
-            ByteBuffer textureBuffer = convertImageData(bufferedImage,texture);
+            ByteBuffer textureBuffer = convertImageData(bufferedImage,texture, flipY);
             int srcPixelFormat = bufferedImage.getColorModel().hasAlpha() ? GL_RGBA : GL_RGB;
             // produce a texture from the byte buffer
             glTexImage2D(target,0,dstPixelFormat,
-                          get2Fold(bufferedImage.getWidth()),
-                          get2Fold(bufferedImage.getHeight()),
+                          Helper.get2Fold(bufferedImage.getWidth()),
+                          Helper.get2Fold(bufferedImage.getHeight()),
                           0,srcPixelFormat,GL_UNSIGNED_BYTE,
                           textureBuffer );
         }
@@ -421,19 +461,7 @@ public final class ResourceManager {
         return texture;
     }
 
-    /**
-     * Get the closest greater power of 2 to the fold number
-     *
-     * @param fold The target number
-     * @return The power of 2
-     */
-    public static int get2Fold(int fold) {
-        int ret = 2;
-        while (ret < fold) {
-            ret *= 2;
-        }
-        return ret;
-    }
+    
 
     /**
      * Convert the buffered image to a texture
@@ -442,7 +470,7 @@ public final class ResourceManager {
      * @param texture The texture to store the data into
      * @return A buffer containing the data
      */
-    private ByteBuffer convertImageData(BufferedImage bufferedImage,CubeTexture texture) {
+    private ByteBuffer convertImageData(BufferedImage bufferedImage,CubeTexture texture, boolean flipY) {
         ByteBuffer imageBuffer;
         WritableRaster raster;
         BufferedImage texImage;
@@ -477,7 +505,13 @@ public final class ResourceManager {
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g.setColor(new Color(0f,0f,0f,0f));
         g.fillRect(0,0,texWidth,texHeight);
-        g.drawImage(bufferedImage,0,texHeight,texWidth,-texHeight,null);
+        int x = 0, y = 0;
+        int w = texWidth, h = texHeight;
+        if(flipY) {
+            y = texHeight;
+            h = -texHeight;
+        }
+        g.drawImage(bufferedImage,x,y,w,h,null);
 
         // build a byte buffer from the temporary image
         // that be used by OpenGL to produce a texture.
@@ -734,28 +768,28 @@ public final class ResourceManager {
 
     // ARBTextureRectangle.GL_TEXTURE_RECTANGLE_ARB
 
-    public int CreateEmptyDepthTexture(int width, int height, int target) {
+    public int CreateEmptyDepthTexture(int width, int height, int bitdepth, int target) {
+        return CreateEmptyDepthTexture(width, height, bitdepth, target, 0);
+    }
+    public int CreateEmptyDepthTexture(int width, int height, int bitdepth, int target, int nLevels) {
         int textureId = createTextureID();
         glBindTexture(target, textureId);
         glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP);
         glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP);
-        glTexParameteri(GL_TEXTURE_2D, GL_DEPTH_TEXTURE_MODE, GL_INTENSITY);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+        glTexParameteri(target, GL_DEPTH_TEXTURE_MODE, GL_INTENSITY);
+        glTexParameteri(target, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
+        glTexParameteri(target, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
         ByteBuffer nullBuffer = null;
-//        ByteBuffer buf = ByteBuffer.allocateDirect(width*height*4);
-//            buf.order(ByteOrder.nativeOrder());
-//            for (int i= 0; i < width*height; i++) {
-//                buf.put((byte)125);
-//                buf.put((byte)0);
-//                buf.put((byte)255);
-//                buf.put((byte)255);
-//            }
-//            buf.flip();
-            
-        glTexImage2D(target, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullBuffer);
+        int component = GL_DEPTH_COMPONENT16;
+        if(bitdepth == 24) component = GL_DEPTH_COMPONENT24;
+        if(bitdepth == 32) component = GL_DEPTH_COMPONENT32;
+        if(target == EXTTextureArray.GL_TEXTURE_2D_ARRAY_EXT) {
+            glTexImage3D(target, 0, component, width, height,nLevels, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullBuffer);
+        } else {
+            glTexImage2D(target, 0, component, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullBuffer);
+        }
         GLRef.checkError();
         return textureId;
     }

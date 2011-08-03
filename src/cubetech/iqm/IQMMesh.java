@@ -1,6 +1,7 @@
 package cubetech.iqm;
 
 import cubetech.gfx.CubeTexture;
+import cubetech.gfx.ResourceManager;
 import cubetech.misc.Ref;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
@@ -62,6 +63,9 @@ public class IQMMesh {
         if(tex == null) {
             String path = modelPath + material;
             if(!material.contains(".")) path = modelPath + material + ".png";
+            if(!ResourceManager.FileExists(path)) {
+                path = modelPath + material + ".tga";
+            }
             tex = Ref.ResMan.LoadTexture(path);
         }
         

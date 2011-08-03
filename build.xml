@@ -81,4 +81,21 @@
 		<arg line="/c postbuild.bat"/>
             </exec>
         </target>
+
+<target name="instrument-classes">
+    <taskdef name="instrument-stack"
+        classname="cz.advel.stack.instrument.InstrumentationTask"
+        classpath="${run.classpath}">
+    </taskdef>
+ 
+    <instrument-stack dest="${build.classes.dir}" packageName="com.bulletphysics">
+        <fileset dir="${build.classes.dir}" includes="**/*.class"/>
+    </instrument-stack>
+</target>
+  
+<!--  
+<target name="-post-compile" depends="instrument-classes"> </target>
+-->
+
+
 </project>

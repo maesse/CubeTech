@@ -2,6 +2,7 @@ package cubetech.CGame;
 
 import cubetech.collision.CubeCollision;
 import cubetech.collision.CubeMap;
+import cubetech.common.CVar;
 import cubetech.common.Helper;
 import cubetech.misc.Plane;
 import cubetech.misc.Ref;
@@ -11,6 +12,7 @@ import java.nio.FloatBuffer;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.GLU;
 import org.lwjgl.util.vector.Matrix;
+import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 
@@ -26,27 +28,33 @@ public class ViewParams {
     public int ViewportHeight;
     public float FovX;
     public int FovY;
-    public Matrix ProjectionMatrix;
+    public Matrix4f ProjectionMatrix;
+    public Matrix4f viewMatrix;
     public Vector3f Angles = new Vector3f();
     public Vector3f[] ViewAxis = new Vector3f[3];
 
     public float xmin, xmax, ymin, ymax;
     public float w, h;
     public float farDepth;
+    public float nearDepth;
 
     public Plane[] planes = new Plane[6];
 
     private FloatBuffer viewbuffer = ByteBuffer.allocateDirect(16*4).order(ByteOrder.nativeOrder()).asFloatBuffer();
     private FloatBuffer projbuffer = ByteBuffer.allocateDirect(16*4).order(ByteOrder.nativeOrder()).asFloatBuffer();
-    private float[] flipMatrix = new float[] {
+    public static final float[] flipMatrix = new float[] {
         // convert from our coordinate system (looking down X)
 	// to OpenGL's coordinate system (looking down -Z)
 	0, 0, -1, 0,
 	-1, 0, 0, 0,
 	0, 1, 0, 0,
 	0, 0, 0, 1};
+    public static final Matrix4f flipMatrix2 = new Matrix4f();
 
     public ViewParams() {
+        Helper.toFloatBuffer(flipMatrix, viewbuffer);
+        flipMatrix2.load(viewbuffer);
+        viewbuffer.clear();
         for (int i= 0; i < 3; i++) {
             ViewAxis[i] = new Vector3f();
         }
@@ -63,8 +71,15 @@ public class ViewParams {
         GL11.glLoadIdentity();
         int near = Ref.cvars.Find("cg_depthnear").iValue;
         int far = Ref.cvars.Find("cg_depthfar").iValue;
-        setup3DProjection(Ref.cgame.cg_fov.fValue * aspect, aspect, near, far);
-
+        nearDepth = near;
+        farDepth = far;
+        float fov = Ref.cgame.cg_fov.fValue;
+        if(Ref.cgame.cg.playingdemo && Ref.cgame.cg_freecam.isTrue()) {
+            fov = Ref.cgame.cg.demofov;
+        }
+        setup3DProjection(fov * aspect, aspect, near, far);
+        
+        
 //        Angles.x *= -1f;
 //        Angles.y *= -1f;
         ViewAxis = Helper.AnglesToAxis(Angles);
@@ -104,20 +119,26 @@ public class ViewParams {
         // convert from our coordinate system (looking down X)
 	// to OpenGL's coordinate system (looking down -Z)
         viewbuffer.position(0);
+        Helper.toFloatBuffer(view, viewbuffer);
+        // Store for shadows
+        
+
+        
         Helper.multMatrix(view, flipMatrix, viewbuffer);
         viewbuffer.limit(16);
         viewbuffer.position(0);
+        viewMatrix = (Matrix4f) new Matrix4f().load(viewbuffer);
+        viewbuffer.position(0);
         
-        
-        
+
+        // set it for opengl
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         
         GL11.glLoadMatrix(viewbuffer);
 
 //        GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projbuffer);
 //        Matrix4f prov = (Matrix4f) new Matrix4f().load(projbuffer);
-//        Matrix4f view = (Matrix4f) new Matrix4f().load(viewbuffer);
-//        viewbuffer.position(0);
+        
 //        projbuffer.position(0);
 //
 //        Matrix4f mvp = Matrix4f.mul(view, prov, null);
@@ -135,7 +156,9 @@ public class ViewParams {
         GL11.glLoadIdentity();
         GLU.gluPerspective(fov, 1f/aspect, znear, zfar);
         farDepth = zfar;
-
+        GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projbuffer);
+        ProjectionMatrix = (Matrix4f) new Matrix4f().load(projbuffer);
+        projbuffer.position(0);
         return;
         
     }
@@ -180,7 +203,7 @@ public class ViewParams {
 
         CubeCollision col = CubeMap.TraceRay(view, t_forward, 8, Ref.cgame.map.chunks);
         t_forward.normalise();
-        float len = 70;
+        float len = 150;
         if(col != null) {
             Vector3f start = new Vector3f(view);
             Vector3f delta = Helper.VectorMA(view, len, t_forward, null);

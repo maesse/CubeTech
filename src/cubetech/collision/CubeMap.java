@@ -1,5 +1,6 @@
 package cubetech.collision;
 
+import cubetech.common.Common;
 import cubetech.misc.Ref;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -31,6 +32,15 @@ public class CubeMap {
     public CubeMap(IChunkGenerator gen, int w, int h, int d) {
         chunkGen = gen;
         fillInitialArea(w, h, d);
+    }
+
+    void destroy() {
+        for (CubeChunk cubeChunk : chunks.values()) {
+            cubeChunk.destroy();
+        }
+        chunks.clear();
+        chunks = null;
+        chunkGen = null;
     }
 
     public CubeMap() {
@@ -238,10 +248,20 @@ public class CubeMap {
             chunkGenQueue.add(new int[] {x,y,z});
             return null;
         }
+
+        long start = System.nanoTime();
+
         CubeChunk chunk = chunkGen.generateChunk(this, x, y, z);
         long index = positionToLookup(x, y, z);
 
         Object last = chunks.put(index, chunk);
+
+        long end = System.nanoTime();
+
+        float time = (end-start) / 1000000f;
+        if(time > 1f && Ref.common.developer.isTrue()) {
+            Common.Log("Generate Chunk took %.0f ms", time);
+        }
 
 //        chunk.notifyChange();
         
@@ -364,4 +384,6 @@ public class CubeMap {
 
         return chunks.get(index);
     }
+
+    
 }

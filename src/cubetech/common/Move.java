@@ -8,6 +8,9 @@ import cubetech.common.items.WeaponItem;
 import cubetech.entities.Event;
 import cubetech.input.Input;
 import cubetech.input.PlayerInput;
+import cubetech.misc.Profiler;
+import cubetech.misc.Profiler.Sec;
+import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
 
 
@@ -19,48 +22,21 @@ import org.lwjgl.util.vector.Vector3f;
  */
 public class Move {
     // Constants loaded
+    private static final float STOP_EPSILON = 0.1f;
     private static float acceleration = 8f;
+    private static float airaccelerate = 10;
     private static float friction = 4f;
-//    private static float spectator_friction = 2f;
     private static float stopspeed = 15f;
     private static float gravity;
-//    private static float pullacceleration;
     private static int speed = 100;
     private static float jumpvel = 100;
-    private static int jumpmsec = 250;
     private static float stepheight = 10;
-//    private static int movemode = 1;
 
     private static final float MIN_WALK_NORMAL = 0.7f;
     private static final float OVERCLIP = 1.0001f;
 
-//    private static int pull1 = 100;
-//    private static int pull2 = 200;
-//    private static int pull3 = 300;
-//    private static int pull4 = 400;
-//    private static int pull5 = 500;
-//    private static int pull6 = 600;
-//    private static float pullstep = 0.75f;
-//
-//    private static Vector3f org_origin = new Vector3f();
-//    private static Vector3f org_velocity = new Vector3f();
-
     private static int msec;
     private static float frametime;
-
-    private static void ContinueAnim(int animation, MoveQuery q) {
-        if((q.ps.animation & ~128) == animation) return;
-
-        if(q.ps.animTime > 0) return; // a priority animation is playing
-
-        if(q.ps.moveType == MoveType.DEAD) return;
-
-        // Set animation + togglebit
-        q.ps.animation = ((q.ps.animation & 128) ^ 128) | animation;
-    }
-
-    
-
     public class MoveType {
         public static final int NORMAL = 0;
         public static final int NOCLIP = 1;
@@ -69,11 +45,60 @@ public class Move {
         public static final int EDITMODE = 4;
     }
 
+    private static void ContinueAnim(Animations animation, MoveQuery q) {
+        ContinueAnim(animation, q, false);
+    }
+    private static void ContinueAnim(Animations animation, MoveQuery q, boolean forceSame) {
+        if((q.ps.animation & ~128) == animation.ordinal() && !forceSame) return;
+
+        if(q.ps.animTime > 0) return; // a priority animation is playing
+
+        if(q.ps.moveType == MoveType.DEAD) return;
+
+        // Set animation + togglebit
+        q.ps.animation = ((q.ps.animation & 128) ^ 128) | animation.ordinal();
+    }
+
+    private static void setMovementDir(MoveQuery query) {
+        if(query.cmd.Forward || query.cmd.Back || query.cmd.Right || query.cmd.Left) {
+            if (!query.cmd.Right && !query.cmd.Left && query.cmd.Forward ) {
+                query.ps.moveDirection = 0;
+            } else if ( query.cmd.Left && query.cmd.Forward) {
+                query.ps.moveDirection = 1;
+            } else if ( query.cmd.Left && !query.cmd.Back && !query.cmd.Forward ) {
+                query.ps.moveDirection = 2;
+            } else if ( query.cmd.Left && query.cmd.Back ) {
+                query.ps.moveDirection = 3;
+            } else if ( !query.cmd.Right && !query.cmd.Left && query.cmd.Back ) {
+                query.ps.moveDirection = 4;
+            } else if ( query.cmd.Right && query.cmd.Back ) {
+                query.ps.moveDirection = 5;
+            } else if ( query.cmd.Right && !query.cmd.Back && !query.cmd.Forward ) {
+                query.ps.moveDirection = 6;
+            } else if ( query.cmd.Right && query.cmd.Forward) {
+                query.ps.moveDirection = 7;
+            }
+        } else {
+            // if they aren't actively going directly sideways,
+            // change the animation to the diagonal so they
+            // don't stop too crooked
+            if(query.ps.moveDirection == 2) {
+                query.ps.moveDirection = 1;
+            } else if(query.ps.moveDirection == 6) {
+                query.ps.moveDirection = 7;
+            }
+        }
+    }
+
     public static void Move(MoveQuery query) {
+
+
         int finaltime = query.cmd.serverTime;
 
         if(finaltime < query.ps.commandTime)
             return; // shouldn't happen
+
+        SecTag s = Profiler.EnterSection(Sec.MOVE);
 
         if(finaltime > query.ps.commandTime + 1000)
             query.ps.commandTime = finaltime - 1000;
@@ -82,23 +107,13 @@ public class Move {
             gravity = Ref.cvars.Find("sv_gravity").fValue;
             speed = Ref.cvars.Find("sv_speed").iValue;
             jumpvel = Ref.cvars.Find("sv_jumpvel").fValue;
-            jumpmsec = Ref.cvars.Find("sv_jumpmsec").iValue;
             acceleration = Ref.cvars.Find("sv_acceleration").fValue;
+            airaccelerate = Ref.cvars.Find("sv_airaccelerate").fValue;
             friction = Ref.cvars.Find("sv_friction").fValue;
             stopspeed = Ref.cvars.Find("sv_stopspeed").fValue;
-//            pullacceleration = Ref.cvars.Find("sv_pullacceleration").fValue;
             stepheight = Ref.cvars.Find("sv_stepheight").fValue;
-//            movemode = Ref.cvars.Find("sv_movemode").iValue;
-//            pull1 = Ref.cvars.Find("sv_pull1").iValue;
-//            pull2 = Ref.cvars.Find("sv_pull2").iValue;
-//            pull3 = Ref.cvars.Find("sv_pull3").iValue;
-//            pull4 = Ref.cvars.Find("sv_pull4").iValue;
-//            pull5 = Ref.cvars.Find("sv_pull5").iValue;
-//            pull6 = Ref.cvars.Find("sv_pull6").iValue;
-//            pullstep = Ref.cvars.Find("sv_pullstep").fValue;
-
         } catch(Exception ex) {
-            
+            Common.LogDebug("Missing Move variables: %s", Common.getExceptionString(ex));
         }
 
         Vector3f start = new Vector3f(query.ps.origin);
@@ -111,6 +126,7 @@ public class Move {
                 stepMsec = 66;
             query.cmd.serverTime = query.ps.commandTime + stepMsec;
             MoveSingle(query);
+            query.cropped = false;
         }
         Vector3f end = new Vector3f(query.ps.origin);
 
@@ -118,9 +134,9 @@ public class Move {
         start.y *= 0.5f; // don't let y velocity impact move animation too much
         float movelen = start.length() * 15;
         query.ps.movetime += (int)movelen;
-    }
 
-    
+        s.ExitSection();
+    }
 
     private static void MoveSingle(MoveQuery query) {
         // determine the time
@@ -158,9 +174,20 @@ public class Move {
         if(query.cmd.Back)
             wishdir.x -= 1f;
 
+        wishdir.scale(speed);
+        float len = wishdir.length();
+        if(len > speed) {
+            wishdir.scale(speed/len);
+        }
+        query.wishdir = wishdir;
+
         groundTrace(query);
         DropTimers(query); // Decrement timers
 
+        setMovementDir(query);
+
+        // handle ducking
+        handleDuck(query);
 
         if(query.onGround) {
             // Walk
@@ -170,7 +197,7 @@ public class Move {
             AirMove(wishdir, query);
         }
 
-        groundTrace(query);
+//        groundTrace(query);
 
         if(!query.onGround) {
             query.ps.velocity.z -= gravity * frametime * 0.5f;
@@ -178,12 +205,167 @@ public class Move {
 
         // animate
         if(query.onGround) {
-            if(query.ps.velocity.x * query.ps.velocity.x + query.ps.velocity.y * query.ps.velocity.y > 10f) ContinueAnim(0, query);
-            else if(query.ps.velocity.z == 0f) ContinueAnim(1, query);
+            if(query.ps.velocity.x * query.ps.velocity.x + query.ps.velocity.y * query.ps.velocity.y > 10f)  {
+                if(query.ps.ducked) {
+                    ContinueAnim(Animations.CROUCH_WALK, query);
+                } else {
+                    ContinueAnim(Animations.WALK, query);
+                }
+            }
+            else if(query.ps.velocity.z == 0f) {
+                if(query.ps.ducked) {
+                    ContinueAnim(Animations.CROUCH_IDLE, query);
+                } else {
+                    ContinueAnim(Animations.IDLE, query);
+                }
+            }
         }
 
         // weapon
         weapons(query);
+    }
+
+    static void handleDuck(MoveQuery pm) {
+        boolean duckPressed = !pm.ps.oldButtons[2] && pm.cmd.buttons[2];
+        boolean duckReleased = pm.ps.oldButtons[2] && !pm.cmd.buttons[2];
+        System.arraycopy(pm.cmd.buttons, 0, pm.ps.oldButtons, 0, pm.ps.oldButtons.length);
+        
+
+        if(pm.ps.stats.Health <= 0) {
+            // Dead
+            if(pm.ps.ducked) {
+                finishUnduck(pm);
+            }
+            return;
+        }
+
+        if(pm.ps.ducked && !pm.cropped) {
+            pm.wishdir.scale(0.5f);
+            pm.cropped = true;
+        }
+
+        // Holding duck, in process of ducking or fully ducked?
+        if(pm.cmd.buttons[2] || pm.ps.ducking || pm.ps.ducked) {
+            // holding duck
+            if(pm.cmd.buttons[2]) { 
+                // Just pressed duck, and not fully ducked?
+                if(duckPressed && !pm.ps.ducked) {
+                    pm.ps.ducking = true;
+                    pm.ps.ducktime = 1000;
+                }
+
+                float duckms = Math.max(0, 1000 - pm.ps.ducktime);
+                float ducks = duckms / 1000f;
+
+                // doing a duck movement? (ie. not fully ducked?)
+                if(pm.ps.ducking) {
+                    // Finish ducking immediately if duck time is over or not on ground
+                    if(ducks > 0.4f || !pm.onGround || pm.ps.ducked) {
+                        finishDuck(pm);
+                    } else {
+                        // Calc parametric time
+                        float duckFrac = Helper.SimpleSpline(ducks/0.4f);
+                        setDuckedEyeOffset(pm, duckFrac);
+                    }
+                }
+            } else {
+                if(duckReleased && pm.ps.ducked) {
+                    // start a unduck
+                    pm.ps.ducktime = 1000;
+                    pm.ps.ducking = true;
+                }
+
+                float duckms = Math.max(0, 1000 - pm.ps.ducktime);
+                float ducks = duckms / 1000f;
+
+                // try to unduck
+                if(canUnduck(pm)) {
+                    if(pm.ps.ducked || pm.ps.ducking) {
+                        // Finish ducking immediately if duck time is over or not on ground
+                        if(ducks > 0.2f || !pm.onGround) {
+                            finishUnduck(pm);
+                        } else {
+                            // Calc parametric time
+                            float duckFrac = Helper.SimpleSpline(1.0f - (ducks / 0.2f));
+                            setDuckedEyeOffset(pm, duckFrac);
+                        }
+                    }
+                } else {
+                    // Still under something where we can't unduck, so make sure we reset this timer so
+                    //  that we'll unduck once we exit the tunnel, etc.
+                    pm.ps.ducktime = 1000;
+                }
+            }
+        }
+    }
+
+    static boolean canUnduck(MoveQuery pm) {
+        Vector3f start = new Vector3f(pm.ps.origin);
+        if(!pm.onGround) {
+            // If in air an letting go of croush, make sure we can offset origin to make
+                //  up for uncrouching
+            Vector3f standingHull = Vector3f.sub(Game.PlayerMaxs, Game.PlayerMins, null);
+            Vector3f duckedHull = Vector3f.sub(Game.PlayerDuckedMaxs, Game.PlayerDuckedMins, null);
+
+            Vector3f.sub(standingHull, duckedHull, duckedHull);
+            duckedHull.scale(-0.5f);
+            Vector3f.add(start, duckedHull, start);
+        }
+
+        boolean saveDuck = pm.ps.ducked;
+        pm.ps.ducked = false;
+        CollisionResult res = TracePlayerBBox(pm, pm.ps.origin, start, Content.MASK_PLAYERSOLID);
+        pm.ps.ducked = saveDuck;
+        if(!res.startsolid && res.frac == 1f) {
+            return true;
+        }
+        return false;
+    }
+
+    static void setDuckedEyeOffset(MoveQuery pm, float frac) {
+        float duckedView = Game.PlayerDuckedHeight;
+        float standingView = Game.PlayerViewHeight;
+
+        pm.ps.viewheight = (int)((duckedView * frac) + (standingView * (1f-frac)));
+    }
+
+    static void finishDuck(MoveQuery pm) {
+        boolean wasDucked = pm.ps.ducked;
+        pm.ps.ducked = true;
+        pm.ps.ducking = false;
+        pm.ps.viewheight = (int) Game.PlayerDuckedHeight;
+
+        if(pm.onGround) {
+
+        } else if(!wasDucked) {
+            Vector3f standingHull = Vector3f.sub(Game.PlayerMaxs, Game.PlayerMins, null);
+            Vector3f duckedHull = Vector3f.sub(Game.PlayerDuckedMaxs, Game.PlayerDuckedMins, null);
+
+            Vector3f.sub(standingHull, duckedHull, duckedHull);
+            duckedHull.scale(0.5f);
+            Vector3f.add(pm.ps.origin, duckedHull, pm.ps.origin);
+        }
+        groundTrace(pm);
+    }
+
+    static void finishUnduck(MoveQuery pm) {
+        if(!pm.onGround) {
+            // If in air an letting go of croush, make sure we can offset origin to make
+                //  up for uncrouching
+            Vector3f standingHull = Vector3f.sub(Game.PlayerMaxs, Game.PlayerMins, null);
+            Vector3f duckedHull = Vector3f.sub(Game.PlayerDuckedMaxs, Game.PlayerDuckedMins, null);
+
+            Vector3f.sub(standingHull, duckedHull, duckedHull);
+            duckedHull.scale(-0.5f);
+            Vector3f.add(pm.ps.origin, duckedHull, pm.ps.origin);
+        }
+
+        pm.ps.ducked = false;
+        pm.ps.ducking = false;
+        pm.ps.ducktime = 0;
+        pm.ps.viewheight = (int) Game.PlayerViewHeight;
+
+        groundTrace(pm);
     }
 
     static void beginWeaponChange(MoveQuery pm, Weapon newWeapon) {
@@ -285,8 +467,19 @@ public class Move {
 
     static boolean groundTrace(MoveQuery pm) {
         Vector3f end = new Vector3f(pm.ps.origin);
-        end.z -= 1f;
+        float delta = -1f;
+
+        
+        if(pm.ps.velocity.z < 0) {
+            delta += pm.ps.velocity.z * frametime;
+        }
+        end.z += delta;
+        //end.z = 870;
+
+
         CollisionResult trace = TracePlayerBBox(pm, pm.ps.origin, end, pm.tracemask);
+
+
         if(trace.frac == 1f)
         {
             groundTraceMissed(pm);
@@ -301,6 +494,11 @@ public class Move {
             pm.onGround = false;
             pm.groundNormal = null;
             return false;
+        }
+
+        // move down
+        if(trace.frac != 0f) {
+            pm.ps.origin.z += delta * trace.frac;
         }
 
         // slopes that are too steep will not be considered onground
@@ -419,7 +617,8 @@ public class Move {
         pm.onGround =false;
         pm.groundNormal = null;
         pm.ps.velocity.z = jumpvel;
-        ContinueAnim(2, pm);
+        
+        ContinueAnim(Animations.JUMP, pm, true);
         return true;
     }
 
@@ -437,13 +636,13 @@ public class Move {
 
         Vector3f wishdir = new Vector3f(wishvel);
         float wishspeed = Helper.Normalize(wishdir);
-        wishspeed = speed;
+        //wishspeed = speed;
         if(wishspeed > speed) {
             wishvel.scale(speed / wishspeed);
             wishspeed = speed;
         }
 
-        AirAccelerate(pm, wishdir, wishspeed, acceleration*1.5f);
+        AirAccelerate(pm, wishdir, wishspeed, airaccelerate);
 
         SlideMove(pm);
     }
@@ -484,7 +683,7 @@ public class Move {
 
         Vector3f wishdir = new Vector3f(wishvel);
         float wishspeed = Helper.Normalize(wishdir);
-        wishspeed = speed;
+        
 
         Accelerate(pm, wishdir, wishspeed, acceleration);
 
@@ -554,13 +753,13 @@ public class Move {
                 Helper.VectorMA(res.start, res.frac, res.delta, pm.ps.origin);
                 orgVel.set(pm.ps.velocity);
                 numplanes = 0;
-            }
+            }            
 
             // If we covered the entire distance, we are done
             //  and can return.
             if(res.frac == 1f)
                 break;
-
+            
             // If the plane we hit has a high z component in the normal, then
             //  it's probably a floor
             if(res.hitAxis.z > MIN_WALK_NORMAL)
@@ -685,7 +884,8 @@ public class Move {
         if(spd < 1) {
             pm.ps.velocity.set(0,0,0);
         } else {
-            float fric = friction * 0.5f;
+            stopspeed = 1;
+            float fric = friction * 0.35f;
             float control = spd < stopspeed ? stopspeed : spd;
             float drop = control * fric * frametime;
 
@@ -715,7 +915,7 @@ public class Move {
 
         Helper.Normalize(wishvel);
 
-        Accelerate(pm, wishvel, speed*4, acceleration);
+        Accelerate(pm, wishvel, speed*2, acceleration*0.35f);
 
         Vector3f delta = new Vector3f(pm.ps.velocity);
         delta.scale(frametime);
@@ -727,7 +927,10 @@ public class Move {
     }
 
     private static CollisionResult TracePlayerBBox(MoveQuery pm, Vector3f origin, Vector3f end, int tracemask) {
-        return pm.Trace(origin, end, Game.PlayerMins, Game.PlayerMaxs, tracemask, pm.ps.clientNum);
+        return pm.Trace(origin, end, // select bounding by duck-state
+                pm.ps.ducked ? Game.PlayerDuckedMins : Game.PlayerMins,
+                pm.ps.ducked ? Game.PlayerDuckedMaxs : Game.PlayerMaxs,
+                tracemask, pm.ps.clientNum);
     }
 
     // result = in - 2*n (n*in);
@@ -740,8 +943,11 @@ public class Move {
         }
 
         out.x = in.x - normal.x * dot;
+        if(out.x > -STOP_EPSILON && out.x < STOP_EPSILON) out.x = 0;
         out.y = in.y - normal.y * dot;
+        if(out.y > -STOP_EPSILON && out.y < STOP_EPSILON) out.y = 0;
         out.z = in.z - normal.z * dot;
+        if(out.z > -STOP_EPSILON && out.z < STOP_EPSILON) out.z = 0;
     }
 
     private static void UpdateStepSound(MoveQuery pm) {
@@ -767,9 +973,13 @@ public class Move {
     private static void DropTimers(MoveQuery pm) {
 //        pm.ps.stepTime -= msec;
         pm.ps.jumpTime -= msec;
+        pm.ps.ducktime -= msec;
         if(pm.ps.stepTime < 0)
             pm.ps.stepTime = 0;
         if(pm.ps.jumpTime < 0)
             pm.ps.jumpTime = 0;
+        if(pm.ps.ducktime < 0)
+            pm.ps.ducktime = 0;
+
     }
 }

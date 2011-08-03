@@ -10,7 +10,7 @@ public class IQMPose {
     int _parent; // parent < 0 means this is a root bone
     IQMPose parent;
     int channelmask; // mask of which 9 channels are present for this joint pose
-    float[] channeloffset = new float[9], channelscale = new float[9];
+    float[] channeloffset = new float[10], channelscale = new float[10];
     // channels 0..2 are translation <Tx, Ty, Tz> and channels 3..5 are quaternion rotation <Qx, Qy, Qz, Qw> where Qw = -sqrt(max(1 - Qx*Qx - Qy*qy - Qz*qz, 0))
     // rotation is in relative/parent local space
     // channels 6..8 are scale <Sx, Sy, Sz>
@@ -25,10 +25,10 @@ public class IQMPose {
             IQMPose pose = new IQMPose();
             pose._parent = buffer.getInt();
             pose.channelmask = buffer.getInt();
-            for (int j= 0; j < 9; j++) {
+            for (int j= 0; j < pose.channeloffset.length; j++) {
                 pose.channeloffset[j] = buffer.getFloat();
             }
-            for (int j= 0; j < 9; j++) {
+            for (int j= 0; j < pose.channelscale.length; j++) {
                 pose.channelscale[j] = buffer.getFloat();
             }
 

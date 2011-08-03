@@ -5,10 +5,12 @@ import cubetech.common.Helper;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.GLRef;
 import cubetech.gfx.Shader;
+import cubetech.gfx.ShadowManager;
 import cubetech.misc.Ref;
 import java.util.LinkedList;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
+import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
@@ -23,10 +25,11 @@ public class Render {
     private LinkedList<RenderEntity> renderList = new LinkedList<RenderEntity>();
 
     Shader softSprite = null;
+    
 
     public Render() {
         for (int i= 0; i < MAX_RENDER_ENTITIES; i++) {
-            entities[i] = new RenderEntity();
+            entities[i] = new RenderEntity(REType.NONE);
         }
         if(Ref.glRef.srgbBuffer != null) {
             softSprite = Ref.glRef.getShader("softsprite");
@@ -36,15 +39,29 @@ public class Render {
         }
     }
 
-    public void renderAll() {
+    public void renderAll(boolean shadowPass) {
         GLRef.checkError();
         for (RenderEntity re : renderList) {
+            if((re.flags & RenderEntity.FLAG_NOSHADOW) == RenderEntity.FLAG_NOSHADOW && shadowPass) {
+                // Ignore this one
+                continue;
+            }
+            
             switch(re.Type) {
                 case MODEL:
                     renderModel(re);
                     break;
                 case SPRITE:
                     renderSprite(re);
+                    break;
+                case BBOX:
+                    renderBBox(re);
+                    break;
+                case BEAM:
+                    renderBeam(re);
+                    break;
+                case POLY:
+                    renderPoly(re);
                     break;
                 default:
                     Ref.common.Error(ErrorCode.FATAL, "Render.renderAll(): unknown type " + re.Type);
@@ -55,11 +72,115 @@ public class Render {
         GLRef.checkError();
     }
 
+    public void renderPoly(RenderEntity ent) {
+    
+       // GL11.glDisable(GL11.GL_CULL_FACE);
+        GL11.glEnable(GL11.GL_BLEND);
+        ent.mat.getTexture().Bind();
+
+        GL11.glDepthMask(false);
+        GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+        GL11.glPolygonOffset(-1f, 0);
+        
+        GL11.glBegin(GL11.GL_QUADS);
+        {
+            for (int i= 0; i < ent.frame; i++) {
+                GL20.glVertexAttrib2f(Shader.INDICE_COORDS, ent.verts[i].s, ent.verts[i].t);
+                Vector3f v = ent.verts[i].xyz;
+                GL20.glVertexAttrib3f(Shader.INDICE_POSITION, v.x, v.y, v.z);
+            }
+            
+        }
+        GL11.glEnd();
+
+        GL11.glDepthMask(true);
+        GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
+        GL11.glPolygonOffset(0, 0);
+
+        //GL11.glEnable(GL11.GL_CULL_FACE);
+    }
+
     public void addRefEntity(RenderEntity ent) {
         if(renderList.contains(ent)) {
             int derp = 2;
         }
         renderList.add(ent);
+    }
+
+    private void renderBeam(RenderEntity ent) {
+        Vector3f start = ent.oldOrigin;
+        Vector3f end = ent.origin;
+
+        float len = Vector3f.sub(end, start, null).length();
+
+        // compute side vector
+        Vector3f renderOrg = Ref.cgame.cg.refdef.Origin;
+        Vector3f v1 = Vector3f.sub(start, renderOrg, null);
+        Vector3f v2 = Vector3f.sub(end, renderOrg, null);
+        Helper.Normalize(v1); Helper.Normalize(v2);
+        Vector3f right = Vector3f.cross(v1, v2, null);
+
+        if(ent.mat != null) ent.mat.getTexture().Bind();
+        else Ref.ResMan.getWhiteTexture().Bind();
+        
+        doBeam(start, end, right, len, ent.radius, ent.outcolor);
+    }
+
+    private void doBeam(Vector3f start, Vector3f end, Vector3f up, float len, float spanWidth, Vector4f color) {
+        // soft particles disabled when no fbo or r_softparticles isn't true
+        boolean useSoftSprites = Ref.glRef.srgbBuffer != null && Ref.glRef.r_softparticles.isTrue();
+        CubeTexture tex = null; // depth
+
+        if(useSoftSprites) {
+            // use soft particle shader
+            Ref.glRef.PushShader(softSprite);
+            softSprite.setUniform("res", Ref.glRef.GetResolution());
+
+            // Bind depth from FBO
+            int depth = Ref.glRef.srgbBuffer.getDepthTextureId();
+            tex = new CubeTexture(Ref.glRef.srgbBuffer.getTarget(), depth, null);
+            tex.textureSlot = 1;
+            tex.loaded = true;
+            tex.Bind();
+        }
+
+        GL11.glDisable(GL11.GL_CULL_FACE);
+
+        GL11.glDepthMask(false); // dont write to depth
+        GL11.glBegin(GL11.GL_QUADS);
+        {
+            // Fancy pants shaders
+            Vector3f v = Helper.VectorMA(start, spanWidth, up, null);
+            GL20.glVertexAttrib2f(Shader.INDICE_COORDS, 1, 0);
+            Helper.col(color);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, v.x, v.y, v.z);
+
+            Helper.VectorMA(start, -spanWidth, up, v);
+            GL20.glVertexAttrib2f(Shader.INDICE_COORDS, 1, 1);
+            Helper.col(color);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, v.x, v.y, v.z);
+
+            
+
+            Helper.VectorMA(end, -spanWidth, up, v);
+            GL20.glVertexAttrib2f(Shader.INDICE_COORDS, 0, 1);
+            Helper.col(color);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, v.x, v.y, v.z);
+
+            Helper.VectorMA(end, spanWidth, up, v);
+            GL20.glVertexAttrib2f(Shader.INDICE_COORDS, 0, 0);
+            Helper.col(color);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, v.x, v.y, v.z);
+        }
+        GL11.glEnd();
+        GL11.glDepthMask(true);
+
+        GL11.glEnable(GL11.GL_CULL_FACE);
+
+        if(useSoftSprites) {
+            tex.Unbind();
+            Ref.glRef.PopShader();
+        }
     }
     
     private void renderModel(RenderEntity ent) {
@@ -67,20 +188,58 @@ public class Render {
 
         float frame = ent.oldframe * ent.backlerp + ent.frame * (1f-ent.backlerp);
         ent.model.animate(ent.frame, ent.oldframe, ent.backlerp);
-        ent.model.render(ent.origin, ent.axis, ent.color);
+        ent.model.render(ent.origin, ent.axis, ent.color, Ref.cgame.shadowMan.isRendering());
+    }
+
+    private void renderBBox(RenderEntity ent) {
+        Vector3f position = ent.origin;
+        Vector3f size = ent.oldOrigin;
+        GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glLineWidth(1f);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+        Helper.renderBBoxWireframe(position.x, position.y, position.z,
+                position.x+size.x, position.y+size.y, position.z+size.z);
+        
+            //cube.chunk.render.renderSingleWireframe(cube.x, cube.y, cube.z, CubeType.DIRT);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glEnable(GL11.GL_CULL_FACE);
     }
 
     private void renderSprite(RenderEntity ent) {
         // calculate the xyz locations for the four corners
         float radius = ent.radius;
-        Vector3f left = new Vector3f(Ref.cgame.cg.refdef.ViewAxis[1]);
+
+        Vector3f left = new Vector3f(), up = new Vector3f();
+        boolean useAxis = (ent.flags & RenderEntity.FLAG_SPRITE_AXIS) == RenderEntity.FLAG_SPRITE_AXIS;
+        if(useAxis) {
+            left.set(ent.axis[0]);
+            up.set(ent.axis[1]);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+        } else {
+            left.set(Ref.cgame.cg.refdef.ViewAxis[1]);
+            up.set(Ref.cgame.cg.refdef.ViewAxis[2]);
+        }
         left.scale(radius);
-        Vector3f up = new Vector3f(Ref.cgame.cg.refdef.ViewAxis[2]);
         up.scale(-radius);
 
-        if(ent.mat != null && ent.mat.getTexture() != null) ent.mat.getTexture().Bind();
-        else Ref.ResMan.getWhiteTexture().Bind();
-        AddQuadStamp(ent.origin, left, up, ent.outcolor);
+        if(ent.mat != null && ent.mat.getTexture() != null) {
+            // Grab texture offsets from material
+            ent.mat.getTexture().Bind();
+            Vector2f texSize = ent.mat.getTextureSize();
+            Vector2f texOffset = ent.mat.getTextureOffset(ent.frame);
+            AddQuadStampExt(ent.origin, left, up, ent.outcolor,
+                    texOffset.x, texOffset.y, texOffset.x + texSize.x, texOffset.y + texSize.y);
+        }
+        else {
+            Ref.ResMan.getWhiteTexture().Bind();
+            AddQuadStamp(ent.origin, left, up, ent.outcolor);
+        }
+        
+
+
+        if(useAxis) {
+            GL11.glEnable(GL11.GL_CULL_FACE);
+        }
     }
 
     private void AddQuadStamp(Vector3f origin, Vector3f left, Vector3f up, Vector4f color) {

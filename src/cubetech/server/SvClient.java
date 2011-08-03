@@ -229,25 +229,22 @@ public class SvClient {
     }
 
     void CheckTimeout(int droppoint, int zombiepoint) {
-        // message times may be wrong across a changelevel
-        if(lastPacketTime > Ref.server.time)
-            lastPacketTime = Ref.server.time;
-
         if(state == ClientState.ZOMBIE && lastPacketTime < zombiepoint) {
             // using the client id cause the cl->name is empty at this point
-            state = ClientState.FREE;
+            Common.LogDebug("Going from ZOMBIE to FREE for client");
+            state = ClientState.FREE; // can now be reused
             return;
         }
-
-        if(state != ClientState.FREE && state != ClientState.ZOMBIE && lastPacketTime < droppoint) {
+        if(state.ordinal() >= ClientState.CONNECTED.ordinal() && lastPacketTime < droppoint) {
             // wait several frames so a debugger session doesn't
             // cause a timeout
             if(++timeoutCount > 5) {
                 DropClient("timed out");
                 state = ClientState.FREE;
             }
-        } else
+        } else {
             timeoutCount = 0;
+        }
     }
 
     public void SendClientMessage() {
@@ -860,10 +857,16 @@ public class SvClient {
             if(downloadName.equals("@cube")) {
                 ClientSnapshot frame = frames[netchan.outgoingSequence & 31];
                 ClientPersistant pers = frame.ps.pers;
-                if(pers == null || pers.queuedChunkData.isEmpty()) return;
+                if(pers == null) return;
 
-                ByteBuffer buf = pers.queuedChunkData.poll();
-                pers.queuedBytes -= buf.limit();
+
+                // we can go about this far without fragmenting the client
+                int maxPacketSize = NetChan.FRAGMENT_SIZE-30;
+
+                int leftOver = maxPacketSize - msg.GetBuffer().position();
+
+                ByteBuffer buf = pers.dequeueChunkData(leftOver);
+                if(buf == null) return;
                 download = new NetBuffer(buf);
             }
             // Client is requesting the current map
@@ -1047,7 +1050,8 @@ public class SvClient {
     private void sendCubeFile() {
         ClientSnapshot frame = frames[netchan.outgoingSequence & 31];
         ClientPersistant pers = frame.ps.pers;
-        if(pers == null || pers.queuedChunkData.isEmpty()) return;
+        if(pers == null || pers.isQueueEmpty()) return;
+
 
 //        ByteBuffer buf = pers.queuedChunkData.poll();
 //        pers.queuedBytes -= buf.limit();

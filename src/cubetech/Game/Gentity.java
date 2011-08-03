@@ -73,6 +73,13 @@ public class Gentity {
     public String targetname = null;
     public Gentity parent;
 
+    // rockets, nades
+    public int damage;
+    public int splashDamage;
+    public int splashRadius;
+    public MeansOfDeath meansOfDeath;
+    public MeansOfDeath splashMeansOfDeath;
+
 
     public void Clear() {
         
@@ -81,6 +88,9 @@ public class Gentity {
 
         inuse = false;
         eventTime = 0;
+        damage = 0;
+        splashDamage = 0;
+        splashRadius = 0;
         freeAfterEvent = false;
         unlinkAfterEvent = false;
         physicsObject = false;

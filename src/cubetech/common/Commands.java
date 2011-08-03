@@ -49,6 +49,11 @@ public final class Commands {
                 Ref.common.Error(Common.ErrorCode.FATAL, str);
             }
         });
+        AddCommand("gc", new ICommand() {
+            public void RunCommand(String[] args) {
+                System.gc();
+            }
+        });
 
         AddCommand("alias", new ICommand() {
             public void RunCommand(String[] args) {

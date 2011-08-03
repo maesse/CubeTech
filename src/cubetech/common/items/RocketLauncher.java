@@ -14,10 +14,12 @@ import cubetech.Game.GameClient;
 import cubetech.Game.Gentity;
 import cubetech.common.Content;
 import cubetech.common.Helper;
+import cubetech.common.MeansOfDeath;
 import cubetech.common.Trajectory;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
 import cubetech.entities.Missiles;
+import cubetech.gfx.CubeMaterial;
 import cubetech.misc.Ref;
 import cubetech.server.SvFlags;
 import org.lwjgl.util.vector.Vector3f;
@@ -31,15 +33,19 @@ public class RocketLauncher extends WeaponItem {
     public RocketLauncher() {
         wi.missileModel = Ref.ResMan.loadModel("data/rocket.iqm");
         wi.missileTrailFunc = missileTrailFunc;
+        wi.viewModel = Ref.ResMan.loadModel("data/rocket_vmodel.iqm");
+        wi.fireSound = "data/TF2RL_Fire.wav";
+        wi.missileSound = "data/TF2RL_Loop.wav";
+        wi.trailRadius = 16f;
+        wi.trailTime = 1500f;
     }
 
     IMethodCentity missileTrailFunc = new IMethodCentity() {
         public void run(CEntity ent) {
             EntityState es = ent.currentState;
             int startTime = ent.trailTime;
-            int step = 50;
+            int step = 10;
             int t = step * ((startTime + step) / step);
-
 
             Vector3f origin = es.pos.Evaluate(Ref.cgame.cg.time);
             if(es.pos.type == Trajectory.STATIONARY) {
@@ -52,14 +58,23 @@ public class RocketLauncher extends WeaponItem {
 
             Vector3f dir = new Vector3f(es.pos.delta);
             dir.normalise();
-
+            Vector3f rndOffset = new Vector3f();
+            CubeMaterial mat = Ref.ResMan.LoadTexture("data/smokepuff.png").asMaterial();
             for (;t <= ent.trailTime; t += step) {
                 es.pos.Evaluate(t, lastPos);
-                Helper.VectorMA(lastPos, -14f, dir, lastPos);
-                LocalEntity le = LocalEntity.smokePuff(lastPos, null, 64, 1, 1, 1, 0.33f, 2000, t, 0, 0, Ref.ResMan.LoadTexture("data/smokepuff.png").asMaterial());
-                // use the optimized local entity add
-                le.Type = LocalEntity.TYPE_SCALE_FADE;
-                
+                Helper.VectorMA(lastPos, -16f, dir, lastPos);
+                rndOffset.set(Ref.rnd.nextFloat()-0.5f,Ref.rnd.nextFloat()-0.5f,Ref.rnd.nextFloat()-0.5f);
+                rndOffset.scale(4f);
+                Vector3f.add(rndOffset, lastPos, rndOffset);
+                float colorRnd = (Ref.rnd.nextFloat()-0.5f)*0.3f;
+                float colorRnd2 = (Ref.rnd.nextFloat()-0.5f)*0.2f;
+                LocalEntity le = LocalEntity.colorFadedSmokePuff(rndOffset, null, wi.trailRadius,
+                        0.8f+colorRnd2, 0.4f+colorRnd2, 0.2f+colorRnd2, 0.4f,
+                        wi.trailTime, t, 0, mat, 
+                        0.6f+colorRnd, 0.6f+colorRnd, 0.6f+colorRnd, 0.4f, 0.2f);
+//                LocalEntity le = LocalEntity.smokePuff(rndOffset, null, wi.trailRadius,
+//                        0.6f+colorRnd, 0.6f+colorRnd, 0.6f+colorRnd, 0.6f,
+//                        wi.trailTime, t, 0, 0, );
             }
         }
     };
@@ -78,6 +93,15 @@ public class RocketLauncher extends WeaponItem {
     public Gentity fireWeapon(GameClient gc) {
         Vector3f dir = gc.getForwardVector();
         Vector3f start = getMuzzlePoint(gc);
+        // Add rocketlauncher offset
+        // extent along forward vector
+        Vector3f forward = new Vector3f();
+        Vector3f right = new Vector3f();
+        Vector3f up = new Vector3f();
+        Helper.AngleVectors(gc.ps.viewangles, forward, right, up);
+        Helper.VectorMA(start, 14f, forward, start);
+        Helper.VectorMA(start, 7f, right, start);
+        Helper.VectorMA(start, -4f, up, start);
 
         dir.normalise();
 
@@ -90,13 +114,17 @@ public class RocketLauncher extends WeaponItem {
         r.s.weapon = getWeapon();
         r.r.ownernum = gc.s.ClientNum;
         r.parent = gc;
+        r.splashDamage = 100;
+        r.splashRadius = 130;
+        r.meansOfDeath = MeansOfDeath.ROCKET;
+        r.splashMeansOfDeath = MeansOfDeath.ROCKET_SPLASH;
+        r.damage = 100;
         r.ClipMask = Content.MASK_SHOT;
-
         r.s.pos.type = Trajectory.LINEAR;
-        r.s.pos.time = g.level.time - 50; // move a bit on first frame
+        r.s.pos.time = g.level.time - 10; // move a bit on first frame
         r.s.pos.base.set(start);
         r.s.pos.delta.set(dir);
-        r.s.pos.delta.scale(800);
+        r.s.pos.delta.scale(600);
         r.r.currentOrigin.set(start);
 
         return r;
@@ -139,6 +167,11 @@ public class RocketLauncher extends WeaponItem {
     @Override
     public int getAltFireTime() {
         return 0; // doesn't do anything
+    }
+
+    @Override
+    public void renderClientEffects() {
+        
     }
 
 

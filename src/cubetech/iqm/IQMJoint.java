@@ -14,7 +14,7 @@ import org.lwjgl.util.vector.Vector3f;
 public class IQMJoint {
     String name;
     int parent; // parent < 0 means this is a root bone
-    float[] translate = new float[3], rotate = new float[3], scale = new float[3];
+    float[] translate = new float[3], rotate = new float[4], scale = new float[3];
     Matrix4f baseframe;
     Matrix4f invbaseframe;
     Matrix3x4 mm;
@@ -49,14 +49,15 @@ public class IQMJoint {
             j.rotate[0] = buffer.getFloat();
             j.rotate[1] = buffer.getFloat();
             j.rotate[2] = buffer.getFloat();
+            j.rotate[3] = buffer.getFloat();
             j.scale[0] = buffer.getFloat();
             j.scale[1] = buffer.getFloat();
             j.scale[2] = buffer.getFloat();
 
             model.joints[i] = j;
-
-            Quaternion q = new Quaternion(j.rotate[0], j.rotate[1], j.rotate[2],
-                    -(float)Math.sqrt(Math.max(1 - (j.rotate[0]*j.rotate[0] + j.rotate[1]*j.rotate[1] + j.rotate[2]*j.rotate[2]), 0)));
+            
+            Quaternion q = new Quaternion(j.rotate[0], j.rotate[1], j.rotate[2], j.rotate[3]);
+            q.normalise();
             Matrix3x4 mm = new Matrix3x4(q, new Vector3f(j.scale[0], j.scale[1], j.scale[2]), new Vector3f(j.translate[0], j.translate[1], j.translate[2]));
             j.mm = mm;
             Matrix4f m = new Matrix4f();

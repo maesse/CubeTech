@@ -51,6 +51,15 @@ public class ClientConnect {
     boolean downloadRestart = false; //
     public NetBuffer mapdata = null;
 
+    // Demo stuff
+    int timeDemoFrames;
+    int timeDemoStart;
+    int timeDemoBaseTime;
+    int timeDemoLastFrame;
+    int timeDemoMinDuration;
+    int timeDemoMaxDuration;
+    
+
     public ClientConnect() {
         
     }
