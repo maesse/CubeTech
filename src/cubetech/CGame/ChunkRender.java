@@ -1,5 +1,10 @@
 package cubetech.CGame;
 
+import com.bulletphysics.collision.dispatch.CollisionFlags;
+import com.bulletphysics.collision.shapes.BvhTriangleMeshShape;
+import com.bulletphysics.collision.shapes.TriangleIndexVertexArray;
+import com.bulletphysics.dynamics.RigidBody;
+import com.bulletphysics.linearmath.Transform;
 import cubetech.collision.CubeChunk;
 import cubetech.collision.CubeMap;
 import cubetech.common.Common;
@@ -16,7 +21,9 @@ import cubetech.misc.Profiler.Sec;
 import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
 import java.nio.BufferOverflowException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.lwjgl.BufferUtils;
@@ -28,7 +35,7 @@ import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Vector4f;
 
 /**
- *
+ * On the client side, a ChunkRender is piggybacked onto each chunk.
  * @author mads
  */
 public class ChunkRender {
@@ -51,7 +58,10 @@ public class ChunkRender {
     private int[] chunkDelta = new int[3];
 
     public int sidesRendered; // set by fillbuffer
-    private int Bufferindex = -1;
+
+    // Physics data
+    //TriangleIndexVertexArray triangles;
+    BvhTriangleMeshShape shape;
 
     public ChunkRender(CubeChunk chunk) {
         this.chunk = chunk;
@@ -62,6 +72,60 @@ public class ChunkRender {
         if(vbo == null) return;
         vbo.destroy();
         vbo = null;
+    }
+
+    private void extractPhysicsMesh(ByteBuffer data) {
+        if(shape != null) return;
+        if(data.limit() == 0) return;
+        int size = data.limit();
+        int nVerts = (size / 32);
+        int nTriangles = (nVerts / 4) * 2;
+
+        if(nVerts / 4 != sidesRendered) {
+            int derp = 2;
+        }
+
+        ByteBuffer vertexBuffer = ByteBuffer.allocateDirect(nVerts * 3 * 4).order(ByteOrder.nativeOrder());
+        ByteBuffer indexBuffer = ByteBuffer.allocateDirect(nTriangles * 3 * 4).order(ByteOrder.nativeOrder());
+
+        try {
+            // Gotta get them points
+            for (int i= 0; i < nVerts; i++) {
+                data.position(i * 32); // seek to position
+
+                // copy 12 bytes
+                for (int j= 0; j < 3*4; j++) {
+                    vertexBuffer.put(data.get());
+                }
+            }
+        } catch (BufferUnderflowException ex) {
+            int derpah = 2;
+        }
+        vertexBuffer.flip();
+
+        // For each quad...
+        for (int i= 0; i < nVerts / 4 ; i++) {
+            // ... build the indices for it
+            indexBuffer.putInt(4 * i);
+            indexBuffer.putInt(4 * i + 1);
+            indexBuffer.putInt(4 * i + 2);
+            indexBuffer.putInt(4 * i + 2);
+            indexBuffer.putInt(4 * i + 1);
+            indexBuffer.putInt(4 * i + 3);
+        }
+        indexBuffer.flip();
+
+        TriangleIndexVertexArray indexVertexArray = new TriangleIndexVertexArray(nTriangles, indexBuffer, 12, nVerts, vertexBuffer, 12);
+
+
+
+        // todo: supply aabb mins/maxs instead of letting BvhTriangle calculate it..
+        // todo: delete shape if not null
+        shape = new BvhTriangleMeshShape(indexVertexArray, true);
+        Transform nullTransform = new Transform();
+        nullTransform.setIdentity();
+        RigidBody body = Ref.cgame.physics.localCreateRigidBody(0f, nullTransform, shape);
+        body.setCollisionFlags(body.getCollisionFlags() | CollisionFlags.STATIC_OBJECT);
     }
 
     public void Render() {
@@ -104,7 +168,7 @@ public class ChunkRender {
             }
     }
 
-    private void markVisible() {
+    public void markVisible() {
         // We're not dirty
         if(!dirty && !lazyDirty)
             return;
@@ -136,10 +200,10 @@ public class ChunkRender {
                 boolean exitSleep = false;
                 int nWait = 0;
 //                Common.LogDebug("[Builder] Trying to grab a buffer..");
-                while(!exitSleep && !Ref.cgame.map.bufferAvailable() && nWait < 500 && !Ref.cgame.map.canGrabOld()) {
+                while(!exitSleep && !Ref.cgame.map.bufferAvailable() && nWait < 500) {
                     try {
                         Thread.sleep(100);
-                        //Common.LogDebug("[Builder] Waiting for buffer...");
+                        Common.LogDebug("[Builder] Waiting for buffer...");
                         nWait++;
                     } catch (InterruptedException ex) {
                         exitSleep = true;
@@ -147,7 +211,8 @@ public class ChunkRender {
                     }
 
                 }
-                ByteBuffer data = Ref.cgame.map.grabBuffer();
+                long chunkid = CubeMap.positionToLookup(chunk.p[0], chunk.p[1], chunk.p[2]);
+                ByteBuffer data = Ref.cgame.map.grabBuffer(chunkid);
                 if(data == null) {
                     // Couldn't get a buffer..
                     Common.LogDebug("[Builder] Couldn't get a buffer");
@@ -155,18 +220,15 @@ public class ChunkRender {
                     return;
                 }
                 
-                Bufferindex = Ref.cgame.map.currentWrite;
 //                Common.LogDebug("[Builder] Writing to buffer (%d)", Bufferindex);
-                data.clear();
                 fillBuffer(data);
                 data.flip();
-                if(data.limit() > PLANE_SIZE * sidesRendered) {
+                if(data.limit() != PLANE_SIZE * sidesRendered) {
                     int test = 2;
                 }
                 if(data.limit() == 0) {
 //                    Common.LogDebug("[Builder] Dropping 0len data (%d)", Bufferindex);
-                    Ref.cgame.map.releaseBuffer(Bufferindex);
-                    Bufferindex = -1;
+                    Ref.cgame.map.releaseBuffer(chunkid);
                 }
                 bufferReady = true;
             } catch(BufferOverflowException ex) {
@@ -192,20 +254,16 @@ public class ChunkRender {
 
         SecTag s = Profiler.EnterSection(Sec.CLIENTCUBES);
 
+        long chunkid = CubeMap.positionToLookup(chunk.p[0], chunk.p[1], chunk.p[2]);
         if(sidesRendered == 0) {
             bufferReady = false; // untag buffer
-            if(Bufferindex != -1) {
 //                Common.LogDebug("[CR] Releasing 0side buffer");
-                Ref.cgame.map.releaseBuffer(Bufferindex);
-                Bufferindex = -1;
-            } else {
-//                Common.LogDebug("[CR] 0side buffer released by builder for us");
-            }
+            Ref.cgame.map.releaseBuffer(chunkid);
             return true; // clear dirty
         }
 
         // Check if we still have the source buffer
-        ByteBuffer src = Ref.cgame.map.getBuffer(Bufferindex);
+        ByteBuffer src = Ref.cgame.map.getBuffer(chunkid);
         if(src == null || src.limit() == 0) {
 //            Common.LogDebug("[CR] ByteBuffer data fell out of the circular buffer (%d)0",Bufferindex);
             // We fell out of the queue :/
@@ -243,14 +301,15 @@ public class ChunkRender {
         
         vbo.unmap();
 
+        extractPhysicsMesh(src);
+
         // Clear state
         vboReady = true;
         bufferReady = false;
 
         // Release source buffer
 //        Common.LogDebug("[CR] Releasing buffer");
-        Ref.cgame.map.releaseBuffer(Bufferindex);
-        Bufferindex = -1;
+        Ref.cgame.map.releaseBuffer(chunkid);
         
         long endTime = System.nanoTime();
         float ms = (endTime - startTime)/(1000F*1000F);

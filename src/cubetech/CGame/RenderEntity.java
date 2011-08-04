@@ -66,6 +66,7 @@ public class RenderEntity {
         flags = 0;
         mat = null;
         Type = null;
+        verts = null;
     }
 
     

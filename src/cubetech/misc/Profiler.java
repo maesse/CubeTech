@@ -15,7 +15,7 @@ public class Profiler {
         TEXMAN,
         SHADOWS,
         CLIENTCUBES
-    }
+    ,   PHYSICS}
 
     private static long[] timeTable = new long[Sec.values().length];
     private static float[] msTable = new float[Sec.values().length];
@@ -53,6 +53,7 @@ public class Profiler {
         
         msTable[Sec.CLIENT.ordinal()] -= msTable[Sec.RENDER.ordinal()];
         msTable[Sec.CLIENT.ordinal()] -= msTable[Sec.SHADOWS.ordinal()];
+        msTable[Sec.CLIENT.ordinal()] -= msTable[Sec.PHYSICS.ordinal()];
         msTable[Sec.RENDER.ordinal()] -= msTable[Sec.RENDERWAIT.ordinal()];
     }
 

@@ -5,11 +5,14 @@
 
 package cubetech.CGame;
 
+import com.bulletphysics.linearmath.MotionState;
+import com.bulletphysics.linearmath.Transform;
 import cubetech.common.Common.ErrorCode;
 import cubetech.misc.Ref;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Queue;
+
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
@@ -84,6 +87,9 @@ public class LocalEntities {
                 case LocalEntity.TYPE_FADE:
                     addFade(le);
                     break;
+                case LocalEntity.TYPE_PHYSICSOBJECT:
+                    addPhysics(le);
+                    break;
                 default:
                     Ref.common.Error(ErrorCode.DROP, "Bad LocalEntity type " + le.Type);
                     break;
@@ -98,6 +104,33 @@ public class LocalEntities {
             }
         }
         allowFree = true;
+    }
+
+    private static void addPhysics(LocalEntity le) {
+        MotionState m = le.phys_motionState;
+        Transform t = new Transform();
+        m.getWorldTransform(t);
+        RenderEntity ent = le.rEntity;
+        ent.origin.set(t.origin.x, t.origin.y, t.origin.z);
+        ent.color.set(1,1,1,1);
+
+        int activationState = le.phys_body.getActivationState();
+        
+        switch(activationState) {
+            case 1: // active
+                ent.color.set(1,0,0,1);
+                break;
+            case 2:
+                ent.color.set(1,1,0,1);
+                break;
+            default:
+                ent.color.set(0,0,1,1);
+        }
+
+        ent.outcolor.set(ent.color);
+        ent.outcolor.scale(255);
+
+        Ref.render.addRefEntity(ent);
     }
 
     private static void addScaleFadeColor(LocalEntity le) {

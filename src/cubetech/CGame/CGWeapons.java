@@ -56,6 +56,8 @@ public class CGWeapons {
                 dir = new Vector3f(0,0,1);
 
                 Ref.cgame.marks.impactMark(origin, dir, radius*0.5f, false, Ref.ResMan.LoadTexture("data/explosionmark.png"));
+                
+                Ref.cgame.physics.explosionImpulse(origin, radius, radius, true);
                 break;
         }
     }

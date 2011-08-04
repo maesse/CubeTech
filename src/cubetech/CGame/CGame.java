@@ -66,6 +66,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
     SkyBox skyBox = new SkyBox("data/sky");
     public ShadowManager shadowMan = new ShadowManager();
+    public CGPhysics physics = new CGPhysics();
     
     /**
     *=================
@@ -101,6 +102,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         commands.put("nextframe", cg.cg_testmodelNextFrame_f);
         commands.put("prevframe", cg.cg_testmodelPrevFrame_f);
         commands.put("weapon", CGameState.cg_SwitchWeapon_f);
+        commands.put("firebox", physics.firebox);
 
         cg.loading = true; // Dont defer now
 
@@ -199,17 +201,25 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             GL11.glLoadMatrix(Ref.glRef.matrixBuffer);
             Ref.glRef.matrixBuffer.clear();
         }
+
+        SecTag s = Profiler.EnterSection(Sec.PHYSICS);
+        physics.stepPhysics();
+        s.ExitSection();
         
-        SecTag s = Profiler.EnterSection(Sec.RENDER);
+        s = Profiler.EnterSection(Sec.RENDER);
 
         if(map != null) {
             skyBox.Render(cg.refdef);
             map.Render(cg.refdef);
         }
+
+        
          
         
         cgr.renderViewModel(cg.predictedPlayerState);
         marks.addMarks();
+
+        physics.renderBodies();
         
         //cgr.RenderScene(cg.refdef);
 

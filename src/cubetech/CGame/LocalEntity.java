@@ -1,5 +1,10 @@
 package cubetech.CGame;
 
+import com.bulletphysics.collision.shapes.CollisionShape;
+import com.bulletphysics.dynamics.RigidBody;
+import com.bulletphysics.linearmath.DefaultMotionState;
+import com.bulletphysics.linearmath.MotionState;
+import com.bulletphysics.linearmath.Transform;
 import cubetech.common.Helper;
 import cubetech.common.Trajectory;
 import cubetech.gfx.CubeMaterial;
@@ -20,8 +25,10 @@ public class LocalEntity {
     public static final int TYPE_SCALE_FADE_MOVE = 2;
     public static final int TYPE_FADE = 3;
     public static final int TYPE_SCALE_DOUBLE_MOVE = 4;
+    public static final int TYPE_PHYSICSOBJECT = 5;
     // flags
     public static final int FLAG_DONT_SCALE = 1;
+
 
 
     public int Type;
@@ -47,12 +54,19 @@ public class LocalEntity {
 
     boolean freeMe = false;
 
+    public MotionState phys_motionState;
+    public RigidBody phys_body;
+
     public void free() {
         freeMe = true;
         LocalEntities.free(this);
     }
 
     void clear() {
+        if(Type == TYPE_PHYSICSOBJECT && phys_body != null) {
+            // remove physics object from world
+            Ref.cgame.physics.deleteBody(phys_body);
+        }
         Type = -1;
         Flags = 0;
         startTime = 0;
@@ -66,6 +80,31 @@ public class LocalEntity {
         radius = 0;
         freeMe = false;
         rEntity = null;
+        phys_motionState = null;
+        phys_body = null;
+    }
+
+    public static LocalEntity physicsBox(Vector3f origin, int starttime, int duration, CubeMaterial mat, CollisionShape boxShape) {
+        LocalEntity le = LocalEntities.allocate();
+        le.Type = LocalEntity.TYPE_PHYSICSOBJECT;
+        le.startTime = starttime;
+        le.endTime = starttime + duration;
+        le.rEntity = new RenderEntity(REType.SPRITE);
+        le.rEntity.radius = 10;
+        le.rEntity.mat = mat;
+        le.rEntity.outcolor.set(255,255,255,255);
+
+        le.pos.base.set(origin);
+
+        Transform t = new Transform();
+        t.setIdentity();
+        t.origin.set(origin.x, origin.y, origin.z);
+        le.phys_motionState = new DefaultMotionState(t);
+
+        le.phys_body = Ref.cgame.physics.localCreateRigidBody(10f, le.phys_motionState, boxShape);
+        le.phys_body.setCcdMotionThreshold(2f);
+        le.phys_body.setCcdSweptSphereRadius(0.2f);
+        return le;
     }
 
     // stretches out along dir

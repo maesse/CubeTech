@@ -1,23 +1,10 @@
 package cubetech.collision;
 
-import com.bulletphysics.collision.broadphase.BroadphaseInterface;
-import com.bulletphysics.collision.broadphase.DbvtBroadphase;
-import com.bulletphysics.collision.dispatch.CollisionConfiguration;
-import com.bulletphysics.collision.dispatch.CollisionDispatcher;
-import com.bulletphysics.collision.dispatch.DefaultCollisionConfiguration;
-import com.bulletphysics.collision.shapes.BoxShape;
-import com.bulletphysics.dynamics.DiscreteDynamicsWorld;
-import com.bulletphysics.dynamics.RigidBody;
-import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
-import com.bulletphysics.dynamics.constraintsolver.SequentialImpulseConstraintSolver;
-import com.bulletphysics.linearmath.DefaultMotionState;
-import com.bulletphysics.linearmath.Transform;
 import cubetech.CGame.ChunkRender;
 import cubetech.CGame.ViewParams;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.gfx.CubeTexture;
-import cubetech.gfx.CubeType;
 import cubetech.gfx.FrameBuffer;
 import cubetech.gfx.GLRef;
 import cubetech.gfx.Shader;
@@ -30,10 +17,6 @@ import java.nio.channels.FileChannel;
 import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.zip.DataFormatException;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
@@ -54,28 +37,28 @@ public class ClientCubeMap {
     public int nSides = 0; // sides rendered this frame
     public int nChunks = 0;
 
-    // temp
-    private Vector3f tempStart = new Vector3f();
-    private Vector3f tempEnd = new Vector3f();
 
     public FrameBuffer derp;
     CubeTexture depthTex = null;
 
     Shader shader = null;
     Shader shadowShader = null;
+
     public ExecutorService exec = Executors.newSingleThreadExecutor();
-    public ByteBuffer[] buildBuffer = new ByteBuffer[8];
-    public int[] bufferRelations = new int[buildBuffer.length];
-    public int[] lastTouched = new int[buildBuffer.length];
-    public boolean[] lockedBuffers = new boolean[buildBuffer.length];
+
+    private static final int NUM_BUILDBUFFERS = 8;
+    
+    private int freeBuffers = NUM_BUILDBUFFERS;
+    public ByteBuffer[] buildBuffer = new ByteBuffer[NUM_BUILDBUFFERS];
+    public long[] bufferRelations = new long[NUM_BUILDBUFFERS];
+    public boolean[] bufferLocked = new boolean[NUM_BUILDBUFFERS];
     public final Object bufferLock = new Object();
+    private static final long NO_CHUNK = Long.MIN_VALUE;
+
     public int currentWrite = 0;
     public int currentRead = 0;
-    private static final int SANE_QUEUE = 20;
 
     public int nVBOthisFrame = 0; // vbo's updated this frame
-
-    public DiscreteDynamicsWorld world;
 
     public void dispose() {
         exec.shutdownNow();
@@ -94,106 +77,74 @@ public class ClientCubeMap {
     //
     public boolean bufferAvailable() {
         synchronized(bufferLock) {
-            for (int i= 0; i < lastTouched.length; i++) {
-                if(bufferRelations[i] == 0) return true;
-            }
-            
+            return freeBuffers > 0;
         }
-        return false;
-//        return freeBuffers > 0 || currentWrite - currentRead > SANE_QUEUE;
-        //return currentWrite - currentRead < buildBuffer.length;// || currentWrite - currentRead > SANE_QUEUE;
     }
 
-    public boolean canGrabOld() {
-        synchronized(bufferLock) {
-            int last = lastTouched[0];
-            int lasti = 0;
-            for (int i= 0; i < lastTouched.length; i++) {
-                if(lastTouched[i] < last)  {
-                    last = lastTouched[i];
-                    lasti = i;
+    public void markLockedChunks() {
+        //synchronized(bufferLock) {
+            for (int i= 0; i < NUM_BUILDBUFFERS; i++) {
+                if(bufferLocked[i]) {
+                    long chunkid = bufferRelations[i];
+
+                    if(chunkid == NO_CHUNK) {
+                        Ref.common.Error(ErrorCode.FATAL, "Invalid locked chunk");
+                    }
+
+                    CubeChunk c = chunks.get(chunkid);
+                    c.render.markVisible();
                 }
             }
-            if(Ref.common.frametime > last + grabTimeout) {
-                return true;
-            }
-        }
-        return false;
+        //}
     }
 
-    private int grabTimeout = 400;
-    private int freeBuffers = buildBuffer.length;
-    private int oldestGrab = Ref.common.frametime;
-
-    public ByteBuffer grabBuffer() {
-        
-        // Find oldest
-        int lowest = Integer.MAX_VALUE;
-        int lowestI = -1;
-
-        int last = lastTouched[0];
-        int lasti = 0;
-        
-        freeBuffers = 0;
+    public ByteBuffer grabBuffer(long chunkid) {
         synchronized(bufferLock) {
-            for (int i= 0; i < lastTouched.length; i++) {
-                if(bufferRelations[i] == 0) {
-                    freeBuffers++;
-                    
-                }
-                
-                if(lastTouched[i] < last)  {
-                    last = lastTouched[i];
-                    lasti = i;
+            if(freeBuffers <= 0) return null;
+
+            for (int i= 0; i < NUM_BUILDBUFFERS; i++) {
+                // Grab the first unlocked buffer
+                if(!bufferLocked[i]) {
+                    // remember owner chunk
+                    bufferRelations[i] = chunkid;
+                    // decrement free buffer counter
+                    freeBuffers--;
+                    // lock this buffer
+                    bufferLocked[i] = true;
+                    buildBuffer[i].clear();
+                    return buildBuffer[i];
                 }
             }
+
+            Ref.common.Error(ErrorCode.FATAL, "freebuffers > 0, but all are locked");
+            return null;
         }
-
-
-        if(lowestI == -1) {
-            if(Ref.common.frametime < last + grabTimeout) {
-                return null; // All buffers are locked
-            }
-            lowestI = lasti;
-        } 
-        freeBuffers--;
-        
-        // Take it
-        currentWrite++;
-        bufferRelations[lowestI] = currentWrite;
-        lastTouched[lowestI] = Ref.common.frametime;
-        return buildBuffer[lowestI];
     }
 
-    public ByteBuffer getBuffer(int index) {
+    // See if we can read from this buffer
+    public ByteBuffer getBuffer(long chunkId) {
         synchronized(bufferLock) {
-        for (int i= 0; i < bufferRelations.length; i++) {
-            if(bufferRelations[i] == index) {
-                
-                    lockedBuffers[i] = true;
-                
-                return buildBuffer[i];
+            for (int i= 0; i < NUM_BUILDBUFFERS; i++) {
+                if(bufferRelations[i] == chunkId && bufferLocked[i]) {
+                    return buildBuffer[i];
+                }
             }
-        }
         }
         return null;
     }
 
-    public void releaseBuffer(int index) {
+    public void releaseBuffer(long chunkid) {
         synchronized(bufferLock) {
-        for (int i= 0; i < bufferRelations.length; i++) {
-            if(bufferRelations[i] == index) {
-                bufferRelations[i] = 0; // make it lowest
-                lastTouched[i] = 0;
-                
-                    lockedBuffers[i] = false;
-                
-                freeBuffers++;
-                break;
+            for (int i= 0; i < NUM_BUILDBUFFERS; i++) {
+                if(bufferRelations[i] == chunkid && bufferLocked[i]) {
+                    // unlock buffer
+                    bufferRelations[i] = NO_CHUNK;
+                    bufferLocked[i] = false;
+                    freeBuffers++;
+                    break;
+                }
             }
-        }}
-        
-        if(currentRead < index) currentRead = index;
+        }
     }
 
     public ClientCubeMap() {
@@ -204,56 +155,37 @@ public class ClientCubeMap {
         shader.mapTextureUniform("tex", 0);
         shader.validate();
         buildLight();
-
-        initPhysics();
-    }
-
-
-    private BoxShape boxShape;
-    private void initPhysics() {
-        // Initalized the bullet physics world
-        CollisionConfiguration collConfig = new DefaultCollisionConfiguration();
-        CollisionDispatcher dispatch = new CollisionDispatcher(collConfig);
-        BroadphaseInterface broadphase = new DbvtBroadphase();
-        SequentialImpulseConstraintSolver solver = new SequentialImpulseConstraintSolver();
-
-        world = new DiscreteDynamicsWorld(dispatch, broadphase, solver, collConfig);
-        float grav = -Ref.cvars.Find("sv_gravity").iValue;
-        world.setGravity(new javax.vecmath.Vector3f(0, 0, grav));
-
-        float boxHalfSize = CubeChunk.BLOCK_SIZE/2;
-        boxShape = new BoxShape(new javax.vecmath.Vector3f(boxHalfSize, boxHalfSize, boxHalfSize));
-        
-        
     }
 
     public void changedBlock(CubeChunk c, int x, int y, int z, byte type) {
         // Update Bullet physics
-        boolean removed = type == CubeType.EMPTY;
-
-        if(removed) {
-            // TODO
-            return;
-        }
-
-        // Create a transform
-        Transform boxTransform = new Transform();
-        boxTransform.setIdentity();
-
-        // Set origin to center of the block
-        int cx = c.p[0] + x * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
-        int cy = c.p[1] + y * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
-        int cz = c.p[2] + z * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
-        boxTransform.origin.set(cx, cy, cz);
-
-        // Create the body
-        DefaultMotionState motionState = new DefaultMotionState(boxTransform);
-        RigidBodyConstructionInfo rbInfo = new RigidBodyConstructionInfo(0, motionState, boxShape);
-        RigidBody body = new RigidBody(rbInfo);
-
-        // Add it to the world
-        world.addRigidBody(body);
+//        boolean removed = type == CubeType.EMPTY;
+//
+//        if(removed) {
+//            // TODO
+//            return;
+//        }
+//
+//        // Create a transform
+//        Transform boxTransform = new Transform();
+//        boxTransform.setIdentity();
+//
+//        // Set origin to center of the block
+//        int cx = c.p[0] + x * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
+//        int cy = c.p[1] + y * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
+//        int cz = c.p[2] + z * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
+//        boxTransform.origin.set(cx, cy, cz);
+//
+//        // Create the body
+//        DefaultMotionState motionState = new DefaultMotionState(boxTransform);
+//        RigidBodyConstructionInfo rbInfo = new RigidBodyConstructionInfo(0, motionState, boxShape);
+//        RigidBody body = new RigidBody(rbInfo);
+//
+//        // Add it to the world
+//        world.addRigidBody(body);
     }
+
+    
 
     public void unserialize(ByteBuffer buf) {
         long count = buf.getLong();
@@ -339,6 +271,10 @@ public class ClientCubeMap {
     }
 
     private void renderFromOrigin(int orgX, int orgY, int orgZ, int chunkDistance, boolean enqueue, Plane[] frustum) {
+        if(enqueue) {
+            markLockedChunks();
+        }
+
         nVBOthisFrame = 0;
         // Render chunks
         for (int z= -chunkDistance; z <= chunkDistance; z++) {
@@ -372,6 +308,9 @@ public class ClientCubeMap {
         }
     }
 
+    
+    
+
     public void Render(ViewParams view) {
         if(Ref.cgame.cg.time - 1000 > lastRefresh) {
             chunkPerSecond = nChunkUpdates;
@@ -379,9 +318,11 @@ public class ClientCubeMap {
             lastRefresh = Ref.cgame.cg.time;
         }
 
+
         // Set shader
         CubeTexture depth = null;
-        if(!Ref.cgame.shadowMan.isRendering()) {
+        boolean shadowPass = Ref.cgame.shadowMan.isRendering();
+        if(!shadowPass) {
             if(shadowShader == null) {
                 shadowShader = Ref.glRef.getShader("WorldFogShadow");
                 shadowShader.mapTextureUniform("tex", 0);
@@ -434,7 +375,7 @@ public class ClientCubeMap {
         int orgY =  (int)Math.floor (view.Origin.y / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
         int orgZ =  (int)Math.floor (view.Origin.z / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
 
-        renderFromOrigin(orgX, orgY, orgZ, chunkDistance, true, view.planes);
+        renderFromOrigin(orgX, orgY, orgZ, chunkDistance, !shadowPass, view.planes);
 
         if(!Ref.cgame.shadowMan.isRendering()) {
             depth.Unbind();

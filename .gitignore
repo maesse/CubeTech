@@ -5,6 +5,7 @@ logs/
 nbproject/private/
 build/
 dist/
+demos/
 *.log
 *.lock
 *.DS_Store
