@@ -803,9 +803,14 @@ public class Server implements ITrace {
 
         Vector3f.sub(end, start, delta);
         // clip to world
-        CollisionResult worldResult = Ref.collision.traceCubeMap(start, delta, mins, maxs, true);
-        if(worldResult.frac == 0.0f)
-            return worldResult; // Blocked instantl by world
+        CollisionResult worldResult;
+        if((tracemask & Content.SOLID) == Content.SOLID) {
+            worldResult = Ref.collision.traceCubeMap(start, delta, mins, maxs, true);
+            if(worldResult.frac == 0.0f) return worldResult; // Blocked instantl by world
+        } else {
+            worldResult = Ref.collision.GetNext();
+            worldResult.reset(start, delta, maxs);
+        }
 
         // create the bounding box of the entire move
         float padding = 0.1f;

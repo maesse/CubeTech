@@ -781,5 +781,13 @@ public class IQMModel {
             glEnable(GL_DEPTH_TEST);
         }
     }
+
+    public Vector3f getMins() {
+        return min;
+    }
+
+    public Vector3f getMaxs() {
+        return max;
+    }
    
 }

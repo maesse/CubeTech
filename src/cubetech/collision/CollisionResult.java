@@ -33,7 +33,7 @@ public class CollisionResult {
         hitAxis.set(0,0);
     }
 
-    void reset(Vector3f start, Vector3f delta, Vector3f extent) {
+    public void reset(Vector3f start, Vector3f delta, Vector3f extent) {
         hit = false;
         frac = 1;
         hitmask = 0;

@@ -45,19 +45,14 @@ public class IQMLoader {
         Vector3f max = new Vector3f(-Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE);
         for (IQMMesh iQMMesh : model.meshes) {
             if(!iQMMesh.name.equals("@bbox")) continue;
-
+            min.set(-1,-1,-1);
+            max.set(1,1,1);
             // We've got a bbox
             // Add all vertices to bounds
             for (int j= 0; j < iQMMesh.num_triangles; j++) {
                 IQMTriangle tri = model.triangles[iQMMesh.first_triangle+j];
                 for (int k= 0; k < tri.vertex.length; k++) {
-                    int indice = tri.vertex[k]-1;
-                    if(indice < 0)  {
-                        min.set(-32,-32,-32);
-                        max.set(32,32,32);
-                        continue;
-                    }
-
+                    int indice = tri.vertex[k];
                     Helper.AddPointToBounds(model.in_position[indice], min, max);
                 }
             }

@@ -65,7 +65,7 @@ public class SingleCube {
      * @param side x = 1, y = 2, z = 3 - multiply by -1 for negative direction.
      * @return
      */
-    public SingleCube getHightlightside(int side) {
+    public SingleCube getHightlightside(int side, boolean server) {
         // FIgure out coords for new cube
         int[] p = new int[] {x, y, z};
         int sign = (int)Math.signum(side);
@@ -87,7 +87,7 @@ public class SingleCube {
             chunkPos[index-1] += sign;
             
             // retrieve the chunk
-            nChunk = CubeMap.getChunk(chunkPos[0], chunkPos[1], chunkPos[2], false, Ref.cgame.map.chunks);
+            nChunk = CubeMap.getChunk(chunkPos[0], chunkPos[1], chunkPos[2], false, server?Ref.cm.cubemap.chunks:Ref.cgame.map.chunks);
 
             // correct the cube position for the new chunk
             p[index-1] = p[index-1] & (CubeChunk.SIZE-1); 
@@ -97,7 +97,7 @@ public class SingleCube {
         return new SingleCube(nChunk, p[0], p[1], p[2]);
     }
 
-    public SingleCube getHightlightside() {
-        return getHightlightside(highlightSide);
+    public SingleCube getHightlightside(boolean server) {
+        return getHightlightside(highlightSide,server);
     }
 }

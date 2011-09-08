@@ -57,7 +57,7 @@ public class Cubar extends WeaponItem {
                 cube.removeBlock();
             } else {
                 // placing stuff is less easy
-                SingleCube destination = cube.getHightlightside();
+                SingleCube destination = cube.getHightlightside(true);
                 Vector3f origin = destination.getOrigin();
                 Vector3f maxs = destination.getSize();
 

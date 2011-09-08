@@ -30,6 +30,7 @@ import org.lwjgl.util.vector.Vector3f;
  */
 public class RocketLauncher extends WeaponItem {
     private WeaponInfo wi = new WeaponInfo();
+
     public RocketLauncher() {
         wi.missileModel = Ref.ResMan.loadModel("data/rocket.iqm");
         wi.missileTrailFunc = missileTrailFunc;
@@ -107,6 +108,8 @@ public class RocketLauncher extends WeaponItem {
 
         Game g = Ref.game;
         Gentity r = g.Spawn();
+        r.r.mins = wi.missileModel.getMins();
+        r.r.maxs = wi.missileModel.getMaxs();
         r.classname = "rocket";
         r.nextthink = g.level.time + 15000;
         r.think = Missiles.ExplodeMissile;

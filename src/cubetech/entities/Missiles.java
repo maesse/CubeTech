@@ -39,7 +39,7 @@ public class Missiles {
         int passEnt = ent.r.ownernum;
 
         // trace a line from the previous position to the current position
-        CollisionResult res = Ref.server.Trace(ent.r.currentOrigin, origin, ent.r.mins, ent.r.maxs, passEnt, ent.ClipMask);
+        CollisionResult res = Ref.server.Trace(ent.r.currentOrigin, origin, ent.r.mins, ent.r.maxs, ent.ClipMask, passEnt);
 //        res.getPOI(ent.r.currentOrigin);
 
         Ref.server.LinkEntity(ent.shEnt);

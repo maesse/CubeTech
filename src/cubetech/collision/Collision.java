@@ -115,36 +115,71 @@ public class Collision {
         tempExtent.scale(2f);
         testAABBAABB(center, v, Extent, box_origin, box_extent, res);
     }
+    
+    private class SATState {
+        boolean startsolid;
+        Vector3f hitaxis;
+        float first;
+        float last;
+        
+        void clear() {
+            startsolid = false;
+            hitaxis = null;
+            first = 0;
+            last = 1;
+        }
+    }
+    private SATState satState = new SATState();
+
+    private boolean separateAxis(SATState state, float amin, float amax, float bmin, float bmax, float v, int axisOffset) {
+
+        if(v < 0) { // moving left
+            if(bmax < amin) return false; // player max is already to the left
+            // player min is to the right of block
+            if(amax < bmin) { 
+                float fv = (amax - bmin)/v;
+                if(fv > state.first - EPSILON) {
+                    state.first = fv - EPSILON;
+                    state.hitaxis = AABBNormals[axisOffset+1];
+                }
+            }
+            else {
+                state.startsolid = true;
+            }
+            if(bmax > amin) state.last = Math.min((amin-bmax)/v,state.last);
+        } else if(v > 0) {
+            if(bmin > amax) return false;
+            if(bmax < amin) {
+                float fv = (amin - bmax)/v;
+                if(fv  > state.first - EPSILON) {
+                    state.first = fv - EPSILON;
+                    state.hitaxis = AABBNormals[axisOffset];
+                }
+            }
+            else {
+                state.startsolid = true;
+            }
+            if(amax > bmin) state.last = Math.min((amax - bmin)/v,state.last);
+        } else {
+            if(bmin >= amax + EPSILON || bmax  + EPSILON <= amin) return  false;
+            else state.startsolid = true;
+        }
+
+        if(state.first > state.last)
+            return  false;
+
+        return true; // continue
+    }
 
     public void testAABBAABB(Vector3f center, Vector3f v, Vector3f Extent, Vector3f test_position, Vector3f test_size, CollisionResult res) {
-        Vector3f hitaxis = null;
-        boolean startsolid = false;
+        satState.clear();
 
-        float first = 0f;
-        float last = 1f;
 
         float bmin = test_position.x;
         float bmax = test_position.x+test_size.x;
         float amax = center.x + Extent.x;
         float amin = center.x - Extent.x;
-        if(v.x < 0.0f) { // moving left
-            if(bmax < amin) return; // player max is already to the left
-            // player min is to the right of block
-            if(amax < bmin) { float fv = (amax - bmin)/v.x; if(fv > first) { first = fv - EPSILON; hitaxis = AABBNormals[1];} }
-            else startsolid = true;
-            if(bmax > amin) last = Math.min((amin-bmax)/v.x,last);
-        } else if(v.x > 0.0f) {
-            if(bmin > amax) return;
-            if(bmax < amin) { float fv = (amin - bmax)/v.x; if(fv > first) { first = fv - EPSILON; hitaxis = AABBNormals[0];} }
-            else startsolid = true;
-            if(amax > bmin) last = Math.min((amax - bmin)/v.x,last);
-        } else {
-            if(bmin >= amax  + EPSILON || bmax  + EPSILON <= amin) return;
-            else startsolid = true;
-        }
-
-        if(first > last)
-            return;
+        if(!separateAxis(satState, amin, amax, bmin, bmax, v.x, 0)) return;
 
         // A - Y Axis
         bmin = test_position.y;
@@ -152,27 +187,7 @@ public class Collision {
         amax = center.y + Extent.y;
         amin = center.y - Extent.y;
 
-        if(v.y < 0.0f) {
-            if(bmax < amin) return;
-            if(amax < bmin) { float fv = (amax - bmin)/v.y; if(fv > first){ first = fv - EPSILON; hitaxis = AABBNormals[3];} }
-            else
-                startsolid = true;
-            if(bmax > amin) last = Math.min((amin-bmax)/v.y,last);
-        } else if(v.y > 0.0f) {
-            if(bmin > amax) return;
-            if(bmax < amin) { float fv = (amin - bmax)/v.y; if(fv > first) { first = fv - EPSILON; hitaxis = AABBNormals[2];} }
-            else
-                startsolid = true;
-            if(amax > bmin) last = Math.min((amax - bmin)/v.y,last);
-        } else {
-            if(bmin >= amax  + EPSILON || bmax  + EPSILON <= amin)
-                return;
-            else
-                startsolid = true;
-        }
-
-        if(first > last)
-            return;
+        if(!separateAxis(satState, amin, amax, bmin, bmax, v.y, 2)) return;
 
         // A - Z Axis
         bmin = test_position.z;
@@ -180,40 +195,45 @@ public class Collision {
         amax = center.z + Extent.z;
         amin = center.z - Extent.z;
 
-        if(v.z < 0.0f) {
-            if(bmax < amin) return;
-            if(amax < bmin) { float fv = (amax - bmin)/v.z; if(fv > first){ first = fv - EPSILON; hitaxis = AABBNormals[5];} }
-            else
-                startsolid = true;
-            if(bmax > amin) last = Math.min((amin-bmax)/v.z,last);
-        } else if(v.z > 0.0f) {
-            if(bmin > amax) return;
-            if(bmax < amin) { float fv = (amin - bmax)/v.z; if(fv > first) { first = fv - EPSILON; hitaxis = AABBNormals[4];} }
-            else
-                startsolid = true;
-            if(amax > bmin) last = Math.min((amax - bmin)/v.z,last);
-        } else {
-            if(bmin >= amax  + EPSILON || bmax  + EPSILON <= amin)
-                return;
-            else
-                startsolid = true;
-        }
+        if(!separateAxis(satState, amin, amax, bmin, bmax, v.z, 4)) return;
 
-        if(first > last)
-            return;
+//        if(v.z < 0.0f) {
+//            if(bmax < amin) return;
+//            if(amax < bmin) { float fv = (amax - bmin)/v.z; if(fv > first){ first = fv - EPSILON; hitaxis = AABBNormals[5];} }
+//            else
+//                startsolid = true;
+//            if(bmax > amin) last = Math.min((amin-bmax)/v.z,last);
+//        } else if(v.z > 0.0f) {
+//            if(bmin > amax) return;
+//            if(bmax < amin) { float fv = (amin - bmax)/v.z; if(fv > first) { first = fv- EPSILON; hitaxis = AABBNormals[4];} }
+//            else
+//                startsolid = true;
+//            if(amax > bmin) last = Math.min((amax - bmin)/v.z,last);
+//        } else {
+//            if(bmin >= amax  + EPSILON || bmax  + EPSILON <= amin)
+//                return;
+//            else
+//                startsolid = true;
+//        }
+//
+//        if(first > last)
+//            return;
 
-        if(first < res.frac && hitaxis != null) {
-            res.frac = first;
+        if(satState.first < res.frac && satState.hitaxis != null) {
+            res.frac = satState.first;
             if(res.frac < 0f)
                 res.frac = 0f;
             res.hit = true;
             res.entitynum = Common.ENTITYNUM_WORLD;
             res.hitmask = Content.SOLID;
-            res.hitAxis.set(hitaxis);
-            res.startsolid = startsolid;
-        } else if(startsolid && hitaxis == null) {
+            res.hitAxis.set(satState.hitaxis);
+            if(res.hitAxis.lengthSquared() == 0) {
+                int test = 2;
+            }
+            res.startsolid = satState.startsolid;
+        } else if(satState.startsolid && satState.hitaxis == null) {
             res.frac = 0f;
-            res.startsolid = startsolid;
+            res.startsolid = satState.startsolid;
             res.entitynum = Common.ENTITYNUM_WORLD;
             res.hitmask = Content.SOLID;
             res.hit = true;
@@ -299,7 +319,7 @@ public class Collision {
         return resultBuffer;
     }
     // Get next collisionresult from the circular buffer
-    private CollisionResult GetNext() {
+    public CollisionResult GetNext() {
         return resultBuffer[BufferOffset++ & RESULT_BUFFER_SIZE-1];
     }
 
