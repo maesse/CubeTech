@@ -197,7 +197,7 @@ public class CGameRender {
 
         Vector3f angles = new Vector3f();
         CalculateWeaponPosition(ent.origin, angles);
-        ent.axis = Helper.AnglesToAxis(angles);
+        ent.axis = Helper.AnglesToAxis(angles, ent.axis);
 
         Helper.VectorMA(ent.origin, game.cg.cg_gun_x.fValue, ent.axis[0], ent.origin);
         Helper.VectorMA(ent.origin, game.cg.cg_gun_y.fValue, ent.axis[1], ent.origin);
@@ -261,7 +261,7 @@ public class CGameRender {
         angles.set(cent.lerpAngles);
         if(angles.x > 1) angles.x = 1;
         if(angles.x < -25) angles.x = -25;
-        ent.axis = Helper.AnglesToAxis(angles);
+        ent.axis = Helper.AnglesToAxis(angles, ent.axis);
 
         playerAngles(cent, ent);
         
@@ -786,7 +786,7 @@ public class CGameRender {
         swingAngles(dest, 15, 30, 0.1f, cent.pe.torso, false);
         torsoAngle.x = cent.pe.torso.pitchAngle;
         
-        rent.axis = Helper.AnglesToAxis(torsoAngle);
+        rent.axis = Helper.AnglesToAxis(torsoAngle, rent.axis);
     }
 
     private void swingAngles(float dest, int swingTolerance, int clampTolerance,

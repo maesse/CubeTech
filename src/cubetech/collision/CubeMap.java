@@ -1,5 +1,7 @@
 package cubetech.collision;
 
+import cern.colt.function.LongObjectProcedure;
+import cern.colt.map.OpenLongObjectHashMap;
 import cubetech.common.Common;
 import cubetech.misc.Ref;
 import java.util.HashMap;
@@ -17,7 +19,7 @@ public class CubeMap {
     public static final int DEFAULT_GROW_DIST = 12;
 
     // Chunks
-    public HashMap<Long, CubeChunk> chunks = new HashMap<Long, CubeChunk>();
+    public OpenLongObjectHashMap chunks = new OpenLongObjectHashMap();
     IChunkGenerator chunkGen = null;
     private Queue<int[]> chunkGenQueue = new LinkedList<int[]>();
 
@@ -35,9 +37,12 @@ public class CubeMap {
     }
 
     void destroy() {
-        for (CubeChunk cubeChunk : chunks.values()) {
-            cubeChunk.destroy();
-        }
+        chunks.forEachPair(new LongObjectProcedure() {
+            public boolean apply(long l, Object o) {
+                ((CubeChunk)o).destroy();
+                return true;
+            }
+        });
         chunks.clear();
         chunks = null;
         chunkGen = null;
@@ -52,7 +57,7 @@ public class CubeMap {
         popChunkQueue(); // Generate one chunk pr. frame when multiple chunks are queued
     }
 
-    public long[] getVisibleChunks(Vector3f position, int dist) {
+    public long[] getVisibleChunks(Vector3f position, int dist, long[] lookups) {
         int axisSize = CubeChunk.SIZE * CubeChunk.BLOCK_SIZE;
         int x = (int)Math.floor(position.x / axisSize);
         int y = (int)Math.floor(position.y / axisSize);
@@ -62,7 +67,9 @@ public class CubeMap {
             dist = 2;
         int halfDist = dist/2;
 
-        long[] lookups = new long[dist*dist*dist];
+        if(lookups == null || lookups.length < dist*dist*dist) {
+            lookups = new long[dist*dist*dist];
+        }
         int i=0;
 
         for (int pz= z; pz < z+dist; pz++) {
@@ -123,7 +130,7 @@ public class CubeMap {
     
     
     // Thanks goes out to http://www.xnawiki.com/index.php?title=Voxel_traversal
-    public static CubeCollision TraceRay(Vector3f start, Vector3f dir, int maxDepth, HashMap<Long, CubeChunk> chunks) {
+    public static CubeCollision TraceRay(Vector3f start, Vector3f dir, int maxDepth, OpenLongObjectHashMap chunks) {
         // NOTES:
         // * This code assumes that the ray's position and direction are in 'cell coordinates', which means
         //   that one unit equals one cell in all directions.
@@ -175,7 +182,7 @@ public class CubeMap {
         if(Float.isNaN(delta.z)) delta.z = Float.POSITIVE_INFINITY;
         // For each step, determine which distance to the next voxel boundary is lowest (i.e.
         // which voxel boundary is nearest) and walk that way.
-        CubeChunk chunk = chunks.get(0L);
+        CubeChunk chunk = (CubeChunk)chunks.get(0L);
 //        if(chunk != null) {
 //            chunk.traceTime = 5000;
 //            chunk.traceCount = 0;
@@ -192,7 +199,7 @@ public class CubeMap {
             // Remember last chunk
             if(chunkX != ccx || chunkY != ccy || chunkZ != ccz) {
                 long lookup = positionToLookup(chunkX, chunkY, chunkZ);
-                chunk = chunks.get(lookup);
+                chunk = (CubeChunk)chunks.get(lookup);
                 ccx = chunkX; ccy = chunkY; ccz = chunkZ;
                 // entering new chunk, clear its trace debug
 //                if(chunk != null) {
@@ -254,7 +261,7 @@ public class CubeMap {
         CubeChunk chunk = chunkGen.generateChunk(this, x, y, z);
         long index = positionToLookup(x, y, z);
 
-        Object last = chunks.put(index, chunk);
+        boolean success = chunks.put(index, chunk);
 
         long end = System.nanoTime();
 
@@ -265,7 +272,7 @@ public class CubeMap {
 
 //        chunk.notifyChange();
         
-        if(last != null)
+        if(!success)
             throw new RuntimeException("generateSimpleMap: Chunk already existed.");
         return chunk;
     }
@@ -281,25 +288,17 @@ public class CubeMap {
         }
     }
 
-    public static Long positionToLookup(int x, int y, int z) {
-        long a = bitTwiddle(x);
-        long b = bitTwiddle(y)<<17;
-        long c = bitTwiddle(z)<<34;
-        Long res = a | b | c;
-        return res;
-//        return bitTwiddle(x) | (bitTwiddle(y)<<17) | (bitTwiddle(z)<<34);
+    public static long positionToLookup(int x, int y, int z) {
+        long a = bitTwiddle(x) | bitTwiddle(y)<<17 | bitTwiddle(z)<<34;
+        return a;
     }
 
     // Twiddle an int down to 17bit
     private static long bitTwiddle(int input) {
         if(input < 0) {
-            return -input & 0xffff | 0x10000;
+            return (-input & 0xffff) | 0x10000;
         }
         return input & 0xffff;
-//        int tx = (int) (input & 0xffffL);
-//        if(input < 0)
-//            tx |= 0x10000; // negative numbers get an extra bit
-//        return tx;
     }
 
     public static int[] lookupToPosition(long lookup) {
@@ -323,7 +322,7 @@ public class CubeMap {
     }
 
     
-    public static ChunkAreaQuery getCubesInVolume(Vector3f mmin, Vector3f mmax, HashMap<Long, CubeChunk> chunks, boolean server) {
+    public static ChunkAreaQuery getCubesInVolume(Vector3f mmin, Vector3f mmax, OpenLongObjectHashMap chunks, boolean server) {
         // Figure out min/max chunk positions
         int axisSize = CubeChunk.SIZE * CubeChunk.BLOCK_SIZE;
         int minx = (int)Math.floor(mmin.x / axisSize);
@@ -339,7 +338,7 @@ public class CubeMap {
         for (int z= minz; z < maxz; z++) {
             for (int y= miny; y < maxy; y++) {
                 for (int x= minx; x < maxx; x++) {
-                    CubeChunk chunk = chunks.get(positionToLookup(x, y, z));
+                    CubeChunk chunk = (CubeChunk) chunks.get(positionToLookup(x, y, z));
                     if(chunk == null) {
                         if(server) {
                             chunk = Ref.cm.cubemap.generateChunk(x, y, z, false);
@@ -369,8 +368,8 @@ public class CubeMap {
         return query;
     }
 
-    public static CubeChunk getChunk(int x, int y, int z, boolean create, HashMap<Long, CubeChunk> chunks) {
-        Long index = positionToLookup(x, y, z);
+    public static CubeChunk getChunk(int x, int y, int z, boolean create, OpenLongObjectHashMap chunks) {
+        long index = positionToLookup(x, y, z);
         
         if(!chunks.containsKey(index)) {
             if(create) {
@@ -382,7 +381,7 @@ public class CubeMap {
             }
         }
 
-        return chunks.get(index);
+        return (CubeChunk)chunks.get(index);
     }
 
     

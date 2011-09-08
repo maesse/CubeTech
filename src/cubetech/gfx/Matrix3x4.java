@@ -5,6 +5,7 @@
 
 package cubetech.gfx;
 
+import java.nio.FloatBuffer;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Quaternion;
 import org.lwjgl.util.vector.Vector3f;
@@ -33,6 +34,34 @@ public class Matrix3x4 {
         src.m01 = b.x; src.m11 = b.y; src.m21 = b.z; src.m31 = b.w;
         src.m02 = c.x; src.m12 = c.y; src.m22 = c.z; src.m32 = c.w;
         return src;
+    }
+
+    public static void storeMatrix4f(Matrix4f src, FloatBuffer buf) {
+        buf.put(src.m00);
+        buf.put(src.m10);
+        buf.put(src.m20);
+        buf.put(src.m30);
+        buf.put(src.m01);
+        buf.put(src.m11);
+        buf.put(src.m21);
+        buf.put(src.m31);
+        buf.put(src.m02);
+        buf.put(src.m12);
+        buf.put(src.m22);
+        buf.put(src.m32);
+
+//        buf.put(src.m00);
+//        buf.put(src.m01);
+//        buf.put(src.m02);
+//        buf.put(src.m10);
+//        buf.put(src.m11);
+//        buf.put(src.m12);
+//        buf.put(src.m20);
+//        buf.put(src.m21);
+//        buf.put(src.m22);
+//        buf.put(src.m30);
+//        buf.put(src.m31);
+//        buf.put(src.m32);
     }
     
     private Vector4f MultiplyVectors(Vector4f src, Vector3f src2, Vector4f dst) {

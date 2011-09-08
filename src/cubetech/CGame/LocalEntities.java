@@ -112,6 +112,7 @@ public class LocalEntities {
         m.getWorldTransform(t);
         RenderEntity ent = le.rEntity;
         ent.origin.set(t.origin.x, t.origin.y, t.origin.z);
+        ent.origin.scale(CGPhysics.INV_SCALE_FACTOR);
         ent.color.set(1,1,1,1);
 
         int activationState = le.phys_body.getActivationState();

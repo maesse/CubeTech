@@ -1,8 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.gfx;
 
 import cubetech.CGame.ViewParams;
@@ -36,19 +31,22 @@ public class ShadowManager {
     private float[] cascadePartitionCoverage = new float[] {7,20,75,100,100,100,100,100};
 
     private int nLevels = 1;
-    private CVar shadow_levels = null;
-    
+    private int shadow_resolution = 1024;
     private boolean fitToCascades = true; // tighten bounding boxes around cascades
     private boolean moveLightTexelSize = true; // decreases shadow jitter
 
-    private int shadow_resolution = 1024;
+    private CVar shadow_levels = null;
     private CVar shadow_res = null;
+    private CVar shadow_enable;
+    private CVar shadow_factor;
+    private CVar shadow_filter;
+    private CVar shadow_kernel;
     
     // Temp vectors
     private Vector4f[] tempFrustumPoints = new Vector4f[8];
     public Matrix4f[] shadowProjections = new Matrix4f[8];
-    public Vector3f lightCameraOthoMin;
-    public Vector3f lightCameraOthoMax;
+    public Vector3f lightCameraOthoMin = new Vector3f();
+    public Vector3f lightCameraOthoMax = new Vector3f();
     public float minz, maxz;
     public Vector3f[] shadowFrustum = new Vector3f[8];
     // state
@@ -62,18 +60,41 @@ public class ShadowManager {
         for (int i= 0; i < tempFrustumPoints.length; i++) {
             tempFrustumPoints[i] = new Vector4f(0,0,0,1);
         }
+        for (int i= 0; i < shadowFrustum.length; i++) {
+            shadowFrustum[i] = new Vector3f();
+        }
         Ref.cvars.Get("shadow_view", "0", EnumSet.of(CVarFlags.NONE));
 
         shadow_resolution = Helper.get2Fold(shadow_resolution);
 
-        depthBuffer = new FrameBuffer(shadow_resolution, nLevels, 24);
-        
         Ref.cvars.Get("shadow_bias", "0.002", EnumSet.of(CVarFlags.NONE));
         shadow_res = Ref.cvars.Get("shadow_resolution", ""+shadow_resolution, EnumSet.of(CVarFlags.NONE));
         shadow_res.modified = false;
         shadow_levels = Ref.cvars.Get("shadow_levels", ""+nLevels, EnumSet.of(CVarFlags.NONE));
 
         Ref.commands.AddCommand("shadow_setlevel", shadow_setlevel);
+
+        shadow_enable = Ref.cvars.Get("shadow_enable", "1", EnumSet.of(CVarFlags.NONE));
+        shadow_enable.modified = false;
+        shadow_factor = Ref.cvars.Get("shadow_factor", "0.5", EnumSet.of(CVarFlags.NONE));
+        shadow_filter = Ref.cvars.Get("shadow_filter", "point", EnumSet.of(CVarFlags.ARCHIVE));
+        shadow_kernel = Ref.cvars.Get("shadow_kernel", "0.5", EnumSet.of(CVarFlags.NONE));
+
+        createDepthBuffer();
+    }
+
+    private void createDepthBuffer() {
+        depthBuffer = new FrameBuffer(shadow_resolution, nLevels, 24);
+        boolean point = true;
+        String val = shadow_filter.sValue.toLowerCase();
+        if(val.equals("linear")) {
+            point = false;
+        }
+        setDepthFiltering(point);
+    }
+
+    public boolean isEnabled() {
+        return shadow_enable.isTrue();
     }
 
     ICommand shadow_setlevel = new ICommand() {
@@ -171,7 +192,8 @@ public class ShadowManager {
     }
 
     private void setPcfOffsets() {
-        float dist = 1f/shadow_resolution;
+        float dist = shadow_kernel.fValue/shadow_resolution;
+
         pcfOffsets[0].x = -dist;
         pcfOffsets[0].y = -dist;
 
@@ -183,6 +205,7 @@ public class ShadowManager {
 
         pcfOffsets[3].x = dist;
         pcfOffsets[3].y = dist;
+
     }
 
     private Vector4f[] pcfOffsets = new Vector4f[] {
@@ -217,11 +240,24 @@ public class ShadowManager {
         }
         
         finishShadowFrame();
+
+        CVar shadow_view = Ref.cvars.Find("shadow_view");
+        if(shadow_view != null && shadow_view.isTrue()) {
+            int level = shadow_view.iValue;
+            applyShadowProjection(level);
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            Matrix4f viewM = Matrix4f.load(Ref.glRef.getLightViewMatrix(), null);
+            viewM.store(Ref.glRef.matrixBuffer);
+            Ref.glRef.matrixBuffer.position(0);
+            GL11.glLoadMatrix(Ref.glRef.matrixBuffer);
+            Ref.glRef.matrixBuffer.clear();
+        }
+
         s.ExitSection();
     }
 
     public Matrix4f[] getShadowViewProjections(int max) {
-        Matrix4f[] out = new Matrix4f[shadowProjections.length];
+        Matrix4f[] out = new Matrix4f[max];
         if(nLevels < max) max = nLevels;
         for (int i= 0; i < max; i++) {
             out[i] = getShadowViewProjection(i);
@@ -262,6 +298,16 @@ public class ShadowManager {
         if(Ref.glRef.srgbBuffer != null) Ref.glRef.srgbBuffer.Bind();
     }
 
+    private void setDepthFiltering(boolean point) {
+        if(depthBuffer == null || depthBuffer.getDepthTextureId() < 0) {
+            return;
+        }
+        GL11.glBindTexture(depthBuffer.getTextureTarget(), depthBuffer.getDepthTextureId());
+        GL11.glTexParameteri(depthBuffer.getTextureTarget(), GL11.GL_TEXTURE_MAG_FILTER, 
+                point?GL11.GL_NEAREST:GL11.GL_LINEAR);
+        GL11.glBindTexture(depthBuffer.getTextureTarget(), 0);
+    }
+
     private void initFrame(ViewParams refdef) {
         if(shadow_levels.modified) {
             nLevels = shadow_levels.iValue;
@@ -271,7 +317,7 @@ public class ShadowManager {
 
             if(!shadow_res.modified) { // don't destory twice in one frame
                 depthBuffer.destroy();
-                depthBuffer = new FrameBuffer(shadow_resolution, nLevels, 24);
+                createDepthBuffer();
             }
         }
 
@@ -282,10 +328,25 @@ public class ShadowManager {
 
             // Resize FBO
             depthBuffer.destroy();
-            depthBuffer = new FrameBuffer(shadow_resolution, nLevels, 24);
+            createDepthBuffer();
 //            for (int i= 0; i < nLevels; i++) {
 //                depthBuffer.resize(shadow_resolution, shadow_resolution);
 //            }
+        }
+
+        if(shadow_filter.modified) {
+            // parse it
+            String str = shadow_filter.sValue.toLowerCase().trim();
+            if(str.equals("point")) {
+                setDepthFiltering(true);
+            } else if(str.equals("linear")) {
+                setDepthFiltering(false);
+            } else {
+                Common.Log("Unknown shadow_filter value. Use point or linear");
+                shadow_filter.set("point");
+            }
+
+            shadow_filter.modified = false;
         }
 
         setPcfOffsets();
@@ -332,8 +393,8 @@ public class ShadowManager {
             createFrustumPointsFromCascadeInterval(frustumIntervalBegin, frustumIntervalEnd,
                     viewCameraProjection,tempFrustumPoints);
 
-            lightCameraOthoMin = new Vector3f(Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE);
-            lightCameraOthoMax = new Vector3f(-Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE);
+            lightCameraOthoMin.set(Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE);
+            lightCameraOthoMax.set(-Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE);
 
             // This next section of code calculates the min and max values for the orthographic projection.
             
@@ -344,26 +405,33 @@ public class ShadowManager {
 
                 // Transform the point from world space to Light Camera Space.
                 Vector4f tempTranslatedCorner =  Matrix4f.transform(lightView, tempFrustumPoints[i], null);
-                Vector3f translatedCorner = new Vector3f(tempTranslatedCorner);
+
+                Vector3f translatedCorner = shadowFrustum[i].set(tempTranslatedCorner);
 
                 Vector3f temp = new Vector3f(tempFrustumPoints[i].x, tempFrustumPoints[i].y, tempFrustumPoints[i].z);
-                shadowFrustum[i] = Helper.transform(lightView, temp, null);
-                shadowFrustum[i] = translatedCorner;
+                shadowFrustum[i] = Helper.transform(lightView, temp, translatedCorner);
                 // Find the closest point.
                 Helper.AddPointToBounds(translatedCorner, lightCameraOthoMin, lightCameraOthoMax);
             }
 
 //
             Matrix4f invLightView = (Matrix4f) Matrix4f.invert(lightView, null);
-            shadowFrustum[0] = Helper.transform(invLightView, lightCameraOthoMin, null);
-            shadowFrustum[1] = Helper.transform(invLightView, new Vector3f(lightCameraOthoMin.x, lightCameraOthoMax.y, lightCameraOthoMin.z), null);
-            shadowFrustum[2] = Helper.transform(invLightView, new Vector3f(lightCameraOthoMax.x, lightCameraOthoMax.y, lightCameraOthoMin.z), null);
-            shadowFrustum[3] = Helper.transform(invLightView, new Vector3f(lightCameraOthoMax.x, lightCameraOthoMin.y, lightCameraOthoMin.z), null);
+            Vector3f camCoords = new Vector3f();
+            shadowFrustum[0] = Helper.transform(invLightView, lightCameraOthoMin, shadowFrustum[0]);
+            camCoords.set(lightCameraOthoMin.x, lightCameraOthoMax.y, lightCameraOthoMin.z);
+            shadowFrustum[1] = Helper.transform(invLightView, camCoords, shadowFrustum[1]);
+            camCoords.set(lightCameraOthoMax.x, lightCameraOthoMax.y, lightCameraOthoMin.z);
+            shadowFrustum[2] = Helper.transform(invLightView, camCoords, shadowFrustum[2]);
+            camCoords.set(lightCameraOthoMax.x, lightCameraOthoMin.y, lightCameraOthoMin.z);
+            shadowFrustum[3] = Helper.transform(invLightView, camCoords, shadowFrustum[3]);
 
-            shadowFrustum[4] = Helper.transform(invLightView, new Vector3f(lightCameraOthoMin.x, lightCameraOthoMin.y, lightCameraOthoMax.z), null);
-            shadowFrustum[5] = Helper.transform(invLightView, new Vector3f(lightCameraOthoMin.x, lightCameraOthoMax.y, lightCameraOthoMax.z), null);
-            shadowFrustum[6] = Helper.transform(invLightView, lightCameraOthoMax, null);
-            shadowFrustum[7] = Helper.transform(invLightView, new Vector3f(lightCameraOthoMax.x, lightCameraOthoMin.y, lightCameraOthoMax.z), null);
+            camCoords.set(lightCameraOthoMin.x, lightCameraOthoMin.y, lightCameraOthoMax.z);
+            shadowFrustum[4] = Helper.transform(invLightView, camCoords, shadowFrustum[4]);
+            camCoords.set(lightCameraOthoMin.x, lightCameraOthoMax.y, lightCameraOthoMax.z);
+            shadowFrustum[5] = Helper.transform(invLightView, camCoords, shadowFrustum[5]);
+            shadowFrustum[6] = Helper.transform(invLightView, lightCameraOthoMax, shadowFrustum[6]);
+            camCoords.set(lightCameraOthoMax.x, lightCameraOthoMin.y, lightCameraOthoMax.z);
+            shadowFrustum[7] = Helper.transform(invLightView, camCoords, shadowFrustum[7]);
 
 
             // This code removes the shimmering effect along the edges of shadows due to

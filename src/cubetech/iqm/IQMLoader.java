@@ -8,7 +8,9 @@ import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector3f;
+import org.lwjgl.util.vector.Vector4f;
 
 /**
  * http://lee.fov120.com/iqm
@@ -81,14 +83,34 @@ public class IQMLoader {
 
         if(model.joints != null) {
             ArrayList<IQMJoint> thighBones = new ArrayList<IQMJoint>();
-            for (IQMJoint iQMJoint : model.joints) {
+            for (int i= 0; i < model.joints.length; i++) {
+                IQMJoint iQMJoint = model.joints[i];
                 String jointName = iQMJoint.name.toUpperCase();
                 if(jointName.startsWith("thigh_")) {
                     thighBones.add(iQMJoint);
                 }
+                if(jointName.startsWith("@ATTACH ")) {
+                    String bonename = iQMJoint.name.substring(8).trim();
+                    BoneAttachment att = new BoneAttachment();
+                    att.name = bonename;
+                    att.boneIndex = i;
+                    model.attachments.put(bonename, att);
+                }
             }
             if(!thighBones.isEmpty()) {
                 model.thighJoints = (IQMJoint[]) thighBones.toArray();
+            }
+        }
+
+        if(model.header.num_joints > 0 && model.joints.length > 0) {
+            model.jointPose = new Vector3f[model.joints.length*2];
+            for (int i= 0; i < model.joints.length; i++) {
+                 IQMJoint j = model.joints[i];
+
+                 model.jointPose[i*2] = new Vector3f(j.translate[0],j.translate[1],j.translate[2]);
+                 Vector4f v = new Vector4f(0,0,0,1);
+                 Matrix4f.transform(j.baseframe, v, v);
+                 model.jointPose[i*2+1] = new Vector3f(v);
             }
         }
         

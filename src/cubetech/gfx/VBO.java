@@ -35,6 +35,10 @@ public class VBO {
         TotalBytes += sizeInBytes;
     }
 
+    public BufferTarget getTarget() {
+        return target;
+    }
+
     public void bind() {
         Ref.glRef.bindVBO(target, vboId);
     }
@@ -62,7 +66,7 @@ public class VBO {
             Ref.glRef.sizeVBO(target, vboId, sizeInBytes);
         }
         mappedBuffer = Ref.glRef.mapVBO(target, vboId, bytes);
-        mappedBuffer.limit(mappedBuffer.capacity());
+        mappedBuffer.clear();
         return mappedBuffer;
     }
 
@@ -74,7 +78,9 @@ public class VBO {
         if(mappedBuffer == null) {
             Ref.common.Error(ErrorCode.FATAL, "VBO.unmap(): Tried to unmap buffer that wasn't mapped.");
         }
-        mappedBuffer.flip();
+        // Assume buffer hasn't been flipped if it isn't positioned at 0
+        if(mappedBuffer.position() != 0) mappedBuffer.flip();
+        
         Ref.glRef.unmapVBO(target, false);
         mappedBuffer = null;
     }

@@ -10,7 +10,11 @@ import com.bulletphysics.linearmath.*;
 import cubetech.collision.CubeChunk;
 import cubetech.common.Helper;
 import cubetech.common.ICommand;
+import cubetech.gfx.GLRef.BufferTarget;
+import cubetech.gfx.VBO;
 import cubetech.misc.Ref;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import javax.vecmath.Quat4f;
 import org.lwjgl.util.vector.Vector3f;
@@ -21,34 +25,80 @@ import org.lwjgl.util.vector.Vector4f;
  * @author mads
  */
 public class CGPhysics {
+    public static final float INV_SCALE_FACTOR = 32f;
+    public static final float SCALE_FACTOR = 1f / INV_SCALE_FACTOR;
+
     public ArrayList<RigidBody> bodies = new ArrayList<RigidBody>();
     private BoxShape boxShape;
     private int lastPhysicsTime;
     public DiscreteDynamicsWorld world;
 
-    private float scaleFactor = 1 / 32f;
+    public ByteBuffer sharedIndiceBuffer;
+
+    // Shared vertex buffer for the physics-cubes
+    public VBO vertexBuffer;
 
     CGPhysics() {
+        initIndiceBuffer();
+        initBoxVBO();
+
         // Initalized the bullet physics world
         CollisionConfiguration collConfig = new DefaultCollisionConfiguration();
         CollisionDispatcher dispatch = new CollisionDispatcher(collConfig);
         BroadphaseInterface broadphase = new DbvtBroadphase();
+        broadphase.getOverlappingPairCache().setInternalGhostPairCallback(new GhostPairCallback());
         SequentialImpulseConstraintSolver solver = new SequentialImpulseConstraintSolver();
 
         world = new DiscreteDynamicsWorld(dispatch, broadphase, solver, collConfig);
-        float grav = -Ref.cvars.Find("sv_gravity").iValue;
+        float grav = -Ref.cvars.Find("sv_gravity").fValue * SCALE_FACTOR;
         world.setGravity(new javax.vecmath.Vector3f(0, 0, grav));
 
-        float boxHalfSize = CubeChunk.BLOCK_SIZE/2;
+        float boxHalfSize = (CubeChunk.BLOCK_SIZE/2f) * SCALE_FACTOR;
         boxShape = new BoxShape(new javax.vecmath.Vector3f(boxHalfSize, boxHalfSize, boxHalfSize));
+
+
         
         BulletGlobals.setDeactivationDisabled(false);
+        BulletGlobals.setDeactivationTime(1.0f);
+    }
+
+    private void initBoxVBO() {
+        // We're going to be rendering the same box a lot, so set up a vbo for it
+        int nVerts = 4 * 6; // 4 points * 6 sides
+        int stride = 32; // 32bytes for each point
+
+        // Create a VBO and grab a mapped bytebuffer
+        vertexBuffer = new VBO(nVerts * stride, BufferTarget.Vertex);
+        ByteBuffer data = vertexBuffer.map();
+
+        // Fill the buffer
+        float boxHalfSize = (CubeChunk.BLOCK_SIZE/2f) * SCALE_FACTOR;
+        // X+
+
+
+        vertexBuffer.unmap();
+    }
+
+    private void initIndiceBuffer() {
+        // Create a big indice buffer that can be used for all chunks
+        int nSides = 32 * 32 * 32;
+        int sideSize = 6 * 4; // 6 integer indices
+        sharedIndiceBuffer = ByteBuffer.allocateDirect(nSides * sideSize).order(ByteOrder.nativeOrder());
+        
+        // For each quad...
+        for (int i= 0; i < nSides; i++) {
+            // ... build the indices for it
+            sharedIndiceBuffer.putInt(4 * i);
+            sharedIndiceBuffer.putInt(4 * i + 1);
+            sharedIndiceBuffer.putInt(4 * i + 2);
+            sharedIndiceBuffer.putInt(4 * i + 2);
+            sharedIndiceBuffer.putInt(4 * i + 1);
+            sharedIndiceBuffer.putInt(4 * i + 3);
+        }
+        sharedIndiceBuffer.flip();
     }
 
     public void stepPhysics() {
-        BulletGlobals.setDeactivationDisabled(false);
-        float deactiavtion = BulletGlobals.getDeactivationTime();
-        BulletGlobals.setDeactivationTime(1.0f);
         int time = Ref.cgame.cg.time;
         if(lastPhysicsTime == 0) {
             lastPhysicsTime = time - 16;
@@ -58,6 +108,7 @@ public class CGPhysics {
             float delta = (time - lastPhysicsTime) / 1000f;
             world.stepSimulation(delta);
             lastPhysicsTime = time;
+            handleGhostObjects();
         }
     }
 
@@ -71,7 +122,52 @@ public class CGPhysics {
      * @param forcefalloff true if force should decrease with distance
      */
     public void explosionImpulse(Vector3f origin, float radius, float force, boolean forcefalloff) {
+        GhostObject ghostObj = new GhostObject();
         
+        // Set shape
+        ghostObj.setCollisionShape(new SphereShape(radius*SCALE_FACTOR));
+
+        // Set origin
+        Transform t = new Transform();
+        t.setIdentity();
+        t.origin.set(origin.x, origin.y, origin.z);
+        t.origin.scale(SCALE_FACTOR); // scale to physics size
+        ghostObj.setWorldTransform(t);
+        
+        // Don't push bodies away
+        ghostObj.setCollisionFlags(ghostObj.getCollisionFlags() | CollisionFlags.NO_CONTACT_RESPONSE);
+
+        // add to world and out ghostobject list
+        world.addCollisionObject(ghostObj);
+        explosionObjects.add(ghostObj);
+    }
+
+    public ArrayList<GhostObject> explosionObjects = new ArrayList<GhostObject>();
+    private void handleGhostObjects() {
+        javax.vecmath.Vector3f impulse = new javax.vecmath.Vector3f(0, 0, 200);
+        Transform t1 = new Transform();
+        Transform t2 = new Transform();
+        for (GhostObject ghostObject : explosionObjects) {
+            ghostObject.getWorldTransform(t1); // get ghost center
+            
+            for (CollisionObject collisionObject : ghostObject.getOverlappingPairs()) {
+                RigidBody b = RigidBody.upcast(collisionObject);
+                if(b != null && !b.isStaticObject()) {
+                    b.getWorldTransform(t2);
+                    impulse.x = t2.origin.x - t1.origin.x;
+                    impulse.y = t2.origin.y - t1.origin.y;
+                    impulse.z = t2.origin.z - t1.origin.z;
+                    float len = impulse.length();
+                    impulse.normalize();
+                    float scale = 200 - len;
+                    impulse.scale(scale);
+                    b.activate(true);
+                    b.applyCentralImpulse(impulse);
+                }
+            }
+            world.removeCollisionObject(ghostObject);
+        }
+        explosionObjects.clear();
     }
 
     public void deleteBody(RigidBody body) {
@@ -94,40 +190,21 @@ public class CGPhysics {
         }
 
         // using motionstate is recommended, it provides interpolation capabilities, and only synchronizes 'active' objects
-
-        //#define USE_MOTIONSTATE 1
-        //#ifdef USE_MOTIONSTATE
-        
-
         RigidBodyConstructionInfo cInfo = new RigidBodyConstructionInfo(mass, mState, shape, localInertia);
-        cInfo.linearSleepingThreshold = 4f;
-        cInfo.angularSleepingThreshold = 1f;
-        cInfo.linearDamping = 0.01f;
-        cInfo.angularDamping = 0.01f;
-        //cInfo.angularSleepingThreshold *= 4f;
         RigidBody body = new RigidBody(cInfo);
-        //#else
-        //btRigidBody* body = new btRigidBody(mass,0,shape,localInertia);
-        //body->setWorldTransform(startTransform);
-        //#endif//
 
         world.addRigidBody(body);
-
         return body;
     }
 
     
 
     public ICommand firebox = new ICommand() {
-
         public void RunCommand(String[] args) {
-
-            Vector3f dest = Helper.VectorMA(Ref.cgame.cg.refdef.Origin, 20f, Ref.cgame.cg.refdef.ViewAxis[0], null);
-            shootBox(dest);
+            Vector3f origin = Ref.cgame.cg.predictedPlayerEntity.lerpOrigin;
+            shootBox(origin, Ref.cgame.cg.refdef.ViewAxis[0], 20f); // shootbox scales it down
         }
     };
-
-    
 
     public void renderBodies() {
 //        Transform t = new Transform();
@@ -162,33 +239,17 @@ public class CGPhysics {
 //        }
     }
 
-    public void shootBox(Vector3f destination) {
+    public void shootBox(Vector3f origin, Vector3f dir, float force) {
         if (world != null) {
 
-
-//            Transform startTransform = new Transform();
-//            startTransform.setIdentity();
-            Vector3f cam = Ref.cgame.cg.refdef.Origin;
-//
-//            javax.vecmath.Vector3f camPos = new javax.vecmath.Vector3f(cam.x, cam.y, cam.z);
-//            startTransform.origin.set(camPos);
-
-            LocalEntity lent = LocalEntity.physicsBox(cam, Ref.cgame.cg.time, 20000, Ref.ResMan.getWhiteTexture().asMaterial(), boxShape);
-            javax.vecmath.Vector3f linVel = new javax.vecmath.Vector3f(destination.x - cam.x, destination.y - cam.y, destination.z - cam.z);
+            LocalEntity lent = LocalEntity.physicsBox(origin, Ref.cgame.cg.time, 20000, Ref.ResMan.getWhiteTexture().asMaterial(), boxShape);
+            javax.vecmath.Vector3f linVel = new javax.vecmath.Vector3f(dir.x, dir.y, dir.z);
             linVel.normalize();
-            linVel.scale(200f);
-
-
-
-//            Transform worldTrans = body.getWorldTransform(new Transform());
-//            worldTrans.origin.set(cam.x, cam.y, cam.z);
-//            worldTrans.setRotation(new Quat4f(0f, 0f, 0f, 1f));
-//            body.setWorldTransform(worldTrans);
+            linVel.scale(force);
 
             lent.phys_body.setLinearVelocity(linVel);
             lent.phys_body.setAngularVelocity(new javax.vecmath.Vector3f(0f, 0f, 0f));
             bodies.add(lent.phys_body);
-            
         }
     }
 }

@@ -330,9 +330,6 @@ public class Collision {
         extent.scale(0.5f);
 
         Vector3f start = new Vector3f(startin);
-//        Vector3f.sub(maxs, extent, start);
-//        Vector3f.add(start, startin, start);
-
         Vector3f dir = new Vector3f();
         if(end != null)
             Vector3f.sub(start, end, dir);
@@ -340,54 +337,10 @@ public class Collision {
         CollisionResult res = GetNext();
         res.reset(start, dir, extent);
 
-        boolean cheapTest = dir.length() == 0;
+//        boolean cheapTest = dir.length() == 0;
 
-        if(boxTrace) {
-            TestAABBBox(start,dir, extent , res);
-//            if(cheapTest)
-//            {
-//
-//                if(TestPosition(start, extent, tempCollisionBox)) {
-//                    // Collided
-//                    res.frac = 0f;
-//                    res.hit = true;
-//                    res.hitAxis.set(0,0,1);
-//                    res.hitmask = Content.SOLID; // unknown hitmask
-//                    res.startsolid = true;
-//                }
-//            } else
-//                Test(start, extent, dir, tempCollisionBox, res);
-        } else {
-            int derp = 2;
-        }
-//        else {
-//            // Trace a group of boxes
-//            // Get bounds
-//            BlockModel model = Ref.cm.cm.getModel(submodel);
-//            model.moveTo(submodelOrigin);
-//
-//
-//            for (Block block : model.blocks) {
-//                if(!block.Collidable)
-//                    continue;
-//
-//                if(cheapTest) {
-//                    if(TestPosition(start, extent, block)) {
-//                        // hit block
-//                        res.frac = 0f;
-//                        res.hit = true;
-//                        res.hitAxis.set(0,0);
-//                        res.hitmask = Content.SOLID;
-//                        res.startsolid = true;
-//                    }
-//                } else
-//                    Test(start, extent, dir, block, res);
-//
-//                if(res.frac == 0f)
-//                    break;
-//            }
-//        }
-
+        assert(boxTrace);
+        TestAABBBox(start,dir, extent , res);
         return res;
     }
 //

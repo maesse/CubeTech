@@ -29,7 +29,7 @@ public class ViewParams {
     public float FovX;
     public int FovY;
     public Matrix4f ProjectionMatrix;
-    public Matrix4f viewMatrix;
+    public Matrix4f viewMatrix = new Matrix4f();
     public Vector3f Angles = new Vector3f();
     public Vector3f[] ViewAxis = new Vector3f[3];
 
@@ -39,8 +39,9 @@ public class ViewParams {
     public float nearDepth;
 
     public Plane[] planes = new Plane[6];
+    private float[] view = new float[16];
 
-    private FloatBuffer viewbuffer = ByteBuffer.allocateDirect(16*4).order(ByteOrder.nativeOrder()).asFloatBuffer();
+    public FloatBuffer viewbuffer = ByteBuffer.allocateDirect(16*4).order(ByteOrder.nativeOrder()).asFloatBuffer();
     private FloatBuffer projbuffer = ByteBuffer.allocateDirect(16*4).order(ByteOrder.nativeOrder()).asFloatBuffer();
     public static final float[] flipMatrix = new float[] {
         // convert from our coordinate system (looking down X)
@@ -57,6 +58,9 @@ public class ViewParams {
         viewbuffer.clear();
         for (int i= 0; i < 3; i++) {
             ViewAxis[i] = new Vector3f();
+        }
+        for (int i= 0; i < planes.length; i++) {
+            planes[i] = new Plane(0, 0, 0, 0);
         }
     }
 
@@ -82,8 +86,8 @@ public class ViewParams {
         
 //        Angles.x *= -1f;
 //        Angles.y *= -1f;
-        ViewAxis = Helper.AnglesToAxis(Angles);
-        float[] view = new float[16];
+        ViewAxis = Helper.AnglesToAxis(Angles, ViewAxis);
+        
         view[0] = ViewAxis[0].x;
         view[4] = ViewAxis[0].y;
         view[8] = ViewAxis[0].z;
@@ -102,7 +106,7 @@ public class ViewParams {
         view[3] = view[7] = view[11] = 0;
         view[15] = 1;
 
-        Vector3f org = new Vector3f(-Origin.x, -Origin.y, -Origin.z);
+        //Vector3f org = new Vector3f(-Origin.x, -Origin.y, -Origin.z);
 //        ViewAxis[0].scale(-1);
 //        ViewAxis[1].scale(-1);
         
@@ -127,7 +131,7 @@ public class ViewParams {
         Helper.multMatrix(view, flipMatrix, viewbuffer);
         viewbuffer.limit(16);
         viewbuffer.position(0);
-        viewMatrix = (Matrix4f) new Matrix4f().load(viewbuffer);
+        viewMatrix.load(viewbuffer);
         viewbuffer.position(0);
         
 
@@ -148,7 +152,8 @@ public class ViewParams {
         derps.scale(-1f);
         float d = Vector3f.dot(derps, Origin);
 
-        planes[0] = new Plane(derps.x, derps.y, derps.z, d).normalize();
+        planes[0].set(derps.x, derps.y, derps.z, d);
+        planes[0].normalize();
     }
 
     private void setup3DProjection(float fov, float aspect, float znear, float zfar) {
@@ -157,7 +162,10 @@ public class ViewParams {
         GLU.gluPerspective(fov, 1f/aspect, znear, zfar);
         farDepth = zfar;
         GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projbuffer);
-        ProjectionMatrix = (Matrix4f) new Matrix4f().load(projbuffer);
+        if(ProjectionMatrix == null) {
+            ProjectionMatrix = new Matrix4f();
+        }
+        ProjectionMatrix.load(projbuffer);
         projbuffer.position(0);
         return;
         

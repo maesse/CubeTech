@@ -43,6 +43,8 @@ public class FrameBuffer {
     private int depthBitResolution = 24;
     private int arrayLevels = 1;
 
+    private CubeTexture asTexture = null;
+
     public FrameBuffer(int depthSize, int nLevels, int nBits) {
         useColor = false;
         useDepth = true;
@@ -53,6 +55,13 @@ public class FrameBuffer {
         depthBitResolution = nBits;
         InitFBO();
     }
+
+    public CubeTexture getAsTexture() {
+        if(asTexture == null) {
+            asTexture = new CubeTexture(getTarget(), getDepthTextureId(), null);
+        }
+        return asTexture;
+    }
     
     public FrameBuffer(boolean color, boolean depth, int w, int h) {
         if(w != h || Helper.get2Fold(w) != w)
@@ -62,8 +71,6 @@ public class FrameBuffer {
 
         if(npot) {
             shader = Ref.glRef.getShader("RectBlit");
-            shader.mapTextureUniform("tex", 0);
-            shader.validate();
 
             if(!Ref.glRef.caps.GL_EXT_texture_rectangle) { // aint got no ext?
                 if(Ref.glRef.caps.GL_NV_texture_rectangle) { // try nvidia
@@ -101,7 +108,7 @@ public class FrameBuffer {
         if(useColor && useDepth) {
             // Create the color texture
             GL11.glDeleteTextures(fboColorId);
-            fboColorId = Ref.ResMan.CreateEmptyTexture(w,h,TexRect,false);
+            fboColorId = Ref.ResMan.CreateEmptyTexture(w,h,TexRect,false, null);
             glBindTexture(TexRect, 0);
             GLRef.checkError();
             // Attach it
@@ -128,8 +135,8 @@ public class FrameBuffer {
             } else {
                 fboColorId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, TexRect);
             }
-            glTexParameteri(TexRect, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(TexRect, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(TexRect, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(TexRect, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             glBindTexture(TexRect, 0);
             GLRef.checkError();
             // Attach it
@@ -215,7 +222,7 @@ public class FrameBuffer {
 
         if(useColor) {
             // Create the color texture
-            fboColorId = Ref.ResMan.CreateEmptyTexture(w,h,TexRect,false);
+            fboColorId = Ref.ResMan.CreateEmptyTexture(w,h,TexRect,false, null);
             glBindTexture(TexRect, 0);
             GLRef.checkError();
             // Attach it
@@ -245,8 +252,8 @@ public class FrameBuffer {
                 fboColorId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, TexRect);
             }
             
-            glTexParameteri(TexRect, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(TexRect, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(TexRect, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(TexRect, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             glBindTexture(TexRect, 0);
             GLRef.checkError();
             // Attach it
@@ -403,6 +410,7 @@ public class FrameBuffer {
     }
 
     public int getDepthTextureId() {
+        if(!useColor && useDepth) return fboColorId;
         return depthId;
     }
 

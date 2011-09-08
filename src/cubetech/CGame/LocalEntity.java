@@ -99,6 +99,7 @@ public class LocalEntity {
         Transform t = new Transform();
         t.setIdentity();
         t.origin.set(origin.x, origin.y, origin.z);
+        t.origin.scale(CGPhysics.SCALE_FACTOR);
         le.phys_motionState = new DefaultMotionState(t);
 
         le.phys_body = Ref.cgame.physics.localCreateRigidBody(10f, le.phys_motionState, boxShape);

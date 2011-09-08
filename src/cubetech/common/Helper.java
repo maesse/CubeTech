@@ -93,10 +93,17 @@ public class Helper {
         return 3 * valSq - 2 * valSq * val;
     }
 
-    public static void renderBBoxWireframe(float xmin, float ymin, float zmin, float xmax, float ymax, float zmax) {
+    //
+    public static void renderBBoxWireframe(float xmin, float ymin, float zmin, 
+            float xmax, float ymax, float zmax,
+            Vector4f color) {
         // ready the texture
         Ref.ResMan.getWhiteTexture().Bind();
-        col(1, 0, 0);
+        if(color != null) {
+            col(color.x, color.y, color.z, color.w);
+        } else {
+            col(1,0,0);
+        }
         GL11.glBegin(GL11.GL_LINES);
 
         // Top: Z+
@@ -255,16 +262,22 @@ public class Helper {
         return ext;
     }
 
-    public static Vector3f[] AnglesToAxis(Vector3f angles) {
-        Vector3f[] axis = new Vector3f[3];
-        for (int i= 0; i < axis.length; i++) {
-            axis[i] = new Vector3f();
+    public static Vector3f[] AnglesToAxis(Vector3f angles, Vector3f[] axis) {
+        if(axis == null) {
+            axis = new Vector3f[3];
+            for (int i= 0; i < 3; i++) {
+                axis[i] = new Vector3f();
+            }
         }
+        assert(axis.length >= 3);
         // angle vectors returns "right" instead of "y axis"
-        Vector3f right = new Vector3f();
-        AngleVectors(angles, axis[0], right, axis[2]);
-        Vector3f.sub(new Vector3f(), right, axis[1]);
+        AngleVectors(angles, axis[0], axis[1], axis[2]);
+        axis[1].scale(-1f);
         return axis;
+    }
+
+    public static Vector3f[] AnglesToAxis(Vector3f angles) {
+        return AnglesToAxis(angles, null);
     }
 
     public static void AngleVectors(Vector3f angles, Vector3f forward, Vector3f right, Vector3f up) {
@@ -378,6 +391,58 @@ public class Helper {
             view[14] = -origin.x * view[2] + -origin.y * view[6] + -origin.z * view[10];
         }
         return view;
+    }
+
+    public static Vector3f[] mul(Vector3f[] left, Vector3f[] right, Vector3f[] dest) {
+        assert(dest != null);
+
+        float m00 =
+                left[0].x * right[0].x + left[0].y * right[1].x + left[0].z * right[2].x;
+        float m01 =
+                left[1].x * right[0].x + left[1].y * right[1].x + left[1].z * right[2].x;
+        float m02 =
+                left[2].x * right[0].x + left[2].y * right[1].x + left[2].z * right[2].x;
+        float m10 =
+                left[0].x * right[0].y + left[0].y * right[1].y + left[0].z * right[2].y;
+        float m11 =
+                left[1].x * right[0].y + left[1].y * right[1].y + left[1].z * right[2].y;
+        float m12 =
+                left[2].x * right[0].y + left[2].y * right[1].y + left[2].z * right[2].y;
+        float m20 =
+                left[0].x * right[0].z + left[0].y * right[1].z + left[0].z * right[2].z;
+        float m21 =
+                left[1].x * right[0].z + left[1].y * right[1].z + left[1].z * right[2].z;
+        float m22 =
+                left[2].x * right[0].z + left[2].y * right[1].z + left[2].z * right[2].z;
+
+
+        dest[0].x = m00;
+        dest[1].x = m01;
+        dest[2].x = m02;
+        dest[0].y = m10;
+        dest[1].y = m11;
+        dest[2].y = m12;
+        dest[0].z = m20;
+        dest[1].z = m21;
+        dest[2].z = m22;
+
+        return dest;
+    }
+
+    public static void matrixToAxis(Matrix4f m, Vector3f[] dest) {
+//        m.invert();
+        assert(dest != null && dest.length >= 3);
+        dest[0].x = m.m00;
+        dest[0].y = m.m10;
+        dest[0].z = m.m20;
+
+        dest[1].x = m.m01;
+        dest[1].y = m.m11;
+        dest[1].z = m.m21;
+
+        dest[2].x = m.m02;
+        dest[2].y = m.m12;
+        dest[2].z = m.m22;
     }
 
     public static Vector3f rotatePointAroundVector(Vector3f dest, Vector3f dir, Vector3f point, float deg) {

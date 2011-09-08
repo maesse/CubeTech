@@ -66,7 +66,7 @@ public class Common {
     private CVar com_abnormalExit;
 
     public int frametime; // the time this frame
-    public ItemList items = new ItemList();
+    public ItemList items;
     
     private int lasttime; // the time last frame
     public int framemsec; // delta time between frames
@@ -104,6 +104,8 @@ public class Common {
         com_timer.Min = 1;
         useSysTimer = com_timer.iValue == 1;
         errorMessage.modified = false;
+
+        items = new ItemList();
         // Init client and server
         Ref.server = new Server();
 //        Ref.server.Init();

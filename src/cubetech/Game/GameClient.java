@@ -56,18 +56,20 @@ public class GameClient extends Gentity {
     public boolean noclip;
     public boolean godmode;
 
+    private static long[] lookupCache = null;
+
     void updatePlayerCubes() {
         // Get a list of chunks surrounding the player
-        long[] lookups = Ref.cm.cubemap.getVisibleChunks(ps.origin, CubeMap.DEFAULT_GROW_DIST);
+        lookupCache = Ref.cm.cubemap.getVisibleChunks(ps.origin, CubeMap.DEFAULT_GROW_DIST, lookupCache);
         
-        for (int i= 0; i < lookups.length; i++) {
-            long index = lookups[i];
-            CubeChunk chunk = Ref.cm.cubemap.chunks.get(index);
+        for (int i= 0; i < lookupCache.length; i++) {
+            long index = lookupCache[i];
+            CubeChunk chunk = (CubeChunk)Ref.cm.cubemap.chunks.get(index);
 
             if(chunk == null) continue;
             
             int version = chunk.version; // server version
-            ChunkEntry clEntry = pers.chunkVersions.get(index);
+            ChunkEntry clEntry = (ChunkEntry)pers.chunkVersions.get(index);
 
             if(clEntry == null)
             {
@@ -84,7 +86,7 @@ public class GameClient extends Gentity {
     }
 
     void sendFullChunk(long index) {
-        CubeChunk chunk = Ref.cm.cubemap.chunks.get(index);
+        CubeChunk chunk = (CubeChunk)Ref.cm.cubemap.chunks.get(index);
 
         // Create data
         ByteBuffer buf = chunk.createByteBuffer();
@@ -93,7 +95,7 @@ public class GameClient extends Gentity {
         pers.queueChunkData(buf);
 
         // Register last sent
-        ChunkEntry en = pers.chunkVersions.get(index);
+        ChunkEntry en = (ChunkEntry)pers.chunkVersions.get(index);
         if(en == null) {
             pers.chunkVersions.put(index, new ChunkEntry(chunk.version));
         } else {
@@ -102,8 +104,8 @@ public class GameClient extends Gentity {
     }
 
     void sendPartialChunk(long index, int start) {
-        CubeChunk chunk = Ref.cm.cubemap.chunks.get(index);
-        ChunkEntry en = pers.chunkVersions.get(index);
+        CubeChunk chunk = (CubeChunk)Ref.cm.cubemap.chunks.get(index);
+        ChunkEntry en = (ChunkEntry)pers.chunkVersions.get(index);
         
         // Check if we have the needed history data
         if(chunk.version - start >= CubeChunk.NUM_VERSION) {

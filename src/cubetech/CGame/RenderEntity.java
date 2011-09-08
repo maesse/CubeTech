@@ -22,6 +22,7 @@ public class RenderEntity {
 
     public static final int FLAG_SPRITE_AXIS = 1; // use axis[0] and axis[1] as up & right vectors
     public static final int FLAG_NOSHADOW = 2;
+    public static final int FLAG_GPUSKINNED = 4;
 
     public IQMModel model = null;
     public REType Type = REType.SPRITE;
@@ -29,6 +30,7 @@ public class RenderEntity {
     public Vector4f color = new Vector4f(255,255,255,255); // 0 - 255f
     public Vector4f outcolor = new Vector4f();
 
+    
     // most recent data
     public Vector3f[] axis  =new Vector3f[3]; // rotation vectors
     public Vector3f origin = new Vector3f();

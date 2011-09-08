@@ -223,6 +223,19 @@ public class CButton extends CContainer {
         }
     }
 
+    private Vector2f topleftOffset = new Vector2f();
+    private Vector2f leftOffset = new Vector2f();
+    private Vector2f rightOffset = new Vector2f();
+    private Vector2f sideSize = new Vector2f();
+    private Vector2f topRightOffset = new Vector2f();
+    private Vector2f botRightOffset = new Vector2f();
+    private Vector2f botSize = new Vector2f();
+    private Vector2f botOffset = new Vector2f();
+    private Vector2f topOffset = new Vector2f();
+    private Vector2f centerOffset = new Vector2f();
+    private Vector2f centerSize = new Vector2f();
+    private Vector2f cornerSize = new Vector2f(16f/512f, 16f/512f);
+
     private void renderNormalBg(Vector2f renderpos) {
         
         Vector2f siz = new Vector2f(getSize());
@@ -234,36 +247,36 @@ public class CButton extends CContainer {
         siz.y += marg.y + marg.w;
 
         float resY = Ref.glRef.GetResolution().y;
-        Vector2f cornerSize = new Vector2f(16f/512f, 16f/512f);
 
+        topleftOffset.set(texOffset.x, texOffset.y + (140f/512f));
+        leftOffset.set(texOffset.x, texOffset.y + (16f/512f));
+        rightOffset.set(texOffset.x + (144f/512f), texOffset.y + (16f/512f));
+        sideSize.set(cornerSize.x, texSize.y - cornerSize.y * 2f);
+        topRightOffset.set(texOffset.x + (144f/512f), texOffset.y + (140f/512f));
+        botRightOffset.set(texOffset.x + (144f/512f), texOffset.y);
+        botSize.set(texSize.x - cornerSize.x * 2f, cornerSize.y);
+        botOffset.set(texOffset.x + (16f/512f), texOffset.y);
+        topOffset.set(texOffset.x + (16f/512f), texOffset.y + (140f/512f));
+        centerOffset.set(texOffset.x + cornerSize.x, texOffset.y + cornerSize.y);
+        centerSize.set(texSize.x - cornerSize.x * 2f, texSize.y - cornerSize.y * 2f);
 
-        Vector2f topleftOffset = new Vector2f(texOffset.x, texOffset.y + (140f/512f));
-        Vector2f leftOffset = new Vector2f(texOffset.x, texOffset.y + (16f/512f));
-        Vector2f rightOffset = new Vector2f(texOffset.x + (144f/512f), texOffset.y + (16f/512f));
-        Vector2f sideSize = new Vector2f(cornerSize.x, texSize.y - cornerSize.y * 2f);
-        Vector2f topRightOffset = new Vector2f(texOffset.x + (144f/512f), texOffset.y + (140f/512f));
-        Vector2f botRightOffset = new Vector2f(texOffset.x + (144f/512f), texOffset.y);
-        Vector2f botSize = new Vector2f(texSize.x - cornerSize.x * 2f, cornerSize.y);
-        Vector2f botOffset = new Vector2f(texOffset.x + (16f/512f), texOffset.y);
-        Vector2f topOffset = new Vector2f(texOffset.x + (16f/512f), texOffset.y + (140f/512f));
-        Vector2f centerOffset = new Vector2f(texOffset.x + cornerSize.x, texOffset.y + cornerSize.y);
-        Vector2f centerSize = new Vector2f(texSize.x - cornerSize.x * 2f, texSize.y - cornerSize.y * 2f);
+        Vector2f margv = new Vector2f(marg.x, marg.y);
 
         // Bot left
         Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(renderpos.x, resY - renderpos.y - siz.y), new Vector2f(marg.x, marg.y), normalBackground.getTexture(), texOffset, cornerSize);
+        spr.Set(new Vector2f(renderpos.x, resY - renderpos.y - siz.y), margv, normalBackground.getTexture(), texOffset, cornerSize);
 
         // Top Left
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(renderpos.x, resY - renderpos.y - marg.y), new Vector2f(marg.x, marg.y), normalBackground.getTexture(), topleftOffset, cornerSize);
+        spr.Set(new Vector2f(renderpos.x, resY - renderpos.y - marg.y), margv, normalBackground.getTexture(), topleftOffset, cornerSize);
 
         // Top Right
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(renderpos.x + siz.x - marg.z, resY - renderpos.y - marg.y), new Vector2f(marg.x, marg.y), normalBackground.getTexture(), topRightOffset, cornerSize);
+        spr.Set(new Vector2f(renderpos.x + siz.x - marg.z, resY - renderpos.y - marg.y), margv, normalBackground.getTexture(), topRightOffset, cornerSize);
 
         // Bot Right
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(renderpos.x + siz.x - marg.z, resY - renderpos.y - siz.y), new Vector2f(marg.x, marg.y), normalBackground.getTexture(), botRightOffset, cornerSize);
+        spr.Set(new Vector2f(renderpos.x + siz.x - marg.z, resY - renderpos.y - siz.y), margv, normalBackground.getTexture(), botRightOffset, cornerSize);
 
         // Top
         spr = Ref.SpriteMan.GetSprite(Type.HUD);

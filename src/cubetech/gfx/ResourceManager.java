@@ -1,5 +1,8 @@
 package cubetech.gfx;
 
+import cubetech.common.CVar;
+import java.util.EnumSet;
+import cubetech.common.CVarFlags;
 import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Profiler;
 import java.util.Iterator;
@@ -56,6 +59,7 @@ import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import javax.swing.ImageIcon;
 import org.lwjgl.opengl.EXTTextureArray;
+import org.lwjgl.util.ReadableColor;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
@@ -75,7 +79,7 @@ public final class ResourceManager {
     private ColorModel glAlphaColorModel;
     private ColorModel glColorModel;
     int nUnloadedTextures = 0; // numbers of textures that needs to be loaded
-
+    CVar devpath;
     public boolean autoSrgb = true;
 
     // Used for quering new opengl textures ids
@@ -90,7 +94,13 @@ public final class ResourceManager {
         glColorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB),
                                             new int[] {8,8,8,0},false,false,
                                             ComponentColorModel.OPAQUE,DataBuffer.TYPE_BYTE);
-        whiteTexture = LoadTexture("data/white.png");
+        
+
+        whiteTexture = new CubeTexture(GL_TEXTURE_2D, -1,"data/white.png");
+        whiteTexture.loaded = true;
+        devpath = Ref.cvars.Get("devpath",
+                "C:\\Users\\mads\\Documents\\NetBeansProjects\\CubeTech\\src\\cubetech\\",
+                EnumSet.of(CVarFlags.ARCHIVE));
     }
 
     public ColorModel getRGBColorModel() {
@@ -126,7 +136,10 @@ public final class ResourceManager {
     public void Update() {
         if(unloadedRessources.isEmpty()) return; // nothing to load
         if(Ref.glRef == null || !Ref.glRef.isInitalized()) return; // OpenGL not ready
-
+        if(whiteTexture.GetID() == -1) {
+            int whiteTextureId = CreateEmptyTexture(1, 1, GL_TEXTURE_2D, true, (org.lwjgl.util.Color) ReadableColor.WHITE);
+            whiteTexture.SetID(whiteTextureId);
+        }
         SecTag s = Profiler.EnterSection(Sec.TEXMAN);
 
         int nLoaded = 0;
@@ -158,8 +171,7 @@ public final class ResourceManager {
         if(Ressources.containsKey(filename)) return (IQMModel)Ressources.get(filename).Data; // cached
 
         String orgName = modelName;
-//        modelName = "src/cubetech/" + modelName;
-        modelName = "C:\\Users\\mads\\Documents\\NetBeansProjects\\CubeTech\\src\\cubetech\\" + modelName;
+        modelName = devpath.sValue + modelName;
         // load
         IQMModel model;
         try {
@@ -186,24 +198,15 @@ public final class ResourceManager {
         return model;
     }
 
-//    public CubeTexture loadCubemap(String filename) throws IOException {
-//        CubeTexture tex = getTexture(filename,
-//                         GL_TEXTURE_CUBE_MAP, // target
-//                         GL_RGB,     // dst pixel format
-//                         GL_LINEAR, // min filter
-//                         GL_LINEAR, null);
-//        tex.loaded = true;
-//
-//        return tex;
-//    }
-
     public CubeTexture LoadTexture(String filename) {
         return LoadTexture(filename, false);
     }
 
     public CubeTexture LoadTexture(String filename, boolean cubemap)  {
         // Check if it is cached
-        if(Ressources.containsKey(filename.toLowerCase())) {
+        if(Ressources.containsKey(filename)) {
+            return (CubeTexture)Ressources.get(filename).Data;
+        } else if(Ressources.containsKey(filename.toLowerCase())) {
             return (CubeTexture)Ressources.get(filename.toLowerCase()).Data;
         }
         
@@ -237,7 +240,12 @@ public final class ResourceManager {
             try {
                 tex = getTexture(res);
             } catch (IOException ex) { // it's a no go
-                Common.Log("Cannot load texture: File not found: " + filename + "(" + Common.getExceptionString(ex) + ")");
+                String error = "Cannot load texture: File not found: " + filename;
+                CVar dev = Ref.cvars.Find("developer");
+                if(dev != null && dev.isTrue()) {
+                    error = error + "(" + Common.getExceptionString(ex) + ")";
+                }
+                Common.Log(error);
                 tex = getUnloadedTexture(res);// Fallback to blank texture -- will never load as there isn't a point
             }
             res.loaded = true;
@@ -708,23 +716,44 @@ public final class ResourceManager {
         fos.close();
     }
 
+    public static AbstractMap.SimpleEntry<NetBuffer, Integer> OpenFileAsNetBufferDisk(String path, boolean direct) {
+        // Try looking on the filesystem
+        File file = new File(path);
+        if(file == null || !file.canRead()) return null;
+        else {
+
+            AbstractMap.SimpleEntry<ByteBuffer, Integer> result;
+            try {
+                result = OpenFileAsByteBuffer(file.getPath(), direct);
+            }catch (IOException ex) {
+                return null;
+            }
+            return new AbstractMap.SimpleEntry<NetBuffer, Integer>(NetBuffer.CreateCustom(result.getKey()), result.getValue());
+
+        }
+    }
+
     // Tries to open a stream to the given path. Checks the JAR first, then the FS
     public static AbstractMap.SimpleEntry<NetBuffer, Integer> OpenFileAsNetBuffer(String path, boolean direct) throws IOException {
+        if(!Ref.glRef.isApplet()) {
+            CVar dev = Ref.cvars.Find("developer");
+            if(dev != null && dev.isTrue()) {
+                AbstractMap.SimpleEntry<NetBuffer, Integer> fromDisk =
+                        OpenFileAsNetBufferDisk(Ref.cvars.Find("devpath").sValue+path, direct);
+                if(fromDisk != null) return fromDisk;
+            }
+            AbstractMap.SimpleEntry<NetBuffer, Integer> fromDisk = OpenFileAsNetBufferDisk(path, direct);
+            if(fromDisk != null) return fromDisk;
+        }
+
         // Look for the resource
         URL url = getClassLoader().getResource("cubetech/"+path);
-        File file = null;
         if(url == null) {
             url = getClassLoader().getResource(path);
             if(url == null) {
-                // Try looking on the filesystem
-                file = new File(path);
-                if(file == null || !file.canRead()) throw new FileNotFoundException("Cannot find file: " + path);
-                else {
-
-                    AbstractMap.SimpleEntry<ByteBuffer, Integer> result = OpenFileAsByteBuffer(file.getPath(), direct);
-                    return new AbstractMap.SimpleEntry<NetBuffer, Integer>(NetBuffer.CreateCustom(result.getKey()), result.getValue());
-
-                }
+                AbstractMap.SimpleEntry<NetBuffer, Integer> fromDisk = OpenFileAsNetBufferDisk(path, direct);
+                if(fromDisk != null) return fromDisk;
+                throw new IOException("File not found: " + path);
             }
         }
 
@@ -794,7 +823,7 @@ public final class ResourceManager {
         return textureId;
     }
 
-    public int CreateEmptyTexture(int width, int height, int target, boolean fill) {
+    public int CreateEmptyTexture(int width, int height, int target, boolean fill, org.lwjgl.util.Color color) {
         int textureId = createTextureID();
         glBindTexture(target, textureId);
         glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -802,13 +831,13 @@ public final class ResourceManager {
         glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         if(fill) {
+            if(color == null) {
+                color = (org.lwjgl.util.Color) org.lwjgl.util.Color.WHITE;
+            }
             ByteBuffer buf = ByteBuffer.allocateDirect(width*height*4);
             buf.order(ByteOrder.nativeOrder());
             for (int i= 0; i < width*height; i++) {
-                buf.put((byte)125);
-                buf.put((byte)0);
-                buf.put((byte)255);
-                buf.put((byte)255);
+                color.writeRGBA(buf);
             }
             buf.flip();
             glTexImage2D(target, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf);

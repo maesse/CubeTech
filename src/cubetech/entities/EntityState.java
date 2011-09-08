@@ -164,14 +164,14 @@ public class EntityState {
         st.frame = frame;
         st.time = time;
         st.pos = new Trajectory();
-        st.pos.base = new Vector3f(pos.base);
-        st.pos.delta = new Vector3f(pos.delta);
+        st.pos.base.set(pos.base);
+        st.pos.delta.set(pos.delta);
         st.pos.type = pos.type;
         st.pos.time = pos.time;
         st.pos.duration = pos.duration;
         st.apos = new Trajectory();
-        st.apos.base = new Vector3f(apos.base);
-        st.apos.delta = new Vector3f(apos.delta);
+        st.apos.base.set(apos.base);
+        st.apos.delta.set(apos.delta);
         st.apos.type = apos.type;
         st.apos.time = apos.time;
         st.apos.duration = apos.duration;

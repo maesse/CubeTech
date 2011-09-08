@@ -327,8 +327,10 @@ public class SoundStore {
         String str =alcGetString(null, ALC_DEVICE_SPECIFIER);
         String[] devices = str.split("\0");
         for (String string : devices) {
-            System.out.println("Audio device: " + string);
+            //System.out.println("Audio device: " + string);
+            //if(string.contains("Wave File") && !hasWavWriter)
         }
+
     }
 
     /**

@@ -101,16 +101,16 @@ public class IQMVertexArray {
                     break;
                 case TYPE_BLENDINDEXES:
                     if(v.format != FORMAT_UBYTE || v.size != 4) throw new IllegalArgumentException("Invalid Vertex format");
-                    model.in_blendindex = new short[model.header.num_vertexes*4];
+                    model.in_blendindex = new byte[model.header.num_vertexes*4];
                     for (int j= 0; j < model.in_blendindex.length; j++) {
-                        model.in_blendindex[j] = ubyteToShort(buffer.get());
+                        model.in_blendindex[j] = buffer.get();
                     }
                     break;
                 case TYPE_BLENDWEIGHTS:
                     if(v.format != FORMAT_UBYTE || v.size != 4) throw new IllegalArgumentException("Invalid Vertex format");
-                    model.in_blendweight = new short[model.header.num_vertexes*4];
+                    model.in_blendweight = new byte[model.header.num_vertexes*4];
                     for (int j= 0; j < model.in_blendweight.length; j++) {
-                        model.in_blendweight[j] = ubyteToShort(buffer.get());
+                        model.in_blendweight[j] = buffer.get();
                     }
                     break;
             } 

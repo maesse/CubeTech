@@ -1,5 +1,6 @@
 package cubetech.collision;
 
+import cern.colt.map.OpenLongObjectHashMap;
 import cubetech.CGame.ChunkRender;
 import cubetech.common.Common;
 import java.nio.ByteBuffer;
@@ -28,7 +29,7 @@ public class CubeChunk {
     public int[] absmin = new int[3];
     public int[] absmax = new int[3];
     public float[] fcenter = new float[3];
-    public HashMap<Long, CubeChunk> chunks;
+    public OpenLongObjectHashMap chunks;
     public ChunkRender render;
 
     public int nCubes = 0;
@@ -37,8 +38,9 @@ public class CubeChunk {
     int[] versionData = new int[32]; // remember the last 32 changes
 
 
+
     public int[] p = new int[3]; // Position/Origin. Grows in the positive direction.
-    public CubeChunk(HashMap<Long, CubeChunk> chunks, int x, int y, int z) {
+    public CubeChunk(OpenLongObjectHashMap chunks, int x, int y, int z) {
         this.chunks = chunks;
         p = new int[] {x,y,z};
         absmin[0] = x * SIZE * BLOCK_SIZE;
@@ -166,6 +168,8 @@ public class CubeChunk {
         return createByteBuffer(-1);
     }
 
+    private static byte[] compressionBuffer1 = new byte[1 + 8 + SIZE * SIZE * SIZE];
+    private static byte[] compressionBuffer2 = new byte[4 + 1 + 8 + SIZE * SIZE * SIZE];
     public ByteBuffer createByteBuffer(int start) {
         int size;
 
@@ -182,8 +186,8 @@ public class CubeChunk {
         }
 
         // Fill byte buffer
-        byte[] data = new byte[size];
-        ByteBuffer buf = ByteBuffer.wrap(data);
+        byte[] data = compressionBuffer1;
+        ByteBuffer buf = ByteBuffer.wrap(data, 0, size);
         buf.order(ByteOrder.nativeOrder());
 
         // Write control byte
@@ -212,11 +216,13 @@ public class CubeChunk {
 
         // Compress data
         int compressionLevel = 4; // this seems like a good tradeoff
-        byte[] dest = new byte[size<64?64:size+4];
-        int wrote = compressData(data, dest, compressionLevel, true);
+        byte[] dest = compressionBuffer2;
+        int wrote = compressData(data, dest, size<64?64:size+4, compressionLevel, true);
 //        Common.LogDebug("Wrote %db cubedata to client (p:%d,%d,%d)", wrote,p[0],p[1],p[2]);
-        
-        buf = ByteBuffer.wrap(dest, 0, wrote);
+
+        byte[] finaldest = new byte[wrote];
+        System.arraycopy(compressionBuffer2, 0, finaldest, 0, wrote);
+        buf = ByteBuffer.wrap(finaldest);
         buf.order(ByteOrder.nativeOrder());
         // Write lenght
         buf.position(0);
@@ -227,7 +233,7 @@ public class CubeChunk {
 
     private void testCompression(byte[] data, byte[] dest) {
         for (int i= 0; i < 10; i++) {
-            Common.LogDebug("level %d compression: %db", i, compressData(data, dest, i, true));
+            Common.LogDebug("level %d compression: %db", i, compressData(data, dest, dest.length, i, true));
         }
     }
 
@@ -239,7 +245,7 @@ public class CubeChunk {
         return len;
     }
 
-    private static int compressData(byte[] src, byte[] dst, int level, boolean addHeaderSpace) {
+    private static int compressData(byte[] src, byte[] dst, int destsize, int level, boolean addHeaderSpace) {
         Deflater zip = new Deflater(level);
         zip.setInput(src);
         zip.finish();

@@ -2,31 +2,25 @@ package cubetech.CGame;
 
 import com.bulletphysics.collision.dispatch.CollisionFlags;
 import com.bulletphysics.collision.shapes.BvhTriangleMeshShape;
+import com.bulletphysics.collision.shapes.IndexedMesh;
 import com.bulletphysics.collision.shapes.TriangleIndexVertexArray;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.linearmath.Transform;
 import cubetech.collision.CubeChunk;
 import cubetech.collision.CubeMap;
+import cubetech.common.CVar;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Helper;
-import cubetech.gfx.CubeTexture;
-import cubetech.gfx.CubeType;
+import cubetech.gfx.*;
 import cubetech.gfx.GLRef.BufferTarget;
-import cubetech.gfx.Shader;
-import cubetech.gfx.TerrainTextureCache;
-import cubetech.gfx.VBO;
 import cubetech.misc.Profiler;
 import cubetech.misc.Profiler.Sec;
 import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
 import java.nio.BufferOverflowException;
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.ARBVertexShader;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -53,86 +47,209 @@ public class ChunkRender {
     private boolean bufferReady = false; // if theres a sourcebuffer ready for copying to vbo
     private boolean updatingBuffer = false; // if theres an update queues
     private boolean vboReady = false; // if vbo is ready for rendering
+    private boolean hasNeighbors = false;
 
+    // temp variables
     private int[] org = new int[3];
     private int[] chunkDelta = new int[3];
 
     public int sidesRendered; // set by fillbuffer
-
+    public int vboLockTime = 0;
     // Physics data
-    //TriangleIndexVertexArray triangles;
+    TriangleIndexVertexArray indexVertexArray;
+    ByteBuffer vertexCollisionData;
     BvhTriangleMeshShape shape;
+    RigidBody body;
 
     public ChunkRender(CubeChunk chunk) {
         this.chunk = chunk;
+//        hasNeighbors = hasNeightbors();
+    }
+
+    public boolean isVboReady() {
+        return vboReady;
     }
 
     public void destroy() {
         vboReady = false;
         if(vbo == null) return;
-        vbo.destroy();
+        VBOPool.Global.freeVBO(vbo);
         vbo = null;
-    }
-
-    private void extractPhysicsMesh(ByteBuffer data) {
-        if(shape != null) return;
-        if(data.limit() == 0) return;
-        int size = data.limit();
-        int nVerts = (size / 32);
-        int nTriangles = (nVerts / 4) * 2;
-
-        if(nVerts / 4 != sidesRendered) {
-            int derp = 2;
-        }
-
-        ByteBuffer vertexBuffer = ByteBuffer.allocateDirect(nVerts * 3 * 4).order(ByteOrder.nativeOrder());
-        ByteBuffer indexBuffer = ByteBuffer.allocateDirect(nTriangles * 3 * 4).order(ByteOrder.nativeOrder());
-
-        try {
-            // Gotta get them points
-            for (int i= 0; i < nVerts; i++) {
-                data.position(i * 32); // seek to position
-
-                // copy 12 bytes
-                for (int j= 0; j < 3*4; j++) {
-                    vertexBuffer.put(data.get());
-                }
-            }
-        } catch (BufferUnderflowException ex) {
-            int derpah = 2;
-        }
-        vertexBuffer.flip();
-
-        // For each quad...
-        for (int i= 0; i < nVerts / 4 ; i++) {
-            // ... build the indices for it
-            indexBuffer.putInt(4 * i);
-            indexBuffer.putInt(4 * i + 1);
-            indexBuffer.putInt(4 * i + 2);
-            indexBuffer.putInt(4 * i + 2);
-            indexBuffer.putInt(4 * i + 1);
-            indexBuffer.putInt(4 * i + 3);
-        }
-        indexBuffer.flip();
-
-        TriangleIndexVertexArray indexVertexArray = new TriangleIndexVertexArray(nTriangles, indexBuffer, 12, nVerts, vertexBuffer, 12);
-
-
-
-        // todo: supply aabb mins/maxs instead of letting BvhTriangle calculate it..
-        // todo: delete shape if not null
-        shape = new BvhTriangleMeshShape(indexVertexArray, true);
-        Transform nullTransform = new Transform();
-        nullTransform.setIdentity();
-        RigidBody body = Ref.cgame.physics.localCreateRigidBody(0f, nullTransform, shape);
-        body.setCollisionFlags(body.getCollisionFlags() | CollisionFlags.STATIC_OBJECT);
+        dirty = true;
     }
 
     public void Render() {
-        markVisible();
+//        if(!hasNeighbors && (updatingBuffer && bufferReady) == false) {
+//            hasNeighbors = hasNeightbors();
+//            if(hasNeighbors) {
+//                //setDirty(true, false);
+//            }
+//        }
+//        hasNeightbors();
+        markVisible(false);
 
         if(chunk.nCubes > 0 && vboReady)
             renderVBO();
+
+        if((dirty || updatingBuffer || bufferReady) && (!Ref.cgame.shadowMan.isRendering())) {
+            RenderEntity ent = Ref.render.createEntity(REType.BBOX);
+            int[] p = chunk.p;
+            int size = BLOCK_SIZE * SIZE;
+            float offset = 0.5f;
+            ent.origin.set(p[0] * size + offset, p[1] * size + offset, p[2] * size + offset);
+            offset *= 2f;
+            ent.oldOrigin.set(size-offset,size-offset,size-offset);
+            float r = dirty ? 1:0;
+            float g = (vboReady || lazyDirty) ? 1:0;
+            float b = updatingBuffer ? 0.5f:0;
+            b += bufferReady ? 1:0;
+            ent.outcolor.set(r,g,b,1);
+            Ref.render.addRefEntity(ent);
+        }
+//        renderSingleWireframe(0,0,0,)
+    }
+
+    private boolean hasNeightbors() {
+        for (int i= 0; i < 6; i++) {
+            int axis = i / 2;
+            int dir = (i & 1)==1 ? 1:-1;
+            org[0] = org[1] = org[2] = 0;
+            org[axis] = dir;
+            CubeChunk c = getChunkInDirection(org);
+            if(c == null) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public void markVisible(boolean force) {
+        
+        // We're not dirty
+        if(!dirty && !lazyDirty && !force)
+            return;
+
+        // Dont want to wash too often
+        if(lazyDirty && !force && !(lazyDirtyTime > Ref.common.frametime)) {
+            if(!hasNeightbors() && (!updatingBuffer || !bufferReady)) {
+                return; // lets be lazy
+            }
+        }
+
+        SecTag s = Profiler.EnterSection(Sec.CLIENTCUBES);
+        if(!updateVBO()) {
+            s.ExitSection();
+            return;
+        } // not ready yet
+        s.ExitSection();
+
+        // Clear dirty flags
+        setDirty(false, false);
+    }
+
+    private boolean updateVBO() {
+        if(chunk.nCubes == 0 && !updatingBuffer) return true;
+
+        if(!bufferReady) {
+            // Start async buffer fill
+            if(!updatingBuffer) {
+//                Common.LogDebug("[CR] Queueing buffer-filling");
+                updateBufffer();
+            }
+
+            return false; // dont clear dirty, we need this method called
+        }
+
+        long chunkid = CubeMap.positionToLookup(chunk.p[0], chunk.p[1], chunk.p[2]);
+        if(sidesRendered == 0) {
+            bufferReady = false; // untag buffer
+            if(updatingBuffer) {
+                Ref.common.Error(ErrorCode.FATAL, "derp");
+            }
+           //Common.LogDebug("[CR] Releasing 0side buffer for " + chunkid);
+//           assert(Ref.cgame.map.releaseBuffer(chunkid) == false);
+            return true; // clear dirty
+        }
+
+        // Check if we still have the source buffer
+        ByteBuffer src = Ref.cgame.map.getBuffer(chunkid);
+        if(src == null || src.limit() == 0) {
+            Common.Log("Lost ChunkRender buffer");
+            // We fell out of the queue :/
+            setDirty(true, true);
+            bufferReady = false;
+            if(updatingBuffer) {
+                Ref.common.Error(ErrorCode.FATAL, "derp");
+            }
+            sidesRendered = 0;
+            return false;
+        }
+
+        // Check how many vbo's we've updated already this frame
+//        if(Ref.cgame.map.nVBOthisFrame >= 4) {
+//            return false;
+//        }
+
+        // Create a VBO if we don't have one
+        long startTime = System.nanoTime();
+        boolean newVBO = vbo == null;
+        if(vbo == null) {
+            // Start off with an exact vbo size.
+            vbo = VBOPool.Global.allocateVBO(PLANE_SIZE * sidesRendered, BufferTarget.Vertex);
+            // overgrow a bit when resizing
+            vbo.resizeMultiplier = VBO_RESIZE_MULTIPLIER;
+        } else if(vbo.getSize() < PLANE_SIZE * sidesRendered) {
+            VBO temp = VBOPool.Global.allocateVBO(PLANE_SIZE * sidesRendered, vbo.getTarget());
+            VBOPool.Global.freeVBO(vbo);
+            vbo = temp;
+        }
+
+        // Copy data to VBO
+        boolean vboResized = vbo.getSize() < PLANE_SIZE * sidesRendered; // shouldn't happen
+        ByteBuffer buffer = vbo.map(PLANE_SIZE * sidesRendered);
+        long startTime2 = System.nanoTime();
+        if(buffer.limit()-buffer.position() < src.limit()) {
+            Ref.common.Error(ErrorCode.FATAL, "bytebuffer -> vbo overflow in chunkRender");
+        }
+        buffer.put(src);
+
+        vbo.unmap();
+
+        //extractPhysicsMesh(src);
+
+        // Clear state
+        vboReady = true;
+        bufferReady = false;
+        if(updatingBuffer) {
+                Ref.common.Error(ErrorCode.FATAL, "derp");
+            }
+        // Release source buffer
+//        Common.LogDebug("[CR] Releasing buffer");
+        int bufferindex = Ref.cgame.map.releaseBuffer(chunkid);
+        Common.LogDebug("[CR] Released buffer for " + chunkid + " bufferindex " + bufferindex);
+
+        long endTime = System.nanoTime();
+        float ms = (endTime - startTime)/(1000F*1000F);
+        float ms2 = (endTime - startTime2)/(1000F*1000F);
+        float percent = (100f/ms) * ms2;
+        CVar dev = Ref.cvars.Find("developer");
+        if(ms > 8.0f && dev != null && dev.isTrue())  {
+            Common.LogDebug("[CR] Building Chunk VBO took %.2fms (%d sides) %s(put+unmap %.0f%%)",
+                ms, sidesRendered,newVBO?"(new) ":(vboResized?"(resized) ":" "), percent);
+        }
+        //Common.LogDebug("Finished reading buffer");
+        Ref.cgame.map.nVBOthisFrame++;
+
+        return true; // clear dirty
+    }
+
+    private void renderVBO() {
+        vbo.bind();
+        preVbo();
+        GL11.glDrawArrays(GL11.GL_QUADS, 0, sidesRendered*4);
+        postVbo();
+        vbo.unbind();
     }
 
     // notify all neighboughrs
@@ -147,55 +264,38 @@ public class ChunkRender {
 
     // Notify a neighbourgh chunk of a change on the edge of
     public void notifyChange(int axis, boolean pos) {
-        int[] cPos = new int[] {chunk.p[0],chunk.p[1],chunk.p[2]};
-        cPos[axis] += pos?1:-1;
-        CubeChunk c = CubeMap.getChunk(cPos[0], cPos[1], cPos[2], false, chunk.chunks);
+        org[0] = org[1] = org[2] = 0;
+        org[axis] = pos?1:-1;
+        CubeChunk c = getChunkInDirection(org);
 
         // mark it dirty
-        if(c != null) c.render.setDirty(true, false);
+        if(c != null && c.render != null) c.render.setDirty(true, true);
     }
 
     public void setDirty(boolean isDirty, boolean lazy) {
-            if(!isDirty) {
-                dirty = false;
-                lazyDirty = false;
-            } else {
-                dirty = true;
-                lazyDirty = lazy;
-                if(lazy) {
-                    lazyDirtyTime = Ref.common.frametime + LAZY_TIME;
-                }
+        if(!isDirty) {
+            dirty = false;
+            lazyDirty = false;
+        } else {
+            dirty = true;
+            lazyDirty = lazy;
+            if(lazy) {
+                lazyDirtyTime = Ref.common.frametime + LAZY_TIME;
             }
+        }
     }
-
-    public void markVisible() {
-        // We're not dirty
-        if(!dirty && !lazyDirty)
-            return;
-
-        // Dont want to wash too often
-        if(lazyDirty && lazyDirtyTime > Ref.common.frametime)
-            return; // lets be lazy
-        
-        if(!updateVBO()) return; // not ready yet
-
-        // Clear dirty flags
-        setDirty(false, false);
-    }
-
     
     private void updateBufffer() {
         updatingBuffer = true;
         bufferReady = false;
-        
+        vboLockTime = 0;
         Ref.cgame.map.exec.submit(update);
-
-//        Thread t = new Thread(update);
-//        t.start();
     }
 
     private Runnable update = new Runnable() {
         public void run() {
+            long chunkid = CubeMap.positionToLookup(chunk.p[0], chunk.p[1], chunk.p[2]);
+            
             try {
                 boolean exitSleep = false;
                 int nWait = 0;
@@ -209,119 +309,39 @@ public class ChunkRender {
                         exitSleep = true;
                         Common.LogDebug("Force exit from sleep");
                     }
-
                 }
-                long chunkid = CubeMap.positionToLookup(chunk.p[0], chunk.p[1], chunk.p[2]);
+                
                 ByteBuffer data = Ref.cgame.map.grabBuffer(chunkid);
                 if(data == null) {
                     // Couldn't get a buffer..
-                    Common.LogDebug("[Builder] Couldn't get a buffer");
+                    Common.Log("[Builder] Couldn't get a buffer");
                     updatingBuffer = false;
                     return;
+                } else {
+                    Common.LogDebug("[Builder] Grabbed buffer for chunk " + chunkid);
                 }
                 
 //                Common.LogDebug("[Builder] Writing to buffer (%d)", Bufferindex);
                 fillBuffer(data);
                 data.flip();
                 if(data.limit() != PLANE_SIZE * sidesRendered) {
-                    int test = 2;
+                    Ref.common.Error(ErrorCode.FATAL, String.format(
+                            "[Builder] Buffer.limit (%d) is unexpected. Should be (%d)"
+                            , data.limit(), PLANE_SIZE * sidesRendered));
                 }
-                if(data.limit() == 0) {
-//                    Common.LogDebug("[Builder] Dropping 0len data (%d)", Bufferindex);
+                if(sidesRendered == 0) {
+                    // release early
+                    Common.LogDebug("[Builder] Releasing zero sized buffer for " + chunkid);
                     Ref.cgame.map.releaseBuffer(chunkid);
                 }
-                bufferReady = true;
             } catch(BufferOverflowException ex) {
                 Ref.common.Error(ErrorCode.FATAL,"CubeChunk.fillBuffer: VBO overflow" + Common.getExceptionString(ex));
             }
+            bufferReady = true;
             updatingBuffer = false;
-//            Common.LogDebug("[Builder] Buffer ready for reading (%d)", Bufferindex);
+            Common.LogDebug("[Builder] Buffer ready for reading for " + chunkid);
         }
-    };
-
-    private boolean updateVBO() {
-        if(chunk.nCubes == 0) return true;
-
-        if(!bufferReady) {
-            // Start async buffer fill
-            if(!updatingBuffer) {
-//                Common.LogDebug("[CR] Queueing buffer-filling");
-                updateBufffer();
-            }
-
-            return false; // dont clear dirty, we need this method called
-        }
-
-        SecTag s = Profiler.EnterSection(Sec.CLIENTCUBES);
-
-        long chunkid = CubeMap.positionToLookup(chunk.p[0], chunk.p[1], chunk.p[2]);
-        if(sidesRendered == 0) {
-            bufferReady = false; // untag buffer
-//                Common.LogDebug("[CR] Releasing 0side buffer");
-            Ref.cgame.map.releaseBuffer(chunkid);
-            return true; // clear dirty
-        }
-
-        // Check if we still have the source buffer
-        ByteBuffer src = Ref.cgame.map.getBuffer(chunkid);
-        if(src == null || src.limit() == 0) {
-//            Common.LogDebug("[CR] ByteBuffer data fell out of the circular buffer (%d)0",Bufferindex);
-            // We fell out of the queue :/
-            setDirty(true, true);
-            bufferReady = false;
-            sidesRendered = 0;
-            return false;
-        }
-
-        // Check how many vbo's we've updated already this frame
-        if(Ref.cgame.map.nVBOthisFrame >= 1) {
-            return false;
-        }
-
-
-
-        // Create a VBO if we don't have one
-        long startTime = System.nanoTime();
-        boolean newVBO = vbo == null;
-        if(vbo == null) {
-            // Start off with an exact vbo size.
-            vbo = new VBO(PLANE_SIZE * sidesRendered, BufferTarget.Vertex);
-            // overgrow a bit when resizing
-            vbo.resizeMultiplier = VBO_RESIZE_MULTIPLIER;   
-        }
-        
-        // Copy data to VBO
-        boolean vboResized = vbo.getSize() < PLANE_SIZE * sidesRendered;
-        ByteBuffer buffer = vbo.map(PLANE_SIZE * sidesRendered);
-        long startTime2 = System.nanoTime();
-        if(buffer.limit()-buffer.position() < src.limit()) {
-            int i = 2;
-        }
-        buffer.put(src);
-        
-        vbo.unmap();
-
-        extractPhysicsMesh(src);
-
-        // Clear state
-        vboReady = true;
-        bufferReady = false;
-
-        // Release source buffer
-//        Common.LogDebug("[CR] Releasing buffer");
-        Ref.cgame.map.releaseBuffer(chunkid);
-        
-        long endTime = System.nanoTime();
-        float ms = (endTime - startTime)/(1000F*1000F);
-        float ms2 = (endTime - startTime2)/(1000F*1000F);
-        float percent = (100f/ms) * ms2;
-        if(ms > 8.0f) Common.LogDebug("[CR] Building Chunk VBO took %.2fms (%d sides) %s(put+unmap %.0f%%)",
-                ms, sidesRendered,newVBO?"(new) ":(vboResized?"(resized) ":" "), percent);
-        
-        Ref.cgame.map.nVBOthisFrame++;
-        s.ExitSection();
-        return true; // clear dirty
-    }
+    };    
 
     private void padd(ByteBuffer buf) {
         buf.put((byte)0);
@@ -393,7 +413,7 @@ public class ChunkRender {
                     boolean ao1, ao2, ao3;
 
                     // Top: Z+
-                    if(derp(pos, ao(0,0,1))) {
+                    if(derp2(pos, ao(0,0,1))) {
                         color = Ref.cgame.map.lightSides[4];
                         ao1 = derp(pos, ao(-1,0,1));
                         ao2 = derp(pos, ao(0,-1,1));
@@ -431,7 +451,7 @@ public class ChunkRender {
                     }
 
                     // Bottom: Z-
-                    if(derp(pos, ao(0,0,-1))) {
+                    if(derp2(pos, ao(0,0,-1))) {
                     //if(visible[index*6+5]) {
                         color = Ref.cgame.map.lightSides[5];
                         if(multiTex) tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.BOTTOM);
@@ -472,7 +492,7 @@ public class ChunkRender {
 
                     // Y+
                     if(multiTex) tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.SIDE);
-                    if(derp(pos, ao(0,1,0))) {
+                    if(derp2(pos, ao(0,1,0))) {
                     //if(visible[index*6+2]) {
                         color = Ref.cgame.map.lightSides[2];
                         ao1 = derp(pos, ao(-1,1,0));
@@ -510,7 +530,7 @@ public class ChunkRender {
                     }
 
                     // Y-
-                    if(derp(pos, ao(0,-1,0))) {
+                    if(derp2(pos, ao(0,-1,0))) {
                     //if(visible[index*6+3]) {
                         color = Ref.cgame.map.lightSides[3];
                         ao1 = derp(pos, ao(-1,-1,0));
@@ -550,7 +570,7 @@ public class ChunkRender {
                     }
 
                     // X+
-                    if(derp(pos, ao(1,0,0))) {
+                    if(derp2(pos, ao(1,0,0))) {
                     //if(visible[index*6]) {
                         color = Ref.cgame.map.lightSides[0];
                         ao1 = derp(pos, ao(1,-1,0));
@@ -588,7 +608,7 @@ public class ChunkRender {
                     }
 
                     // X-
-                    if(derp(pos, ao(-1,0,0))) {
+                    if(derp2(pos, ao(-1,0,0))) {
                     //if(visible[index*6+1]) {
                         color = Ref.cgame.map.lightSides[1];
                         ao1 = derp(pos, ao(-1,-1,0));
@@ -629,9 +649,15 @@ public class ChunkRender {
         }
         sidesRendered = tempSidesRendered;
     }
-    
-    
+
+    private boolean derp2(int[] p,int[] a) {
+        return derp3(p, a, false);
+    }
     private boolean derp(int[] p,int[] a) {
+        return derp3(p, a, true);
+    }
+    
+    private boolean derp3(int[] p,int[] a, boolean onNoChunk) {
         CubeChunk baseChunk = chunk;
         boolean gotChunkDelta = false;
         
@@ -651,7 +677,7 @@ public class ChunkRender {
 
         if(gotChunkDelta) {
             baseChunk = getChunkInDirection(chunkDelta);
-            if(baseChunk == null) return false;
+            if(baseChunk == null) return onNoChunk;
         }
 
         return baseChunk.blockType[org[0] | org[1] << 5 | org[2] << 10] == 0;
@@ -669,15 +695,6 @@ public class ChunkRender {
         ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COLOR, 4, GL11.GL_UNSIGNED_BYTE, true, stride, 3*4);
         ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COORDS); // coords
         ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS, 2, GL11.GL_FLOAT, false, stride, 4*4);
-        CubeTexture tex = Ref.ResMan.LoadTexture("data/terrain.png");
-
-        tex.setFiltering(false, GL11.GL_NEAREST);
-//        tex.setAnisotropic(0);
-        tex.setWrap(GL12.GL_CLAMP_TO_EDGE);
-        GL11.glTexParameteri(tex.getTarget(), GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST_MIPMAP_LINEAR);
-        GL11.glTexParameteri(tex.getTarget(), GL12.GL_TEXTURE_MIN_LOD, 0);
-        GL11.glTexParameteri(tex.getTarget(), GL12.GL_TEXTURE_MAX_LOD, 2);
-//        Ref.ResMan.getWhiteTexture().Bind();
     }
 
     public static void postVbo() {
@@ -686,17 +703,7 @@ public class ChunkRender {
         GL20.glDisableVertexAttribArray(2);
     }
 
-    private void renderVBO() {
-        vbo.bind();
-        preVbo();
-
-        //GL11.glDisable(GL11.GL_BLEND);
-        GL11.glDrawArrays(GL11.GL_QUADS, 0, sidesRendered*4);
-        //GL12.glDrawRangeElements(GL11.GL_QUADS, callStart, callEnd-1, callLenght, GL11.GL_UNSIGNED_INT, offset);
-        //GL11.glEnable(GL11.GL_BLEND);
-        postVbo();
-        vbo.unbind();
-    }
+    
 
     public void renderSingle(int x, int y, int z, int typ) {
         // ready the texture
@@ -804,7 +811,7 @@ public class ChunkRender {
         GL11.glEnd();
     }
 
-    public void renderSingleWireframe(int x, int y, int z, int typ) {
+    public void renderSingleWireframe(int x, int y, int z, int typ, int blocksize) {
         // ready the texture
         CubeTexture tex = Ref.ResMan.LoadTexture("data/terrain.png");
         tex.setFiltering(false, GL11.GL_NEAREST);
@@ -818,9 +825,9 @@ public class ChunkRender {
         int ppz = p[2] * CHUNK_SIDE;
 
         // Get absolute coords
-        int lx = ppx+ x * BLOCK_SIZE;
-        int ly = ppy+ y * BLOCK_SIZE;
-        int lz = ppz+ z * BLOCK_SIZE;
+        int lx = ppx+ x * blocksize;
+        int ly = ppy+ y * blocksize;
+        int lz = ppz+ z * blocksize;
 
         // Get texture offsets
         byte type = (byte) typ;
@@ -837,21 +844,21 @@ public class ChunkRender {
         // Top: Z+
         {
             Helper.tex(tx.x, tx.y);
-            GL11.glVertex3i(lx,             ly,             lz+ BLOCK_SIZE);
+            GL11.glVertex3i(lx,             ly,             lz+ blocksize);
             Helper.tex(tx.z, tx.y);
-            GL11.glVertex3i(lx + BLOCK_SIZE,ly,             lz+ BLOCK_SIZE);
+            GL11.glVertex3i(lx + blocksize,ly,             lz+ blocksize);
             Helper.tex(tx.z, tx.y);
-            GL11.glVertex3i(lx + BLOCK_SIZE,ly,             lz+ BLOCK_SIZE);
+            GL11.glVertex3i(lx + blocksize,ly,             lz+ blocksize);
             Helper.tex(tx.z, tx.w);
-            GL11.glVertex3i(lx + BLOCK_SIZE,ly + BLOCK_SIZE,lz+ BLOCK_SIZE);
+            GL11.glVertex3i(lx + blocksize,ly + blocksize,lz+ blocksize);
             Helper.tex(tx.z, tx.w);
-            GL11.glVertex3i(lx + BLOCK_SIZE,ly + BLOCK_SIZE,lz+ BLOCK_SIZE);
+            GL11.glVertex3i(lx + blocksize,ly + blocksize,lz+ blocksize);
             Helper.tex(tx.x, tx.w);
-            GL11.glVertex3i(lx,             ly + BLOCK_SIZE,lz+ BLOCK_SIZE);
+            GL11.glVertex3i(lx,             ly + blocksize,lz+ blocksize);
             Helper.tex(tx.x, tx.w);
-            GL11.glVertex3i(lx,             ly + BLOCK_SIZE,lz+ BLOCK_SIZE);
+            GL11.glVertex3i(lx,             ly + blocksize,lz+ blocksize);
             Helper.tex(tx.x, tx.y);
-            GL11.glVertex3i(lx,             ly,             lz+ BLOCK_SIZE);
+            GL11.glVertex3i(lx,             ly,             lz+ blocksize);
         }
 
         // Bottom: Z-
@@ -860,24 +867,24 @@ public class ChunkRender {
             Helper.tex(tx.x, tx.y);
             GL11.glVertex3i(lx,             ly,                 lz );
             Helper.tex(tx.x, tx.w);
-            GL11.glVertex3i(lx,             ly + BLOCK_SIZE,    lz);
+            GL11.glVertex3i(lx,             ly + blocksize,    lz);
             Helper.tex(tx.z, tx.w);
-            GL11.glVertex3i(lx + BLOCK_SIZE,ly + BLOCK_SIZE,    lz );
+            GL11.glVertex3i(lx + blocksize,ly + blocksize,    lz );
             Helper.tex(tx.z, tx.y);
-            GL11.glVertex3i(lx + BLOCK_SIZE,ly,                 lz);
+            GL11.glVertex3i(lx + blocksize,ly,                 lz);
         }
 
         // Y+
         if(multiTex) tx = TerrainTextureCache.getSide(type, TerrainTextureCache.Side.SIDE);
         {
             Helper.tex(tx.x, tx.y);
-            GL11.glVertex3i(lx,             ly+ BLOCK_SIZE,     lz );
+            GL11.glVertex3i(lx,             ly+ blocksize,     lz );
             Helper.tex(tx.x, tx.w);
-            GL11.glVertex3i(lx,             ly + BLOCK_SIZE,    lz+ BLOCK_SIZE);
+            GL11.glVertex3i(lx,             ly + blocksize,    lz+ blocksize);
             Helper.tex(tx.z, tx.w);
-            GL11.glVertex3i(lx + BLOCK_SIZE,ly + BLOCK_SIZE,    lz + BLOCK_SIZE);
+            GL11.glVertex3i(lx + blocksize,ly + blocksize,    lz + blocksize);
             Helper.tex(tx.z, tx.y);
-            GL11.glVertex3i(lx + BLOCK_SIZE,ly+ BLOCK_SIZE,     lz);
+            GL11.glVertex3i(lx + blocksize,ly+ blocksize,     lz);
         }
 
         // Y-
@@ -885,23 +892,23 @@ public class ChunkRender {
             Helper.tex(tx.x, tx.y);
             GL11.glVertex3i(lx,             ly,     lz );
             Helper.tex(tx.z, tx.y);
-            GL11.glVertex3i(lx + BLOCK_SIZE,ly,     lz);
+            GL11.glVertex3i(lx + blocksize,ly,     lz);
             Helper.tex(tx.z, tx.w);
-            GL11.glVertex3i(lx + BLOCK_SIZE,ly ,    lz + BLOCK_SIZE);
+            GL11.glVertex3i(lx + blocksize,ly ,    lz + blocksize);
             Helper.tex(tx.x, tx.w);
-            GL11.glVertex3i(lx,             ly,    lz+ BLOCK_SIZE);
+            GL11.glVertex3i(lx,             ly,    lz+ blocksize);
         }
 
         // X+
         {
             Helper.tex(tx.x, tx.y);
-            GL11.glVertex3i(lx+ BLOCK_SIZE, ly,                  lz );
+            GL11.glVertex3i(lx+ blocksize, ly,                  lz );
             Helper.tex(tx.z, tx.y);
-            GL11.glVertex3i(lx+ BLOCK_SIZE ,ly+ BLOCK_SIZE,     lz);
+            GL11.glVertex3i(lx+ blocksize ,ly+ blocksize,     lz);
             Helper.tex(tx.z, tx.w);
-            GL11.glVertex3i(lx+ BLOCK_SIZE ,ly+ BLOCK_SIZE ,    lz + BLOCK_SIZE);
+            GL11.glVertex3i(lx+ blocksize ,ly+ blocksize ,    lz + blocksize);
             Helper.tex(tx.x, tx.w);
-            GL11.glVertex3i(lx+ BLOCK_SIZE, ly,                 lz+ BLOCK_SIZE);
+            GL11.glVertex3i(lx+ blocksize, ly,                 lz+ blocksize);
         }
 
         // X-
@@ -909,11 +916,11 @@ public class ChunkRender {
             Helper.tex(tx.x, tx.y);
             GL11.glVertex3i(lx, ly,                  lz );
             Helper.tex(tx.x, tx.w);
-            GL11.glVertex3i(lx, ly,                 lz+ BLOCK_SIZE);
+            GL11.glVertex3i(lx, ly,                 lz+ blocksize);
             Helper.tex(tx.z, tx.w);
-            GL11.glVertex3i(lx ,ly+ BLOCK_SIZE ,    lz + BLOCK_SIZE);
+            GL11.glVertex3i(lx ,ly+ blocksize ,    lz + blocksize);
             Helper.tex(tx.z, tx.y);
-            GL11.glVertex3i(lx ,ly+ BLOCK_SIZE,     lz);
+            GL11.glVertex3i(lx ,ly+ blocksize,     lz);
         }
         GL11.glEnd();
     }
@@ -925,5 +932,76 @@ public class ChunkRender {
             GL11.glColor4ub(derp?(byte)125:(byte)255,(byte)255,(byte)255,(byte)255);
     }
 
-    
+    private void extractPhysicsMesh(ByteBuffer data) {
+        if(data.limit() == 0) {
+            if(body != null) {
+                // remove body
+                indexVertexArray = null;
+                vertexCollisionData = null;
+                shape = null;
+                Ref.cgame.physics.world.removeRigidBody(body);
+                body = null;
+            }
+            return;
+        }
+
+        int size = data.limit();
+        int nVerts = (size / 32);
+        int nTriangles = (nVerts / 4) * 2;
+        int vertexBufferSize = nVerts * 3 * 4;
+
+        assert(nVerts / 4 == sidesRendered);
+
+        // If no buffer or too small, create a new one
+        if(vertexCollisionData == null || vertexCollisionData.capacity() < vertexBufferSize) {
+            vertexCollisionData = ByteBuffer.allocateDirect(vertexBufferSize).order(ByteOrder.nativeOrder());
+        }
+
+        // Gotta get them points
+        vertexCollisionData.clear();
+        for (int i= 0; i < nVerts; i++) {
+            data.position(i * 32); // seek to position
+
+            // copy 12 bytes
+            for (int j= 0; j < 3; j++) {
+                vertexCollisionData.putFloat(data.getFloat()*CGPhysics.SCALE_FACTOR);
+            }
+        }
+        vertexCollisionData.flip();
+
+        if(indexVertexArray != null) {
+            // we're overwriting an old vertexbuffer
+            IndexedMesh mesh = indexVertexArray.getIndexedMeshArray().getQuick(0);
+            mesh.numTriangles = nTriangles;
+            mesh.numVertices = nVerts;
+            mesh.vertexBase = vertexCollisionData;
+        } else {
+            ByteBuffer indices = Ref.cgame.physics.sharedIndiceBuffer;
+            indexVertexArray = new TriangleIndexVertexArray(nTriangles, indices, 12, nVerts, vertexCollisionData, 12);
+        }
+
+        // create shape
+        //if(shape == null) {
+            // todo: supply aabb mins/maxs instead of letting BvhTriangle calculate it..
+            shape = new BvhTriangleMeshShape(indexVertexArray, true);
+        //}
+
+        if(body == null) {
+            // Create and add to the world
+            Transform nullTransform = new Transform();
+            nullTransform.setIdentity();
+            body = Ref.cgame.physics.localCreateRigidBody(0f, nullTransform, shape);
+            body.setCollisionFlags(body.getCollisionFlags() | CollisionFlags.STATIC_OBJECT);
+        } else {
+            // Updating existing body
+            body.setCollisionShape(shape);
+            //shape.setLocalScaling(new Vector3f(0, 0, 0));
+            //shape.recalcLocalAabb();
+            //shape.refitTree(null, null); // todo: optimize
+
+            // Notify world that body has changed
+            Ref.cgame.physics.world.getBroadphase().getOverlappingPairCache().cleanProxyFromPairs(
+                    body.getBroadphaseHandle(), Ref.cgame.physics.world.getDispatcher());
+        }
+    }
 }

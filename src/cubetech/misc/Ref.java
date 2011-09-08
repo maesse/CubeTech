@@ -61,15 +61,18 @@ public class Ref {
         
         Log.Init(isApplet); // Re-route System.out through the Log system
         Ref.SpriteMan = new SpriteManager(); // sprite factory/manager/renderer
-        Ref.ResMan = new ResourceManager(); // Loads and caches textures
+        
         
         Ref.rnd = new Random(); // just nice to have a single random object allocated
         
-        Ref.textMan = new TextManager(); // manages text-rendering
+        
         Ref.common = new Common(); // common subsystem. runs everything
         Ref.commands = new Commands(); // command subsystem, a string communication system
-        Ref.Input = new Input(); // input subsystem
         Ref.cvars = new CVars(); // init cvar subsystem
+        Ref.ResMan = new ResourceManager(); // Loads and caches textures
+        Ref.textMan = new TextManager(); // manages text-rendering
+        Ref.Input = new Input(); // input subsystem
+        
         Ref.Input.initialize();
         Ref.net = new Net(); // init network, creates sockets for client and server
         Ref.collision = new Collision();

@@ -1,5 +1,7 @@
 package cubetech.CGame;
 
+import cubetech.common.CVar;
+import cubetech.common.CVarFlags;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Helper;
 import cubetech.gfx.CubeTexture;
@@ -7,6 +9,8 @@ import cubetech.gfx.GLRef;
 import cubetech.gfx.Shader;
 import cubetech.gfx.ShadowManager;
 import cubetech.misc.Ref;
+import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedList;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
@@ -22,20 +26,17 @@ public class Render {
     private static final int MAX_RENDER_ENTITIES = 1000;
     private RenderEntity[] entities = new RenderEntity[MAX_RENDER_ENTITIES];
     private int next = 0;
-    private LinkedList<RenderEntity> renderList = new LinkedList<RenderEntity>();
+    private ArrayList<RenderEntity> renderList = new ArrayList<RenderEntity>();
 
     Shader softSprite = null;
-    
+    CVar r_gpuskin = Ref.cvars.Get("r_gpuskin", "1", EnumSet.of(CVarFlags.NONE));
 
     public Render() {
         for (int i= 0; i < MAX_RENDER_ENTITIES; i++) {
             entities[i] = new RenderEntity(REType.NONE);
         }
-        if(Ref.glRef.srgbBuffer != null) {
+        if(Ref.glRef.srgbBuffer != null && softSprite == null) {
             softSprite = Ref.glRef.getShader("softsprite");
-            softSprite.mapTextureUniform("tex", 0);
-            softSprite.mapTextureUniform("depth", 1);
-            softSprite.validate();
         }
     }
 
@@ -102,7 +103,7 @@ public class Render {
 
     public void addRefEntity(RenderEntity ent) {
         if(renderList.contains(ent)) {
-            int derp = 2;
+            Ref.common.Error(ErrorCode.FATAL, "RenderEntity already contained");
         }
         renderList.add(ent);
     }
@@ -185,10 +186,25 @@ public class Render {
     
     private void renderModel(RenderEntity ent) {
         if(ent.model == null) return;
+        if(r_gpuskin.isTrue()) ent.flags |= RenderEntity.FLAG_GPUSKINNED;
 
-        float frame = ent.oldframe * ent.backlerp + ent.frame * (1f-ent.backlerp);
+        //float frame = ent.oldframe * ent.backlerp + ent.frame * (1f-ent.backlerp);
+        ent.model.gpuskinning = (ent.flags & RenderEntity.FLAG_GPUSKINNED) != 0;
         ent.model.animate(ent.frame, ent.oldframe, ent.backlerp);
+        //Vector3f org = new Vector3f(ent.origin);
+
+        //int count = 10;
         ent.model.render(ent.origin, ent.axis, ent.color, Ref.cgame.shadowMan.isRendering());
+//        for (int i = 0; i < count; i++) {
+//            for (int j = 0; j < count; j++) {
+//                org.x = ent.origin.x + (i-4) * 64;
+//                org.y = ent.origin.y + (j-4) * 64;
+//
+//
+//                ent.model.render(org, ent.axis, ent.color, Ref.cgame.shadowMan.isRendering());
+//            }
+//        }
+        
     }
 
     private void renderBBox(RenderEntity ent) {
@@ -198,18 +214,19 @@ public class Render {
             GL11.glLineWidth(1f);
             GL11.glDisable(GL11.GL_CULL_FACE);
         Helper.renderBBoxWireframe(position.x, position.y, position.z,
-                position.x+size.x, position.y+size.y, position.z+size.z);
+                position.x+size.x, position.y+size.y, position.z+size.z, ent.outcolor);
         
             //cube.chunk.render.renderSingleWireframe(cube.x, cube.y, cube.z, CubeType.DIRT);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
             GL11.glEnable(GL11.GL_CULL_FACE);
     }
 
+    private Vector3f left = new Vector3f(), up = new Vector3f();
     private void renderSprite(RenderEntity ent) {
         // calculate the xyz locations for the four corners
         float radius = ent.radius;
 
-        Vector3f left = new Vector3f(), up = new Vector3f();
+        
         boolean useAxis = (ent.flags & RenderEntity.FLAG_SPRITE_AXIS) == RenderEntity.FLAG_SPRITE_AXIS;
         if(useAxis) {
             left.set(ent.axis[0]);
@@ -257,8 +274,8 @@ public class Render {
             softSprite.setUniform("res", Ref.glRef.GetResolution());
 
             // Bind depth from FBO
-            int depth = Ref.glRef.srgbBuffer.getDepthTextureId();
-            tex = new CubeTexture(Ref.glRef.srgbBuffer.getTarget(), depth, null);
+            
+            tex = Ref.glRef.srgbBuffer.getAsTexture();
             tex.textureSlot = 1;
             tex.loaded = true;
             tex.Bind();

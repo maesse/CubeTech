@@ -65,6 +65,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     public Marks marks;
 
     SkyBox skyBox = new SkyBox("data/sky");
+    private CVar cg_skybox;
     public ShadowManager shadowMan = new ShadowManager();
     public CGPhysics physics = new CGPhysics();
     
@@ -94,6 +95,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         for (int i= 0; i < cg_entities.length; i++) {
             cg_entities[i] = new CEntity();
         }
+
+        cg_skybox = Ref.cvars.Get("cg_skybox", "1", EnumSet.of(CVarFlags.NONE));
 
         commands.put("+scores", new Cmd_ScoresDown());
         commands.put("-scores", new Cmd_ScoresUp());
@@ -166,40 +169,24 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Ref.soundMan.Respatialize(cg.predictedPlayerState.clientNum, cg.refdef.Origin, cg.predictedPlayerState.velocity, cg.refdef.ViewAxis);
 //        AddLocalEntities();
         
-//        cg.refdef.time = cg.time;
         cg.frametime = cg.time - cg.oldTime;
         if(cg.frametime < 0)
             cg.frametime = 0;
         cg.oldTime = cg.time;
         lag.AddFrameInfo();
-
-        if(cg_drawbin.iValue == 1) {
-            cgr.DrawBin();
-            return;
-        }
         
         AddPacketEntities();
         cg.addTestModel();
 
-        shadowMan.renderShadowCascades(cg.refdef, new IThinkMethod() {
-            public void think(Gentity ent) {
-                if(map != null) {
-                    map.Render(cg.refdef);
-                    Ref.render.renderAll(true);
+        if(shadowMan.isEnabled()) {
+            shadowMan.renderShadowCascades(cg.refdef, new IThinkMethod() {
+                public void think(Gentity ent) {
+                    if(map != null) {
+                        map.Render(cg.refdef);
+                        Ref.render.renderAll(true);
+                    }
                 }
-            }
-        });
-        
-        CVar shadow_view = Ref.cvars.Find("shadow_view");
-        if(shadow_view != null && shadow_view.isTrue()) {
-            int level = shadow_view.iValue;
-            shadowMan.applyShadowProjection(level);
-            GL11.glMatrixMode(GL11.GL_MODELVIEW);
-            Matrix4f viewM = Matrix4f.load(Ref.glRef.getLightViewMatrix(), null);
-            viewM.store(Ref.glRef.matrixBuffer);
-            Ref.glRef.matrixBuffer.position(0);
-            GL11.glLoadMatrix(Ref.glRef.matrixBuffer);
-            Ref.glRef.matrixBuffer.clear();
+            });
         }
 
         SecTag s = Profiler.EnterSection(Sec.PHYSICS);
@@ -209,13 +196,10 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         s = Profiler.EnterSection(Sec.RENDER);
 
         if(map != null) {
-            skyBox.Render(cg.refdef);
+            if(cg_skybox.isTrue()) skyBox.Render(cg.refdef);
             map.Render(cg.refdef);
         }
 
-        
-         
-        
         cgr.renderViewModel(cg.predictedPlayerState);
         marks.addMarks();
 
@@ -502,7 +486,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                     GL11.glDepthFunc(GL11.GL_ALWAYS);
                     Ref.glRef.PushShader(Ref.glRef.getShader("sprite"));
                     Helper.renderBBoxWireframe(cent.lerpOrigin.x-x, cent.lerpOrigin.y-y, cent.lerpOrigin.z-zmin,
-                            cent.lerpOrigin.x + x, cent.lerpOrigin.y + y, cent.lerpOrigin.z+zmax);
+                            cent.lerpOrigin.x + x, cent.lerpOrigin.y + y, cent.lerpOrigin.z+zmax,null);
                     Ref.glRef.PopShader();
                     GL11.glDepthFunc(GL11.GL_LEQUAL);
                 }

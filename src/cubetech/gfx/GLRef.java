@@ -70,6 +70,8 @@ public class GLRef {
     public CVar r_softparticles;
     private Vector2f resolution;
 
+    private ArrayList<Shader> shader_recompile_queue = new ArrayList<Shader>();
+
     public Shader shader = null; // current shader
     public HashMap<String, Shader> shaders = new HashMap<String, Shader>();
 
@@ -95,9 +97,6 @@ public class GLRef {
     public boolean fboSupported = false;
     public FrameBuffer srgbBuffer = null;
 
-    
-    
-
     public enum BufferTarget {
         Vertex,
         Index
@@ -105,6 +104,14 @@ public class GLRef {
 
     public GLRef() {
         Init();
+    }
+
+    public void enqueueShaderRecompile(Shader shader) {
+        shader_recompile_queue.add(shader);
+    }
+
+    public ContextCapabilities getGLCaps() {
+        return caps;
     }
 
     public void InitWindow(Canvas parent, Applet applet, boolean lowGraphics) throws Exception {
@@ -269,7 +276,7 @@ public class GLRef {
         floatBuff16.flip();
         glLightModel(GL_LIGHT_MODEL_AMBIENT, floatBuff16);
         //glLight(GL_LIGHT0, GL_AMBIENT, floatBuff16);
-        glMaterialf(GL_FRONT, GL_SHININESS, 4.0f);
+        glMaterialf(GL_FRONT, GL_SHININESS, 8.0f);
     }
     
     public Vector3f getLightAngle() 
@@ -278,26 +285,28 @@ public class GLRef {
     }
 
     // Returns a view matrix for the global directional light
+    private Vector3f[] lightAxisVectors = null;
     public Matrix4f getLightViewMatrix() {
         lightDir.set(-1,0,0.3f);
         lightDir.x = (float)Math.sin(Ref.cgame.cg.time/10000f);
         lightDir.y = (float)Math.cos(Ref.cgame.cg.time/10000f);
         lightDir.x = -0.25f;
         lightDir.y = -1.0f;
+        
         Vector3f dir = lightDir;
         dir.normalise();
         Vector3f angle = new Vector3f(0f, (float)(180f/Math.PI *  Math.atan2(dir.y, dir.x)), lightDir.z*90f);
 
-        Vector3f[] axis = Helper.AnglesToAxis(angle);
+        lightAxisVectors = Helper.AnglesToAxis(angle, lightAxisVectors);
        
         float temp = lightDir.x;
         lightDir.x = lightDir.y;
         lightDir.y = -temp;
 
         for (int i= 0; i < 3; i++) {
-            axis[i].normalise();
+            lightAxisVectors[i].normalise();
         }
-        float[] data = Helper.fillMatrixBuffer(axis, null);
+        float[] data = Helper.fillMatrixBuffer(lightAxisVectors, null);
 
         // this should be ok
         floatBuff16.clear();
@@ -314,13 +323,7 @@ public class GLRef {
     public Shader getShader(String str) {
         Shader shad = shaders.get(str);
         if(shad == null) {
-            try {
-                // try to load
-                shad = new Shader("gfx/shaders/" + str);
-                shaders.put(str, shad);
-            } catch (Exception ex) {
-                Common.Log("Can't load shader %s: %s", str, Common.getExceptionString(ex));
-            }
+            Ref.common.Error(ErrorCode.FATAL, "Unregistered shader " + str);
         }
         return shad;
     }
@@ -338,6 +341,7 @@ public class GLRef {
         r_softparticles = Ref.cvars.Get("r_softparticles", "1", EnumSet.of(CVarFlags.ARCHIVE));
         
         Ref.commands.AddCommand("listmodes", Cmd_listmodes);
+        Ref.commands.AddCommand("shader", cmd_shader);
         
         // Don't set all these at the first frame, it is done during init
         r_toggleRes.modified = false;
@@ -426,6 +430,11 @@ public class GLRef {
                 }
             }
         }
+
+        for (Shader s : shader_recompile_queue) {
+            s.recompile();
+        }
+        shader_recompile_queue.clear();
 
         checkError();
     }
@@ -667,20 +676,92 @@ public class GLRef {
     private void loadShaders() {
         try {
 
-            Shader shad = getShader("sprite");
-            shad.mapTextureUniform("tex", 0);
-            shad.validate();
-            
-            shad = Ref.glRef.getShader("litobjectpixel");
-            shad.mapTextureUniform("tex", 0);
-            shad.mapTextureUniform("shadows", 1);
-            shad.mapTextureUniform("envmap", 2);
-            shad.validate();
+            // sprite shader
+            ShaderBuilder builder = new ShaderBuilder("sprite");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.setAttribute("v_color", Shader.INDICE_COLOR);
+            builder.mapTextureUniform("tex", 0);
+            builder.createShader();
 
-            shad = Ref.glRef.getShader("unlitObject");
-            shad.validate();
+            // iqm object shader for cpu skinned
+            builder = new ShaderBuilder("litobjectpixel");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.setAttribute("v_color", Shader.INDICE_COLOR);
+            builder.mapTextureUniform("tex", 0);
+            builder.mapTextureUniform("shadows", 1);
+            builder.mapTextureUniform("envmap", 2);
+            builder.createShader();
 
-            Ref.glRef.getShader("ShadowRender");
+            // iqm object shader for static models
+            builder = new ShaderBuilder("litobjectpixel_1");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.setAttribute("v_color", Shader.INDICE_COLOR);
+            builder.mapTextureUniform("tex", 0);
+            builder.mapTextureUniform("shadows", 1);
+            builder.mapTextureUniform("envmap", 2);
+            builder.createShader();
+
+            // iqm gpu skinning for dynamic objects
+            builder = new ShaderBuilder("gpuskin");
+            builder.setAttribute("vweights", Shader.INDICE_NORMAL);
+            builder.setAttribute("vbones", Shader.INDICE_COLOR);
+            builder.setAttribute("vtangent", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("tex", 0);
+            builder.createShader();
+
+            // cube world recieving shadow
+            builder = new ShaderBuilder("gpuskinShadowed");
+            builder.setAttribute("vweights", Shader.INDICE_NORMAL);
+            builder.setAttribute("vbones", Shader.INDICE_COLOR);
+            builder.setAttribute("vtangent", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("tex", 0);
+            builder.mapTextureUniform("shadows", 1);
+            builder.mapTextureUniform("envmap", 2);
+            builder.createShader();
+
+            // iqm model with no pixel color
+            builder = new ShaderBuilder("unlitObject");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.setAttribute("v_color", Shader.INDICE_COLOR);
+            builder.createShader();
+
+            // cube world with fog
+            builder = new ShaderBuilder("WorldFog");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.setAttribute("v_color", Shader.INDICE_COLOR);
+            builder.mapTextureUniform("tex", 0);
+            builder.createShader();
+
+            // cube world recieving shadow
+            builder = new ShaderBuilder("WorldFogShadow");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.setAttribute("v_color", Shader.INDICE_COLOR);
+            builder.mapTextureUniform("tex", 0);
+            builder.mapTextureUniform("shadows", 1);
+            builder.createShader();
+
+            // rectangular blit
+            builder = new ShaderBuilder("RectBlit");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.setAttribute("v_color", Shader.INDICE_COLOR);
+            builder.mapTextureUniform("tex", 0);
+            builder.createShader();
+
+            // soft sprites shader
+            builder = new ShaderBuilder("softsprite");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.setAttribute("v_color", Shader.INDICE_COLOR);
+            builder.mapTextureUniform("tex", 0);
+            builder.mapTextureUniform("depth", 1);
+            builder.createShader();
 
             setShader("sprite");
         } catch (Exception ex) {
@@ -790,6 +871,32 @@ public class GLRef {
                 }
 
                 System.out.println(availableModes[i]);
+            }
+        }
+    };
+
+    private ICommand cmd_shader = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(args.length <= 1) {
+                Common.Log("usage: shader <command> [list, recompile]");
+                return;
+            }
+
+            String arg = args[1].toLowerCase();
+            if(arg.equals("list")) {
+                Common.Log("Shader list:");
+                for (String string : shaders.keySet()) {
+                    Common.Log("    " + string);
+                }
+            } else if(arg.equals("recompile")) {
+                if(args.length < 3 || shaders.get(args[2]) == null) {
+                    Common.Log("usage: shader recompile <shadername>");
+                    return;
+                }
+                Shader s = shaders.get(args[2]);
+                s.recompile();
+            } else {
+                Common.Log("Unknown argument " + args[1]);
             }
         }
     };

@@ -6,19 +6,18 @@ uniform vec4 cascadeDistances;
 uniform mat4 shadowMatrix[4];
 uniform vec4 pcfOffsets[4];
 uniform float shadow_bias = 0.002;
-uniform float shadow_factor = 1.0;
+uniform float shadow_factor = 0.75;
+varying vec4 vPosition;
+varying float vDepth;
 
 uniform samplerCube envmap;
 uniform sampler2D tex;
 
-// Shadow in
-varying vec4 vPosition;
-varying float vDepth;
-
-// Light in
+varying vec2 coords;
 varying vec4 diffuse, ambient;
 varying vec3 normal, lightDir, halfVector;
 varying vec3 reflectDir;
+varying vec4 col;
 
 float getShadowFraction()
 {
@@ -28,11 +27,11 @@ float getShadowFraction()
     int index = int(fIndex);
 
     vec4 shadowCoords = shadowMatrix[index] * vPosition;
-    shadowCoords.w = shadowCoords.z - shadow_bias;
+    shadowCoords.w = (shadowCoords.z - shadow_bias);
     shadowCoords.z = fIndex;
 
     // Sample four times
-    float lightDist = 0;
+    float lightDist = shadow_bias;
     if(SHADOW_SAMPLES == 1) {
         lightDist = shadow2DArray(shadows, shadowCoords).r;
     } else {
@@ -60,14 +59,13 @@ vec4 getLighting(in vec4 texcol)
 void main()
 {
     // Start with ambient
-    vec4 ambientcolor = ambient * textureCube(envmap, reflectDir);
-    vec4 texcol = texture2D(tex, gl_TexCoord[0].xy);
+    vec4 color = ambient * textureCube(envmap, reflectDir);
 
-    // get light
+    vec4 texcol = texture2D(tex, coords);
+
     vec4 lightColor = getLighting(texcol);
-    // multiply by shadow
     lightColor.rgb *= getShadowFraction();
 
-    gl_FragColor.rgb = texcol.rgb * (ambientcolor.rgb + lightColor.rgb) * gl_Color.rgb;
+    gl_FragColor.rgb = texcol.rgb * (color.rgb + lightColor.rgb) * col.rgb;
     gl_FragColor.a = 1.0;
 }

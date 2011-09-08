@@ -61,9 +61,10 @@ public class IQMMesh {
 
     void bindTexture() {
         if(tex == null) {
-            String path = modelPath + material;
-            if(!material.contains(".")) path = modelPath + material + ".png";
-            if(!ResourceManager.FileExists(path)) {
+            String path1 = modelPath + material;
+            String path = path1;
+            if(!material.contains(".")) path1 = modelPath + material + ".png";
+            if(!ResourceManager.FileExists(path1)) {
                 path = modelPath + material + ".tga";
             }
             tex = Ref.ResMan.LoadTexture(path);

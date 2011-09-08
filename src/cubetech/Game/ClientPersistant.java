@@ -1,5 +1,6 @@
 package cubetech.Game;
 
+import cern.colt.map.OpenLongObjectHashMap;
 import cubetech.input.PlayerInput;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -28,7 +29,7 @@ public class ClientPersistant {
     public ClientConnected connected = ClientConnected.DISCONNECTED;
 
     // Chunk data
-    public HashMap<Long, ChunkEntry> chunkVersions = new HashMap<Long, ChunkEntry>();
+    public OpenLongObjectHashMap chunkVersions = new OpenLongObjectHashMap();
     private Queue<ByteBuffer> queuedChunkData = new LinkedList<ByteBuffer>();
     private int queuedBytes = 0;
 
