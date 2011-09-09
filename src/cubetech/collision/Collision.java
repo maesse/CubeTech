@@ -69,18 +69,22 @@ public class Collision {
         if(delta.y < 0) cmmin.y += delta.y; else cmmax.y += delta.y;
         if(delta.z < 0) cmmin.z += delta.z; else cmmax.z += delta.z;
 
-        delta.scale(-1f);
+        cmmin.x -= 0.1f; cmmin.y -= 0.1f; cmmin.z -= 0.1f;
+        cmmax.x += 0.1f; cmmax.y += 0.1f; cmmax.z += 0.1f;
 
         // query the cube map
         ChunkAreaQuery area = CubeMap.getCubesInVolume(cmmin, cmmax, server?Ref.cm.cubemap.chunks:Ref.cgame.map.chunks, server);
+        if(area.isEmpty()) return res;
 
+        cmmin.x += 0.1f; cmmin.y += 0.1f; cmmin.z += 0.1f;
+        cmmax.x -= 0.1f; cmmax.y -= 0.1f; cmmax.z -= 0.1f;
+        
+        delta.scale(-1f);
         Vector3f.sub(maxs, mins, cextent);
-
         Vector3f.add(cextent, mins, cdiff);
         Vector3f.add(cdiff, mins, cdiff);
         cdiff.scale(0.5f);
         cextent.scale(0.5f);
-
         Vector3f.add(start, cdiff, cstart);
 
         // iterate though results
@@ -125,21 +129,20 @@ public class Collision {
         void clear() {
             startsolid = false;
             hitaxis = null;
-            first = 0;
+            first = -0.00000001f;
             last = 1;
         }
     }
     private SATState satState = new SATState();
 
     private boolean separateAxis(SATState state, float amin, float amax, float bmin, float bmax, float v, int axisOffset) {
-
         if(v < 0) { // moving left
             if(bmax < amin) return false; // player max is already to the left
             // player min is to the right of block
-            if(amax < bmin) { 
-                float fv = (amax - bmin)/v;
-                if(fv > state.first - EPSILON) {
-                    state.first = fv - EPSILON;
+            if(amax  < bmin) {
+                float fv = (amax - (bmin - EPSILON))/v;
+                if(fv  > state.first) {
+                    state.first = fv;
                     state.hitaxis = AABBNormals[axisOffset+1];
                 }
             }
@@ -150,9 +153,9 @@ public class Collision {
         } else if(v > 0) {
             if(bmin > amax) return false;
             if(bmax < amin) {
-                float fv = (amin - bmax)/v;
-                if(fv  > state.first - EPSILON) {
-                    state.first = fv - EPSILON;
+                float fv = (amin - (bmax + EPSILON))/v;
+                if(fv   > state.first) {
+                    state.first = fv ;
                     state.hitaxis = AABBNormals[axisOffset];
                 }
             }
@@ -196,6 +199,10 @@ public class Collision {
         amin = center.z - Extent.z;
 
         if(!separateAxis(satState, amin, amax, bmin, bmax, v.z, 4)) return;
+
+        if(satState.hitaxis != null && satState.hitaxis.z != 0 && v.z != 1) {
+            int test = 2;
+        }
 
 //        if(v.z < 0.0f) {
 //            if(bmax < amin) return;

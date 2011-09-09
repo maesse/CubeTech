@@ -361,7 +361,8 @@ public class CubeMap {
                     tempEnd.z = Math.min(chunkMax[2], mmax.z) - chunkMin[2];
 
                     ChunkSpatialPart part = chunk.getCubesInVolume(tempStart, tempEnd);
-                    query.addPart(part);
+                    if(part.nIndex > 0) query.addPart(part);
+                    
                 }
             }
         }

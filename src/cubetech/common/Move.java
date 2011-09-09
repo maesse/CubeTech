@@ -725,6 +725,7 @@ public class Move {
         float allFrac = 0;
         float timeLeft = frametime;
         Vector3f end = new Vector3f();
+        Vector3f orgorg = new Vector3f();
         for (int bump= 0; bump < bumpcount; bump++) {
             if(pm.ps.velocity.lengthSquared() == 0) {
                 break;
@@ -736,7 +737,8 @@ public class Move {
             end.scale(timeLeft);
             Vector3f.add(end, pm.ps.origin, end);
 
-            // See if we can make it from origin to end point.
+            orgorg.set(pm.ps.origin);
+            
             CollisionResult res = TracePlayerBBox(pm, pm.ps.origin, end, pm.tracemask);
             allFrac += res.frac;
 
@@ -750,7 +752,13 @@ public class Move {
             //  zero the plane counter.
             if(res.frac > 0) {
                 // actually covered some distance
+                float prex = pm.ps.origin.y;
                 Helper.VectorMA(res.start, res.frac, res.delta, pm.ps.origin);
+                // See if we can make it from origin to end point.
+                if(prex <= -62.0625f && pm.ps.origin.y > -62.0625f) {
+                    int test = 2;
+                    CollisionResult r = TracePlayerBBox(pm, orgorg, end, pm.tracemask);
+                }
                 orgVel.set(pm.ps.velocity);
                 numplanes = 0;
             }            

@@ -18,6 +18,10 @@ public class ChunkAreaQuery {
         parts = new ChunkSpatialPart[initialSize];
     }
 
+    public boolean isEmpty() {
+        return index == 0;
+    }
+
     /**
      * Gets the next cube found in the area query.
      * @param dst the 3 integer array the cube position will be written to
