@@ -252,7 +252,10 @@ public class Collision {
         Vector3f.sub(maxs, mins, extent);
         extent.scale(0.5f);
 
-        Vector3f start = new Vector3f(startin);
+        Vector3f diff = Vector3f.sub(maxs, mins, null);
+        diff.scale(0.5f);
+
+        Vector3f start = Vector3f.add(startin, diff, null);
         Vector3f dir = new Vector3f();
         if(end != null)
             Vector3f.sub(start, end, dir);

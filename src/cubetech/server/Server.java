@@ -813,7 +813,7 @@ public class Server implements ITrace {
         }
 
         // create the bounding box of the entire move
-        float padding = 0.1f;
+        float padding = -1f;
         for (int i= 0; i < 3; i++) {
             if(Helper.VectorGet(end, i) > Helper.VectorGet(start, i)) {
                 Helper.VectorSet(boxmins, i, Helper.VectorGet(start, i) + Helper.VectorGet(mins, i) - padding);
