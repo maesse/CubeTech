@@ -5,6 +5,7 @@ import cubetech.collision.CubeChunk;
 import cubetech.collision.CubeMap;
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
+import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Helper;
 import cubetech.gfx.CubeTexture;
@@ -272,6 +273,7 @@ public class Marks {
 
                 addMarkFragments(4, clipPoints, nPlanes, normals, dists, markArgs);
                 if(markArgs.returnedFragments == maxFragments) {
+                    Common.LogDebug("[Marks] Not enough space for fragments");
                     return markArgs.returnedFragments; // not enough space for more fragments
                 }
             }
@@ -298,6 +300,7 @@ public class Marks {
         }
 
         if(numClipPoints + args.returnedVerts > args.maxPoints) {
+            Common.LogDebug("[Marks] Not enough space for this polygon");
             return; // not enough space for this polygon
         }
 
@@ -411,19 +414,19 @@ public class Marks {
         switch(normalIdx) {
             case 0:
                 // X+ normal
-                grabPoints(3, 7, 2, 6, absmin, clipPoints);
+                grabPoints(7, 3, 2, 6, absmin, clipPoints);
                 break;
             case 1:
                 // X- normal
-                grabPoints(0,4,1,5, absmin, clipPoints);
+                grabPoints(4,0,1,5, absmin, clipPoints);
                 break;
             case 2:
                 // Y+ normal
-                grabPoints(5,1,7,3, absmin, clipPoints);
+                grabPoints(5,1,3,7, absmin, clipPoints);
                 break;
             case 3:
                 // Y- normal
-                grabPoints(2,6,0,4, absmin, clipPoints);
+                grabPoints(6,2,0,4, absmin, clipPoints);
                 break;
             case 4:
                 // Z+ normal

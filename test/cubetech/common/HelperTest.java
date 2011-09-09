@@ -14,6 +14,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.*;
 import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -77,6 +78,16 @@ public class HelperTest {
         expResult = 4;
         result = Helper.ColorIndex(str);
         assertEquals(expResult, result);
+    }
+
+    @Test
+    public void testFloatToInt() {
+        System.out.println("FloatToInt");
+        Vector3f v = new Vector3f((float) Ref.rnd.nextGaussian(), (float) Ref.rnd.nextGaussian(), (float) Ref.rnd.nextGaussian());
+        v.normalise();
+        int i = Helper.normalToInt(v);
+        Vector3f v2 = Helper.intToNormal(i);
+        assertTrue(Helper.Equals(v, v2,0.01f));
     }
 
     /**

@@ -614,6 +614,12 @@ public class Helper {
         return a.x == b.x && a.y == b.y && a.z == b.z;
     }
 
+    public static boolean Equals(Vector3f a, Vector3f b, float epsilon) {
+        return a.x-epsilon < b.x && a.x + epsilon > b.x &&
+                a.y-epsilon < b.y && a.y + epsilon > b.y &&
+                a.z-epsilon < b.z && a.z + epsilon > b.z;
+    }
+
     // Helper method
     public static float VectorGet(Vector2f src, int index) {
         if(index == 1)
@@ -803,6 +809,48 @@ public class Helper {
         if(to - from > 180) to -= 360;
         if(to - from < -180) to += 360;
         return from + frac * (to -from);
+    }
+
+
+
+    public static Vector3f intToNormal(int i) {
+        int bits = 10; // for each direction
+        float x = unpackFloat(i, 0, bits);
+        float y = unpackFloat(i, 1, bits);
+        float z = unpackFloat(i, 2, bits);
+        return new Vector3f(x, y, z);
+    }
+
+    private static float unpackFloat(int i, int bitoffset, int nbits) {
+        int bitmask = (1 << nbits)-1;
+        int valuemask = (1<<(nbits-1))-1;
+
+        int v = (i >> bitoffset * nbits) & bitmask; // mask of everything unneeded
+
+        float f = (float)(v & valuemask) / valuemask;
+        boolean neg = (v & (valuemask+1)) != 0;
+        if(neg) f = -f;
+        return f;
+    }
+
+    private static int packFloat(float v, int bitoffset, int nbits) {
+        float v2 = v;
+        if(v2 < 0) {
+            v2 = -v2;
+        }
+        int bitsize = (1<<(nbits-1))-1;
+        int i = ((int)(v2 * bitsize));
+        if(v < 0) i |= (1<<(nbits-1));
+        i <<= (nbits * bitoffset);
+
+        return i;
+    }
+
+    public static int normalToInt(Vector3f v) {
+        int bits = 10; // for each direction
+        int i = packFloat(v.x, 0, bits) | packFloat(v.y, 1, bits) | packFloat(v.z, 2, bits);
+        
+        return i;
     }
 
     

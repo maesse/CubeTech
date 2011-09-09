@@ -227,7 +227,8 @@ public class CEntity {
                 Ref.cgame.weapons.fireWeaponEvent(this);
                 break;
             case MISSILE_MISS:
-                Ref.cgame.weapons.missileHitWall(currentState.weapon, 0, lerpOrigin, null);
+                Vector3f dir  = Helper.intToNormal(currentState.evtParams);
+                Ref.cgame.weapons.missileHitWall(currentState.weapon, 0, lerpOrigin, dir);
                 break;
             default:
                 Common.LogDebug("Unhandled CGame event: " + event);

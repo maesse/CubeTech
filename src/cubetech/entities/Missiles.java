@@ -7,6 +7,7 @@ package cubetech.entities;
 
 import cubetech.Game.Gentity;
 import cubetech.collision.CollisionResult;
+import cubetech.common.Helper;
 import cubetech.common.IThinkMethod;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector3f;
@@ -23,9 +24,9 @@ public class Missiles {
 
             // we don't have a valid direction, so just point straight up
             Vector3f dir = new Vector3f(0, 0, 1);
-
+            int idir = Helper.normalToInt(dir);
             ent.s.eType = EntityType.GENERAL;
-            Ref.game.AddEvent(ent, Event.MISSILE_MISS, 0);
+            Ref.game.AddEvent(ent, Event.MISSILE_MISS, idir);
             ent.freeAfterEvent = true;
             ent.Link();
         }
@@ -56,7 +57,7 @@ public class Missiles {
     }
 
     private static void missileImpact(Gentity ent, CollisionResult res) {
-        Ref.game.AddEvent(ent, Event.MISSILE_MISS, 0);
+        Ref.game.AddEvent(ent, Event.MISSILE_MISS, Helper.normalToInt(res.hitAxis));
 
         ent.freeAfterEvent = true;
         // change over to a normal entity right at the point of impact

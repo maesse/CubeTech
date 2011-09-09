@@ -53,7 +53,10 @@ public class CGWeapons {
                 SparkEmitter.spawn(radius, origin);
                 TrailEmitter.spawn(origin, radius);
 
-                dir = new Vector3f(0,0,1);
+                if(dir == null) {
+                    dir = new Vector3f(0,0.0f,1);
+                }
+                dir.normalise();
 
                 Ref.cgame.marks.impactMark(origin, dir, radius*0.5f, false, Ref.ResMan.LoadTexture("data/explosionmark.png"));
                 

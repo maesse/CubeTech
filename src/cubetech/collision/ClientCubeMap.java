@@ -67,6 +67,10 @@ public class ClientCubeMap {
 
     public int nVBOthisFrame = 0; // vbo's updated this frame
 
+    int nChunkUpdates = 0;
+    int lastRefresh = 0;
+    public int chunkPerSecond = 0;
+
     private ICommand cmd_cube_refresh = new ICommand() {
         public void RunCommand(String[] args) {
             // chunk render distance
@@ -485,10 +489,6 @@ public class ClientCubeMap {
     }
 
     
-
-    int nChunkUpdates = 0;
-    int lastRefresh = 0;
-    public int chunkPerSecond = 0;
     public void parseCubeData(ByteBuffer download, int count) {
         // need a backing array
         if(!download.hasArray()) {
@@ -549,7 +549,6 @@ public class ClientCubeMap {
 
         if(control == 1) {
             // get entry count
-
             int startVersion = download.getInt();
             byte count = download.get();
             if(download.limit() - download.position() < count * 4) {
@@ -562,9 +561,6 @@ public class ClientCubeMap {
                 int[] delta = CubeChunk.unpackChange(data);
                 // 0-2 = cube index, 3 = cube type
                 byte type = (byte) delta[3];
-                if(delta[3]>Byte.MAX_VALUE) {
-                    int derp2 = 2;
-                }
                 c.setCubeType(delta[0], delta[1], delta[2], type, true);
                 changedBlock(c, delta[0], delta[1], delta[2], type);
             }
