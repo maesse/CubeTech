@@ -67,7 +67,7 @@ public class SparkEmitter implements IEmitter {
 
             int lifetimeRnd = (int)((Ref.rnd.nextFloat()) * -300f) + lifeTime;
 
-            LocalEntity ent = LocalEntity.sparkTrail(origin, dir, baseDir, 10f, lifetimeRnd, time, mat,1,0.65f,0,1);
+            LocalEntity ent = LocalEntity.sparkTrail(origin, dir, baseDir, 10f, lifetimeRnd, time, mat,1,0.55f,0,1);
             ent.Flags = LocalEntity.FLAG_DONT_SCALE;
             ent.pos.type = Trajectory.GRAVITY;
             ent.pos.duration = 200;

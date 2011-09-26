@@ -41,7 +41,7 @@ public class CollisionResult {
         entitynum = Common.ENTITYNUM_NONE;
         this.start.set(start);
         this.delta.set(delta);
-        this.extent.set(extent);
+        if(extent != null) this.extent.set(extent); // can be null for ray tracing
     }
 
     public Vector3f getPOI(Vector3f dest) {

@@ -20,7 +20,7 @@ public class PlayerInput {
     public boolean[] buttons = new boolean[30];
     public int serverTime;
     public int WheelDelta;
-    public Weapon weapon;
+    public Weapon weapon = Weapon.NONE;
     public boolean Mouse1;
     public boolean Mouse1Diff;
     public boolean Mouse2;

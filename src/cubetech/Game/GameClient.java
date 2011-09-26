@@ -1,29 +1,21 @@
 package cubetech.Game;
 
 import cubetech.Block;
+import cubetech.collision.CollisionResult;
 import cubetech.collision.CubeChunk;
 import cubetech.collision.CubeMap;
-import cubetech.common.CS;
-import cubetech.common.Commands;
-import cubetech.common.Common;
+import cubetech.common.*;
 import cubetech.common.Common.ErrorCode;
-import cubetech.common.Content;
-import cubetech.common.Helper;
-import cubetech.common.ICommand;
-import cubetech.common.IDieMethod;
-import cubetech.common.Info;
-import cubetech.common.MeansOfDeath;
-import cubetech.common.Move;
 import cubetech.common.Move.MoveType;
-import cubetech.common.MoveQuery;
-import cubetech.common.PlayerState;
 import cubetech.common.items.IItem;
 import cubetech.common.items.Weapon;
 import cubetech.common.items.WeaponItem;
+import cubetech.common.items.WeaponState;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityType;
 import cubetech.entities.Event;
 import cubetech.input.PlayerInput;
+import cubetech.iqm.IQMAnim;
 import cubetech.misc.Ref;
 import cubetech.server.SvFlags;
 import cubetech.spatial.SectorQuery;
@@ -46,6 +38,8 @@ public class GameClient extends Gentity {
     public int clientIndex = -1;
     public int lastCmdTime;
 
+    public int extraWeaponTime;
+
     // timers
     public int inactivityTime; // for kicking afk players
     public int respawnTime;
@@ -58,7 +52,10 @@ public class GameClient extends Gentity {
 
     private static long[] lookupCache = null;
 
+    ScoreList scores = new ScoreList();
+
     void updatePlayerCubes() {
+        if(r.svFlags.contains(SvFlags.BOT)) return;
         // Get a list of chunks surrounding the player
         lookupCache = Ref.cm.cubemap.getVisibleChunks(ps.origin, CubeMap.DEFAULT_GROW_DIST, lookupCache);
         
@@ -183,24 +180,9 @@ public class GameClient extends Gentity {
      * Updates the scoreboard for this client
      */
     public void ScoreboardMessage() {
-        StringBuilder str = new StringBuilder();
-        int nClients = 0;
-        for (int i= 0; i < Ref.game.level.clients.length; i++) {
-            GameClient cl = Ref.game.level.clients[i];
-            if(cl == null)
-                continue;
-            if(cl.pers.connected == ClientPersistant.ClientConnected.DISCONNECTED)
-                continue;
-
-            int ping = -1;
-            if(cl.pers.connected == ClientPersistant.ClientConnected.CONNECTED)
-                ping = cl.ps.ping;
-
-            nClients++;
-            str.append(String.format(" %d %d %d", i, ping, (Ref.game.level.time - cl.pers.JoinTime)/60000));
-        }
-
-        SendServerCommand(String.format("scores %d %s", nClients, str));
+        String scoreCommand = scores.createUpdate(Ref.game.level.clients);
+        if(scoreCommand == null) return;
+        SendServerCommand(String.format("scores %s", scoreCommand));
     }
 
     public void SendServerCommand(String str) {
@@ -214,9 +196,7 @@ public class GameClient extends Gentity {
             cmd_Say(tokens, false);
         else if(cmd.equals("score"))
             cmd_Score();
-        else if(cmd.equals("block")) {
-            cmd_Block(tokens);
-        } else if(cmd.equals("give")) {
+        else if(cmd.equals("give")) {
             cmd_Give.RunCommand(tokens);
         } else if(cmd.equals("noclip")) {
             cmd_NoClip.RunCommand(tokens);
@@ -224,6 +204,8 @@ public class GameClient extends Gentity {
             cmd_Kill.RunCommand(tokens);
         } else if(cmd.equals("god")) {
             cmd_God.RunCommand(tokens);
+        } else if(cmd.equals("dropweapon")) {
+            tossWeapon(ps.weapon);
         } else
             SendServerCommand("print \"unknown command " + cmd + "\"");
     }
@@ -336,30 +318,6 @@ public class GameClient extends Gentity {
         Ref.game.Say(this, text);
     }
 
-    // Client want's to modify the map
-    private void cmd_Block(String[] tokens) {
-        if(!Ref.game.level.editmode) {
-            // not in edit mode
-            return;
-        }
-
-        if(ps.moveType != MoveType.EDITMODE) {
-            Common.LogDebug("Player not in EDITMODE :S");
-            return;
-        }
-
-        if(tokens.length < 2)
-            return;
-
-        String bCmd = tokens[1];
-        if(bCmd.equalsIgnoreCase("add")) {
-            Vector3f position = ps.origin;
-            Block b = Ref.cm.cm.AddBlock();
-            b.SetCentered(new Vector2f(position.x, position.y), new Vector2f(8, 8));
-            Ref.game.SendBlock(b);
-        }
-    }
-
     private boolean ClientInactivityTimer() {
 //        if(cl.lastCmdTime != 0 && level.time - cl.lastCmdTime > 10000) {
 //            if(!cl.pers.LocalClient)
@@ -459,10 +417,10 @@ public class GameClient extends Gentity {
         setHealth(getMaxHealth());
 
         // Set spawn
-        Gentity spawnPoint = selectSpawnPoint(ps.origin);
+        Vector3f spawnPoint = selectSpawnPoint();
         if(spawnPoint != null) {
-            SetOrigin(new Vector3f(spawnPoint.s.origin));
-            ps.origin = new Vector3f(spawnPoint.s.origin);
+            SetOrigin(new Vector3f(spawnPoint));
+            ps.origin = new Vector3f(spawnPoint);
         }
         
         pers.cmd = Ref.server.GetUserCommand(index);
@@ -471,8 +429,8 @@ public class GameClient extends Gentity {
         respawnTime = Ref.game.level.time;
 
         // fire the targets of the spawn point
-        if(spawnPoint != null)
-            spawnPoint.UseTargets(this);
+//        if(spawnPoint != null)
+//            spawnPoint.UseTargets(this);
 
         // run a client frame to drop exactly to the floor,
         // initialize animations and other things
@@ -502,6 +460,8 @@ public class GameClient extends Gentity {
     public void Client_Think() {
         pers.cmd = Ref.server.GetUserCommand(s.ClientNum);
         lastCmdTime = Ref.game.level.time;
+
+//        if(r.svFlags.contains(SvFlags.BOT)) return;
 
         // don't think if the client is not yet connected (and thus not yet spawned in)
         if(pers.connected != ClientPersistant.ClientConnected.CONNECTED)
@@ -560,8 +520,8 @@ public class GameClient extends Gentity {
 
         // link entity now, after any personal teleporters have been used
         Link();
-//        if(!noclip)
-//            TouchTriggers();
+        if(!noclip) touchTriggers();
+            
 
         // NOTE: now copy the exact origin over otherwise clients can be snapped into solid
         r.currentOrigin.set(ps.origin);
@@ -570,7 +530,14 @@ public class GameClient extends Gentity {
         if(ps.eventSequence != oldEventSequence)
             eventTime = Ref.game.level.time;
 
-        updatePlayerCubes();
+        if(!r.svFlags.contains(SvFlags.BOT)) {
+            updatePlayerCubes();
+            String update = scores.createUpdate(Ref.game.level.clients);
+            if(update != null) {
+                SendServerCommand("scores " + update);
+            }
+        }
+        
 
         // Check for respawning
         if(isDead()) {
@@ -585,6 +552,40 @@ public class GameClient extends Gentity {
         // Check for death
         if(ps.origin.z < Ref.game.g_killheight.iValue) {
             Die();
+        }
+    }
+
+    private static Vector3f touchRange  = new Vector3f(40,40,52);
+    private void touchTriggers() {
+        if(ps.stats.Health <= 0) return;
+        Vector3f mins = Vector3f.sub(ps.origin, touchRange, null);
+        Vector3f maxs = Vector3f.add(ps.origin, touchRange, null);
+
+        SectorQuery q = Ref.server.EntitiesInBox(mins, maxs);
+
+        // can't use ent->absmin, because that has a one unit pad
+        Vector3f.add(ps.origin, r.mins, mins);
+        Vector3f.add(ps.origin, r.maxs, maxs);
+
+        for (Integer entNum : q.List) {
+            Gentity hit = Ref.game.g_entities[entNum];
+            if(hit.touch == null) continue;
+
+            if((hit.r.contents & Content.TRIGGER) == 0) continue;
+
+            // use seperate code for determining if an item is picked up
+            // so you don't have to actually contact its bounding box
+            if(hit.s.eType == EntityType.ITEM) {
+                if(!Ref.common.items.playerTouchesItem(ps, hit.s, Ref.game.level.time)) {
+                    continue;
+                }
+            } else {
+                if(!Ref.server.EntityContact(mins, maxs, hit.shEnt)) {
+                    continue;
+                }
+            }
+
+            hit.touch.touch(hit, this);
         }
     }
 
@@ -617,11 +618,17 @@ public class GameClient extends Gentity {
             ent.s.frame = killer;
             ent.r.svFlags.add(SvFlags.BROADCAST);
 
+            tossClientItems();
+
             self.s.weapon = Weapon.NONE;
             self.r.contents = Content.CORPSE;
             respawnTime = Ref.game.level.time + 1000;
 
+            ps.animation = ((ps.animation & 128) ^ 128) | Animations.DIE.ordinal();
+
             Ref.game.AddEvent(self, Event.DIED, killer);
+            
+            
 
             Ref.server.LinkEntity(self.shEnt);
         }
@@ -629,8 +636,25 @@ public class GameClient extends Gentity {
 
     };
 
+    private void tossClientItems() {
+        Weapon[] weaponList = ps.stats.getWeapons();
+        for (Weapon w : weaponList) {
+            tossWeapon(w);
+        }
+    }
+
+    private void tossWeapon(Weapon w) {
+        if(!ps.stats.hasWeapon(w)) return;
+        if(w == Weapon.NONE) return;
+        WeaponItem wi = Ref.common.items.getWeapon(w);
+        Ref.common.items.dropItem(this, wi, 0, ps.stats.getAmmo(w));
+        ps.stats.removeWeapon(w);
+        ps.weapon = ps.stats.getWeaponNearest(w, false);
+        ps.weaponState = WeaponState.RAISING;
+        ps.weaponTime = Ref.common.items.getWeapon(w).getRaiseTime();
+    }
+
     public void Die() {
- 
         ps.AddPredictableEvent(Event.DIED, 0);
         ps.velocity.set(0,0,0);
         if(!isDead())
@@ -645,6 +669,8 @@ public class GameClient extends Gentity {
     
     private void ClientTimerActions(int msec) {
         timeResidual += msec;
+        extraWeaponTime -= msec;
+        if(extraWeaponTime < 0) extraWeaponTime = 0;
         while(timeResidual >= 1000) {
             timeResidual -= 1000;
 
@@ -665,61 +691,14 @@ public class GameClient extends Gentity {
         }
     }
 
-//    private void TouchTriggers() {
-//        // dead clients don't activate triggers!
-//        if(isDead())
-//            return;
-//
-//        Vector2f range = new Vector2f(40,40);
-//        Vector2f mins = new Vector2f(ps.origin);
-//        Vector2f.sub(mins, range, mins);
-//        Vector2f maxs = new Vector2f(ps.origin);
-//        Vector2f.add(maxs, range, maxs);
-//
-//        SectorQuery query = Ref.server.EntitiesInBox(mins, maxs);
-//
-//        // can't use ent->absmin, because that has a one unit pad
-//        mins.x = ps.origin.x + r.mins.x;
-//        mins.y = ps.origin.y + r.mins.y;
-//        maxs.x = ps.origin.x + r.maxs.x;
-//        maxs.y = ps.origin.y + r.maxs.y;
-//
-//        for (int index : query.List) {
-//            Gentity hit = Ref.game.g_entities[index];
-//
-//            if(hit.touch == null && touch == null)
-//                continue;
-//
-//            if((hit.r.contents & Content.TRIGGER) == 0)
-//                continue;
-//
-//            // use seperate code for determining if an item is picked up
-//            // so you don't have to actually contact its bounding box
-//            if(hit.s.eType == EntityType.ITEM) {
-//                if(!Ref.common.items.playerTouchesItem(ps, hit.s, Ref.game.level.time))
-//                    continue;
-//            } else {
-//                if(!Ref.server.EntityContact(mins, maxs, hit.shEnt))
-//                    continue;
-//            }
-//
-//            if(hit.touch != null)
-//                hit.touch.touch(hit, this);
-//
-//
-//        }
-//    }
-
     public void respawn() {
-        
         // TODO: Spawn effect and maybe bodyque
         ClientSpawn();
-        Ref.game.respawnAllItems();
         
         ps.maptime = 0;
     }
 
-    public String Client_Connect(int id, boolean firsttime) {
+    public String Client_Connect(int id, boolean firsttime, boolean isBot) {
         Clear();
 
         if(id != s.ClientNum)
@@ -727,9 +706,13 @@ public class GameClient extends Gentity {
         
         clientIndex = id;
         pers.connected = ClientPersistant.ClientConnected.CONNECTING;
-        if(firsttime) {
-            // InitSessionData
+
+        if(isBot) {
+            r.svFlags.add(SvFlags.BOT);
+            inuse = true;
+            
         }
+
         ClientUserInfoChanged();
         // don't do the "xxx connected" messages if they were caried over from previous level
         if(firsttime) {
@@ -764,17 +747,7 @@ public class GameClient extends Gentity {
         Ref.game.CalculateRanks();
     }
 
-    void PlaceInEditMode() {
-        if(isDead())
-            ClientSpawn();
-        ps.moveType = MoveType.NORMAL;
-    }
-
-    void RemoveFromEditMode() {
-        ps.moveType = MoveType.EDITMODE;
-    }
-
-    private Gentity selectSpawnPoint(Vector3f origin) {
+    private Vector3f selectSpawnPoint() {
         Gentity spot = null;
         ArrayList<Gentity> spots = new ArrayList<Gentity>();
 
@@ -782,15 +755,32 @@ public class GameClient extends Gentity {
             spots.add(spot);
         }
 
-        Vector2f spawn = null;
-
         if(spots.isEmpty()) {
             Common.LogDebug("Warning: No spawn points found.");
+            return new Vector3f(0, 0, 0);
         } else {
             spot = spots.get(Ref.rnd.nextInt(spots.size()));
         }
 
-        return spot;
+        boolean spotOk = false;
+        int i = 0;
+        Vector3f origin = new Vector3f(spot.s.origin);
+        while(i < 10 && !spotOk) {
+            CollisionResult res = Ref.server.Trace(origin, origin, Game.PlayerMins, Game.PlayerMaxs, -1, spot.s.ClientNum);
+            if(res.frac == 1f && !res.startsolid) {
+                spotOk = true;
+                break;
+            }
+            origin.z += Game.PlayerMaxs.z - Game.PlayerMins.z;
+            i++;
+        }
+
+        if(!spotOk) {
+            // Cant find a non-solid spawn
+            origin.set(spot.s.origin);
+        }
+
+        return origin;
     }
 
     public Vector3f getForwardVector() {

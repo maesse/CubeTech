@@ -24,6 +24,11 @@ public class CubeMaterial {
         POINT,
         LINEAR
     }
+
+     public enum BlendMode {
+        ALPHA,
+        ONE
+    }
     
     private CubeTexture texture = null;
     private String textureName = "None";
@@ -33,6 +38,7 @@ public class CubeMaterial {
     private int translucent = 2; // 0=off, 1=multiply, 2=add
     private boolean ignorez = false;
     private Filtering filter = Filtering.LINEAR;
+    public BlendMode blendmode = BlendMode.ALPHA;
     private Vector2f textureOffset = new Vector2f(0, 0);
     private Vector2f textureSize = new Vector2f(1, 1);
     private int animFrames = 1;
@@ -285,6 +291,10 @@ public class CubeMaterial {
             lastFrameTime = Ref.client.realtime;
             currFrame++;
         }
+    }
+
+    public int getFrame(int time) {
+        return (time / framedelay)%animFrames;
     }
 
     Vector2f[] animOffsetCache = null;

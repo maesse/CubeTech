@@ -192,6 +192,7 @@ public class CVars {
             Common.Log("CVar: Get w/ null arguments");
             return null;
         }
+        if(flags == null) flags = EnumSet.of(CVarFlags.NONE);
 
         if(!ValidateString(name))
         {

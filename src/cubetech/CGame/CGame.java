@@ -1,5 +1,6 @@
 package cubetech.CGame;
 
+import cubetech.common.Score;
 import cubetech.Block;
 import cubetech.Game.Gentity;
 import cubetech.collision.*;
@@ -41,7 +42,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_viewmode = Ref.cvars.Get("cg_viewmode", "1", EnumSet.of(CVarFlags.NONE));
     CVar cg_drawentities = Ref.cvars.Get("cg_drawentities", "0", EnumSet.of(CVarFlags.ROM));
     CVar cg_drawbin = Ref.cvars.Get("cg_drawbin", "0", EnumSet.of(CVarFlags.NONE));
-    CVar cg_swingspeed = Ref.cvars.Get("cg_swingspeed", "0.3", EnumSet.of(CVarFlags.CHEAT));
+    CVar cg_swingspeed = Ref.cvars.Get("cg_swingspeed", "0.8", EnumSet.of(CVarFlags.CHEAT));
     CVar cg_freecam = Ref.cvars.Get("cg_freecam", "0", EnumSet.of(CVarFlags.CHEAT));
 
     CVar cg_tps = Ref.cvars.Get("cg_tps", "0", EnumSet.of(CVarFlags.NONE));
@@ -98,8 +99,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
         cg_skybox = Ref.cvars.Get("cg_skybox", "1", EnumSet.of(CVarFlags.NONE));
 
-        commands.put("+scores", new Cmd_ScoresDown());
-        commands.put("-scores", new Cmd_ScoresUp());
+//        commands.put("+scores", new Cmd_ScoresDown());
+//        commands.put("-scores", new Cmd_ScoresUp());
         commands.put("testgun", cg.cg_testgun_f);
         commands.put("testmodel", cg.cg_testmodel_f);
         commands.put("nextframe", cg.cg_testmodelNextFrame_f);
@@ -133,6 +134,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
         Ref.Input.AddKeyEventListener(this, Input.KEYCATCH_CGAME);
         Ref.Input.AddMouseEventListener(this, Input.KEYCATCH_CGAME);
+
+        Ref.soundMan.clearLoopingSounds(true);
         
     }
 
@@ -146,6 +149,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             cgr.DrawInformation();
             return;
         }
+
+        Ref.soundMan.clearLoopingSounds(false);
 
         // set up cg.snap and possibly cg.nextSnap
         cg.ProcessSnapshots();
@@ -163,6 +168,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         // this counter will be bumped for every valid scene we generate
         cg.clientframe++;
         cg.PredictPlayerState();
+        cg.showScores = cg.predictedPlayerState.oldButtons[3];
 
         CalcViewValues();
 
@@ -178,6 +184,18 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         AddPacketEntities();
         cg.addTestModel();
 
+        
+
+        SecTag s = Profiler.EnterSection(Sec.PHYSICS);
+        physics.stepPhysics();
+        s.ExitSection();
+        
+        s = Profiler.EnterSection(Sec.RENDER);
+        cgr.renderViewModel(cg.predictedPlayerState);
+        marks.addMarks();
+
+        physics.renderBodies();
+
         if(shadowMan.isEnabled()) {
             shadowMan.renderShadowCascades(cg.refdef, new IThinkMethod() {
                 public void think(Gentity ent) {
@@ -189,21 +207,11 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             });
         }
 
-        SecTag s = Profiler.EnterSection(Sec.PHYSICS);
-        physics.stepPhysics();
-        s.ExitSection();
-        
-        s = Profiler.EnterSection(Sec.RENDER);
-
         if(map != null) {
             if(cg_skybox.isTrue()) skyBox.Render(cg.refdef);
             map.Render(cg.refdef);
         }
-
-        cgr.renderViewModel(cg.predictedPlayerState);
-        marks.addMarks();
-
-        physics.renderBodies();
+        
         
         //cgr.RenderScene(cg.refdef);
 
@@ -335,24 +343,34 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg.refdef = new ViewParams();
         cg.refdef.CalcVRect();
 
-        if(cg_freecam.isTrue() && cg.playingdemo) {
-            // Do a fake playerstate for freecamming in demos
-            if(cg.demoPlayerState == null) {
-                cg.demoPlayerState = cg.predictedPlayerState.Clone(null);
-                cg.demoPlayerState.moveType = Move.MoveType.NOCLIP;
-                cg.demoPlayerState.velocity.set(0,0,0); // clear velocity
-            }
-            WeightedMouseMove(Ref.Input.playerInput);
-            Ref.Input.playerInput.serverTime = Ref.common.framemsec;
-            cg.demoPlayerState.UpdateViewAngle(Ref.Input.playerInput);
-            cg.demoPlayerState.commandTime = 0;
+        cg.bobcycle = (cg.predictedPlayerState.bobcycle & 128) >> 7;
+        cg.bobfracsin = (float) Math.abs(Math.sin((float)(cg.predictedPlayerState.bobcycle & 0xff) / 127f * Math.PI));
+        cg.xyspeed = (float) Math.sqrt(cg.predictedPlayerState.velocity.x * cg.predictedPlayerState.velocity.x +
+                                    cg.predictedPlayerState.velocity.y * cg.predictedPlayerState.velocity.y);
 
-            MoveQuery move = new MoveQuery(this);
-            move.cmd = Ref.Input.playerInput;
-            move.ps = cg.demoPlayerState;
-            Move.Move(move);
-            Helper.VectorCopy(cg.demoPlayerState.origin, cg.refdef.Origin);
-            Helper.VectorCopy(cg.demoPlayerState.viewangles, cg.refdef.Angles);
+        if(cg_freecam.isTrue() && cg.playingdemo) {
+            if(Ref.client.demo.track.playingTrack()) {
+                Ref.client.demo.track.readFrame(cg.time, cg.refdef);
+            } else {
+                // Do a fake playerstate for freecamming in demos
+                if(cg.demoPlayerState == null) {
+                    cg.demoPlayerState = cg.predictedPlayerState.Clone(null);
+                    cg.demoPlayerState.moveType = Move.MoveType.NOCLIP;
+                    cg.demoPlayerState.velocity.set(0,0,0); // clear velocity
+                }
+                WeightedMouseMove(Ref.Input.playerInput);
+                Ref.Input.playerInput.serverTime = Ref.common.framemsec;
+                cg.demoPlayerState.UpdateViewAngle(Ref.Input.playerInput);
+                cg.demoPlayerState.commandTime = 0;
+
+                MoveQuery move = new MoveQuery(this);
+                move.cmd = Ref.Input.playerInput;
+                move.ps = cg.demoPlayerState;
+                Move.Move(move);
+                Helper.VectorCopy(cg.demoPlayerState.origin, cg.refdef.Origin);
+                Helper.VectorCopy(cg.demoPlayerState.viewangles, cg.refdef.Angles);
+                Ref.client.demo.track.recordFrame(cg.time, cg.refdef.Origin, cg.refdef.Angles, cg.demofov);
+            }
         } else {
 
             Helper.VectorCopy(cg.predictedPlayerState.origin, cg.refdef.Origin);
@@ -373,7 +391,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             if(cg_tps.isTrue()) {
                 cg.refdef.offsetThirdPerson();
             } else {
-
+                Vector3f.add(cg.refdef.Angles, cg.predictedPlayerState.punchangle, cg.refdef.Angles);
             }
         }
 
@@ -410,16 +428,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Ref.commands.AddCommand("block", null);
     }
 
-    private void ParseScores(String[] tokens) {
-        int nClients = Integer.parseInt(tokens[1]);
-        cg.scores = new Score[nClients];
-        for (int i= 0; i < nClients; i++) {
-            cg.scores[i] = new Score();
-            cg.scores[i].client = Integer.parseInt(tokens[3 * i + 2]);
-            cg.scores[i].ping = Integer.parseInt(tokens[3 * i + 3]);
-            cg.scores[i].time = Integer.parseInt(tokens[3 * i + 4]);
-        }
-    }
+    
 
     private void AddPacketEntities() {
         if(cg.nextSnap != null) {
@@ -549,9 +558,11 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Common.Log("--- CGAME SHUTDOWN ---");
         Ref.Input.RemoveKeyEventListener(this, Input.KEYCATCH_CGAME);
         Ref.Input.RemoveMouseEventListener(this, Input.KEYCATCH_CGAME);
-        map.dispose();
+        if(!Ref.client.demo.isPlaying()) {
+            map.dispose();
+            map = null;
+        }
         Ref.ResMan.cleanupModels();
-        map = null;
         System.gc();
         System.gc();
         System.gc();
@@ -629,7 +640,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         }
 
         if(cmd.equalsIgnoreCase("scores")) {
-            ParseScores(tokens);
+            cg.scores.parseScores(tokens);
             return;
         }
 
@@ -692,8 +703,9 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     */
     private void MapRestart() {
         InitLocalEntities();
+        marks = new Marks();
         cg.mapRestart = false;
-
+        Ref.soundMan.clearLoopingSounds(true);
         // Display "GO" message or something
     }
 
@@ -749,7 +761,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                 int zminLen = (pack >> 24) & 127;
 
                 if(x == 0 || y == 0 || height == 0) {
-                    Common.Log("Invalid entity bbox for unpacking");
+                    Common.Log("Invalid entity bbox for unpacking ent:%d eType:%d", ent.ClientNum, ent.eType);
                     continue;
                 }
 
@@ -759,8 +771,10 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                 
 
                 float leftover = ((height-zminLen)-zminLen) / 2f;
-                origin.z += leftover;
-                Ref.collision.SetBoxModel(new Vector3f(x, y, z), origin);
+                //origin.z += leftover;
+                Vector3f tmins = new Vector3f(-x,-y,-zminLen);
+                Vector3f tmaxs = new Vector3f(x,y,height - zminLen);
+                Ref.collision.SetBoxModel(tmins, tmaxs, origin);
             }
 
             
@@ -782,37 +796,37 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         }
     }
 
-    // User wants to see the scoreboard
-    private class Cmd_ScoresDown implements ICommand {
-        public void RunCommand(String[] args) {
-            if(cg.scoresRequestTime + 2000 < cg.time) {
-                // the scores are more than two seconds out of data,
-		// so request new ones
-                cg.scoresRequestTime = cg.time;
-                Ref.client.AddReliableCommand("score", false);
-
-                // leave the current scores up if they were already
-		// displayed, but if this is the first hit, clear them out
-                if(!cg.showScores)
-                {
-                    cg.showScores = true;
-//                    cg.scores = new Score[0]; // empty array
-                }
-            } else {
-                // show the cached contents even if they just pressed if it
-		// is within two seconds
-                cg.showScores = true;
-            }
-        }
-    }
-    // Users doesnt want to see the scoreboard anymore
-    private class Cmd_ScoresUp implements ICommand {
-        public void RunCommand(String[] args) {
-            if(cg.showScores) {
-                cg.showScores = false;
-            }
-        }
-    }
+//    // User wants to see the scoreboard
+//    private class Cmd_ScoresDown implements ICommand {
+//        public void RunCommand(String[] args) {
+//            if(cg.scoresRequestTime + 2000 < cg.time) {
+//                // the scores are more than two seconds out of data,
+//		// so request new ones
+//                cg.scoresRequestTime = cg.time;
+//                Ref.client.AddReliableCommand("score", false);
+//
+//                // leave the current scores up if they were already
+//		// displayed, but if this is the first hit, clear them out
+//                if(!cg.showScores)
+//                {
+//                    cg.showScores = true;
+////                    cg.scores = new Score[0]; // empty array
+//                }
+//            } else {
+//                // show the cached contents even if they just pressed if it
+//		// is within two seconds
+//                cg.showScores = true;
+//            }
+//        }
+//    }
+//    // Users doesnt want to see the scoreboard anymore
+//    private class Cmd_ScoresUp implements ICommand {
+//        public void RunCommand(String[] args) {
+//            if(cg.showScores) {
+//                cg.showScores = false;
+//            }
+//        }
+//    }
 
     public int GetCurrentPlayerEntityNum() {
         if(cg.predictedPlayerState != null)

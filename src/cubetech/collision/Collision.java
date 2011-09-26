@@ -117,7 +117,7 @@ public class Collision {
         Vector3f.sub(box_origin, box_extent, tempPos);
         tempExtent.set(box_extent);
         tempExtent.scale(2f);
-        testAABBAABB(center, v, Extent, box_origin, box_extent, res);
+        testAABBAABB(center, v, Extent, tempPos, tempExtent, res);
     }
     
     private class SATState {
@@ -200,8 +200,8 @@ public class Collision {
 
         if(!separateAxis(satState, amin, amax, bmin, bmax, v.z, 4)) return;
 
-        if(satState.hitaxis != null && satState.hitaxis.z != 0 && v.z != 1) {
-            int test = 2;
+        if(satState.first > 0 && center.x == -60.0625f) {
+            int test =2 ;
         }
 
 //        if(v.z < 0.0f) {
@@ -234,9 +234,6 @@ public class Collision {
             res.entitynum = Common.ENTITYNUM_WORLD;
             res.hitmask = Content.SOLID;
             res.hitAxis.set(satState.hitaxis);
-            if(res.hitAxis.lengthSquared() == 0) {
-                int test = 2;
-            }
             res.startsolid = satState.startsolid;
         } else if(satState.startsolid && satState.hitaxis == null) {
             res.frac = 0f;
@@ -252,19 +249,127 @@ public class Collision {
         Vector3f.sub(maxs, mins, extent);
         extent.scale(0.5f);
 
-        Vector3f diff = Vector3f.sub(maxs, mins, null);
+        Vector3f diff = Vector3f.add(maxs, mins, null);
         diff.scale(0.5f);
 
         Vector3f start = Vector3f.add(startin, diff, null);
         Vector3f dir = new Vector3f();
         if(end != null)
-            Vector3f.sub(start, end, dir);
+            Vector3f.sub(startin, end, dir);
 
         CollisionResult res = GetNext();
         res.reset(start, dir, extent);
         assert(boxTrace);
         TestAABBBox(start,dir, extent , res);
         return res;
+    }
+
+    private class Ray {
+        Vector3f o = new Vector3f();
+        Vector3f d = new Vector3f();
+        Vector3f tempMin = new Vector3f();
+        Vector3f tempMax = new Vector3f();
+    }
+
+    private Ray r = new Ray();
+
+    public float TestAABBRay(Vector3f origin, Vector3f dir, 
+            Vector3f aabb_org, Vector3f aabb_mins, Vector3f aabb_maxs,
+            Vector3f hitaxis)
+    {
+        r.o = origin;
+        r.d = dir;
+        Vector3f p1 = Vector3f.add(aabb_org, aabb_mins, r.tempMin);
+        Vector3f p2 = Vector3f.add(aabb_org, aabb_maxs, r.tempMax);
+        float t1, t2, tmp;
+        float tfar = Float.POSITIVE_INFINITY;
+        float tnear = Float.NEGATIVE_INFINITY;
+        int axis = 0;
+        // check X slab
+        if (r.d.x == 0) {
+            if (r.o.x > p2.x || r.o.x < p1.x) {
+                return Float.POSITIVE_INFINITY; // ray is parallel to the planes & outside slab
+            }
+        } else {
+            tmp = 1.0f / r.d.x;
+            t1 = (p1.x - r.o.x) * tmp;
+            t2 = (p2.x - r.o.x) * tmp;
+            if (t1 > t2) {
+                float c = t1; t1 = t2; t2 = c;
+            }
+            if (t1 > tnear) {
+                axis = 1;
+                tnear = t1;
+            }
+            if (t2 < tfar) {
+                tfar = t2;
+            }
+            if (tnear > tfar || tfar < 0.0) {
+                return Float.POSITIVE_INFINITY; // ray missed box or box is behind ray
+            }
+        }
+        // check Y slab
+        if (r.d.y == 0) {
+            if (r.o.y > p2.y || r.o.y < p1.y) {
+                return Float.POSITIVE_INFINITY; // ray is parallel to the planes & outside slab
+            }
+        } else {
+            tmp = 1.0f / r.d.y;
+            t1 = (p1.y - r.o.y) * tmp;
+            t2 = (p2.y - r.o.y) * tmp;
+            if (t1 > t2) {
+                float c = t1; t1 = t2; t2 = c;
+            }
+            if (t1 > tnear) {
+                tnear = t1;
+                axis = 2;
+            }
+            if (t2 < tfar) {
+                tfar = t2;
+            }
+            if (tnear > tfar || tfar < 0) {
+                return Float.POSITIVE_INFINITY; // ray missed box or box is behind ray
+            }
+        }
+        // check Z slab
+        if (r.d.z == 0) {
+            if (r.o.z > p2.z || r.o.z < p1.z) {
+                return Float.POSITIVE_INFINITY; // ray is parallel to the planes & outside slab
+            }
+        } else {
+            tmp = 1.0f / r.d.z;
+            t1 = (p1.z - r.o.z) * tmp;
+            t2 = (p2.z - r.o.z) * tmp;
+            if (t1 > t2) {
+                float c = t1; t1 = t2; t2 = c;
+            }
+            if (t1 > tnear) {
+                tnear = t1;
+                axis = 3;
+            }
+            if (t2 < tfar) {
+                tfar = t2;
+            }
+            if (tnear > tfar || tfar < 0) {
+                return Float.POSITIVE_INFINITY; // ray missed box or box is behind ray
+            }
+        }
+        switch(axis) {
+            case 1:
+                hitaxis.set(r.d.x>0?1:0,0,0);
+                break;
+            case 2:
+                hitaxis.set(0,r.d.y>0?1:0,0);
+                break;
+            case 3:
+                hitaxis.set(0,0,r.d.z>0?1:0);
+                break;
+        }
+        if (tnear > 0) {
+            return tnear;
+        } else {
+            return tfar;
+        }
     }
 
     /**
@@ -334,17 +439,20 @@ public class Collision {
     }
 
     public void SetBoxModel(Vector3f mins, Vector3f maxs, Vector3f origin) {
+        Vector3f.add(mins, maxs, box_extent);
+        box_extent.scale(0.5f);
         // get mins and maxs offset for centering
-        Vector3f.add(origin, mins, box_origin);
+        Vector3f.add(origin, box_extent, box_origin);
 
         // grab the extents
         Vector3f.sub(maxs, mins, box_extent);
+        box_extent.scale(0.5f);
         boxTrace = true; // next BoxTrace will use the boxmodel
     }
 
     public void SetBoxModel(Vector3f extent, Vector3f origin) {
         Vector3f.sub(origin, extent, box_origin);
-        box_extent.set(extent).scale(2f);
+        box_extent.set(extent);
         boxTrace = true; // next BoxTrace will use the boxmodel
     }
 

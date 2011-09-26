@@ -310,7 +310,7 @@ public class SpriteManager {
                     Ref.ResMan.SetWhiteTexture();
             }
                 
-            Sprites[index].Draw();
+            Sprites[index].DrawFromBuffer();
         }
         Ref.glRef.PopShader();
     }

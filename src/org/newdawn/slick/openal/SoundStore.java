@@ -466,7 +466,7 @@ public class SoundStore {
                 if (ch.sfx != null) {
                     // Start
 
-                    int result = playAsSoundAt(ch.sfx.getBufferID(), ch.chanIndex, 1.0f, 1.0f, false,
+                    int result = playAsSoundAt(ch.sfx.getBufferID(), ch.chanIndex, 1.0f, 1.0f, ch.loop,
                             origin.x, origin.y, origin.z, velocity.x, velocity.y, velocity.z, false);
 
                     if (result == -1) {

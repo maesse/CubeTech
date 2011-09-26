@@ -27,6 +27,41 @@ public class Helper {
         dst.y = src.y;
     }
 
+    public static Vector3f VectorToAngles(Vector3f dir, Vector3f dest) {
+        if(dest == null) dest = new Vector3f();
+        
+        float forward, yaw, pitch;
+        if(dir.x == 0 && dir.y == 0) {
+            yaw = 0;
+            if(dir.z > 0) {
+                pitch = 90;
+            } else {
+                pitch = 270;
+            }
+        } else {
+            if(dir.x != 0) {
+                yaw = (float)(Math.atan2(dir.y, dir.x) * 180f / Math.PI);
+            } else if(dir.y != 0) {
+                yaw = 90;
+            } else {
+                yaw = 270;
+            }
+            if(yaw < 0) {
+                yaw += 360;
+            }
+
+            forward = (float) Math.sqrt(dir.x*dir.x + dir.y*dir.y);
+            pitch = (float)(Math.atan2(dir.z, forward) * 180f / Math.PI);
+            if(pitch < 0) pitch += 360;
+        }
+
+        dest.x = -pitch;
+        dest.y = yaw;
+        dest.z = 0;
+        return dest;
+    }
+
+
     public static void VectorCopy(Vector3f src, Vector3f dst) {
         dst.x = src.x;
         dst.y = src.y;
@@ -100,7 +135,7 @@ public class Helper {
         // ready the texture
         Ref.ResMan.getWhiteTexture().Bind();
         if(color != null) {
-            col(color.x, color.y, color.z, color.w);
+            col(color);
         } else {
             col(1,0,0);
         }
@@ -682,6 +717,7 @@ public class Helper {
     }
 
     public static float VectorGet(Vector3f vec, int axis) {
+        if(vec == null) return 0;
         if(axis == 0)
             return vec.x;
         if(axis == 1)

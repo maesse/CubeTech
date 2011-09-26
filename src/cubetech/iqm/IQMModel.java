@@ -120,6 +120,10 @@ public class IQMModel {
         return dest;
     }
 
+    public BoneAttachment getAttachment(String attachPoint) {
+        return attachments.get(attachPoint);
+    }
+
     public IQMAnim getAnimation(Animations animations) {
         return animationMap.get(animations);
     }
@@ -233,8 +237,20 @@ public class IQMModel {
         staticModelVB.unmap();
     }
 
+    // Contains the values of the latest call
+    private int _frame = -1;
+    private int _lastframe;
+    private float _backlerp;
+    
     private void gpuAnimate(int frame, int lastframe, float backlerp) {
         createDynamicBuffer();
+        gpu_skin_dirty = true; // need to update bonemats
+        gpu_skin_shadow_dirty = true;
+        // Avoid animating the same frame over again
+        if(frame == _frame && lastframe == _lastframe && backlerp == _backlerp) return;
+        _frame = frame;
+        _lastframe = lastframe;
+        _backlerp = backlerp;
         
         int frame1 = frame;
         int frame2 = lastframe;
@@ -282,8 +298,8 @@ public class IQMModel {
         }
 
         updateAttachments();
-        gpu_skin_dirty = true; // need to update bonemats
-        gpu_skin_shadow_dirty = true;
+        
+        
     }
 
     public void animate(int frame, int oldframe, float backlerp) {
@@ -298,6 +314,12 @@ public class IQMModel {
             gpuAnimate(frame, oldframe, backlerp);
             return;
         }
+
+        // Avoid animating the same frame over again
+        if(frame == _frame && oldframe == _lastframe && backlerp == _backlerp) return;
+        _frame = frame;
+        _lastframe = oldframe;
+        _backlerp = backlerp;
 
         int frame1 = oldframe;
         int frame2 = frame;
@@ -470,23 +492,23 @@ public class IQMModel {
 //        GL11.glPopMatrix();
         Ref.glRef.PopShader();
 
-        for (BoneAttachment boneAttachment : attachments.values()) {
-            Vector4f derp = new Vector4f(boneAttachment.lastposition.x
-                    , boneAttachment.lastposition.y
-                    , boneAttachment.lastposition.z
-                    , 1);
-            
-            Matrix4f.transform(modelMatrix, derp, derp);
-            Helper.renderBBoxWireframe(derp.x-1,derp.y-1,derp.z-1,derp.x+1,derp.y+1,derp.z+1,null);
-
-            IQMModel model = Ref.ResMan.loadModel("data/ak47.iqm");
-            model.animate(0, 0, 0);
-            Vector3f derpp = new Vector3f(derp);
-
-            Helper.mul(boneAttachment.axis, axis, boneAttachment.axis);
-            
-            model.render(derpp, boneAttachment.axis, color, shadowCasting);
-        }
+//        for (BoneAttachment boneAttachment : attachments.values()) {
+//            Vector4f derp = new Vector4f(boneAttachment.lastposition.x
+//                    , boneAttachment.lastposition.y
+//                    , boneAttachment.lastposition.z
+//                    , 1);
+//
+//            Matrix4f.transform(modelMatrix, derp, derp);
+//            Helper.renderBBoxWireframe(derp.x-1,derp.y-1,derp.z-1,derp.x+1,derp.y+1,derp.z+1,null);
+//
+//            IQMModel model = Ref.ResMan.loadModel("data/ak47.iqm");
+//            model.animate(0, 0, 0);
+//            Vector3f derpp = new Vector3f(derp);
+//
+//            Helper.mul(boneAttachment.axis, axis, boneAttachment.axis);
+//
+//            model.render(derpp, boneAttachment.axis, color, shadowCasting);
+//        }
     }
 
     private void preShadowRecieve(Shader shader) {

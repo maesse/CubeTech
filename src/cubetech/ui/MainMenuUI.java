@@ -62,11 +62,12 @@ public class MainMenuUI implements IMenu {
 
     public void Update(int msec) {
         Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(0, 0), Ref.glRef.GetResolution(), background, new Vector2f(), new Vector2f(1, 1));
+        Vector2f res = Ref.glRef.GetResolution();
+        spr.Set(0, 0, res.x, res.y, background);
         if(Ref.cvars.Find("ui_fullscreen").iValue == 0)
             spr.SetColor(255,255,255,127);
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(Ref.glRef.GetResolution().x/2f - 200, Ref.glRef.GetResolution().y/2f + 100), new Vector2f(400, 200), Ref.ResMan.LoadTexture("data/logo.png"), new Vector2f(), new Vector2f(1, 1));
+        spr.Set(res.x/2f - 200, res.y/2f + 100, 400, 200, Ref.ResMan.LoadTexture("data/logo.png"));
 //        if(Ref.cvars.Find("ui_fullscreen").iValue == 0)
 //            spr.SetColor(255,255,255,127);
 

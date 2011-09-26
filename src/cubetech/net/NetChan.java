@@ -43,11 +43,15 @@ public class NetChan {
     public int unsentLenght;
     byte[] unsentBuffer = new byte[MSG_LEN];
 
+    public boolean isBot = false;
+
     public boolean isLocalhost() {
+        if(addr == null) return false;
         return (addr.getAddress().isLoopbackAddress());
     }
 
     public boolean isLAN() {
+        if(addr == null) return isBot;
         // todo: test
         return (addr.getAddress().isAnyLocalAddress());
     }
@@ -122,6 +126,7 @@ public class NetChan {
             newbuf.Write(qport);
         buf.Flip();
         newbuf.GetBuffer().put(buf.GetBuffer());
+        if(isBot) return;
         Ref.net.SendPacket(source, newbuf, addr);
     }
 

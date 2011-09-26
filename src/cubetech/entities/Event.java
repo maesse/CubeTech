@@ -24,4 +24,4 @@ public enum Event {
      FIRE_WEAPON_ALT, // alternative fire
      NO_AMMO,
      CHANGE_WEAPON
-,   MISSILE_MISS, ORBITUARY}
+,   MISSILE_MISS, ORBITUARY, BULLET_HIT_WALL, BULLET_HIT_FLESH}

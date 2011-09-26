@@ -3,14 +3,15 @@ package cubetech.collision;
 import cern.colt.function.LongObjectProcedure;
 import cern.colt.map.OpenLongObjectHashMap;
 import cubetech.CGame.ChunkRender;
+import cubetech.CGame.CubeChunkDataBuilder;
 import cubetech.CGame.ViewParams;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.ICommand;
 import cubetech.gfx.CubeTexture;
-import cubetech.gfx.FrameBuffer;
 import cubetech.gfx.GLRef;
 import cubetech.gfx.Shader;
+import cubetech.gfx.VBO;
 import cubetech.misc.MutableInteger;
 import cubetech.misc.Plane;
 import cubetech.misc.Ref;
@@ -21,14 +22,10 @@ import java.nio.channels.FileChannel;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.zip.DataFormatException;
-import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.util.Color;
-import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
@@ -43,64 +40,37 @@ public class ClientCubeMap {
     // render stats
     public int nSides = 0; // sides rendered this frame
     public int nChunks = 0;
-
-
-    public FrameBuffer derp;
-    CubeTexture depthTex = null;
+    public int nVBOthisFrame = 0; // vbo's updated this frame
 
     Shader shader = null;
     Shader shadowShader = null;
 
-    public ExecutorService exec = Executors.newSingleThreadExecutor();
-
-    private static final int NUM_BUILDBUFFERS = 8;
-    
-    private int freeBuffers = NUM_BUILDBUFFERS;
-    public ByteBuffer[] buildBuffer = new ByteBuffer[NUM_BUILDBUFFERS];
-    public long[] bufferRelations = new long[NUM_BUILDBUFFERS];
-    public boolean[] bufferLocked = new boolean[NUM_BUILDBUFFERS];
-    public static final Object bufferLock = new Object();
-    private static final long NO_CHUNK = Long.MIN_VALUE;
-
-    public int currentWrite = 0;
-    public int currentRead = 0;
-
-    public int nVBOthisFrame = 0; // vbo's updated this frame
-
+    // Vertex data builder
+    public CubeChunkDataBuilder builder = new CubeChunkDataBuilder();
+   
+    // Recieving of chunks
     int nChunkUpdates = 0;
     int lastRefresh = 0;
     public int chunkPerSecond = 0;
+    private byte[] uncompressBuffer = new byte[CubeChunk.CHUNK_SIZE + 1 + 8]; // max possible size
 
-    private ICommand cmd_cube_refresh = new ICommand() {
-        public void RunCommand(String[] args) {
-            // chunk render distance
-            ViewParams view = Ref.cgame.cg.refdef;
-            int chunkDistance = (int) (view.farDepth * 1f / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE))+1;
-            if(chunkDistance <= 0)
-                chunkDistance = 1;
+    // For keeping track of last rendertime for chunks
+    private HashMap<CubeChunk, MutableInteger> chunksWithVBO = new HashMap<CubeChunk, MutableInteger>();
 
-            // Origin in chunk coordinates
-            int orgX =  (int)Math.floor (view.Origin.x / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
-            int orgY =  (int)Math.floor (view.Origin.y / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
-            int orgZ =  (int)Math.floor (view.Origin.z / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
-            for (int z= -chunkDistance; z <= chunkDistance; z++) {
-                for (int y= -chunkDistance; y <= chunkDistance; y++) {
-                    for (int x= -chunkDistance; x <= chunkDistance; x++) {
-                        long lookup = CubeMap.positionToLookup(orgX + x, orgY + y, orgZ + z);
-                        CubeChunk chunk = (CubeChunk) chunks.get(lookup);
-                        if(chunk == null) continue;
-                        chunk.render.setDirty(true, true);
-                    }
-                }
-            }
-        }
-    };
+    public ClientCubeMap() {
+        shader = Ref.glRef.getShader("WorldFog");
+        buildLight();
+        Ref.commands.AddCommand("cube_refresh", cmd_cube_refresh);
+    }
 
     public void dispose() {
-        exec.shutdownNow();
-        exec = null;
-        depthTex = null;
-        if(derp != null) derp.destroy();
+        // Clear chunk data builder
+        if(builder != null) {
+            builder.dispose();
+            builder = null;
+        }
+
+        // Clear chunks
         chunks.forEachPair(new LongObjectProcedure() {
             public boolean apply(long l, Object o) {
                 ((CubeChunk)o).destroy();
@@ -108,132 +78,145 @@ public class ClientCubeMap {
             }
         });
         chunks.clear();
-        buildBuffer = null;
     }
 
-    //
-    // Intermediate buffer handling
-    //
-    public boolean bufferAvailable() {
-        synchronized(bufferLock) {
-            return freeBuffers > 0;
+    public void Render(ViewParams view) {
+        if(Ref.cgame.cg.time - 1000 > lastRefresh) {
+            chunkPerSecond = nChunkUpdates;
+            nChunkUpdates = 0;
+            lastRefresh = Ref.cgame.cg.time;
+        }
+
+        // Set shader (+ uniforms)
+        boolean shadowPass = Ref.cgame.shadowMan.isRendering();
+        boolean renderingShadows = !shadowPass && Ref.cgame.shadowMan.isEnabled();
+        CubeTexture depth = null;
+        if(shadowPass || !Ref.cgame.shadowMan.isEnabled()) {
+            shader = Ref.glRef.getShader("WorldFog");
+            Ref.glRef.PushShader(shader);
+            shader.setUniform("fog_factor", 1f/(view.farDepth/2f));
+            shader.setUniform("fog_color", (Vector4f)new Vector4f(95,87,67,255).scale(1/255f)); // 145, 140, 129
+        } else {
+            if(shadowShader == null) {
+                shadowShader = Ref.glRef.getShader("WorldFogShadow");
+            }
+            Ref.glRef.PushShader(shadowShader);
+            depth = Ref.cgame.shadowMan.getDepthTexture();
+            depth.textureSlot = 1;
+            depth.Bind();
+            shadowShader.setUniform("shadowMatrix", Ref.cgame.shadowMan.getShadowViewProjections(4));
+            shadowShader.setUniform("cascadeDistances", Ref.cgame.shadowMan.getCascadeDepths());
+            shadowShader.setUniform("fog_factor", 1f/(view.farDepth));
+            shadowShader.setUniform("fog_color", (Vector4f)new Vector4f(95,87,67,255).scale(1/255f)); // 145, 140, 129
+            shadowShader.setUniform("shadow_bias", Ref.cvars.Find("shadow_bias").fValue);
+            shadowShader.setUniform("shadow_factor", Ref.cvars.Find("shadow_factor").fValue);
+            shadowShader.setUniform("pcfOffsets", Ref.cgame.shadowMan.getPCFoffsets());
+        }
+        GLRef.checkError();
+
+        // Set rendermodes
+        GL11.glDisable(GL11.GL_BLEND);
+        if(!Ref.glRef.r_fill.isTrue()) {
+            GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_LINE);
+        }
+
+        // clear render stats
+        nSides = 0;
+        nChunks = 0;
+
+        // chunk render distance
+        int chunkDistance = (int) (view.farDepth * 1f / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE))+1;
+        if(chunkDistance <= 0)
+            chunkDistance = 1;
+
+        // Origin in chunk coordinates
+        int orgX =  (int)Math.floor (view.Origin.x / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+        int orgY =  (int)Math.floor (view.Origin.y / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+        int orgZ =  (int)Math.floor (view.Origin.z / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+
+        renderFromOrigin(orgX, orgY, orgZ, chunkDistance, !Ref.cgame.shadowMan.isRendering(), view.planes);
+
+        if(renderingShadows) {
+            depth.Unbind();
+        }
+        // Reset shader
+        Ref.glRef.PopShader();
+
+        // Clear rendermodes
+        GL11.glEnable(GL11.GL_BLEND);
+        if(!Ref.glRef.r_fill.isTrue()) {
+            GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
         }
     }
 
-    public void markLockedChunks() {
+    private void renderFromOrigin(int orgX, int orgY, int orgZ, int chunkDistance, boolean enqueue, Plane[] frustum) {
+        nVBOthisFrame = 0;
+        if(enqueue) {
+            builder.markLockedChunks(chunks); // push vertex data off to the chunks
+            wipeOldChunkVBO(5000); // remove vbo's that hasn't been rendering for 5secs
+        }
+        initOpengGLRender();
+        
+        // Render chunks
+        for (int z= -chunkDistance; z <= chunkDistance; z++) {
+            for (int y= -chunkDistance; y <= chunkDistance; y++) {
+                for (int x= -chunkDistance; x <= chunkDistance; x++) {
+                    long lookup = CubeMap.positionToLookup(orgX + x, orgY + y, orgZ + z);
+                    CubeChunk chunk = (CubeChunk) chunks.get(lookup);
+                    if(chunk == null) continue; // Chunk not generated yet
 
-        synchronized(bufferLock) {
-            int time = Ref.common.frametime;
-            for (int i= 0; i < NUM_BUILDBUFFERS; i++) {
-                if(bufferLocked[i]) {
-                    long chunkid = bufferRelations[i];
+                    // First time we're trying to render this chunk
+                    // TODO: only create if containing cubes
+                    if(chunk.render == null) chunk.render = new ChunkRender(chunk);
 
-                    if(chunkid == NO_CHUNK) {
-                        Ref.common.Error(ErrorCode.FATAL, "Invalid locked chunk");
+                    // Render chunk
+                    chunk.render.Render();
+
+                    nSides += chunk.render.getRenderFaces();
+                    // don't count empty chunks
+                    if(chunk.render.getRenderFaces() > 0) {
+                        markChunk(chunk); // mark as used
+                        nChunks++;
                     }
-
-                    CubeChunk c = (CubeChunk)chunks.get(chunkid);
-                    boolean force = false;
-                    if(c.render.vboLockTime == 0) {
-                        c.render.vboLockTime = time;
-                    } else {
-                        int delta = time - c.render.vboLockTime;
-                        if(delta > 8000) force = true;
-                    }
-                    c.render.markVisible(force);
                 }
             }
         }
+        if(nChunks > 0) {
+            ChunkRender.postVbo();
+            VBO.unbindVertexBuffer();
+        }
+        int chunksRendered = nChunks;
     }
 
-    public ByteBuffer grabBuffer(long chunkid) {
-        synchronized(bufferLock) {
-            if(freeBuffers <= 0) return null;
-
-            for (int i= 0; i < NUM_BUILDBUFFERS; i++) {
-                // Grab the first unlocked buffer
-                if(!bufferLocked[i]) {
-                    // remember owner chunk
-                    bufferRelations[i] = chunkid;
-                    // decrement free buffer counter
-                    freeBuffers--;
-                    // lock this buffer
-                    bufferLocked[i] = true;
-                    buildBuffer[i].clear();
-                    return buildBuffer[i];
-                }
-            }
-
-            Ref.common.Error(ErrorCode.FATAL, "freebuffers > 0, but all are locked");
-            return null;
+    // Marks chunks for VBO unloading
+    private void markChunk(CubeChunk chunk) {
+        if(chunk.render == null || chunk.render.state != ChunkRender.State.READY) return;
+        MutableInteger cached = chunksWithVBO.get(chunk);
+        int time = Ref.common.frametime;
+        if(cached == null) {
+            chunksWithVBO.put(chunk, new MutableInteger(time));
+        } else {
+            cached.setValue(time);
         }
     }
 
-    // See if we can read from this buffer
-    public ByteBuffer getBuffer(long chunkId) {
-        synchronized(bufferLock) {
-            for (int i= 0; i < NUM_BUILDBUFFERS; i++) {
-                if(bufferRelations[i] == chunkId && bufferLocked[i]) {
-                    return buildBuffer[i];
+    private void wipeOldChunkVBO(int timeout) {
+        int minTime = Ref.common.frametime - timeout;
+        Iterator<Entry<CubeChunk, MutableInteger>> it = chunksWithVBO.entrySet().iterator();
+        while(it.hasNext()) {
+            Entry<CubeChunk, MutableInteger> entry = it.next();
+            if(entry.getValue().getValue() < minTime) {
+                // too old
+                if(entry.getKey().render != null) {
+                    if(entry.getKey().render.state != ChunkRender.State.DIRTY)
+                    // destroy render
+                    //Common.Log("Releasing VBO");
+                    entry.getKey().render.destroy();
                 }
-            }
-        }
-        return null;
-    }
-
-    public int releaseBuffer(long chunkid) {
-        synchronized(bufferLock) {
-            for (int i= 0; i < NUM_BUILDBUFFERS; i++) {
-                if(bufferRelations[i] == chunkid && bufferLocked[i]) {
-                    // unlock buffer
-                    bufferRelations[i] = NO_CHUNK;
-                    bufferLocked[i] = false;
-                    freeBuffers++;
-                    return i;
-                }
+                it.remove();
             }
         }
-        return -1;
     }
-
-    public ClientCubeMap() {
-        for (int i= 0; i < buildBuffer.length; i++) {
-            buildBuffer[i] = BufferUtils.createByteBuffer(CubeChunk.PLANE_SIZE * CubeChunk.CHUNK_SIZE /2);
-        }
-        shader = Ref.glRef.getShader("WorldFog");
-        buildLight();
-        Ref.commands.AddCommand("cube_refresh", cmd_cube_refresh);
-    }
-
-    public void changedBlock(CubeChunk c, int x, int y, int z, byte type) {
-        // Update Bullet physics
-//        boolean removed = type == CubeType.EMPTY;
-//
-//        if(removed) {
-//            // TODO
-//            return;
-//        }
-//
-//        // Create a transform
-//        Transform boxTransform = new Transform();
-//        boxTransform.setIdentity();
-//
-//        // Set origin to center of the block
-//        int cx = c.p[0] + x * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
-//        int cy = c.p[1] + y * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
-//        int cz = c.p[2] + z * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
-//        boxTransform.origin.set(cx, cy, cz);
-//
-//        // Create the body
-//        DefaultMotionState motionState = new DefaultMotionState(boxTransform);
-//        RigidBodyConstructionInfo rbInfo = new RigidBodyConstructionInfo(0, motionState, boxShape);
-//        RigidBody body = new RigidBody(rbInfo);
-//
-//        // Add it to the world
-//        world.addRigidBody(body);
-    }
-
-    
 
     public void unserialize(ByteBuffer buf) {
         long count = buf.getLong();
@@ -253,7 +236,7 @@ public class ClientCubeMap {
         int count = chunks.size();
         tempBuf.putLong(0, count).position(0);
         out.write(tempBuf);
-        Common.Log("Writing %d cube chunks to demo file" + count);
+        Common.Log("Writing %d cube chunks to demo file", count);
         int totalChunkSize = 0;
         for (Object object : chunks.values().elements()) {
             CubeChunk chunk = (CubeChunk)object;
@@ -263,7 +246,7 @@ public class ClientCubeMap {
             totalChunkSize += chunkData.limit();
             out.write(chunkData);
         }
-        Common.Log("Compressed map data: %d bytes", totalChunkSize);
+        Common.Log("Compressed map data: %d kbytes", totalChunkSize/1024);
     }
 
     private void buildLight() {
@@ -320,174 +303,12 @@ public class ClientCubeMap {
 
     private void initOpengGLRender() {
         CubeTexture tex = Ref.ResMan.LoadTexture("data/terrain.png");
-
         tex.setFiltering(false, GL11.GL_NEAREST);
-//        tex.setAnisotropic(0);
         tex.setWrap(GL12.GL_CLAMP_TO_EDGE);
         GL11.glTexParameteri(tex.getTarget(), GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST_MIPMAP_LINEAR);
         GL11.glTexParameteri(tex.getTarget(), GL12.GL_TEXTURE_MIN_LOD, 0);
         GL11.glTexParameteri(tex.getTarget(), GL12.GL_TEXTURE_MAX_LOD, 2);
-
     }
-
-    private void renderFromOrigin(int orgX, int orgY, int orgZ, int chunkDistance, boolean enqueue, Plane[] frustum) {
-        if(enqueue) {
-            markLockedChunks();
-            wipeOldChunkVBO(5000);
-        }
-
-        initOpengGLRender();
-
-        nVBOthisFrame = 0;
-        // Render chunks
-        for (int z= -chunkDistance; z <= chunkDistance; z++) {
-            for (int y= -chunkDistance; y <= chunkDistance; y++) {
-                for (int x= -chunkDistance; x <= chunkDistance; x++) {
-                    long lookup = CubeMap.positionToLookup(orgX + x, orgY + y, orgZ + z);
-                    CubeChunk chunk = (CubeChunk) chunks.get(lookup);
-
-                    // Chunk not generated yet, queue it..
-                    if(chunk == null) {
-                       // if(enqueue) generateChunk(orgX + x, orgY + y, orgZ + z, true);
-                        continue;
-                    }
-
-                    if(chunk.render == null) chunk.render = new ChunkRender(chunk);
-
-//                    // do frustum culling
-//                    if(frustum[0] != null) {
-//                        Plane p = frustum[0];
-//                        if(p.testPoint(chunk.fcenter[0], chunk.fcenter[1], chunk.fcenter[2]) < -CubeChunk.RADIUS) {
-//                            continue;
-//                        }
-//                    }
-
-                    chunk.render.Render();
-
-                    nSides += chunk.render.sidesRendered;
-                    // don't count empty chunks
-                    if(chunk.render.sidesRendered > 0) {
-                        markChunk(chunk);
-                        nChunks++;
-                    }
-                }
-            }
-        }
-    }
-
-    private void markChunk(CubeChunk chunk) {
-        if(chunk.render == null || !chunk.render.isVboReady()) return;
-        MutableInteger cached = chunksWithVBO.get(chunk);
-        int time = Ref.common.Milliseconds();
-        if(cached == null) {
-            chunksWithVBO.put(chunk, new MutableInteger(time));
-        } else {
-            cached.setValue(time);
-        }
-    }
-
-    private void wipeOldChunkVBO(int timeout) {
-        int minTime = Ref.common.Milliseconds() - timeout;
-        Iterator<Entry<CubeChunk, MutableInteger>> it = chunksWithVBO.entrySet().iterator();
-        while(it.hasNext()) {
-            Entry<CubeChunk, MutableInteger> entry = it.next();
-            if(entry.getValue().getValue() < minTime) {
-                // too old
-                if(entry.getKey().render != null) {
-                    // destroy render
-                    //Common.Log("Releasing VBO");
-                    entry.getKey().render.destroy();
-                }
-                it.remove();
-            }
-        }
-    }
-
-    private HashMap<CubeChunk, MutableInteger> chunksWithVBO = new HashMap<CubeChunk, MutableInteger>();
-    
-
-    public void Render(ViewParams view) {
-        if(Ref.cgame.cg.time - 1000 > lastRefresh) {
-            chunkPerSecond = nChunkUpdates;
-            nChunkUpdates = 0;
-            lastRefresh = Ref.cgame.cg.time;
-        }
-
-        
-        CubeTexture depth = null;
-
-        // Set shader
-        boolean shadowPass = Ref.cgame.shadowMan.isRendering();
-        boolean renderingShadows = !shadowPass && Ref.cgame.shadowMan.isEnabled();
-        if(shadowPass || !Ref.cgame.shadowMan.isEnabled()) {
-            shader = Ref.glRef.getShader("WorldFog");
-            Ref.glRef.PushShader(shader);
-            shader.setUniform("fog_factor", 1f/(view.farDepth/2f));
-            shader.setUniform("fog_color", (Vector4f)new Vector4f(95,87,67,255).scale(1/255f)); // 145, 140, 129
-            //shader.mapTextureUniform("tex", 0);
-        } else {
-            if(shadowShader == null) {
-                shadowShader = Ref.glRef.getShader("WorldFogShadow");
-            }
-            Ref.glRef.PushShader(shadowShader);
-            depth = Ref.cgame.shadowMan.getDepthTexture();
-            depth.textureSlot = 1;
-            depth.Bind();
-            Matrix4f[] shadowmat = Ref.cgame.shadowMan.getShadowViewProjections(4);
-            shadowShader.setUniform("shadowMatrix", shadowmat);
-            Vector4f[] shadowDepths = Ref.cgame.shadowMan.getCascadeDepths();
-
-            shadowShader.setUniform("cascadeDistances", shadowDepths);
-
-//            shadowShader.setUniform("cascadeColors", Ref.cgame.shadowMan.getCascadeColors());
-            shadowShader.setUniform("fog_factor", 1f/(view.farDepth));
-            shadowShader.setUniform("fog_color", (Vector4f)new Vector4f(95,87,67,255).scale(1/255f)); // 145, 140, 129
-            shadowShader.setUniform("shadow_bias", Ref.cvars.Find("shadow_bias").fValue);
-            shadowShader.setUniform("shadow_factor", Ref.cvars.Find("shadow_factor").fValue);
-
-            shadowShader.setUniform("pcfOffsets", Ref.cgame.shadowMan.getPCFoffsets());
-            GLRef.checkError();
-        }
-        
-        
-        GLRef.checkError();
-        
-
-        // Set rendermodes
-        GL11.glDisable(GL11.GL_BLEND);
-        if(!Ref.glRef.r_fill.isTrue()) {
-            GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_LINE);
-        }
-
-        // clear render stats
-        nSides = 0;
-        nChunks = 0;
-
-        // chunk render distance
-        int chunkDistance = (int) (view.farDepth * 1f / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE))+1;
-        if(chunkDistance <= 0)
-            chunkDistance = 1;
-
-        // Origin in chunk coordinates
-        int orgX =  (int)Math.floor (view.Origin.x / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
-        int orgY =  (int)Math.floor (view.Origin.y / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
-        int orgZ =  (int)Math.floor (view.Origin.z / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
-
-        renderFromOrigin(orgX, orgY, orgZ, chunkDistance, !Ref.cgame.shadowMan.isRendering(), view.planes);
-
-        if(renderingShadows) {
-            depth.Unbind();
-        }
-        // Reset shader
-        Ref.glRef.PopShader();
-
-        // Clear rendermodes
-        GL11.glEnable(GL11.GL_BLEND);
-        if(!Ref.glRef.r_fill.isTrue()) {
-            GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
-        }
-    }
-
     
     public void parseCubeData(ByteBuffer download, int count) {
         // need a backing array
@@ -517,7 +338,7 @@ public class ClientCubeMap {
 
     }
 
-    private byte[] uncompressBuffer = new byte[CubeChunk.CHUNK_SIZE + 1 + 8]; // max possible size
+    
     private ByteBuffer uncompressCubeData(byte[] src, int offset, int lenght) {
         byte[] dest = uncompressBuffer;
         int len = 0;
@@ -581,6 +402,56 @@ public class ClientCubeMap {
         }
     }
 
+    private ICommand cmd_cube_refresh = new ICommand() {
+        public void RunCommand(String[] args) {
+            // chunk render distance
+            ViewParams view = Ref.cgame.cg.refdef;
+            int chunkDistance = (int) (view.farDepth * 1f / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE))+1;
+            if(chunkDistance <= 0)
+                chunkDistance = 1;
 
-    
+            // Origin in chunk coordinates
+            int orgX =  (int)Math.floor (view.Origin.x / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+            int orgY =  (int)Math.floor (view.Origin.y / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+            int orgZ =  (int)Math.floor (view.Origin.z / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+            for (int z= -chunkDistance; z <= chunkDistance; z++) {
+                for (int y= -chunkDistance; y <= chunkDistance; y++) {
+                    for (int x= -chunkDistance; x <= chunkDistance; x++) {
+                        long lookup = CubeMap.positionToLookup(orgX + x, orgY + y, orgZ + z);
+                        CubeChunk chunk = (CubeChunk) chunks.get(lookup);
+                        if(chunk == null) continue;
+                        chunk.render.setDirty(true, true);
+                    }
+                }
+            }
+        }
+    };
+
+    public void changedBlock(CubeChunk c, int x, int y, int z, byte type) {
+        // Update Bullet physics
+//        boolean removed = type == CubeType.EMPTY;
+//
+//        if(removed) {
+//            // TODO
+//            return;
+//        }
+//
+//        // Create a transform
+//        Transform boxTransform = new Transform();
+//        boxTransform.setIdentity();
+//
+//        // Set origin to center of the block
+//        int cx = c.p[0] + x * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
+//        int cy = c.p[1] + y * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
+//        int cz = c.p[2] + z * CubeChunk.BLOCK_SIZE + CubeChunk.BLOCK_SIZE/2;
+//        boxTransform.origin.set(cx, cy, cz);
+//
+//        // Create the body
+//        DefaultMotionState motionState = new DefaultMotionState(boxTransform);
+//        RigidBodyConstructionInfo rbInfo = new RigidBodyConstructionInfo(0, motionState, boxShape);
+//        RigidBody body = new RigidBody(rbInfo);
+//
+//        // Add it to the world
+//        world.addRigidBody(body);
+    }
 }

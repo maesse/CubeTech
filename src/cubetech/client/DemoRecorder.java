@@ -5,6 +5,7 @@ import cubetech.common.Common;
 import cubetech.common.ICommand;
 import cubetech.entities.EntityState;
 import cubetech.gfx.ResourceManager;
+import cubetech.misc.CameraTrack;
 import cubetech.misc.Ref;
 import cubetech.net.ConnectState;
 import cubetech.net.NetBuffer;
@@ -20,6 +21,9 @@ import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import cubetech.misc.FastZipOutputStream;
+import cubetech.misc.FasterZip;
+import java.util.zip.ZipOutputStream;
 import org.lwjgl.BufferUtils;
 
 /**
@@ -37,6 +41,11 @@ public class DemoRecorder {
     private boolean firstDemoFrameSkipped;
     private ByteBuffer fileBuffer;
 
+    // video creation
+    public FasterZip zipStream = null;
+    public int startTime;
+    public CameraTrack track = new CameraTrack();
+
     private Client cl;
     private String demoName;
 
@@ -47,6 +56,8 @@ public class DemoRecorder {
         Ref.commands.AddCommand("record", cmd_record);
         Ref.commands.AddCommand("stoprecord", cmd_stoprecord);
         Ref.commands.AddCommand("demo", cmd_demo);
+        
+        Ref.cvars.Get("record_fps", "30", null);
     }
 
     private void initDemo(String filename) {
@@ -207,7 +218,7 @@ public class DemoRecorder {
 
     void readDemoMessage() {
         if(fileBuffer == null) {
-            playCompleted();
+            playCompleted(true);
             return;
         }
 
@@ -218,7 +229,7 @@ public class DemoRecorder {
 
             int len = fileBuffer.getInt();
             if(len == -1) {
-                playCompleted();
+                playCompleted(true);
                 return;
             }
             byte[] pdata = new byte[len];
@@ -230,7 +241,7 @@ public class DemoRecorder {
 
         } catch(BufferUnderflowException ex) {
             Common.Log("Hit the end of demo");
-            playCompleted();
+            playCompleted(true);
             return;
         }
 
@@ -241,10 +252,19 @@ public class DemoRecorder {
     }
 
     // playback
-    private void playCompleted() {
+    public void playCompleted(boolean disconnect) {
         fileBuffer = null;
-        cl.Disconnect(true);
+        if(disconnect) cl.Disconnect(true);
         demoplaying = false;
+        if(zipStream != null) {
+            zipStream.close();
+            zipStream = null;
+        }
+        if(Ref.cvars.Find("cl_demorecord").isTrue() && startTime != 0) {
+            int deltams = Ref.common.Milliseconds() - startTime;
+            Common.Log("Demo playback took " + deltams / 1000f + " seconds");
+            startTime = 0;
+        }
     }
 
     ICommand cmd_stoprecord = new ICommand() {
@@ -255,8 +275,8 @@ public class DemoRecorder {
 
     ICommand cmd_demo = new ICommand() {
         public void RunCommand(String[] args) {
-            if(args.length != 2) {
-                Common.Log("demo <demoname>");
+            if(args.length < 2) {
+                Common.Log("demo <demoname> [track]");
                 return;
             }
 
@@ -285,11 +305,18 @@ public class DemoRecorder {
             cl.state = ConnectState.CONNECTED;
             demoplaying = true;
             cl.servername = name;
-            demoName = name;
-
+            demoName = name;            
             fileBuffer.order(ByteOrder.nativeOrder());
 
+            if(args.length > 2) {
+                track = CameraTrack.load(demoName, args[2]);
+            } else {
+                track = new CameraTrack(); // allow for camera recording
+            }
+
             ClientCubeMap cmap = new ClientCubeMap();
+            if(Ref.cgame != null && Ref.cgame.map != null) Ref.cgame.map.dispose();
+            
             cmap.unserialize(fileBuffer);
 
             // read demo messages until connected
@@ -304,8 +331,8 @@ public class DemoRecorder {
             // time from the gamestate load from messing causing a time skip
             firstDemoFrameSkipped = false;
 
+            startTime = Ref.common.Milliseconds();
             
-
         }
     };
 

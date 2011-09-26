@@ -5,6 +5,7 @@
 
 package cubetech.Game;
 
+import cubetech.collision.CollisionResult;
 import cubetech.common.items.IItem;
 import cubetech.common.*;
 import cubetech.entities.EntityShared;
@@ -20,6 +21,7 @@ import org.lwjgl.util.vector.Vector3f;
  * @author mads
  */
 public class Gentity {
+    public static final int FLAG_DROPPED_ITEM = 1;
     public Gentity() {
         shEnt = new SharedEntity();
         s = shEnt.s;
@@ -62,6 +64,8 @@ public class Gentity {
 //    public int health;
     public int speed;
     public int count;
+
+    public int flags;
     
     
     // timing
@@ -85,7 +89,7 @@ public class Gentity {
         
         s.Clear();
         r.Clear();
-
+        flags = 0;
         inuse = false;
         eventTime = 0;
         damage = 0;
@@ -152,6 +156,12 @@ public class Gentity {
         freetime = Ref.game.level.time;
         inuse = false;
     }
+
+    public static IThinkMethod freeEntity = new IThinkMethod() {
+        public void think(Gentity ent) {
+            ent.Free();
+        }
+    };
 
     public void Link() {
         Ref.server.LinkEntity(shEnt);
@@ -221,8 +231,7 @@ public class Gentity {
     // This entity is an item, run it for this frame
     public void runItem() {
         // TODO: FIX
-        //if(s.pos.type == Trajectory.STATIONARY)
-        if(true)
+        if(s.pos.type == Trajectory.STATIONARY)
         {
             runThink();
             return;
@@ -235,6 +244,20 @@ public class Gentity {
         int mask = ClipMask;
         if(mask == 0)
             mask = Content.MASK_PLAYERSOLID & ~Content.BODY;
+        CollisionResult res = Ref.server.Trace(r.currentOrigin, origin, r.mins, r.maxs, mask, r.ownernum);
+        res.getPOI(r.currentOrigin);
+        if(res.startsolid) {
+            res.frac = 0;
+        }
+
+        Link();
+
+        // check think function
+        runThink();
+
+        if(res.frac == 1) return;
+
+        Gitems.bounceItem(this, res);
     }
 
 //    /**

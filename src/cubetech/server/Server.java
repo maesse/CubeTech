@@ -5,12 +5,15 @@
 
 package cubetech.server;
 
+import cubetech.Game.Bot.GBot;
 import cubetech.Game.Game;
 import cubetech.Game.GameClient;
 import cubetech.client.CLSnapshot;
 import cubetech.collision.BlockModel;
 import cubetech.collision.ClipmapException;
 import cubetech.collision.CollisionResult;
+import cubetech.collision.CubeCollision;
+import cubetech.collision.CubeMap;
 import cubetech.common.CS;
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
@@ -127,6 +130,8 @@ public class Server implements ITrace {
 
         timeResidual += msec;
 
+        Ref.game.runBotFrame(time);
+
         if(sv.restartTime > 0 && sv.time >= sv.restartTime) {
             sv.restartTime = 0;
             Ref.commands.AddText("map_restart 0\n");
@@ -161,10 +166,14 @@ public class Server implements ITrace {
 
         CheckTimeouts();
 
+        int ents = nextSnapshotEntities;
+
         // Let the clients send their messages
         for (int i= 0; i < clients.length; i++) {
             clients[i].SendClientMessage();
         }
+
+        ents = nextSnapshotEntities - ents;
 
         if(sv_lan.iValue == 0)
             MasterServer.autohandleHeartbeat(Ref.common.Milliseconds());
@@ -179,7 +188,7 @@ public class Server implements ITrace {
         SvClient cl;
         for (int i= 0; i < clients.length; i++) {
             cl = clients[i];
-            if(cl.state != ClientState.FREE && cl.state != ClientState.ZOMBIE)
+            if(cl.state != ClientState.FREE && cl.state != ClientState.ZOMBIE && !cl.netchan.isBot)
                 count++;
         }
         
@@ -310,7 +319,7 @@ public class Server implements ITrace {
                 client.state == SvClient.ClientState.PRIMED ||
                 client.state == SvClient.ClientState.ACTIVE) {
                 // connect the client again
-                String denied = Ref.game.Client_Connect(i, false);
+                String denied = Ref.game.Client_Connect(i, false, client.netchan.isBot);
                 if(denied != null) {
                     // this generally shouldn't happen, because the client
                     // was connected before the level change
@@ -692,7 +701,7 @@ public class Server implements ITrace {
         newcl.userinfo = userinfo;
 
         // get the game a chance to reject this connection or modify the userinfo
-        String denied = Ref.game.Client_Connect(i, true);
+        String denied = Ref.game.Client_Connect(i, true, false);
         if(denied != null) {
             Ref.net.SendOutOfBandPacket(NetSource.SERVER, from, String.format("print \"%s\"", denied));
             Common.Log("Rejected a connection: " + denied);
@@ -709,6 +718,7 @@ public class Server implements ITrace {
         newcl.nextSnapshotTime = time;
         newcl.lastPacketTime = time;
         newcl.lastConnectTime = time;
+        newcl.netchan.isBot = false;
 
         // when we receive the first packet from the client, we will
         // notice that it is from a different serverid and that the
@@ -795,25 +805,46 @@ public class Server implements ITrace {
 
     Vector3f boxmins = new Vector3f(), boxmaxs = new Vector3f();
     Vector3f delta = new Vector3f();
+    Vector3f tempdir = new Vector3f();
     public CollisionResult Trace(Vector3f start, Vector3f end, Vector3f mins, Vector3f maxs, int tracemask, int passEntityNum) {
-        if(mins == null)
-            mins = new Vector3f();
-        if(maxs == null)
-            maxs = new Vector3f();
-
-        Vector3f.sub(end, start, delta);
-        // clip to world
-        CollisionResult worldResult;
-        if((tracemask & Content.SOLID) == Content.SOLID) {
-            worldResult = Ref.collision.traceCubeMap(start, delta, mins, maxs, true);
-            if(worldResult.frac == 0.0f) return worldResult; // Blocked instantl by world
+        boolean isRay = false;
+        if(mins == null && maxs == null) {
+            isRay = true;
         } else {
+            if(mins == null) mins = new Vector3f();
+            if(maxs == null) maxs = new Vector3f();
+        }
+        Vector3f.sub(end, start, delta);
+        CollisionResult worldResult = null;
+
+        if((tracemask & Content.SOLID) == Content.SOLID) {
+            if(isRay) {
+                // Trace ray against world
+                tempdir.set(delta);
+                float len = Helper.Normalize(tempdir);
+                CubeCollision col = CubeMap.TraceRay(start, tempdir, (int) ((len / 32) + 1), Ref.cm.cubemap.chunks);
+                if(col != null) {
+                    worldResult = Ref.collision.GetNext();
+                    worldResult.reset(start, delta, maxs);
+                    worldResult.hit = true;
+                    worldResult.hitAxis = col.getHitAxis();
+                    worldResult.entitynum = Common.ENTITYNUM_WORLD;
+                    worldResult.frac = col.getHitPlane().findIntersection(start, delta);
+                }
+            } else {
+                // clip to world
+                worldResult = Ref.collision.traceCubeMap(start, delta, mins, maxs, true);
+                if(worldResult.frac == 0.0f) return worldResult; // Blocked instantl by world
+            }
+        }
+        
+        if(worldResult == null) {
             worldResult = Ref.collision.GetNext();
             worldResult.reset(start, delta, maxs);
         }
 
         // create the bounding box of the entire move
-        float padding = -1f;
+        float padding = 1f;
         for (int i= 0; i < 3; i++) {
             if(Helper.VectorGet(end, i) > Helper.VectorGet(start, i)) {
                 Helper.VectorSet(boxmins, i, Helper.VectorGet(start, i) + Helper.VectorGet(mins, i) - padding);
@@ -824,6 +855,7 @@ public class Server implements ITrace {
             }
         }
 
+        if(isRay) end = delta;
         ClipMoveToEntities(worldResult, start, end, mins, maxs, boxmins, boxmaxs, tracemask, passEntityNum);
         return worldResult;
     }
@@ -848,8 +880,10 @@ public class Server implements ITrace {
         return res.startsolid;
     }
 
+    Vector3f tempAxis = new Vector3f();
     private void ClipMoveToEntities(CollisionResult clip, Vector3f start, Vector3f end, Vector3f mins, Vector3f maxs,
         Vector3f boxmins, Vector3f boxmaxs, int tracemask, int passEntityNum) {
+        boolean isRay = mins == null && maxs == null;
 
         SectorQuery entityList = sv_worldSector.AreaEntities(boxmins, boxmaxs); // FIX
 
@@ -862,7 +896,9 @@ public class Server implements ITrace {
 
         for (Integer entIndex : entityList.List) {
             // Starting solid, no need to check any further
-            if(clip.startsolid) return;
+            if(clip.startsolid) {
+                return;
+            }
 
             SharedEntity touch = sv.gentities[entIndex];
             // see if we should ignore this entity
@@ -881,22 +917,37 @@ public class Server implements ITrace {
                 continue;
 
             // might intersect, so do an exact clip
-            ClipHandleForEntity(touch);
-
-            CollisionResult res = Ref.collision.TransformedBoxTrace(start, end, mins, maxs, tracemask);
-            if(res.frac  < clip.frac) {
-                clip.frac = res.frac;
-                clip.hit = res.hit;
-                clip.entitynum = touch.s.ClientNum;
-                clip.hitAxis = res.hitAxis;
-                clip.hitmask = res.hitmask;
-
-                if(res.frac < 0) {
-                    res.frac = 0;
+            CollisionResult res = null;
+            if(isRay) {
+                // AABB-Ray test
+                // end contains the delta move when raytracing
+                float frac = Ref.collision.TestAABBRay(start, end, touch.r.currentOrigin, touch.r.mins, touch.r.maxs, tempAxis);
+                if(frac != Float.POSITIVE_INFINITY && frac != Float.NEGATIVE_INFINITY) {
+                    if(frac < clip.frac) {
+                        clip.frac = frac;
+                        clip.hit = true;
+                        clip.entitynum = touch.s.ClientNum;
+                        clip.hitmask = touch.r.contents;
+                        clip.hitAxis.set(tempAxis);
+                    }
                 }
+            } else {
+                // AABB-AABB test
+                ClipHandleForEntity(touch);
+                res = Ref.collision.TransformedBoxTrace(start, end, mins, maxs, tracemask);
+                
+                if(res.frac  < clip.frac) {
+                    clip.frac = res.frac;
+                    clip.hit = res.hit;
+                    clip.entitynum = touch.s.ClientNum;
+                    clip.hitAxis = res.hitAxis;
+                    clip.hitmask = touch.r.contents;
+                }
+            }
 
-                if(res.frac == 0f)
-                    break;
+            if(res != null && res.frac <= 0) {
+                res.frac = 0;
+                break;
             }
         }
     }
@@ -1080,6 +1131,37 @@ public class Server implements ITrace {
                 cmd_Map(args);
             }
         });
+        Ref.commands.AddCommand("kick", cmd_kick);
+
+    }
+
+    private ICommand cmd_kick = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(!Ref.common.sv_running.isTrue()) return;
+            if(args.length < 2) {
+                Common.Log("usage: kick <username>");
+                return;
+            }
+
+            SvClient client = getPlayerByName(args[1]);
+            if(client != null) {
+                if(client.netchan.isLocalhost()) {
+                    Common.Log("Can't kick host");
+                    return;
+                }
+
+                client.DropClient("was kicked");
+            }
+        }
+    };
+
+    private SvClient getPlayerByName(String name) {
+        for (SvClient svClient : clients) {
+            if(svClient.state.ordinal() < ClientState.CONNECTED.ordinal()) continue;
+            if(svClient.name.equalsIgnoreCase(name)) return svClient;
+        }
+        Common.Log("Can't find player " + name);
+        return null;
     }
 
     private void cmd_Map(String[] tokens) {
@@ -1106,6 +1188,39 @@ public class Server implements ITrace {
             
             Ref.collision.SetBoxModel(touch.r.mins, touch.r.maxs, touch.r.currentOrigin);
         }
+    }
+
+    public int allocateBotClient() {
+        // find a client slot
+        for (int i= 0; i < sv_maxclients.iValue; i++) {
+            if(clients[i].state == ClientState.FREE) {
+                SvClient client = clients[i];
+                client.gentity = sv.gentities[i];
+                client.gentity.s.ClientNum = i;
+                client.state = ClientState.ACTIVE;
+                client.lastPacketTime = time;
+                if(client.netchan == null) client.netchan = new NetChan(NetSource.CLIENT, null, 0);
+                client.netchan.isBot = true;
+                client.rate = 16384;
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public void freeBotClient(SvClient client) {
+        GBot.removeBot(client.id);
+        client.state = ClientState.FREE;
+        client.name = "";
+        if(client.gentity != null) {
+            client.gentity.r.svFlags.remove(SvFlags.BOT);
+        }
+    }
+
+    
+
+    public SvClient getClient(int clientIndex) {
+        return clients[clientIndex];
     }
 
 

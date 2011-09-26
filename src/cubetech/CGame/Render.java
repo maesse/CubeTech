@@ -4,8 +4,10 @@ import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Helper;
+import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.GLRef;
+import cubetech.gfx.GLState;
 import cubetech.gfx.Shader;
 import cubetech.gfx.ShadowManager;
 import cubetech.misc.Ref;
@@ -43,9 +45,10 @@ public class Render {
     public void renderAll(boolean shadowPass) {
         GLRef.checkError();
         for (RenderEntity re : renderList) {
-            if((re.flags & RenderEntity.FLAG_NOSHADOW) == RenderEntity.FLAG_NOSHADOW && shadowPass) {
-                // Ignore this one
-                continue;
+            if(shadowPass) {
+                // Skip render entities that doesn't cast shadows
+                if((re.flags & RenderEntity.FLAG_NOSHADOW) == RenderEntity.FLAG_NOSHADOW) continue;
+                if(re.Type == REType.SPRITE) continue; // sprites are rendered without depth writing
             }
             
             switch(re.Type) {
@@ -74,9 +77,11 @@ public class Render {
     }
 
     public void renderPoly(RenderEntity ent) {
-    
-       // GL11.glDisable(GL11.GL_CULL_FACE);
+        Ref.glRef.PushShader(Ref.glRef.getShader("sprite"));
+//        GL11.glDisable(GL11.GL_CULL_FACE);
+        Helper.col(ent.color);
         GL11.glEnable(GL11.GL_BLEND);
+        GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         ent.mat.getTexture().Bind();
 
         GL11.glDepthMask(false);
@@ -90,15 +95,13 @@ public class Render {
                 Vector3f v = ent.verts[i].xyz;
                 GL20.glVertexAttrib3f(Shader.INDICE_POSITION, v.x, v.y, v.z);
             }
-            
         }
         GL11.glEnd();
 
         GL11.glDepthMask(true);
         GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
         GL11.glPolygonOffset(0, 0);
-
-        //GL11.glEnable(GL11.GL_CULL_FACE);
+        Ref.glRef.PopShader();
     }
 
     public void addRefEntity(RenderEntity ent) {
@@ -225,8 +228,6 @@ public class Render {
     private void renderSprite(RenderEntity ent) {
         // calculate the xyz locations for the four corners
         float radius = ent.radius;
-
-        
         boolean useAxis = (ent.flags & RenderEntity.FLAG_SPRITE_AXIS) == RenderEntity.FLAG_SPRITE_AXIS;
         if(useAxis) {
             left.set(ent.axis[0]);
@@ -244,15 +245,19 @@ public class Render {
             ent.mat.getTexture().Bind();
             Vector2f texSize = ent.mat.getTextureSize();
             Vector2f texOffset = ent.mat.getTextureOffset(ent.frame);
+            if(ent.mat.blendmode == CubeMaterial.BlendMode.ONE) {
+                GLState.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE);
+            } else {
+                GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            }
             AddQuadStampExt(ent.origin, left, up, ent.outcolor,
                     texOffset.x, texOffset.y, texOffset.x + texSize.x, texOffset.y + texSize.y);
         }
         else {
+            GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             Ref.ResMan.getWhiteTexture().Bind();
             AddQuadStamp(ent.origin, left, up, ent.outcolor);
         }
-        
-
 
         if(useAxis) {
             GL11.glEnable(GL11.GL_CULL_FACE);

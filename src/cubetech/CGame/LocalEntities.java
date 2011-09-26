@@ -71,6 +71,10 @@ public class LocalEntities {
                 continue;
             }
 
+            if((le.Flags & LocalEntity.FLAG_TRAJECTORY) != 0) {
+                applyMove(le);
+            }
+
             switch(le.Type) {
                 case LocalEntity.TYPE_SCALE_FADE:
                     addScaleFade(le);
@@ -90,6 +94,9 @@ public class LocalEntities {
                 case LocalEntity.TYPE_PHYSICSOBJECT:
                     addPhysics(le);
                     break;
+                case LocalEntity.TYPE_EXPLOSION:
+                    addExplosion(le);
+                    break;
                 default:
                     Ref.common.Error(ErrorCode.DROP, "Bad LocalEntity type " + le.Type);
                     break;
@@ -105,6 +112,14 @@ public class LocalEntities {
         }
         allowFree = true;
     }
+
+    private static void addExplosion(LocalEntity le) {
+        RenderEntity re = le.rEntity;
+//        re.frame = re.mat.getFrame(Ref.cgame.cg.time - le.startTime);
+        Ref.render.addRefEntity(re);
+    }
+
+
 
     private static void addPhysics(LocalEntity le) {
         MotionState m = le.phys_motionState;
@@ -158,6 +173,10 @@ public class LocalEntities {
         re.radius = le.radius * (1f - c) + 4;
 
         Ref.render.addRefEntity(re);
+    }
+
+    private static void applyMove(LocalEntity le) {
+        le.pos.Evaluate(Ref.cgame.cg.time, le.rEntity.origin);
     }
 
     private static void addScaleFade(LocalEntity le) {

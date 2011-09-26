@@ -17,6 +17,7 @@ public abstract class CComponent {
     private boolean mouseEnter = false;
     public Object tag = null;
     private boolean visible = true;
+    private Vector2f tempIntPos = new Vector2f();
 
     public abstract void Render(Vector2f parentPosition);
 
@@ -41,7 +42,8 @@ public abstract class CComponent {
         return size;
     }
     public Vector2f getInternalPosition() {
-        return new Vector2f(position.x + margin.x, position.y + margin.y);
+        tempIntPos.set(position.x + margin.x, position.y + margin.y);
+        return tempIntPos;
     }
     public Vector2f getPosition() {
         return position;

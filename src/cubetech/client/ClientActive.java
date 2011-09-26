@@ -174,9 +174,8 @@ public class ClientActive {
                 
                 clc.timeDemoFrames++;
 
-                int frameRate = 1000 / Ref.cvars.Find("maxfps").iValue;
+                int frameRate = 1000 / Ref.cvars.Find("record_fps").iValue;
                 serverTime = clc.timeDemoBaseTime + clc.timeDemoFrames * frameRate;
-
             }
             while(serverTime >= snap.serverTime) {
                 // feed another messag, which should change

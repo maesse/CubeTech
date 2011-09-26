@@ -9,8 +9,6 @@ import cubetech.common.Helper;
 import cubetech.common.Trajectory;
 import cubetech.gfx.CubeMaterial;
 import cubetech.misc.Ref;
-import java.util.LinkedList;
-import java.util.Queue;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
@@ -26,10 +24,11 @@ public class LocalEntity {
     public static final int TYPE_FADE = 3;
     public static final int TYPE_SCALE_DOUBLE_MOVE = 4;
     public static final int TYPE_PHYSICSOBJECT = 5;
+    public static final int TYPE_EXPLOSION = 6;
+    public static final int TYPE_FRAGMENT = 7;
     // flags
     public static final int FLAG_DONT_SCALE = 1;
-
-
+    public static final int FLAG_TRAJECTORY = 2; // use trajectory to update position
 
     public int Type;
     public int Flags;
@@ -251,6 +250,25 @@ public class LocalEntity {
 
         re.radius = le.radius;
 
+        return le;
+    }
+
+    public static LocalEntity bloodExplosion(int time, Vector3f origin, Vector3f velocity, CubeMaterial mat) {
+        LocalEntity le = LocalEntities.allocate();
+        le.Type = TYPE_EXPLOSION;
+        le.Flags |= FLAG_TRAJECTORY;
+        le.startTime = time;
+        le.endTime = le.startTime + 500;
+        le.pos.type = Trajectory.GRAVITY;
+        le.pos.base.set(origin);
+        le.pos.delta.set(velocity);
+        le.pos.time = time;
+        le.rEntity = new RenderEntity(REType.SPRITE);
+        le.rEntity.frame = Ref.rnd.nextInt(100)%mat.getAnimCount();
+        le.rEntity.outcolor.set(255,255,255,255);
+        le.rEntity.origin.set(origin);
+        le.rEntity.radius = 16f;
+        le.rEntity.mat = mat;
         return le;
     }
 

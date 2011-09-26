@@ -15,8 +15,9 @@ public class SoundLoop {
     int mergeFrame;
     boolean active;
     boolean kill;
-    boolean doppler;
-    float dopplerScale;
-    int framenum;
+
+    boolean loopAddedThisFrame;
+    boolean startLoopingSound;
+    Audio loophandle;
     
 }

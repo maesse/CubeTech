@@ -17,5 +17,6 @@ public enum SvFlags {
     SINGLECLIENT, // only send to a single client
 
     NOSERVERINFO, // don't send CS_SERVERINFO updates to this client
-    NOTSINGLECLIENT // send entity to everyone but one client
+    NOTSINGLECLIENT, // send entity to everyone but one client
+    BOT,
 }

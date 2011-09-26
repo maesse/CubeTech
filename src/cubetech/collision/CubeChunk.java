@@ -217,7 +217,7 @@ public class CubeChunk {
         // Compress data
         int compressionLevel = 4; // this seems like a good tradeoff
         byte[] dest = compressionBuffer2;
-        int wrote = compressData(data, dest, size<64?64:size+4, compressionLevel, true);
+        int wrote = compressData(data, data.length, dest, compressionLevel, true);
 //        Common.LogDebug("Wrote %db cubedata to client (p:%d,%d,%d)", wrote,p[0],p[1],p[2]);
 
         byte[] finaldest = new byte[wrote];
@@ -233,7 +233,7 @@ public class CubeChunk {
 
     private void testCompression(byte[] data, byte[] dest) {
         for (int i= 0; i < 10; i++) {
-            Common.LogDebug("level %d compression: %db", i, compressData(data, dest, dest.length, i, true));
+            Common.LogDebug("level %d compression: %db", i, compressData(data, data.length, dest, i, true));
         }
     }
 
@@ -245,9 +245,9 @@ public class CubeChunk {
         return len;
     }
 
-    private static int compressData(byte[] src, byte[] dst, int destsize, int level, boolean addHeaderSpace) {
+    public static int compressData(byte[] src, int srclen, byte[] dst, int level, boolean addHeaderSpace) {
         Deflater zip = new Deflater(level);
-        zip.setInput(src);
+        zip.setInput(src,0,srclen);
         zip.finish();
         int header = 0;
         if(addHeaderSpace) header = 4; // 4 bytes

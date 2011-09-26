@@ -97,6 +97,8 @@ public class Input {
             Ref.commands.AddCommand("+button" + i, in_buttons[i].KeyDownHook);
             Ref.commands.AddCommand("-button" + i, in_buttons[i].KeyUpHook);
         }
+        // button2 = crouch
+        // button3 = scoreboard
 
         binds.BindKey("W", "+forward");
         binds.BindKey("S", "+back");
@@ -110,7 +112,7 @@ public class Input {
         binds.BindKey("RIGHT", "+right");
         binds.BindKey("F10", "console");
         binds.BindKey("BACKSLASH", "console");
-        binds.BindKey("TAB", "+scores");
+        binds.BindKey("TAB", "+button3");
         binds.BindKey("RETURN", "message");
         binds.BindKey("y", "message");
         binds.BindKey("1", "weapon 1");
@@ -122,6 +124,7 @@ public class Input {
         binds.BindKey("mouse2", "+button1");
         binds.BindKey("LCONTROL", "+button2");
         binds.BindKey("F11", "screenshot");
+        binds.BindKey("g", "dropweapon");
         initialized = true;
     }
 

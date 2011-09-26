@@ -78,7 +78,7 @@ public class EntityState {
     }
 
     public static void WriteDeltaRemoveEntity(NetBuffer buf, EntityState toRemove) {
-        buf.Write(toRemove.ClientNum);
+        buf.WriteShort(toRemove.ClientNum);
         buf.Write(true); // remove
     }
 
@@ -86,7 +86,7 @@ public class EntityState {
         if(buf.ReadBool()) {
             // Remoev
             ClientNum = Common.ENTITYNUM_NONE;
-            Common.LogDebug("Removed entity");
+            //Common.LogDebug("Removed entity");
             return;
         }
 
@@ -105,17 +105,17 @@ public class EntityState {
         Angles = buf.ReadDeltaVector(from.Angles);
         Angles2 = buf.ReadDeltaVector(from.Angles2);
         origin = buf.ReadDeltaVector(from.origin);
-        evt = buf.ReadDeltaInt(from.evt);
+        evt = buf.ReadDeltaShort((short)from.evt);
         evtParams = buf.ReadDeltaInt(from.evtParams);
-        eType = buf.ReadDeltaInt(from.eType);
-        eFlags = buf.ReadDeltaInt(from.eFlags);
-        frame = buf.ReadDeltaInt(from.frame);
-        time = buf.ReadDeltaInt(from.time);
+        eType = buf.ReadDeltaShort((short)from.eType);
+        eFlags = buf.ReadByte();
+        frame = buf.ReadDeltaShort((short)from.frame);
+        time = buf.ReadDeltaShort((short)from.time);
         pos.ReadDelta(buf, from.pos);
         apos.ReadDelta(buf, from.apos);
-        otherEntityNum = buf.ReadDeltaInt(from.otherEntityNum);
+        otherEntityNum = buf.ReadDeltaShort((short)from.otherEntityNum);
         solid = buf.ReadDeltaInt(from.solid);
-        modelindex = buf.ReadDeltaInt(from.modelindex);
+        modelindex = buf.ReadDeltaShort((short)from.modelindex);
         weapon = buf.ReadEnum(Weapon.class);
     }
 
@@ -125,31 +125,31 @@ public class EntityState {
             if(!force)
                 return;
 
-            buf.Write(ClientNum);
+            buf.WriteShort(ClientNum);
             buf.Write(false); // not removed
             buf.Write(false); // no delta
             return;
         }
 
-        buf.Write(ClientNum);
+        buf.WriteShort(ClientNum);
         buf.Write(false); // not removed
         buf.Write(true); // got delta
 
-        buf.WriteDelta(b.Angles, Angles);
+        buf.WriteDelta(b.Angles, Angles); // 13b
         buf.WriteDelta(b.Angles2, Angles2);
 
         buf.WriteDelta(b.origin, origin);
-        buf.WriteDelta(b.evt, evt);
+        buf.WriteDelta((short)b.evt, (short)evt);
         buf.WriteDelta(b.evtParams, evtParams);
-        buf.WriteDelta(b.eType, eType);
-        buf.WriteDelta(b.eFlags, eFlags);
-        buf.WriteDelta(b.frame, frame);
-        buf.WriteDelta(b.time, time);
+        buf.WriteDelta((short)b.eType, (short)eType);
+        buf.WriteByte(eFlags);
+        buf.WriteDelta((short)b.frame, (short)frame);
+        buf.WriteDelta((short)b.time, (short)time);
         pos.WriteDelta(buf, b.pos);
         apos.WriteDelta(buf, b.apos);
-        buf.WriteDelta(b.otherEntityNum, otherEntityNum);
+        buf.WriteDelta((short)b.otherEntityNum, (short)otherEntityNum);
         buf.WriteDelta(b.solid, solid);
-        buf.WriteDelta(b.modelindex, modelindex);
+        buf.WriteDelta((short)b.modelindex, (short)modelindex);
         buf.WriteEnum(weapon);
     }
 

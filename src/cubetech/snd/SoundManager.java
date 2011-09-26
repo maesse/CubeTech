@@ -21,7 +21,7 @@ import org.lwjgl.util.vector.Vector4f;
 import org.newdawn.slick.openal.Audio;
 import org.newdawn.slick.openal.SoundStore;
 
-public class SoundManager {
+public class SoundManager implements ISoundManager {
     private static final int MAX_CHANNELS = 96;
     
     private SoundStore store = null;
@@ -122,13 +122,17 @@ public class SoundManager {
         loop.velocity.set(velocity);
         loop.active = true;
         loop.kill = true;
-        loop.doppler = false;
-        loop.dopplerScale = 1.0f;
+        //loop.doppler = false;
+        //loop.dopplerScale = 1.0f;
         loop.sfx = aud;
-        loop.framenum = Ref.client.framecount;
+        //loop.framenum = Ref.client.framecount;
 
-        ALChannel ch = channelMalloc();
-        ch.dirty = true;
+//        ALChannel ch = channelMalloc();
+//        ch.sfx = aud;
+//        ch.entNum = entityNum;
+//        ch.loop = true;
+//        ch.localsound = listener_num == entityNum;
+//        ch.dirty = true;
     }
 
     public void clearLoopingSounds(boolean killall)
@@ -182,6 +186,7 @@ public class SoundManager {
         int inplay = 0;
         for (int i= 0; i < channels.length; i++) {
             ALChannel ch = channels[i];
+            // Avoid soundspam from a single entity
             if(ch.entNum == entityNum && ch.sfx == sfx && ch.source_playing) {
                 if(time - ch.allocTime < 50) {
                     return;
@@ -235,8 +240,11 @@ public class SoundManager {
             ch.fixed_origin = false;
         }
 
+        ch.localsound = entityNum == listener_num;
         ch.entChannel = chan;
         ch.entNum = entityNum;
+        ch.loop = false;
+
         ch.sfx = sfx;
         ch.dirty = true;
 

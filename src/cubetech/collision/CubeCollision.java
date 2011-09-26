@@ -1,6 +1,8 @@
 package cubetech.collision;
 
 import cubetech.misc.Plane;
+import org.lwjgl.util.vector.Vector3f;
+
 
 /**
  *
@@ -19,6 +21,19 @@ public class CubeCollision {
         this.y = y;
         this.z = z;
         this.hitAxis = hitAxis;
+    }
+
+    public Vector3f getHitAxis() {
+        Vector3f hitaxis = new Vector3f();
+        switch(hitAxis) {
+            case 1: hitaxis.x = 1f; break;
+            case 2: hitaxis.y = 1f; break;
+            case 3: hitaxis.z = 1f; break;
+            case -1: hitaxis.x = -1f; break;
+            case -2: hitaxis.y = -1f; break;
+            case -3: hitaxis.z = -1f; break;
+        }
+        return hitaxis;
     }
 
     public Plane getHitPlane() {

@@ -7,5 +7,6 @@ package cubetech.common.items;
 public enum Weapon {
     NONE,
     CUBAR,
-    ROCKETLAUNCHER
+    ROCKETLAUNCHER,
+    AK47
 }

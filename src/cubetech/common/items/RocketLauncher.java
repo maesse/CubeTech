@@ -38,7 +38,9 @@ public class RocketLauncher extends WeaponItem {
         wi.fireSound = "data/TF2RL_Fire.wav";
         wi.missileSound = "data/TF2RL_Loop.wav";
         wi.trailRadius = 16f;
+        wi.explodeSound = "data/80401__steveygos93__explosion2.wav";
         wi.trailTime = 1500f;
+        wi.worldModel = Ref.ResMan.loadModel("data/rocket_vmodel.iqm");
     }
 
     IMethodCentity missileTrailFunc = new IMethodCentity() {

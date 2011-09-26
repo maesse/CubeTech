@@ -117,13 +117,14 @@ public class CubeMap {
     private void popChunkQueue() {
         
         int[] chunkQueue = null;
+        int nChunksLoaded = 0;
         boolean chunkLoaded = false;
-        while((chunkQueue = chunkGenQueue.peek()) != null && !chunkLoaded) {
+        while((chunkQueue = chunkGenQueue.peek()) != null && nChunksLoaded < 1) {
             chunkGenQueue.poll();
             if(chunks.containsKey(positionToLookup(chunkQueue[0], chunkQueue[1], chunkQueue[2])))
                 continue;
             CubeChunk chunk = generateChunk(chunkQueue[0], chunkQueue[1], chunkQueue[2], false);
-            chunkLoaded = true;
+            nChunksLoaded++;
         }
     }
 

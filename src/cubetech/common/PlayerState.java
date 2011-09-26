@@ -49,8 +49,11 @@ public class PlayerState {
 
     public int[] powerups = new int[NUM_POWERUPS];
     public static int NUM_POWERUPS = 1;
+    public Vector3f punchangle = new Vector3f();
+    public int groundEntity = Common.ENTITYNUM_NONE;
+    public float fallVelocity;
 
-    public int movetime = 0;
+    public int bobcycle = 0;
 
     public int maptime = 0;
 
@@ -86,6 +89,8 @@ public class PlayerState {
 
     // Wipe values
     public void Clear() {
+        groundEntity = Common.ENTITYNUM_NONE;
+        fallVelocity = 0;
         clientNum = 0;
         commandTime = 0;
         delta_angles = new int[3];
@@ -100,6 +105,7 @@ public class PlayerState {
         externalEventTime = 0;
         origin = new Vector3f();
         velocity = new Vector3f();
+        punchangle = new Vector3f();
         viewangles = new Vector3f();
         ping = -1;
         moveType = MoveType.SPECTATOR;
@@ -109,7 +115,7 @@ public class PlayerState {
         jumpDown = false;
         canDoubleJump = false;
         powerups = new int[NUM_POWERUPS];
-        movetime = 0;
+        bobcycle = 0;
         maptime = 0;
         animation = 0;
         animTime = 0;
@@ -159,6 +165,8 @@ public class PlayerState {
             ps = new PlayerState();
 
         ps.clientNum = clientNum;
+        ps.groundEntity = groundEntity;
+        ps.fallVelocity = fallVelocity;
         ps.commandTime = commandTime;
         ps.delta_angles[0] = delta_angles[0];
         ps.delta_angles[1] = delta_angles[1];
@@ -181,6 +189,7 @@ public class PlayerState {
         if(velocity != null) {
             ps.velocity.set(velocity);
         }
+        ps.punchangle.set(punchangle);
         ps.ping = ping;
         ps.moveType = moveType;
         ps.stepTime = stepTime;
@@ -190,7 +199,7 @@ public class PlayerState {
         ps.applyPull = applyPull;
         ps.jumpDown = jumpDown;
         ps.canDoubleJump = canDoubleJump;
-        ps.movetime = movetime;
+        ps.bobcycle = bobcycle;
         ps.maptime = maptime;
         ps.animTime = animTime;
         ps.animation = animation;
@@ -217,7 +226,7 @@ public class PlayerState {
         // TODO animation
         s.frame = animation;
         s.ClientNum = clientNum;
-        s.time = movetime;
+        s.time = bobcycle;
         s.pos.base.set(origin);
         s.pos.type = Trajectory.INTERPOLATE;
         if(snap) {
@@ -300,6 +309,7 @@ public class PlayerState {
         msg.WriteDelta(ps.externalEventTime, externalEventTime);
         msg.WriteDelta(ps.origin, origin);
         msg.WriteDelta(ps.velocity, velocity);
+        msg.WriteDelta(ps.punchangle, punchangle);
         msg.WriteDelta(ps.viewangles, viewangles);
         msg.WriteDelta(ps.ping, ping);
         msg.WriteDelta(ps.moveType, moveType);
@@ -316,7 +326,7 @@ public class PlayerState {
         for (int i= 0; i < NUM_POWERUPS; i++) {
             msg.WriteDelta(ps.powerups[i], powerups[i]);
         }
-        msg.WriteDelta(ps.movetime, movetime);
+        msg.WriteDelta(ps.bobcycle, bobcycle);
         stats.WriteDelta(msg, ps.stats);
         msg.Write(ducking);
         msg.Write(ducked);
@@ -327,6 +337,8 @@ public class PlayerState {
         }
         msg.Write(buttons);
         msg.WriteDelta(ps.viewheight, viewheight);
+        msg.WriteDelta(ps.groundEntity, groundEntity);
+        msg.WriteDelta(ps.fallVelocity, fallVelocity);
     }
 
     public void ReadDelta(NetBuffer msg, PlayerState ps) {
@@ -350,6 +362,7 @@ public class PlayerState {
         externalEventTime = msg.ReadDeltaInt(ps.externalEventTime);
         origin = msg.ReadDeltaVector(ps.origin);
         velocity = msg.ReadDeltaVector(ps.velocity);
+        punchangle = msg.ReadDeltaVector(ps.punchangle);
         viewangles = msg.ReadDeltaVector(ps.viewangles);
         ping = msg.ReadDeltaInt(ps.ping);
         moveType = msg.ReadDeltaInt(ps.moveType);
@@ -366,7 +379,7 @@ public class PlayerState {
         for (int i= 0; i < NUM_POWERUPS; i++) {
             powerups[i] = msg.ReadDeltaInt(ps.powerups[i]);
         }
-        movetime = msg.ReadDeltaInt(ps.movetime);
+        bobcycle = msg.ReadDeltaInt(ps.bobcycle);
         stats.ReadDelta(msg, ps.stats);
         ducking = msg.ReadBool();
         ducked = msg.ReadBool();
@@ -376,6 +389,8 @@ public class PlayerState {
             oldButtons[i] = (((buttons >> i) & 1) == 1);
         }
         viewheight = msg.ReadDeltaInt(ps.viewheight);
+        groundEntity = msg.ReadDeltaInt(ps.groundEntity);
+        fallVelocity = msg.ReadDeltaFloat(ps.fallVelocity);
     }
 
     public void AddPredictableEvent(Event event, int eventParam) {

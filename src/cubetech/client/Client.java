@@ -3,17 +3,23 @@ package cubetech.client;
 import cubetech.common.items.Weapon;
 import cubetech.CGame.CGame;
 import cubetech.CGame.Snapshot;
+import cubetech.collision.ClientCubeMap;
+import cubetech.collision.CubeChunk;
 import cubetech.collision.CubeMap;
 import cubetech.common.*;
 import cubetech.common.Common.ErrorCode;
 import cubetech.entities.EntityState;
 import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.GLRef;
+import cubetech.gfx.GLState;
 import cubetech.gfx.ResourceManager;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
 import cubetech.input.Input;
 import cubetech.input.PlayerInput;
+import cubetech.misc.BMPWriter;
+import cubetech.misc.FastZipOutputStream;
+import cubetech.misc.FasterZip;
 import cubetech.misc.FinishedUpdatingListener;
 import cubetech.misc.MasterServer;
 import cubetech.misc.PngEncoder;
@@ -46,8 +52,13 @@ import java.util.Hashtable;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.zip.DataFormatException;
+import java.util.zip.Deflater;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
@@ -319,6 +330,21 @@ public class Client {
         clc.serverMessageSequence = buf.getInt();
         buf.position(currPos);
 
+        // uncompress
+        int endPos = buf.limit() - 4;
+        NetBuffer uncompressed = NetBuffer.GetNetBuffer(false, true);
+        byte[] dst = uncompressed.GetBuffer().array();
+        try {
+            int read = CubeChunk.uncompressData(data.buf.GetBuffer().array(), currPos, endPos, dst);
+            uncompressed.GetBuffer().limit(read+4);
+            uncompressed.GetBuffer().putInt(read, SVC.OPS_EOF);
+            uncompressed.GetBuffer().position(0);
+            data.buf = uncompressed;
+        } catch (Exception ex) {
+            Common.Log("Failed to uncompress packet: " + ex.toString());
+            return;
+        }
+
         ParseServerMessage(data.buf);
 
         //
@@ -326,7 +352,7 @@ public class Client {
 	// after we have parsed the frame
 	//
         if(demo.isRecording()) {
-            demo.writeMessage(data, currPos);
+            demo.writeMessage(data, 0);
         }
     }
 
@@ -549,8 +575,16 @@ public class Client {
 
         Ref.cvars.Set2("ui_fullscreen", "1", true);
 
-        if(showMainMenu)
-            Ref.ui.SetActiveMenu(UI.MENU.MAINMENU);
+        if(demo.isRecording()) {
+            demo.cmd_stoprecord.RunCommand(null);
+        }
+
+        if(clc.download != null) {
+            clc.download = null;
+        }
+        clc.downloadName = null;        
+
+        if(showMainMenu) Ref.ui.SetActiveMenu(UI.MENU.MAINMENU);
 
         // send a disconnect message to the server
         // send it a few times in case one is dropped
@@ -559,6 +593,10 @@ public class Client {
             WritePacket();
             WritePacket();
             WritePacket();
+        }
+
+        if(demo.isPlaying()) {
+            demo.playCompleted(false);
         }
 
         cl = new ClientActive();
@@ -572,7 +610,7 @@ public class Client {
         cgameStarted = false;
         if(Ref.cgame != null) {
             Ref.cgame.Shutdown();
-            Ref.cgame = null;
+            if(!demo.isPlaying()) Ref.cgame = null;
         }
         Ref.Input.SetKeyCatcher(Ref.Input.GetKeyCatcher() & ~Input.KEYCATCH_UI);
         //Ref.cgame.CG_Shutdown();
@@ -727,7 +765,7 @@ public class Client {
             }
             else if(cmd == SVC.OPS_BASELINE) {
                 // Read baseline
-                int newnum = buf.ReadInt();
+                int newnum = buf.ReadShort();
                 if(newnum < 0 || newnum >= Common.MAX_GENTITIES) {
                     Ref.common.Error(ErrorCode.DROP, "ParseGameState: Baseline number out of range");
                 }
@@ -930,9 +968,11 @@ public class Client {
         // init for this gamestate
         // use the lastExecutedServerCommand instead of the serverCommandSequence
         // otherwise server commands sent just before a gamestate are dropped
+        ClientCubeMap map = null;
+        if(demo.isPlaying() && Ref.cgame != null && Ref.cgame.map != null) map = Ref.cgame.map;
         Ref.cgame = new CGame();
+        if(map != null) Ref.cgame.map = map;
         Ref.cgame.Init(clc.serverMessageSequence, clc.lastExecutedServerCommand, clc.ClientNum);
-
         // we will send a usercmd this frame, which
         // will cause the server to send us the first snapshot
         state = ConnectState.PRIMED;
@@ -1074,7 +1114,7 @@ public class Client {
 
         while(true) {
             // read the entity index number
-            int newnum = buf.ReadInt();
+            int newnum = buf.ReadShort();
 
             if(newnum >= Common.MAX_GENTITIES-1)
                 break;
@@ -1184,7 +1224,7 @@ public class Client {
         //GL11.glOrtho(0, 1,1, 0, 1,-1000);
         GL11.glOrtho(0, (int)Ref.glRef.GetResolution().x, 0, (int)Ref.glRef.GetResolution().y, 1,-1000);
 
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glLoadIdentity();
         
@@ -1222,31 +1262,81 @@ public class Client {
     };
 
 
+    ByteBuffer screenshotBuffer = null;
     private void takeScreenshot() {
         cl.screenshot = false;
 
         // Are we taking pictures of a demo?
         boolean video = (demo.isPlaying() && Ref.cvars.Find("cl_demorecord").isTrue());
 
-        
-
         int width = (int)Ref.glRef.GetResolution().x;
         int height = (int)Ref.glRef.GetResolution().y;
 
         // Copy backbuffer
-        ByteBuffer buffer = ByteBuffer.allocateDirect(3*width*height);
-        GL11.glReadPixels(0, 0, width, height, GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, buffer);
+        if(screenshotBuffer == null || screenshotBuffer.capacity() < 3*width*height) {
+            screenshotBuffer = ByteBuffer.allocateDirect(3*width*height);
+        }
+        screenshotBuffer.clear();
+        GL11.glReadPixels(0, 0, width, height, GL12.GL_BGR, GL11.GL_UNSIGNED_BYTE, screenshotBuffer);
 
-        // Encode as png
-        PngEncoder enc = new PngEncoder(buffer, false,PngEncoder.FILTER_NONE, 4, width, height);
-        byte[] ddata = enc.pngEncode();
+        byte[] encData = null;
+        if(video) {
+            // Bmp for speed
+            BMPWriter enc = new BMPWriter(screenshotBuffer, width, height);
+            encData = enc.encodeImage();
+            writeVideoFrame(encData);
+        } else {
+            // Encode as png
+            PngEncoder enc = new PngEncoder(screenshotBuffer, false,PngEncoder.FILTER_NONE, 3, width, height);
+            encData = enc.pngEncode();
+            writeScreenshot(encData);
+        }
+    }
 
+    private void writeVideoFrame(byte[] bmpdata) {
+        // Open zip stream
+        if(demo.zipStream == null) {
+            String directory = "demos\\";
+
+            // Create dest folder
+            File folder = new File(directory);
+            if(!folder.exists() || !folder.isDirectory()) {
+                boolean created = folder.mkdir();
+                if(!created) {
+                    Common.Log("Can't create destination directory %s", directory);
+                    return;
+                }
+            }
+            String filepath = directory + demo.getDemoName() + ".zip";
+            try {
+                
+                demo.zipStream = new FasterZip(new FileOutputStream(filepath));
+                demo.zipStream.start();
+            } catch (FileNotFoundException ex) {
+                Common.Log(Common.getExceptionString(ex));
+                // todo: stop playback
+            }
+        }
+
+        // Write to zipstream
+        if(demo.zipStream != null) {
+            int number = clc.timeDemoFrames;
+            demo.zipStream.enqueueFile(bmpdata, number + ".bmp");
+        }
+
+        // resync
+        while(demo.zipStream.getJobCount() > 10) {
+            try {
+                Thread.sleep(2);
+            } catch (InterruptedException ex) { }
+        }
+    }
+
+    private void writeScreenshot(byte[] filedata) {
         // Figure out destination
         String directory = "screenshots\\"; // default screenshot direction
-        if(video) {
-            // screenshots for demos goes into the demo folder
-            directory = "demos\\" + demo.getDemoName();
-        }
+
+        // Create dest folder
         File folder = new File(directory);
         if(!folder.exists() || !folder.isDirectory()) {
             boolean created = folder.mkdir();
@@ -1258,9 +1348,6 @@ public class Client {
 
         // Write it
         int number =  framecount;
-        if(video) {
-            number = clc.timeDemoFrames;
-        }
         String filename = directory + "\\" + number;
         File f = new File(filename + ".png");
         try {
@@ -1270,16 +1357,13 @@ public class Client {
                 return;
             }
             FileChannel fc = new FileOutputStream(f).getChannel();
-            ByteBuffer data = ByteBuffer.wrap(ddata);
+            ByteBuffer data = ByteBuffer.wrap(filedata, 0, filedata.length);
             fc.write(data);
             fc.close();
-            if(!video) {
-                Common.Log("Saved screenshot as %s.png (%.1fMB)", filename, ddata.length / (1024*1024f));
-            }
+            Common.Log("Saved screenshot as %s.png (%.1fMB)", filename, filedata.length / (1024*1024f));
         } catch (IOException ex) {
             Common.Log(Common.getExceptionString(ex));
         }
-
     }
 
     private void updateScreen() {
@@ -1312,7 +1396,7 @@ public class Client {
         if(Ref.cgame != null)
         {
             Ref.cgame.Shutdown();
-            Ref.cgame = null;
+            if(!demo.isPlaying()) Ref.cgame = null;
         }
         
     }
@@ -1624,7 +1708,8 @@ public class Client {
                 return true;
             }
             String filename = buf.ReadString();
-            if(filename.equals("@cube")) {
+            //if(filename.equals("@cube"))
+            {
 //                Common.LogDebug("Recieving cubechunk");
                 clc.downloadBlock = 0;
                 clc.downloadCount = 0;

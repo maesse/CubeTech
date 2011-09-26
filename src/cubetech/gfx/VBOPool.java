@@ -13,6 +13,18 @@ public class VBOPool {
     private ArrayList<VBO> busyList = new ArrayList<VBO>();
     private ArrayList<VBO> freeList = new ArrayList<VBO>();
 
+    public int getTotalCount() {
+        return busyList.size() + freeList.size();
+    }
+
+    public int getBusyCount() {
+        return busyList.size();
+    }
+
+    public int getFreeCount() {
+        return freeList.size();
+    }
+
     public VBO allocateVBO(int size, GLRef.BufferTarget target) {
         VBO vbo = poolFreeList(size, target);
         if(vbo == null) {

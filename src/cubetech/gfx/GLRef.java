@@ -229,7 +229,7 @@ public class GLRef {
         glDepthMask(true);
         glLineWidth(2f);
         glDepthFunc(GL_LEQUAL);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        GLState.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glViewport(0, 0, currentMode.getWidth(), currentMode.getHeight());
         checkError();
 

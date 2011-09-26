@@ -36,7 +36,7 @@ public class RingEmitter implements IEmitter {
         CubeMaterial mat = Ref.ResMan.LoadTexture("data/particles/ringexplosion.png").asMaterial();
         // move origin a bit towards the normal so the ring doesn't spawn underground
         Vector3f correctedOrigin = Helper.VectorMA(origin, 1f, normal, null);
-        LocalEntity.ringExplosion(correctedOrigin, normal, radius, 800, time, mat, 1, 0.3f, 0, 1);
+        LocalEntity.ringExplosion(correctedOrigin, normal, radius, 400, time, mat, 1, 0.3f, 0, 1);
     }
 
     public void update(int msec) {

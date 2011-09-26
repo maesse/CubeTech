@@ -35,6 +35,12 @@ public class Move {
     private static final float MIN_WALK_NORMAL = 0.7f;
     private static final float OVERCLIP = 1.0001f;
 
+    private static final float PLAYER_FATAL_FALL_SPEED		=1024;// approx 60 feet
+    private static final float PLAYER_MAX_SAFE_FALL_SPEED	=580;// approx 20 feet
+    private static final float DAMAGE_FOR_FALL_SPEED		=(float) 100 / ( PLAYER_FATAL_FALL_SPEED - PLAYER_MAX_SAFE_FALL_SPEED );// damage per unit per second.
+    private static final float PLAYER_MIN_BOUNCE_SPEED		=200;
+    private static final float PLAYER_FALL_PUNCH_THRESHHOLD =(float)350; // won't punch player's screen/make scrape noise unless player falling at least this fast.
+
     private static int msec;
     private static float frametime;
     public class MoveType {
@@ -116,7 +122,6 @@ public class Move {
             Common.LogDebug("Missing Move variables: %s", Common.getExceptionString(ex));
         }
 
-        Vector3f start = new Vector3f(query.ps.origin);
         // chop the move up if it is too long, to prevent framerate
 	// dependent behavior
         int totalMsec = finaltime - query.ps.commandTime;
@@ -128,12 +133,6 @@ public class Move {
             MoveSingle(query);
             query.cropped = false;
         }
-        Vector3f end = new Vector3f(query.ps.origin);
-
-        Vector3f.sub(start, end, start);
-        start.y *= 0.5f; // don't let y velocity impact move animation too much
-        float movelen = start.length() * 15;
-        query.ps.movetime += (int)movelen;
 
         s.ExitSection();
     }
@@ -148,13 +147,14 @@ public class Move {
         query.ps.commandTime = query.cmd.serverTime;
         frametime = msec * 0.001f;
 
-        query.ps.UpdateViewAngle(query.cmd);
-
-        Helper.AngleVectors(query.ps.viewangles, query.forward, query.right, query.up);
-
+        dropPunchAngle(query.ps.punchangle);
 
         if(query.ps.moveType == MoveType.DEAD)
             return; // Dead players can't move
+
+        query.ps.UpdateViewAngle(query.cmd);
+
+        Helper.AngleVectors(query.ps.viewangles, query.forward, query.right, query.up);
 
         if(query.ps.moveType == MoveType.NOCLIP) {
             NoclipMove(query);
@@ -185,6 +185,10 @@ public class Move {
         DropTimers(query); // Decrement timers
 
         setMovementDir(query);
+
+        if(!query.onGround) {
+            query.ps.fallVelocity = -query.ps.velocity.z;
+        }
 
         // handle ducking
         handleDuck(query);
@@ -220,9 +224,71 @@ public class Move {
                 }
             }
         }
+        groundTrace(query);
+
+        checkFalling(query);
+
+        footsteps(query);
 
         // weapon
         weapons(query);
+    }
+
+    static void checkFalling(MoveQuery pm) {
+        if(pm.ps.groundEntity != Common.ENTITYNUM_NONE && pm.ps.stats.Health > 0
+                && pm.ps.fallVelocity >= PLAYER_FALL_PUNCH_THRESHHOLD) {
+            pm.ps.punchangle.z = pm.ps.fallVelocity * 0.013f;
+            if(pm.ps.punchangle.x > 8) pm.ps.punchangle.x = 8;
+        }
+
+        if(pm.onGround) {
+            pm.ps.fallVelocity = 0;
+        }
+    }
+
+    static void dropPunchAngle(Vector3f v) {
+        float len = Helper.Normalize(v);
+        len -= (10f + len * 0.5f) * frametime;
+        if(len < 0) len = 0;
+        v.scale(len);
+    }
+
+    static void footsteps(MoveQuery pm) {
+        if(!pm.onGround) {
+            // airborne leaves position in cycle intact, but doesn't advance
+            return;
+        }
+
+        float xyspeed = (float) Math.sqrt(pm.ps.velocity.x * pm.ps.velocity.x +
+                                          pm.ps.velocity.y * pm.ps.velocity.y);
+
+        if(pm.wishdir.x == 0 && pm.wishdir.y == 0) {
+            if(xyspeed < 5) {
+                pm.ps.bobcycle = 0; // start at beginning of cycle again
+            }
+            return;
+        }
+
+        float bobmove = 1f;
+        boolean footstep = false;
+        if(pm.ps.ducked) {
+            bobmove = 0.5f; // ducked characters bob much faster
+        } else {
+            bobmove = 0.4f;
+            footstep = true;
+        }
+
+        // check for footstep / splash sounds
+        int old = pm.ps.bobcycle;
+        pm.ps.bobcycle = (int)(old + bobmove * msec) & 0xff;
+
+        // if we just crossed a cycle boundary, play an apropriate footstep event
+        if((((old + 64) ^ (pm.ps.bobcycle + 64)) & 128) != 0) {
+            if(footstep) {
+                AddEvent(pm, Event.FOOTSTEP, 0);
+            }
+        }
+        
     }
 
     static void handleDuck(MoveQuery pm) {
@@ -493,6 +559,7 @@ public class Move {
             Common.LogDebug("Kickoff");
             pm.onGround = false;
             pm.groundNormal = null;
+            pm.ps.groundEntity = Common.ENTITYNUM_NONE;
             return false;
         }
 
@@ -505,23 +572,29 @@ public class Move {
         if(pm.groundNormal.z < MIN_WALK_NORMAL) {
             pm.onGround = false;
             pm.groundNormal = null;
+            pm.ps.groundEntity = Common.ENTITYNUM_NONE;
             return false;
         }
 
+        if(pm.ps.groundEntity == Common.ENTITYNUM_NONE) {
+            // just hit the ground
+            crashLand(pm);
+        }
+        pm.ps.groundEntity = trace.entitynum;
         pm.onGround = true;
-
-//        if(pm.ps.groundEntityNum == Common.ENTITYNUM_NONE) {
-//            // just hit the ground
-//            CrashLand(query);
-//
-//
-//        }
+        
         return true;
+    }
+
+    static void crashLand(MoveQuery pm) {
+        AddEvent(pm, Event.FOOTSTEP, 0);
+        pm.ps.bobcycle = 0;
     }
 
     static void groundTraceMissed(MoveQuery pm) {
         pm.onGround = false;
         pm.groundNormal = null;
+        pm.ps.groundEntity = Common.ENTITYNUM_NONE;
         
     }
 
@@ -615,6 +688,7 @@ public class Move {
             return false;
 
         pm.onGround =false;
+        pm.ps.groundEntity = Common.ENTITYNUM_NONE;
         pm.groundNormal = null;
         pm.ps.velocity.z = jumpvel;
         
@@ -752,13 +826,13 @@ public class Move {
             //  zero the plane counter.
             if(res.frac > 0) {
                 // actually covered some distance
-                float prex = pm.ps.origin.y;
+                float prex = pm.ps.origin.z;
                 Helper.VectorMA(res.start, res.frac, res.delta, pm.ps.origin);
                 // See if we can make it from origin to end point.
-                if(prex <= -62.0625f && pm.ps.origin.y > -62.0625f) {
-                    int test = 2;
-                    CollisionResult r = TracePlayerBBox(pm, orgorg, end, pm.tracemask);
-                }
+//                if(prex >= 1156.0625f && pm.ps.origin.z < 1156.0625f) {
+//                    int test = 2;
+//                    CollisionResult r = TracePlayerBBox(pm, orgorg, end, pm.tracemask);
+//                }
                 orgVel.set(pm.ps.velocity);
                 numplanes = 0;
             }            

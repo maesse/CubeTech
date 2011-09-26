@@ -181,7 +181,7 @@ public class Common {
     public void Frame() {
         // Update profiler
         // calculate times from last frame and prepare for a new one
-        Profiler.reset(); 
+        
 
         // Change timer strategy
         if(com_timer.modified) {
@@ -241,12 +241,11 @@ public class Common {
                 Ref.commands.Execute(); // Pump commands
             }
 
-            
-
             // Client Frame
             SecTag ptag = Profiler.EnterSection(Sec.CLIENT);
             Ref.client.Frame(msec);
             ptag.ExitSection();
+            Profiler.reset(); 
         } catch(FrameException ex) {
             // FrameException is a special RuntimeException that only has
             // one purpose - to exit the current frame.
@@ -266,6 +265,10 @@ public class Common {
 
     public static void Log(String str) {
         System.out.println(str);
+    }
+
+    public static void Log(Exception ex) {
+        System.out.println(getExceptionString(ex));
     }
 
     public static void Log(String str, Object... args) {
@@ -409,11 +412,15 @@ public class Common {
                 case PACKET:
                     // packet value2: 0 for server, 1 for client
                     if(ev.Value2 == 0) {
-                        if(sv_running.iValue == 1)
+                        if(sv_running.iValue == 1) {
+                            SecTag t = Profiler.EnterSection(Sec.SV_PACKET);
                             Ref.server.PacketEvent((Packet)ev.data);
+                            t.ExitSection();
+                        }
                     } else {
-
+                        SecTag t = Profiler.EnterSection(Sec.CL_PACKET);
                         Ref.client.PacketEvent((Packet)ev.data);
+                        t.ExitSection();
                     }
                     break;
             }

@@ -1,5 +1,6 @@
 package cubetech.Game;
 
+import cubetech.Game.Bot.GBot;
 import cubetech.Block;
 import cubetech.collision.CubeChunk;
 import cubetech.common.CS;
@@ -19,7 +20,9 @@ import cubetech.entities.IEntity;
 import cubetech.entities.SharedEntity;
 import cubetech.entities.Info_Player_Spawn;
 import cubetech.entities.Missiles;
+import cubetech.input.PlayerInput;
 import cubetech.misc.Ref;
+import cubetech.server.SvFlags;
 import cubetech.spatial.SectorQuery;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -55,16 +58,6 @@ public class Game {
     CVar g_killheight;
     CVar g_knockback;
 
-    CVar sv_pull1;
-    CVar sv_pull2;
-    CVar sv_pull3;
-    CVar sv_pull4;
-    CVar sv_pull5;
-    CVar sv_pull6;
-
-    CVar sv_pullstep;
-//    CVar sv_doublejump;
-
     public SpawnEntities spawnEntities;
     public Gentity[] g_entities;
     GameClient[] g_clients;
@@ -91,17 +84,17 @@ public class Game {
         sv_stopspeed = Ref.cvars.Get("sv_stopspeed", "100", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         sv_stepheight = Ref.cvars.Get("sv_stepheight", "4", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         g_knockback = Ref.cvars.Get("g_knockback", "1400", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
-//        sv_doublejump = Ref.cvars.Get("sv_doublejump", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
 
         // Add entities to spawn list. All entities that's not items should be added here
         IEntity ent = new Info_Player_Spawn();
         addEntityToSpawn(ent);
-        ent = new Func_Door();
-        addEntityToSpawn(ent);
+//        ent = new Func_Door();
+//        addEntityToSpawn(ent);
 //        addEntityToSpawn(new Info_Player_Goal());
         spawnEntities = new SpawnEntities();
         
 //        spawnEntities = Ref.cm.cm.spawnEntities;
+        //Ref.commands.AddCommand("addbot", GBot.cmd_addbot);
     }
 
     private void addEntityToSpawn(IEntity ent) {
@@ -150,48 +143,12 @@ public class Game {
 
         WorldSpawn();
 
-//        SpawnEntity spEnt = new SpawnEntity("item_boots", new Vector2f(150,50));
-//        spawnEntities.AddEntity(spEnt);
-
-//        Gentity hp = Spawn();
-//        hp.s.origin.set(150,50);
-//        hp.classname = "item_boots";
-//        hp.s.pos.base.set(hp.s.origin);
-//        hp.r.currentOrigin.set(hp.s.origin);
-//
-//        if(!callSpawn(hp))
-//            hp.Free();
-
-//        SpawnEntity spEnt = new SpawnEntity("info_player_spawn", new Vector2f(150,100));
-//        spawnEntities.AddEntity(spEnt);
-//        spEnt = new SpawnEntity("info_player_goal", new Vector2f(500,100));
-//        spawnEntities.AddEntity(spEnt);
-
-//        Gentity hp = Spawn();
-//        hp.classname = "info_player_spawn";
-//        hp.s.origin.set(100, 100);
-//        hp.s.pos.base.set(hp.s.origin);
-//        hp.r.currentOrigin.set(hp.s.origin);
-//
-//        if(!callSpawn(hp))
-//            hp.Free();
         spawnEntities.AddEntity(new SpawnEntity("info_player_spawn", new Vector3f(0,0,CubeChunk.BLOCK_SIZE * CubeChunk.SIZE + 50)));
         spawnEntities.SpawnAll();
 
-//        Ref.cm.cm.ToSubModel(Ref.cm.cm.GetBlock(20));
-//        Ref.cm.cm.GetBlock(20).SetSize(new Vector2f(100,10));
-//
-//        hp = Spawn();
-//        hp.classname = "func_door";
-//        hp.s.origin.set(-100, 100);
-//
-//        hp.s.pos.base.set(hp.s.origin);
-//        hp.r.currentOrigin.set(hp.s.origin);
-//
-//        if(!callSpawn(hp))
-//            hp.Free();
-
         Ref.server.LocateGameData(level.sentities, level.num_entities, level.clients);
+
+        GBot.init();
     }
 
     private void WorldSpawn() {
@@ -274,11 +231,6 @@ public class Game {
             GameClient ent = (GameClient)g_entities[i];
             if(ent.inuse)
                 ent.ClientEndFrame();
-        }
-
-        // Check if editmode has changed
-        if(g_editmode.modified) {
-            CheckEditMode();
         }
 
         Ref.cm.cubemap.update();
@@ -395,63 +347,13 @@ public class Game {
         ent.Client_Disconnect();
     }
 
-    public String Client_Connect(int id, boolean firsttime) {
+    public String Client_Connect(int id, boolean firsttime, boolean isBot) {
         GameClient ent = (GameClient)g_entities[id];
-        return ent.Client_Connect(id, firsttime);
+        return ent.Client_Connect(id, firsttime, isBot);
     }
 
     public void Client_Think(int id) {
         ((GameClient)g_entities[id]).Client_Think();
-    }
-
-    // Reacts on a change to g_editmode
-    private void CheckEditMode() {
-        g_editmode.modified = false;
-        if((g_editmode.iValue == 1) == level.editmode)
-            return; // no change
-
-        if(level.editmode) {
-            ExitEditMode();
-        } else
-            EnterEditMode();
-    }
-
-    
-
-    private void ExitEditMode() {
-        if(!level.editmode)
-            return;
-
-        level.editmode = false;
-        // Notify all clients
-        for (int i= 0; i < g_clients.length; i++) {
-            if(g_clients[i] != null || !g_clients[i].inuse)
-                continue;
-
-            g_clients[i].RemoveFromEditMode();
-        }
-
-        // Cache the changed map
-//        Ref.cm.SaveBlockMap("custom");
-        spawnEntities.SpawnAll();
-    }
-
-    private void EnterEditMode() {
-        if(level.editmode)
-            return;
-
-        Ref.cvars.Set2("mapname", "custom", true);
-        Ref.commands.ExecuteText(ExecType.NOW, "stop");
-
-        level.editmode = true;
-        // Notify all clients
-        for (int i= 0; i < g_clients.length; i++) {
-            if(g_clients[i] == null || !g_clients[i].inuse)
-                continue;
-
-            g_clients[i].PlaceInEditMode();
-        }
-        spawnEntities.UnspawnAll();
     }
 
     public IEntity findSpawnEntityFromClassName(String classname) {
@@ -550,19 +452,6 @@ public class Game {
         return null;
     }
 
-    // Sends an update to all clients, so they can know about this block
-    void SendBlock(Block b) {
-        // TODO: Don't send to localclient?
-        Ref.server.GameSendServerCommand(-1, String.format("setblock %d \"%s\"", b.Handle, b.GetSendString()));
-//        for (int i= 0; i < g_clients.length; i++) {
-//            GameClient cl = g_clients[i];
-//            if(cl == null || !cl.inuse || cl.pers.connected == ClientConnected.DISCONNECTED)
-//                continue;
-//
-//
-//        }
-    }
-
     public boolean CheatsOk(GameClient gc) {
         if(g_cheats.iValue != 1) {
             gc.SendServerCommand("print \"Cheats are not enabled on this server.\"");
@@ -619,7 +508,7 @@ public class Game {
             }
 
             float points = dmg * (1f - dist / radius);
-            if(canDamage(ent, origin)) {
+            if(ent.isClient()) {
                 hitClient = true;
                 Vector3f dir = Vector3f.sub(ent.r.currentOrigin, origin, null);
                 dir.z += 24;
@@ -655,8 +544,6 @@ public class Game {
     ============
     **/
     public void damage(Gentity targ, Gentity inflictor, Gentity attacker, Vector3f dir, Vector3f point, int damage, int dflags, MeansOfDeath mod) {
-        //if(!targ.takedamage) return;
-
         if(inflictor == null) {
             inflictor = g_entities[Common.ENTITYNUM_WORLD];
         }
@@ -692,7 +579,7 @@ public class Game {
         }
 
         // figure momentum add, even if the damage won't be taken
-        if(knockback > 0 && client != null) {
+        if(knockback > 0 && client != null && (dflags & DamageFlag.NO_KNOCKBACK) == 0) {
             float mass = 200;
 
             Vector3f kvel = new Vector3f(dir);
@@ -733,18 +620,22 @@ public class Game {
                 client.ps.stats.Health -= take;
                 if(client.ps.stats.Health <= 0) {
                     targ.die.die(targ, inflictor, attacker, take, mod);
+                    if(attacker.isClient()) {
+                        attacker.getClient().pers.score++;
+                    }
                 } else if(targ.pain != null) {
                      targ.pain.pain(targ, attacker, take);
                 }
             }
         }
-
-
-
     }
 
-    private boolean canDamage(Gentity ent, Vector3f origin) {
-        return ent.isClient();
+    public void runBotFrame(int time) {
+        for (GameClient gameClient : g_clients) {
+            if(!gameClient.inuse || !gameClient.r.svFlags.contains(SvFlags.BOT)) continue;
+            GBot.runBotFrame(time, gameClient);
+            
+        }
     }
 
 }

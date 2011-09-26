@@ -90,7 +90,7 @@ public class Trajectory {
     public void ReadDelta(NetBuffer buf, Trajectory from) {
         base = buf.ReadDeltaVector(from.base);
         delta = buf.ReadDeltaVector(from.delta);
-        type = buf.ReadDeltaInt(from.type);
+        type = buf.ReadByte();
         time = buf.ReadDeltaInt(from.time);
         duration = buf.ReadDeltaInt(from.duration);
     }
@@ -99,8 +99,29 @@ public class Trajectory {
     public void WriteDelta(NetBuffer buf, Trajectory b) {
         buf.WriteDelta(b.base, base);
         buf.WriteDelta(b.delta, delta);
-        buf.WriteDelta(b.type, type);
+        buf.Write((byte)type);
         buf.WriteDelta(b.time, time);
         buf.WriteDelta(b.duration, duration);
+    }
+
+    public void EvaluateDelta(int atTime, Vector3f result) {
+        switch(type) {
+            case STATIONARY:
+            case INTERPOLATE:
+                result.set(0, 0, 0);
+                break;
+            case LINEAR:
+                result.set(delta);
+                break;
+            case GRAVITY:
+                float deltaTime = (atTime - time) * 0.001f;
+                result.set(delta);
+                int grav = duration;
+                if(grav == 0) grav = Common.DEFAULT_GRAVITY;
+                result.z -= grav * deltaTime;
+                break;
+            default:
+                Ref.common.Error(Common.ErrorCode.FATAL, "Trajectory.EvaluateDelta: unknown type " + type);
+        }
     }
 }

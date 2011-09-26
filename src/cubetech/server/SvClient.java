@@ -7,6 +7,7 @@ package cubetech.server;
 
 import cubetech.Game.ClientPersistant;
 import cubetech.client.CLSnapshot;
+import cubetech.collision.CubeChunk;
 import cubetech.common.CS;
 import cubetech.common.Commands;
 import cubetech.common.Common;
@@ -14,6 +15,7 @@ import cubetech.common.Info;
 import cubetech.common.PlayerState;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
+import cubetech.entities.Event;
 import cubetech.entities.SharedEntity;
 import cubetech.entities.SvEntity;
 import cubetech.gfx.ResourceManager;
@@ -173,7 +175,7 @@ public class SvClient {
         }
     }
 
-    private void ClientThink(PlayerInput cmd) {
+    public void ClientThink(PlayerInput cmd) {
         lastUserCmd = cmd;
         if(state != ClientState.ACTIVE)
             return; // may have been kicked since last usercmd
@@ -268,6 +270,10 @@ public class SvClient {
     public void SendClientSnapshot() {
         BuildClientSnapshot();
 
+        // bots need to have their snapshots build, but
+	// the query them directly without needing to be sent
+        if(gentity != null && gentity.r.svFlags.contains(SvFlags.BOT)) return;
+
         NetBuffer msg = NetBuffer.GetNetBuffer(false, true);
         // let the client know which reliable clientCommands we have received
         msg.Write(lastClientCommand);
@@ -284,7 +290,11 @@ public class SvClient {
 
         WriteDownloadToClient(msg);
 
+        
+
         SendMessageToClient(msg);
+
+
     }
 
     private void BuildClientSnapshot() {
@@ -385,7 +395,7 @@ public class SvClient {
             // broadcast entities are always sent
             if(ent.r.svFlags.contains(SvFlags.BROADCAST)) {
                 if(ent.s.eType >= EntityType.EVENTS) {
-                    Common.LogDebug("Broadcasting event");
+                    //Common.LogDebug("Broadcasting event " + Event.values()[ent.s.eType-EntityType.EVENTS].toString());
                 }
                 AddEntToSnapshot(svEnt, ent, snapEntNums);
                 continue;
@@ -432,7 +442,7 @@ public class SvClient {
             lastframe = netchan.outgoingSequence - deltaMessage;
             // the snapshot's entities may still have rolled off the buffer, though
             if(oldframe.first_entity <= Ref.server.nextSnapshotEntities - Ref.server.numSnapshotEntities) {
-                Common.LogDebug("Delta requit from out of date entities");
+                Common.LogDebug("Delta request from out of date entities");
                 oldframe = null;
                 lastframe = 0;
             }
@@ -464,15 +474,19 @@ public class SvClient {
 
         msg.Write(snapflags);
 
+        int psSize = msg.GetBuffer().position();
         // delta encode the playerstate
         if(oldframe != null)
             frame.ps.WriteDelta(msg, oldframe.ps);
         else
             frame.ps.WriteDelta(msg, null);
+        int entSize = msg.GetBuffer().position();
+        psSize = entSize - psSize;
 
         // delta encode the entities
-        EmitPacketEntities(oldframe, frame, msg);
 
+        EmitPacketEntities(oldframe, frame, msg);
+        entSize = msg.GetBuffer().position() - entSize;
         
     }
 
@@ -531,7 +545,7 @@ public class SvClient {
             }
         }
 
-        msg.Write(Common.MAX_GENTITIES-1);    // end of packetentities
+        msg.WriteShort(Common.MAX_GENTITIES-1);    // end of packetentities
     }
 
     private void UpdateConfigStrings() {
@@ -631,6 +645,9 @@ public class SvClient {
     }
 
     private void SendMessageToClient(NetBuffer buf) {
+        // Compress netbuffer
+        buf.compress();
+
         int size = buf.GetBuffer().position();
         frames[netchan.outgoingSequence & 31].messageSize = size;
         frames[netchan.outgoingSequence & 31].messageSent = Ref.server.time;
@@ -864,6 +881,7 @@ public class SvClient {
                 int maxPacketSize = NetChan.FRAGMENT_SIZE-30;
 
                 int leftOver = maxPacketSize - msg.GetBuffer().position();
+                if(leftOver > 1400) leftOver = 1400;
 
                 ByteBuffer buf = pers.dequeueChunkData(leftOver);
                 if(buf == null) return;
@@ -897,6 +915,7 @@ public class SvClient {
                 msg.Write(SVC.OPS_DOWNLOAD);
                 msg.Write(0); // first chunk
                 msg.Write(-1); // error size
+                if(errorMessage == null) errorMessage = "unknown file error";
                 msg.Write(errorMessage); // error msg
                 downloadName = null;
                 CloseDownload();
@@ -957,8 +976,8 @@ public class SvClient {
 	// based on the rate, how many bytes can we fit in the snapMsec time of the client
 	// normal rate / snapshotMsec calculation
         int blocksPerSnap = (int) (((rate * snapshotMsec) / 1000f + MAX_DOWNLOAD_BLKSIZE) / MAX_DOWNLOAD_BLKSIZE);
-        if(blocksPerSnap <= 0)
-            blocksPerSnap = 1;
+        if(blocksPerSnap <= 1)
+            blocksPerSnap = 2;
 
 //        System.out.println(""+blocksPerSnap);
 
@@ -1083,16 +1102,45 @@ public class SvClient {
         if(state == ClientState.ZOMBIE)
             return;
 
-        // TODO: see if we already have a challenge for this ip
         Common.Log("Dropping client");
+
+        if(!netchan.isBot) {
+            // see if we already have a challenge for this ip
+            for (Challenge challenge : Ref.server.challenges) {
+                if(challenge.addr == null) continue;
+                if(challenge.addr.equals(netchan.addr)) {
+                    challenge.clear();
+                    break;
+                }
+            }
+        }
+
+        // Kill any download
+        CloseDownload();
 
         // tell everyone why they got dropped
         Ref.server.SendServerCommand(null, String.format("print \"%s %s\"\n", name, reason));
+
+        // call the prog function for removing a client
         Ref.game.Client_Disconnect(gentity.s.ClientNum);
+
+        // add the disconnect command
         Ref.server.SendServerCommand(this, String.format("disconnect \"%s\"\n", reason));
 
+        if(netchan.isBot) {
+            // bots shouldn't go zombie, as there's no real net connection.
+            Ref.server.freeBotClient(this);
+        }
+
+        // nuke user info
         SetUserInfo("");
-        state = ClientState.ZOMBIE;
+
+        if(netchan.isBot) {
+            // bots shouldn't go zombie, as there's no real net connection.
+            state = ClientState.FREE;
+        } else {
+            state = ClientState.ZOMBIE; // become free in a few seconds
+        }
     }
 
     public void UserInfoChanged(boolean autoFix) {

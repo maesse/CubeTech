@@ -209,7 +209,6 @@ public final class Net {
                 dest = NetBuffer.GetNetBuffer(false, false);
                 destBuf = dest.GetBuffer();
             }
-            
         } catch (IOException ex) {
             Logger.getLogger(Net.class.getName()).log(Level.SEVERE, null, ex);
         }

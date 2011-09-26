@@ -21,6 +21,44 @@ public class PlayerStats {
         weapons |= (1 << tag);
     }
 
+    public void removeWeapon(Weapon weapon) {
+        int tag = weapon.ordinal();
+        weapons &= ~(1<<tag);
+        ammo[tag] = 0;
+    }
+
+    public Weapon getWeaponNearest(Weapon w, boolean forwards) {
+        int start = w.ordinal();
+        if(!forwards) {
+            for (int i = start; i > 0; --i) {
+                if(hasWeapon(Weapon.values()[i])) return Weapon.values()[i];
+            }
+        }
+        if(forwards) {
+            for (int i= start+1; i < Weapon.values().length; i++) {
+                if(hasWeapon(Weapon.values()[i])) return Weapon.values()[i];
+            }
+        }
+        return Weapon.NONE;
+    }
+
+    public Weapon[] getWeapons() {
+        int count = 0;
+        for (Weapon weapon : Weapon.values()) {
+            if(weapon == Weapon.NONE) continue;
+            if(hasWeapon(weapon)) count++;
+        }
+        Weapon[] weaps = new Weapon[count];
+        count = 0;
+        for (Weapon weapon : Weapon.values()) {
+            if(weapon == Weapon.NONE) continue;
+            if(hasWeapon(weapon)) {
+                weaps[count++] = weapon;
+            }
+        }
+        return weaps;
+    }
+
     public boolean hasWeapon(Weapon w) {
         if(w == Weapon.NONE) return true;
         int tag = w.ordinal();
@@ -66,6 +104,8 @@ public class PlayerStats {
         System.arraycopy(ammo, 0, ps.ammo, 0, ammo.length);
         return ps;
     }
+
+    
 
 
 

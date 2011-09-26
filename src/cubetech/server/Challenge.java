@@ -20,4 +20,14 @@ public class Challenge {
     public int time;
     public boolean wasRefused;
     public boolean connected;
+
+    void clear() {
+        addr = null;
+        clientChallenge = 0;
+        pingTime = 0;
+        firstTime = 0;
+        time = 0;
+        wasRefused = false;
+        connected = false;
+    }
 }

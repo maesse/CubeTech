@@ -1,5 +1,6 @@
 package cubetech.net;
 
+import cubetech.collision.CubeChunk;
 import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.common.items.Weapon;
@@ -18,9 +19,10 @@ import org.lwjgl.util.vector.Vector3f;
 public class NetBuffer {
     final static int BIG_BUFFER_SIZE = 16384; // Allocate 1400 bytes
     final static int BUFFER_SIZE = 1400; // Allocate 1400 bytes
-    final static int POOL_SIZE = 128;
-    static NetBuffer[] BufferPool = new NetBuffer[POOL_SIZE]; // Circular buffer
-    static NetBuffer[] BigBufferPool = new NetBuffer[POOL_SIZE]; // Circular buffer
+    final static int BIG_POOL_SIZE = 128;
+    final static int SMALL_POOL_SIZE = 256;
+    static NetBuffer[] BufferPool = new NetBuffer[SMALL_POOL_SIZE]; // Circular buffer
+    static NetBuffer[] BigBufferPool = new NetBuffer[BIG_POOL_SIZE]; // Circular buffer
     static int PoolIndex = 0;
     static int BigPoolIndex = 0;
     static boolean poolInit = false; // false untill first GetNetBuffer
@@ -31,18 +33,21 @@ public class NetBuffer {
     public static NetBuffer GetNetBuffer(boolean writeMagicHeader, boolean allowOverflow) {
         // Init pool the first time
         if(!poolInit) {
-            for (int i = 0; i < POOL_SIZE; i++) {
-                BufferPool[i] = new NetBuffer(BUFFER_SIZE);
+            for (int i = 0; i < SMALL_POOL_SIZE; i++) {
+                BufferPool[i] = new NetBuffer(BUFFER_SIZE);   
+            }
+            for (int i = 0; i < BIG_POOL_SIZE; i++) {
                 BigBufferPool[i] = new NetBuffer(BIG_BUFFER_SIZE);
             }
+
             poolInit = true;
         }
 
         NetBuffer buf;
         if(allowOverflow)
-            buf = BigBufferPool[BigPoolIndex++ % POOL_SIZE];
+            buf = BigBufferPool[BigPoolIndex++ % BIG_POOL_SIZE];
         else 
-            buf = BufferPool[PoolIndex++ % POOL_SIZE];
+            buf = BufferPool[PoolIndex++ % SMALL_POOL_SIZE];
         buf.Clear();
         buf.allowOverflow = allowOverflow;
         if(writeMagicHeader)
@@ -87,6 +92,10 @@ public class NetBuffer {
         buffer.putInt(value);
     }
 
+    public void Write(short value) {
+        buffer.putShort(value);
+    }
+
     public void Write(byte b) {
         buffer.put(b);
     }
@@ -113,6 +122,16 @@ public class NetBuffer {
     }
 
     public void WriteDelta(int old, int newval) {
+        if(old == newval)
+            Write(false);
+        else
+        {
+            Write(true);
+            Write(newval);
+        }
+    }
+
+    public void WriteDelta(short old, short newval) {
         if(old == newval)
             Write(false);
         else
@@ -159,6 +178,13 @@ public class NetBuffer {
         int newval = old;
         if(ReadBool())
             newval = ReadInt();
+        return newval;
+    }
+
+    public short ReadDeltaShort(short old) {
+        short newval = old;
+        if(ReadBool())
+            newval = ReadShort();
         return newval;
     }
 
@@ -266,6 +292,21 @@ public class NetBuffer {
         if(b < 0)return null;
         return c.getEnumConstants()[b];
     }
+
+    public void compress() {
+        if(!buffer.hasArray()) {
+            Ref.common.Error(Common.ErrorCode.FATAL, "NetBuffer.compress(): Can't compress a buffer that has no backing array");
+        }
+        
+        byte[] data = buffer.array();
+        int srclen = buffer.position();
+        byte[] dest = new byte[srclen+64];
+        int wrote = CubeChunk.compressData(data, srclen, dest, 4, false);
+        buffer.clear();
+        buffer.put(dest, 0, wrote);
+    }
+
+    
 
 //    public <T extends Enum<T>> T ReadEnum(T t) {
 //        byte b = ReadByte();

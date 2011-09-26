@@ -42,6 +42,7 @@ public class CEntity {
     public Vector3f lerpOrigin = new Vector3f();
     public Vector3f lerpAngles = new Vector3f();
     public int trailTime;
+    int muzzleFlashTime;
 
     void ResetEntity() {
         // if the previous snapshot this entity was updated in is at least
@@ -229,6 +230,13 @@ public class CEntity {
             case MISSILE_MISS:
                 Vector3f dir  = Helper.intToNormal(currentState.evtParams);
                 Ref.cgame.weapons.missileHitWall(currentState.weapon, 0, lerpOrigin, dir);
+                break;
+            case BULLET_HIT_WALL:
+                dir = Helper.intToNormal(currentState.evtParams);
+                Ref.cgame.weapons.bullet(currentState.pos.base, currentState.otherEntityNum, dir, false, Common.ENTITYNUM_WORLD);
+                break;
+            case BULLET_HIT_FLESH:
+                Ref.cgame.weapons.bullet(currentState.pos.base, currentState.otherEntityNum, null, true, currentState.evtParams);
                 break;
             default:
                 Common.LogDebug("Unhandled CGame event: " + event);

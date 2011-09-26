@@ -44,7 +44,7 @@ public abstract class WeaponItem implements IItem {
     public int itemPicked(Gentity self, Gentity ent) {
         int quantity = 0;
         if(self.count >= 0) { // -1 = no ammo, 0 = ask weapon, > 0 = take this amount
-            if(self.count > 0) quantity = self.count;
+            if(self.count > 0 || (self.flags & Gentity.FLAG_DROPPED_ITEM) != 0) quantity = self.count;
             else quantity = getAmmoQuantity();
         }
 

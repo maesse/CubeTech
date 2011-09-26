@@ -52,9 +52,11 @@ public class NullWeapon extends WeaponItem {
         return "DISREGARD ME";
     }
 
+    private WeaponInfo wi = new WeaponInfo();
+
     @Override
     public WeaponInfo getWeaponInfo() {
-        return null;
+        return wi;
     }
 
     @Override

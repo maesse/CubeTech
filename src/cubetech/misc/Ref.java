@@ -20,6 +20,8 @@ import cubetech.gfx.TextManager;
 import cubetech.input.Input;
 import cubetech.server.Server;
 //import cubetech.state.StateManager;
+import cubetech.snd.ALSoundManager;
+import cubetech.snd.ISoundManager;
 import cubetech.ui.UI;
 import java.util.Random;
 import javax.swing.UIManager;
@@ -40,7 +42,7 @@ public class Ref {
     public static Net net;
     public static Collision collision;
 
-    public static SoundManager soundMan;
+    public static ISoundManager soundMan;
     public static Spatial spatial;
     public static Client client;
     public static Server server;
@@ -76,7 +78,7 @@ public class Ref {
         Ref.Input.initialize();
         Ref.net = new Net(); // init network, creates sockets for client and server
         Ref.collision = new Collision();
-        Ref.soundMan = new SoundManager(); // loads, manages and plays sounds
+        Ref.soundMan = new ALSoundManager(); // loads, manages and plays sounds
         if(!noSound)
             Ref.soundMan.initialize(12); // Init 12 channels
         Ref.spatial = new Spatial(); // spatial query subsystem

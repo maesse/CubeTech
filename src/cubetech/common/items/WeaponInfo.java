@@ -17,4 +17,6 @@ public class WeaponInfo {
     public float trailRadius;
     public String fireSound;
     public String explodeSound;
+    public String flashTexture;
+    public IQMModel worldModel;
 }

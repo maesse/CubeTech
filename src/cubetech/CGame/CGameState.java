@@ -6,6 +6,7 @@
 package cubetech.CGame;
 
 
+import cubetech.common.Score;
 import cubetech.client.CLSnapshot;
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
@@ -17,6 +18,7 @@ import cubetech.common.ICommand;
 import cubetech.common.Move;
 import cubetech.common.MoveQuery;
 import cubetech.common.PlayerState;
+import cubetech.common.ScoreList;
 import cubetech.common.items.Weapon;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityState;
@@ -64,7 +66,8 @@ public class CGameState {
     public ViewParams refdef;
     public String infoScreenText = "";
 
-    public Score[] scores = new Score[64];
+    public ScoreList scores = new ScoreList();
+    
 
     public boolean showScores = false; // true if scoreboard should we showing
     public int scoresRequestTime = 0;
@@ -86,13 +89,14 @@ public class CGameState {
     public float demofov = 90f;
     public float demofovVel = 0f;
 
+    public int bobcycle;
+    public float bobfracsin;
+    public float xyspeed;
+
     public CGameState(int clientnum) {
         this.clientNum = clientnum;
         activeSnapshots[0] = new Snapshot();
         activeSnapshots[1] = new Snapshot();
-        for (int i= 0; i < scores.length; i++) {
-            scores[i] = new Score();
-        }
         cg_gun_x = Ref.cvars.Get("cg_gun_x", "0", EnumSet.of(CVarFlags.NONE));
         cg_gun_y = Ref.cvars.Get("cg_gun_y", "0", EnumSet.of(CVarFlags.NONE));
         cg_gun_z = Ref.cvars.Get("cg_gun_z", "0", EnumSet.of(CVarFlags.NONE));
@@ -287,6 +291,12 @@ public class CGameState {
         }
 
         float f = ((float)time - prev.serverTime) / ((float)next.serverTime - prev.serverTime);
+
+        int bob = next.ps.bobcycle;
+        if(bob < prev.ps.bobcycle) {
+            bob += 256;
+        }
+        out.bobcycle = (int) (prev.ps.bobcycle + f * (bob - prev.ps.bobcycle));
         
         Vector3f delta = Vector3f.sub(next.ps.origin, prev.ps.origin, null);
         Helper.VectorMA(prev.ps.origin, f, delta, out.origin);

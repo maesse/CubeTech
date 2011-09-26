@@ -2,6 +2,7 @@ package cubetech.Game;
 
 import cern.colt.map.OpenLongObjectHashMap;
 import cubetech.input.PlayerInput;
+import cubetech.net.NetBuffer;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -14,6 +15,7 @@ import java.util.Queue;
  */
 public class ClientPersistant {
 
+
     
     public enum ClientConnected {
         DISCONNECTED,
@@ -22,7 +24,7 @@ public class ClientPersistant {
     }
 
     
-    public PlayerInput cmd; // latest user command
+    public PlayerInput cmd = new PlayerInput(); // latest user command
     public boolean LocalClient; // true if this guy is running the server
     public String Name = "N/A";
     public int JoinTime; // level.time at the point of connection
@@ -32,6 +34,9 @@ public class ClientPersistant {
     public OpenLongObjectHashMap chunkVersions = new OpenLongObjectHashMap();
     private Queue<ByteBuffer> queuedChunkData = new LinkedList<ByteBuffer>();
     private int queuedBytes = 0;
+
+    // score stuff
+    public int score;
 
     public ByteBuffer dequeueChunkData() {
         return dequeueChunkData(0);
@@ -46,33 +51,27 @@ public class ClientPersistant {
         queuedBytes += data.limit();
     }
 
-    public ByteBuffer dequeueChunkData(int maxBytes) {
-        ByteBuffer base = queuedChunkData.poll();
-        if(base == null) return null;
-        queuedBytes -= base.limit();
+    public ByteBuffer dequeueChunkData(int freeBytes) {
+        if(queuedChunkData.isEmpty()) return null;
         
-        int currentBytes = base.limit();
-        // If we're past out max limit, just return the base
-        if(currentBytes >= maxBytes) return base;
+        ByteBuffer dest = null;
+        ByteBuffer src = null;
+        boolean first = true;
+        while((src = queuedChunkData.peek()) != null &&
+                (first || src.limit() <= freeBytes)) {
+            if(first) {
+                if(src.limit() > 1400) dest = NetBuffer.GetNetBuffer(false, true).GetBuffer();
+                else dest = NetBuffer.GetNetBuffer(false, false).GetBuffer();
+            }
 
-        int freeBytes = base.capacity()-base.limit();
-        ByteBuffer next;
-        while((next = queuedChunkData.peek()) != null
-                && freeBytes - next.limit() > 0
-                && currentBytes + next.limit() < maxBytes) {
             queuedChunkData.poll();
-
-            int addSize = next.limit();
-            // prepare base buffer
-            base.limit(currentBytes + addSize);
-            base.position(currentBytes);
-
-            queuedBytes -= addSize;
-            currentBytes += addSize;
-            freeBytes -= addSize;
-            base.put(next);
+            dest.put(src);
+            freeBytes -= src.limit();
+            queuedBytes -= src.limit();
+            first = false;
         }
-        base.position(0);
-        return base;
+
+        dest.flip();
+        return dest;
     }
 }

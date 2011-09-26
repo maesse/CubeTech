@@ -477,7 +477,7 @@ public class PngEncoder extends Object {
         int startRow = 0;       // starting row to process this time through
         int nRows;              // how many rows to grab at a time
 
-        byte[] scanLines;       // the scan lines to be compressed
+        byte[] scanLines = null;       // the scan lines to be compressed
         int scanPos;            // where we are in the scan lines
         int startPos;           // where this line's actual pixels start (used for filtering)
 
@@ -488,18 +488,22 @@ public class PngEncoder extends Object {
 
         PixelGrabber pg;
 
+
         bytesPerPixel = (encodeAlpha) ? 4 : 3;
 
         Deflater scrunch = new Deflater(compressionLevel);
-        ByteArrayOutputStream outBytes = new ByteArrayOutputStream(1024);
+        ByteArrayOutputStream outBytes = new ByteArrayOutputStream(1024*400);
 
         DeflaterOutputStream compBytes = new DeflaterOutputStream(outBytes, scrunch);
+        int[] pixels = null;
         try {
             while (rowsLeft > 0) {
                 nRows = Math.min(32767 / (width * (bytesPerPixel + 1)), rowsLeft);
                 nRows = Math.max( nRows, 1 );
 
-                int[] pixels = new int[width * nRows];
+                if(pixels == null || pixels.length < width * nRows) {
+                    pixels = new int[width * nRows];
+                }
 
                 try {
                     int flipStartRow = height - startRow - 1;
@@ -525,7 +529,9 @@ public class PngEncoder extends Object {
                  * Create a data chunk. scanLines adds "nRows" for
                  * the filter bytes.
                  */
-                scanLines = new byte[width * nRows * bytesPerPixel +  nRows];
+                if(scanLines == null || scanLines.length < width * nRows * bytesPerPixel +  nRows) {
+                    scanLines = new byte[width * nRows * bytesPerPixel +  nRows];
+                }
 
                 if (filter == FILTER_SUB) {
                     leftBytes = new byte[16];
@@ -565,6 +571,7 @@ public class PngEncoder extends Object {
                 startRow += nRows;
                 rowsLeft -= nRows;
             }
+            
             compBytes.close();
 
             /*

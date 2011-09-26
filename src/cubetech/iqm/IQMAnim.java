@@ -51,7 +51,8 @@ public class IQMAnim {
 
             if(a.framerate == 0f) a.framerate = 25f;
             a.frameLerp = (int) (1000/a.framerate);
-            a.loopFrames = a.num_frames;
+            if(!a.name.equals("die")) a.loopFrames = a.num_frames;
+            
             model.anims[i] = a;
         }
     }

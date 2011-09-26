@@ -3,11 +3,13 @@ package cubetech.common.items;
 import cubetech.Game.Gentity;
 import cubetech.common.Common;
 import cubetech.common.Content;
+import cubetech.common.Helper;
 import cubetech.common.IThinkMethod;
 import cubetech.common.ITouchMethod;
 import cubetech.common.IUseMethod;
 import cubetech.common.Move.MoveType;
 import cubetech.common.PlayerState;
+import cubetech.common.Trajectory;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
@@ -31,6 +33,7 @@ public class ItemList {
         addItem(new RocketLauncher());
         addItem(new Cubar());
         addItem(new NullWeapon()); // just so we dont get null exceptions for Weapon_none
+        addItem(new Ak47());
     }
 
     public IItem findItemByPickup(String pickupName) {
@@ -82,6 +85,45 @@ public class ItemList {
             WeaponItem w = ((WeaponItem)item);
             weaponList[w.getWeapon().ordinal()] = w;
         }
+    }
+
+    public Gentity dropItem(Gentity ent, IItem item, float angle, int ammo) {
+        Vector3f angles = new Vector3f(ent.s.apos.base);
+        angles.x = 0;
+        angles.y += angle;
+        Vector3f velocity = new Vector3f();
+        Helper.AngleVectors(angles, velocity, null, null);
+        Vector3f origin = Helper.VectorMA(ent.s.pos.base, 40f, velocity, null);
+        if(ent.isClient()) {
+            origin.z += ent.getClient().ps.viewheight;
+        }
+        velocity.scale(150f);
+        velocity.z += 100 + Ref.rnd.nextFloat() * 50;
+
+        return launchItem(item, origin, velocity, ammo);
+    }
+
+    private Gentity launchItem(IItem item, Vector3f origin, Vector3f velocity, int ammo) {
+        Gentity dropped = Ref.game.Spawn();
+        dropped.s.eType = EntityType.ITEM;
+        dropped.s.modelindex = items2.indexOf(item);
+        dropped.classname = item.getClassName();
+        dropped.item = item;
+        dropped.r.mins.set(-32,-32,-32);
+        dropped.r.maxs.set(32,32,32);
+        dropped.r.contents = Content.TRIGGER;
+        dropped.touch = TouchItem;
+        dropped.SetOrigin(origin);
+        dropped.count = ammo;
+        dropped.s.pos.type = Trajectory.GRAVITY;
+        dropped.s.pos.time = Ref.game.level.time;
+        dropped.s.pos.delta.set(velocity);
+        dropped.think = Gentity.freeEntity;
+        dropped.nextthink = Ref.game.level.time + 30000;
+        //dropped.s.eFlags |= EntityFlags.BOUNCE_HALF;
+        dropped.flags = Gentity.FLAG_DROPPED_ITEM;
+        dropped.Link();
+        return dropped;
     }
 
     public IThinkMethod FinishSpawningItem = new IThinkMethod() {
@@ -154,9 +196,8 @@ public class ItemList {
             int respawn = item.itemPicked(self, other);
             Common.LogDebug("Item touched: " + other.s.ClientNum + ", " + self.item.getClassName());
 
-            if(respawn <= 0)
-                return;
-
+            if(respawn == 0) return;
+                
             // play the normal pickup sound
             Ref.game.AddEvent(other, Event.ITEM_PICKUP, self.s.modelindex);
 
@@ -178,7 +219,9 @@ public class ItemList {
             }
 
             // dropped items will not respawn
-            // TODO: self.flags
+            if((self.flags & Gentity.FLAG_DROPPED_ITEM) != 0) {
+                self.freeAfterEvent = true;
+            }
 
             // picked up items still stay around, they just don't
             // draw anything.  This allows respawnable items

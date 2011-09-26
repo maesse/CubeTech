@@ -89,6 +89,10 @@ public class VBO {
         Ref.glRef.unbindVBO(target);
     }
 
+    public static void unbindVertexBuffer() {
+        Ref.glRef.unbindVBO(BufferTarget.Vertex);
+    }
+
     public void destroy() {
         if(sizeInBytes == 0) return;
         if(mappedBuffer != null) {

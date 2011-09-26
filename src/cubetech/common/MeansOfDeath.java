@@ -11,4 +11,4 @@ public enum MeansOfDeath {
     ROCKET_SPLASH,
     FALLING,
     SUICIDE
-}
+,   AK47}

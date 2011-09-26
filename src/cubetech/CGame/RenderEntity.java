@@ -5,9 +5,11 @@
 
 package cubetech.CGame;
 
-import cubetech.CGame.Marks.PolyVert;
 import cubetech.gfx.CubeMaterial;
+import cubetech.gfx.CubeTexture;
+import cubetech.gfx.PolyVert;
 import cubetech.iqm.IQMModel;
+import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
@@ -50,6 +52,16 @@ public class RenderEntity {
 
     public PolyVert[] verts;
 
+    public static RenderEntity addPolyToScene(PolyVert[] verts, CubeTexture tex) {
+        RenderEntity ent = Ref.render.createEntity(REType.POLY);
+        ent.frame = verts.length;
+        ent.verts = verts;
+        ent.mat = tex.asMaterial();
+        ent.flags |= FLAG_NOSHADOW;
+        Ref.render.addRefEntity(ent);
+        return ent;
+    }
+
     
     public RenderEntity(REType rEType) {
         Type = rEType;
@@ -58,13 +70,23 @@ public class RenderEntity {
         axis[2] = new Vector3f(0,0,1);
     }
 
+    public void setAxis(Vector3f[] a) {
+        for (int i= 0; i < 3; i++) {
+            axis[i].set(a[i]);
+        }
+
+    }
+
     void clear() {
         model = null;
         color.set(255,255,255,255);
+        origin.set(0,0,0);
         axis[0].set(1,0,0);
         axis[1].set(0,1,0);
         axis[2].set(0,0,1);
         frame = 0;
+        oldframe = 0;
+        backlerp = 0;
         flags = 0;
         mat = null;
         Type = null;

@@ -9,6 +9,7 @@ import cubetech.Game.Gentity;
 import cubetech.collision.CollisionResult;
 import cubetech.common.Helper;
 import cubetech.common.IThinkMethod;
+import cubetech.common.MeansOfDeath;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector3f;
 
@@ -66,6 +67,13 @@ public class Missiles {
         ent.SetOrigin(endPos);
 
         Gentity other = Ref.game.g_entities[res.entitynum];
+        if(other.isClient()) {
+            Vector3f velocity = new Vector3f();
+            ent.s.pos.EvaluateDelta(Ref.game.level.time, velocity);
+            if(velocity.length() == 0) velocity.z = 1;
+            
+            Ref.game.damage(other, ent, Ref.game.g_entities[ent.r.ownernum], velocity, ent.s.origin, ent.damage, 0, ent.meansOfDeath);
+        }
         // Splash damage
         if(ent.splashDamage > 0) {
             Ref.game.radiusDamage(endPos, ent.parent, ent.splashDamage, ent.splashRadius, other, ent.splashMeansOfDeath);

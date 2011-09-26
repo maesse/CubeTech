@@ -8,7 +8,9 @@ import cubetech.common.CVarFlags;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Helper;
+import cubetech.gfx.CubeMaterial.BlendMode;
 import cubetech.gfx.CubeTexture;
+import cubetech.gfx.PolyVert;
 import cubetech.misc.Ref;
 import java.util.EnumSet;
 import java.util.Iterator;
@@ -61,11 +63,7 @@ public class Marks {
         }
     }
 
-    public class PolyVert {
-        Vector3f xyz;
-        float s;
-        float t;
-    }
+    
 
     private class MarkRun {
         public Vector3f[] inPoints;
@@ -434,7 +432,7 @@ public class Marks {
                 break;
             case 5:
                 // Z- normal
-                grabPoints(4,5,6,7, absmin, clipPoints);
+                grabPoints(4,5,7,6, absmin, clipPoints);
                 break;
         }
     }

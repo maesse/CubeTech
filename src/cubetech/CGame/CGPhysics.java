@@ -8,6 +8,7 @@ import com.bulletphysics.dynamics.*;
 import com.bulletphysics.dynamics.constraintsolver.SequentialImpulseConstraintSolver;
 import com.bulletphysics.linearmath.*;
 import cubetech.collision.CubeChunk;
+import cubetech.common.CVar;
 import cubetech.common.Helper;
 import cubetech.common.ICommand;
 import cubetech.gfx.GLRef.BufferTarget;
@@ -50,7 +51,11 @@ public class CGPhysics {
         SequentialImpulseConstraintSolver solver = new SequentialImpulseConstraintSolver();
 
         world = new DiscreteDynamicsWorld(dispatch, broadphase, solver, collConfig);
-        float grav = -Ref.cvars.Find("sv_gravity").fValue * SCALE_FACTOR;
+        CVar gravity = Ref.cvars.Find("sv_gravity");
+        float grav = 800;
+        if(gravity != null) {
+            grav = -gravity.fValue * SCALE_FACTOR;
+        }
         world.setGravity(new javax.vecmath.Vector3f(0, 0, grav));
 
         float boxHalfSize = (CubeChunk.BLOCK_SIZE/2f) * SCALE_FACTOR;

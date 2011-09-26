@@ -123,6 +123,59 @@ public class Sprite {
         invalid = false;
     }
 
+    // Position = Lower left
+    // Size = Real size (eg. not half-size)
+    public void Set(float x, float y, float w, float h, CubeTexture tex,
+                    Vector2f texOffset, Vector2f texSize) {
+        Center.x = x + (w/2f);
+        Center.y = y + (h/2f);
+        Extent.x = w / 2f;
+        Extent.y = h / 2f;
+        this.Texture = tex;
+        if(tex != null)
+            sort = tex.needSort();
+        if(texOffset != null) {
+            TexOffset.x = texOffset.x;
+            TexOffset.y = texOffset.y;
+        } else {
+            TexOffset.x = 0;
+            TexOffset.y = 0;
+        }
+        if(texSize != null) {
+            TexSize.x = texSize.x;
+            TexSize.y = texSize.y;
+        } else {
+            TexSize.set(1,1);
+        }
+        color.set(255, 255, 255, 255);
+        Angle = 0;
+        special = 0;
+        depth = 0;
+        dirty = true;
+        invalid = false;
+    }
+
+    // Position = Lower left
+    // Size = Real size (eg. not half-size)
+    public void Set(float x, float y, float w, float h, CubeTexture tex) {
+        Center.x = x + w/2f;
+        Center.y = x + h/2f;
+        Extent.x = w / 2f;
+        Extent.y = h / 2f;
+        this.Texture = tex;
+        if(tex != null) sort = tex.needSort();
+        TexOffset.x = 0;
+        TexOffset.y = 0;
+        TexSize.x = 1;
+        TexSize.y = 1;
+        color.set(255, 255, 255, 255);
+        Angle = 0;
+        special = 0;
+        depth = 0;
+        dirty = true;
+        invalid = false;
+    }
+
     public void Set(float x, float y, float radius) {
         Texture = null;
         Center.set(x, y);
@@ -251,26 +304,28 @@ public class Sprite {
             return;
         }
 
-        GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+        if(dirty) updateData();
+
+        GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
 
         // Texture coords are flipped on y axis
         GL11.glBegin(GL11.GL_QUADS);
         {
             // Good ol' fixed function
-            GL11.glTexCoord2f(data[3], data[4]);
-            GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL20.glVertexAttrib2f(Shader.INDICE_COORDS,data[3], data[4]);
+//            GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
             GL11.glVertex3f(data[0], data[1], data[2]);
 
-            GL11.glTexCoord2f(data[8], data[9]);
-            GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL20.glVertexAttrib2f(Shader.INDICE_COORDS,data[8], data[9]);
+//            GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
             GL11.glVertex3f(data[5], data[6], data[7]);
 
-            GL11.glTexCoord2f(data[13], data[14]);
-            GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL20.glVertexAttrib2f(Shader.INDICE_COORDS,data[13], data[14]);
+//            GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
             GL11.glVertex3f(data[10], data[11], data[12]);
 
-            GL11.glTexCoord2f(data[18], data[19]);
-            GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
+            GL20.glVertexAttrib2f(Shader.INDICE_COORDS,data[18], data[19]);
+//            GL11.glColor4ub(color.getRedByte(), color.getGreenByte(), color.getBlueByte(), color.getAlphaByte());
             GL11.glVertex3f(data[15], data[16], data[17]);
 
         }
@@ -281,8 +336,6 @@ public class Sprite {
 
     // Old immediate mode rendering
     public void Draw() {
-        
-
         if(special != 0) {
             if(special == GL11.GL_SCISSOR_TEST) {
                 if(value)

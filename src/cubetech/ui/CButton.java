@@ -260,48 +260,49 @@ public class CButton extends CContainer {
         centerOffset.set(texOffset.x + cornerSize.x, texOffset.y + cornerSize.y);
         centerSize.set(texSize.x - cornerSize.x * 2f, texSize.y - cornerSize.y * 2f);
 
-        Vector2f margv = new Vector2f(marg.x, marg.y);
+
 
         // Bot left
         Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(renderpos.x, resY - renderpos.y - siz.y), margv, normalBackground.getTexture(), texOffset, cornerSize);
+        spr.Set(renderpos.x, resY - renderpos.y - siz.y, marg.x, marg.y, normalBackground.getTexture(), texOffset, cornerSize);
 
         // Top Left
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(renderpos.x, resY - renderpos.y - marg.y), margv, normalBackground.getTexture(), topleftOffset, cornerSize);
+        spr.Set(renderpos.x, resY - renderpos.y - marg.y, marg.x, marg.y, normalBackground.getTexture(), topleftOffset, cornerSize);
 
         // Top Right
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(renderpos.x + siz.x - marg.z, resY - renderpos.y - marg.y), margv, normalBackground.getTexture(), topRightOffset, cornerSize);
+        spr.Set(renderpos.x + siz.x - marg.z, resY - renderpos.y - marg.y, marg.x, marg.y, normalBackground.getTexture(), topRightOffset, cornerSize);
 
         // Bot Right
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(renderpos.x + siz.x - marg.z, resY - renderpos.y - siz.y), margv, normalBackground.getTexture(), botRightOffset, cornerSize);
+        spr.Set(renderpos.x + siz.x - marg.z, resY - renderpos.y - siz.y, marg.x, marg.y, normalBackground.getTexture(), botRightOffset, cornerSize);
 
         // Top
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(renderpos.x + marg.x, resY - renderpos.y - marg.y),
-                new Vector2f(siz.x - marg.x - marg.z, marg.y), normalBackground.getTexture(), topOffset, botSize);
+        spr.Set(renderpos.x + marg.x, resY - renderpos.y - marg.y,
+                siz.x - marg.x - marg.z, marg.y, normalBackground.getTexture(), topOffset, botSize);
 
         // Bottom
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(renderpos.x + marg.x, resY - renderpos.y - siz.y),
-                new Vector2f(siz.x - marg.x - marg.z, marg.y), normalBackground.getTexture(), botOffset, botSize);
+        spr.Set(renderpos.x + marg.x, resY - renderpos.y - siz.y,
+                siz.x - marg.x - marg.z, marg.y, normalBackground.getTexture(), botOffset, botSize);
 
         //  Left
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(renderpos.x, resY - renderpos.y - siz.y + marg.y),
-                new Vector2f(marg.x, siz.y - marg.w - marg.y), normalBackground.getTexture(), leftOffset, sideSize);
+        spr.Set(renderpos.x, resY - renderpos.y - siz.y + marg.y,
+                marg.x, siz.y - marg.w - marg.y, normalBackground.getTexture(), leftOffset, sideSize);
 
         // Right
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(renderpos.x + siz.x - marg.z , resY - renderpos.y - siz.y + marg.y),
-                new Vector2f(marg.x, siz.y - marg.w - marg.y), normalBackground.getTexture(), rightOffset, sideSize);
+        spr.Set(renderpos.x + siz.x - marg.z , resY - renderpos.y - siz.y + marg.y,
+                marg.x, siz.y - marg.w - marg.y, normalBackground.getTexture(), rightOffset, sideSize);
 
         // Center
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(renderpos.x + marg.x, resY - renderpos.y - siz.y + marg.y),
-                new Vector2f(siz.x - marg.x - marg.z, siz.y - marg.w - marg.y), normalBackground.getTexture(), centerOffset, centerSize);
+        spr.Set(renderpos.x + marg.x, resY - renderpos.y - siz.y + marg.y,
+                siz.x - marg.x - marg.z, siz.y - marg.w - marg.y, normalBackground.getTexture(), centerOffset, centerSize);
+
 
 //        spr.Set(new Vector2f(renderpos.x, Ref.glRef.GetResolution().y - renderpos.y - siz.y),
 //                new Vector2f(siz.x + marg.x + marg.z, siz.y + marg.y + marg.w), normalBackground.getTexture(), normalBackground.getTextureOffset(frame), normalBackground.getTextureSize());

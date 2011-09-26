@@ -1,52 +1,35 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.CGame;
 
+import cubetech.common.Score;
 import cubetech.Block;
 import cubetech.Game.Game;
 import cubetech.Game.Gentity;
 import cubetech.collision.BlockModel;
 import cubetech.collision.CubeChunk;
-import cubetech.collision.CubeCollision;
-import cubetech.collision.CubeMap;
 import cubetech.collision.SingleCube;
-import cubetech.common.Animations;
-import cubetech.common.Common;
-import cubetech.common.Content;
-import cubetech.common.Helper;
-import cubetech.common.Move.MoveType;
-import cubetech.common.PlayerState;
-import cubetech.common.items.IItem;
-import cubetech.common.items.ItemType;
-import cubetech.common.items.Weapon;
-import cubetech.common.items.WeaponInfo;
-import cubetech.common.items.WeaponItem;
+import cubetech.common.*;
+import cubetech.common.items.*;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
 import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.CubeTexture;
-import cubetech.gfx.CubeType;
-import cubetech.gfx.Shader;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
 import cubetech.gfx.VBO;
-import cubetech.input.Input;
-import cubetech.iqm.IQMAdjacency;
+import cubetech.gfx.VBOPool;
+import cubetech.iqm.BoneAttachment;
 import cubetech.iqm.IQMAnim;
 import cubetech.iqm.IQMModel;
 import cubetech.misc.Profiler;
 import cubetech.misc.Ref;
 import cubetech.spatial.Bin;
+import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.Locale;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL20;
 import org.lwjgl.util.Color;
+import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
@@ -57,16 +40,11 @@ import org.lwjgl.util.vector.Vector4f;
  */
 public class CGameRender {
     private CGame game;
-
-    
-
     SingleCube lookingAtCube;
 
     public CGameRender(CGame game) {
         this.game = game;
-
     }
-
 
     //
     // Entities
@@ -87,9 +65,6 @@ public class CGameRender {
             case EntityType.ITEM:
                 Item(cent);
                 break;
-            case EntityType.MOVER:
-                Mover(cent);
-                break;
             case EntityType.MISSILE:
                 missile(cent);
                 break;
@@ -100,21 +75,13 @@ public class CGameRender {
         WeaponItem w = WeaponItem.get(cent.currentState.weapon);
         cent.lerpAngles.set(cent.currentState.Angles);
 
-        
-
-        // add trails
-        Vector3f o = cent.lerpOrigin;
-//        Vector3f min = cent.currentState.
-
         // convert direction of travel into axis
-
         RenderEntity ent = Ref.render.createEntity(REType.MODEL);
 
         ent.axis[0].set(cent.currentState.pos.delta);
         if(Helper.Normalize(ent.axis[0]) == 0) {
             ent.axis[0].z = 1;
         }
-//        ent.axis[0].z *= -1;
 
         WeaponInfo wi = w.getWeaponInfo();
         if(wi != null) {
@@ -122,7 +89,6 @@ public class CGameRender {
 
             ent.model = wi.missileModel;
             ent.origin.set(cent.lerpOrigin);
-    //        ent.axis = Helper.AnglesToAxis(ent.axis[0]);
             Ref.render.addRefEntity(ent);
 
             if(wi.missileSound != null && !wi.missileSound.isEmpty()) {
@@ -132,20 +98,8 @@ public class CGameRender {
             }
 
             wi.missileTrailFunc.run(cent);
-
-//            if(wi.missileSound != null && !wi.missileSound.isEmpty()) {
-//                int buffer = Ref.soundMan.AddWavSound(wi.missileSound);
-//                Ref.soundMan.playEntityEffectLoop(cent.currentState.ClientNum, buffer, 1.0f);
-//            }
         }
-
-
-
-        
-        //Helper.renderBBoxWireframe(o.x - 10, o.y - 10, o.z - 10, o.x + 10, o.y + 10, o.z + 10);
-    }
-
-    
+    }    
 
     private void Item(CEntity cent) {
         EntityState es = cent.currentState;
@@ -157,23 +111,31 @@ public class CGameRender {
             return;
         }
 
-
-        float bounce = 0;
-
         IItem item = Ref.common.items.getItem(es.modelindex);
-        if(item.getType() == ItemType.POWERUP)
-            bounce = (float) Math.sin(game.cg.time/400f) * 2f;
+        if(item.getType() == ItemType.WEAPON && item instanceof WeaponItem) {
+            WeaponItem wi = (WeaponItem)item;
+            IQMModel wModel = wi.getWeaponInfo().worldModel;
+            if(wModel != null) {
+                RenderEntity ent = Ref.render.createEntity(REType.MODEL);
+                ent.model = wModel;
+                ent.origin.set(cent.lerpOrigin);
+                Ref.render.addRefEntity(ent);
+                return;
+            }
+        }
+        
+        float bounce = 0;
+        if(item.getType() == ItemType.POWERUP) bounce = (float) Math.sin(game.cg.time/400f) * 2f;
+
         Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
         Vector3f min = new Vector3f(), max = new Vector3f();
         item.getBounds(min, max);
         float radius = (float) Math.sqrt((max.lengthSquared() - min.lengthSquared())*0.5);
-
         spr.Set(cent.lerpOrigin.x, cent.lerpOrigin.y + bounce, radius, Ref.ResMan.LoadTexture(item.getIconName()));
         spr.SetDepth(CGame.PLAYER_LAYER-1);
-        if(item.getType() == ItemType.HEALTH)
-            spr.SetAngle(game.cg.autoAngle);
-
+        if(item.getType() == ItemType.HEALTH) spr.SetAngle(game.cg.autoAngle);
     }
+
 
     public void renderViewModel(PlayerState ps) {
         // no gun if in third person view or a camera is active
@@ -183,6 +145,7 @@ public class CGameRender {
         if(Ref.cgame.cg.testGun) return;
 
         RenderEntity ent = Ref.render.createEntity(REType.MODEL);
+        ent.flags |= RenderEntity.FLAG_NOSHADOW;
         // get clientinfo for animation map
         WeaponItem wi = Ref.common.items.getWeapon(ps.weapon);
         if(wi == null) return;
@@ -197,6 +160,17 @@ public class CGameRender {
 
         Vector3f angles = new Vector3f();
         CalculateWeaponPosition(ent.origin, angles);
+        if(ps.weaponState == WeaponState.DROPPING) {
+            float dropFrac = 1f - ((float)ps.weaponTime / wi.getDropTime());
+            if(dropFrac < 0) dropFrac = 0;
+            if(dropFrac > 1) dropFrac = 1f;
+            angles.x += dropFrac * 90;
+        } else if(ps.weaponState == WeaponState.RAISING) {
+            float dropFrac = ((float)ps.weaponTime / wi.getRaiseTime());
+            if(dropFrac < 0) dropFrac = 0;
+            if(dropFrac > 1) dropFrac = 1f;
+            angles.x += dropFrac * 90;
+        }
         ent.axis = Helper.AnglesToAxis(angles, ent.axis);
 
         Helper.VectorMA(ent.origin, game.cg.cg_gun_x.fValue, ent.axis[0], ent.origin);
@@ -204,24 +178,110 @@ public class CGameRender {
         Helper.VectorMA(ent.origin, game.cg.cg_gun_z.fValue, ent.axis[2], ent.origin);
         
         if(ent.model.anims != null && ent.model.anims.length > 0) {
-            int max = ent.model.anims[0].num_frames;
-            float left = (Ref.cgame.cg.time/50f) - (Ref.cgame.cg.time/50);
-            ent.backlerp = 1f-left;
-            ent.frame = (Ref.cgame.cg.time/50) % max;
-            ent.oldframe = ent.frame - 1;
-            if(ent.oldframe < 0) ent.oldframe = max-1;
+            IQMAnim anim = ent.model.anims[0];
+
+            if(ps.weaponState == WeaponState.READY && ent.model.getAnimation(Animations.READY) != null) {
+                anim = ent.model.getAnimation(Animations.READY);
+            } else if(ps.weaponState == WeaponState.FIRING && ent.model.getAnimation(Animations.FIRING) != null) {
+                anim = ent.model.getAnimation(Animations.FIRING);
+            }
+            int num = anim.num_frames;
+            int first = anim.first_frame;
+            if(ps.weaponTime > 0 && ps.weaponState == WeaponState.FIRING) {
+                float frac = 1f-(ps.weaponTime / (float)wi.getFireTime());
+                ent.frame = (int) Math.ceil(frac * num);
+                
+                float lerp = frac * num;
+                ent.backlerp = -(lerp-ent.frame);
+//                ent.backlerp = 0f;
+                ent.oldframe = ent.frame - 1;
+                if(ent.oldframe < 0) ent.oldframe = num-1;
+                
+                ent.frame += first;
+                ent.oldframe += first;
+            } else {
+                float left = (Ref.cgame.cg.time/50f) - (Ref.cgame.cg.time/50);
+                ent.backlerp = 1f-left;
+                ent.frame = (Ref.cgame.cg.time/50) % num;
+                ent.oldframe = ent.frame - 1;
+                if(ent.oldframe < 0) ent.oldframe = num-1;
+                ent.frame += first;
+                ent.oldframe += first;
+            }
         }
 
         Ref.render.addRefEntity(ent);
+        ent.model.animate(ent.frame, ent.oldframe, ent.backlerp);
+        BoneAttachment muzzleBone = ent.model.getAttachment("muzzle");
+        if(muzzleBone == null || winfo.flashTexture == null) return;
+//
+//        // Add muzzle flash
+        CEntity cent = Ref.cgame.cg.predictedPlayerEntity;
+        if(Ref.cgame.cg.time - cent.muzzleFlashTime > 20) return;
+//
+        RenderEntity flash = Ref.render.createEntity(REType.SPRITE);
+        flash.flags |= RenderEntity.FLAG_SPRITE_AXIS;
+        flash.mat = Ref.ResMan.LoadTexture(winfo.flashTexture).asMaterial();
+        flash.mat.blendmode = CubeMaterial.BlendMode.ONE;
+        flash.outcolor.set(255,255,255,255);
+        flash.radius = 5f;
+        Matrix4f modelMatrix = createModelMatrix(ent.axis, ent.origin, null);
+        Vector4f vec = new Vector4f(muzzleBone.lastposition.x, muzzleBone.lastposition.y, muzzleBone.lastposition.z, 1);
+        Matrix4f.transform(modelMatrix, vec, vec);
+        flash.origin.set(vec.x, vec.y, vec.z);
+        // Get attachment point
+        Vector3f[] rotatedMuzzleAxis = new Vector3f[3];
+        rotatedMuzzleAxis[0] = muzzleBone.axis[1];
+        rotatedMuzzleAxis[1] = muzzleBone.axis[2];
+        rotatedMuzzleAxis[2] = muzzleBone.axis[0];
+        Helper.mul(rotatedMuzzleAxis, ent.axis, flash.axis);
+        Ref.render.addRefEntity(flash);
+    }
 
-        
+    
+    private Matrix4f createModelMatrix(Vector3f[] axis, Vector3f position, Matrix4f dest) {
+        if(dest == null) dest = new Matrix4f();
+        // Set rotation matrix
+        FloatBuffer viewbuffer = Ref.glRef.matrixBuffer;
+        viewbuffer.position(0);
+        viewbuffer.put(axis[0].x);viewbuffer.put(axis[1].x);viewbuffer.put(axis[2].x);viewbuffer.put(0);
+        viewbuffer.put(axis[0].y);viewbuffer.put(axis[1].y);viewbuffer.put(axis[2].y); viewbuffer.put(0);
+        viewbuffer.put(axis[0].z); viewbuffer.put(axis[1].z); viewbuffer.put(axis[2].z);viewbuffer.put(0);
+        viewbuffer.put(0); viewbuffer.put(0); viewbuffer.put(0); viewbuffer.put(1);
+        viewbuffer.flip();
+        Matrix4f mMatrix = (Matrix4f) dest.load(viewbuffer);
+        mMatrix.invert();
+        mMatrix.m30 = position.x;
+        mMatrix.m31 = position.y;
+        mMatrix.m32 = position.z;
+
+        viewbuffer.clear();
+        return mMatrix;
     }
 
     private void CalculateWeaponPosition(Vector3f position, Vector3f angles) {
         position.set(game.cg.refdef.Origin);
         angles.set(game.cg.refdef.Angles);
 
+        // on odd legs, invert some angles
+        float scale;
+        if((game.cg.bobcycle & 1) != 0) {
+            scale = -game.cg.xyspeed;
+        } else {
+            scale = game.cg.xyspeed;
+        }
+
+        // gun angles from bobbing
+        angles.z += scale * game.cg.bobfracsin * 0.005;
+        angles.y += scale * game.cg.bobfracsin * 0.01;
+        angles.x += game.cg.xyspeed * game.cg.bobfracsin * 0.005;
+
+        CEntity cent = game.cg.predictedPlayerEntity;
+        swingAngles(angles.x, 0, 20, 0.2f, cent.pe.torso, true);
+        angles.x = cent.pe.torso.yawAngle;
         
+        swingAngles(angles.y, 0, 20, 0.3f, cent.pe.torso, false);
+        angles.y = cent.pe.torso.pitchAngle;
     }
 
     // Render a player
@@ -235,28 +295,8 @@ public class CGameRender {
         // set origin & angles
         ent.origin.set(cent.lerpOrigin);
         ent.origin.z += Game.PlayerMins.z;
-//        Vector3f deltaMove = cent.currentState.pos.delta;
 
         Vector3f angles = new Vector3f();
-//        if(deltaMove.lengthSquared() > 0.1f) {
-//            angles = new Vector3f(deltaMove);
-//            angles.y = (float) (180/Math.PI * Math.atan2(-deltaMove.y, deltaMove.x) + Math.PI / 2f);
-//        }
-//        else {
-//            angles = new Vector3f(cent.lerpAngles);
-//            angles.y *= -1f;
-//            angles.x *= -1f;
-//        }
-//
-//        Vector3f velNorm = new Vector3f(deltaMove);
-//        if(Helper.Normalize(velNorm) == 0) {
-//            velNorm.set(0,0,1);
-//        }
-//        angles.x = 0;
-//        angles.z = 0;
-//        angles.set(0,90,0);
-//        ent.axis[0].set(1,0,0);
-//        Helper.rotateAroundDirection(ent.axis, game.cg.time/10f);
 
         angles.set(cent.lerpAngles);
         if(angles.x > 1) angles.x = 1;
@@ -264,13 +304,6 @@ public class CGameRender {
         ent.axis = Helper.AnglesToAxis(angles, ent.axis);
 
         playerAngles(cent, ent);
-        
-        //ent.axis = Helper.AnglesToAxis(angles);
-//        for (int i= 0; i < 3; i++) {
-//            ent.axis[i].normalise();
-//        }
-//        ent.axis[0].scale(-1f);
-//        ent.axis[1].scale(-1f);
 
         playerAnimation(cent, ent);
 
@@ -287,36 +320,20 @@ public class CGameRender {
             distance /= maxdist-mindist;
         }
 
-        ent.color = new Vector4f(255, 255, 255, 255f*distance);
+        ent.color = new Vector4f(255, 255, 255, 255f);
+
         Ref.render.addRefEntity(ent);
-//        LocalEntity.smokePuff(cent.lerpOrigin, new Vector3f(), 32, 1, 1, 1, 1, 500, Ref.cgame.cg.time, 0, 0, Ref.ResMan.LoadTexture("data/smokepuff.png").asMaterial());
     }
-
-
 
     private void playerAnimation(CEntity cent, RenderEntity ent) {
         float speedScale = 1.0f;
         
         ClientInfo ci = Ref.cgame.cgs.clientinfo[cent.currentState.ClientNum];
-
-        
-
         runLerpFrame(ci, cent.pe.torso, cent.currentState.frame, speedScale);
 
         ent.oldframe = cent.pe.torso.oldFrame;
         ent.frame = cent.pe.torso.frame;
         ent.backlerp = cent.pe.torso.backlerp;
-    }
-
-    private void Mover(CEntity cent) {
-//        cent.currentState.solid
-//        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-//        Vector2f size = new Vector2f(40, 8);
-//
-//        spr.Set(new Vector2f(cent.lerpOrigin.x - size.x/2f, cent.lerpOrigin.y - size.y/2f), size, null, null,null);
-//        spr.SetDepth(CGame.PLAYER_LAYER);
-
-        RenderModel(cent.currentState.modelindex, new Vector2f(cent.lerpOrigin), CGame.PLAYER_LAYER); // FIX
     }
 
     //
@@ -326,48 +343,45 @@ public class CGameRender {
         DrawChat();
         game.lag.Draw();
 
-
         if(Ref.common.isDeveloper()) {
-            Ref.textMan.AddText(new Vector2f(0, 0), "Position: " + game.cg.refdef.Origin, Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()), "Velocity: " + game.cg.predictedPlayerState.velocity, Align.LEFT, Type.HUD);
-            //Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Ping: " + Ref.cgame.cg.snap.ps.ping, Align.LEFT, Type.HUD);
-//            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Pull accel: " + game.getPullAccel(), Align.LEFT, Type.HUD);
-//            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "v: " + game.cg.predictedPlayerState.delta_angles[0], Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2), "Total VBO size: " + VBO.TotalBytes/(1024*1024) + "mb", Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*3), "cl_chunks/s: " + game.map.chunkPerSecond, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(0, 0),
+                    "Position: " + game.cg.refdef.Origin, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()),
+                    "Velocity: " + game.cg.predictedPlayerState.velocity, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*2),
+                    "cl_chunks/s: " + game.map.chunkPerSecond, Align.LEFT, Type.HUD);
             if(Ref.cm != null && Ref.cm.cubemap != null && Ref.cm.cubemap.nChunks != 0)
-            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*4), 
-                    String.format(Locale.ENGLISH,"Chunks: %d (avg. quads/chunk: %d (%.1fkb))", Ref.cm.cubemap.nChunks, (Ref.cm.cubemap.nSides)/Ref.cm.cubemap.nChunks, (Ref.cm.cubemap.nSides* CubeChunk.PLANE_SIZE )/Ref.cm.cubemap.nChunks/1024f), Align.LEFT, Type.HUD);
-            //if(Ref.cgame.cg.refdef.planes[0] != null)
-                //Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*5), "near plane: " + game.cg.refdef.planes[0], Align.LEFT, Type.HUD);
-//            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*4), "Vv: " + Ref.Input.viewangles[0], Align.LEFT, Type.HUD);
-
-            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-            Vector2f res = Ref.glRef.GetResolution();
-            float width = 14;
-            spr.setLine(new Vector2f(res.x/2f - width / 2f, res.y/2f), new Vector2f(res.x/2f + width / 2f, res.y/2f), 2f);
-            spr.SetColor(255, 0, 0, 255);
-            spr = Ref.SpriteMan.GetSprite(Type.HUD);
-            spr.setLine(new Vector2f(res.x/2f , res.y/2f - width / 2f), new Vector2f(res.x/2f , res.y/2f + width / 2f), 2f);
-            spr.SetColor(255, 0, 0, 255);
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*3),
+                    String.format(Locale.ENGLISH,"Chunks: %d (avg. quads/chunk: %d (%.1fkb))", 
+                    Ref.cm.cubemap.nChunks, (Ref.cm.cubemap.nSides)/Ref.cm.cubemap.nChunks,
+                    (Ref.cm.cubemap.nSides* CubeChunk.PLANE_SIZE )/Ref.cm.cubemap.nChunks/1024f), Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*4),
+                    "VBOPool: " + VBOPool.Global.getFreeCount() + " free, " + VBOPool.Global.getBusyCount() + " in use", Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*5),
+                    "Chunks: " + game.map.nChunks + " visible. " + game.map.nSides + " quads. " + game.map.nVBOthisFrame + " vbo's filled this frame", Align.LEFT, Type.HUD);
         }
+
+        // Draw crosshair
+        Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+        Vector2f res = Ref.glRef.GetResolution();
+        float width = 14;
+        spr.setLine(new Vector2f(res.x/2f - width / 2f, res.y/2f), new Vector2f(res.x/2f + width / 2f, res.y/2f), 2f);
+        spr.SetColor(255, 0, 0, 255);
+        spr = Ref.SpriteMan.GetSprite(Type.HUD);
+        spr.setLine(new Vector2f(res.x/2f , res.y/2f - width / 2f), new Vector2f(res.x/2f , res.y/2f + width / 2f), 2f);
+        spr.SetColor(255, 0, 0, 255);
 
         if(Ref.net.net_graph.iValue > 0) {
             DrawNetGraph();
         }
-
-//        Ref.textMan.AddText(new Vector2f(0, 0), "Time: " + game.cg.snap.ps.maptime, Align.LEFT, Type.HUD);
-//        Ref.textMan.AddText(new Vector2f(0, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()), "HP: " + Ref.cgame.cg.snap.ps.stats.Health, Align.LEFT, Type.HUD);
-//        Ref.textMan.AddText(new Vector2f(0, 0.75f), "Interp: " + Ref.cgame.cg.frameInterpolation, Align.LEFT, Type.HUD);
 
         if(game.cg.predictedPlayerState.stats.Health <= 0) {
             Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y /2f  - Ref.textMan.GetCharHeight()*2), "^5You are dead", Align.CENTER, Type.HUD);
             Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y/2f  - Ref.textMan.GetCharHeight()), "Click mouse to spawn", Align.CENTER, Type.HUD);
             Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y/2f), "ESC for menu", Align.CENTER, Type.HUD);
         }
-        PlayerState ps = game.cg.snap.ps;
         
-
+        PlayerState ps = game.cg.snap.ps;
         Ref.textMan.AddText(new Vector2f(0, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*2), "HP: " + ps.stats.Health, Align.LEFT, Type.HUD,2f);
 
         if(ps.weapon != Weapon.NONE) {
@@ -376,30 +390,7 @@ public class CGameRender {
             Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x/2f, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*1), "(" + ps.weaponState + ")", Align.CENTER, Type.HUD);
         }
         
-        // Draw powerups
-        
-//        for (int i= 0; i < PlayerState.NUM_POWERUPS; i++) {
-//            if(ps.powerups[i] <= 0)
-//                continue;
-//
-//            int ms = ps.powerups[i];
-//            int sec = ms / 1000;
-//
-//
-//            IItem item = Ref.common.items.findItemByClassname("item_boots");
-//            if(item == null) {
-//                Common.LogDebug("CGame.Draw2D: Can't find item " + i);
-//                continue;
-//            }
-//            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-//            Vector2f res = Ref.glRef.GetResolution();
-//            float radius = 32;
-//            spr.Set(res.x - radius * 2, res.y - ( res.y * 0.7f + i * radius * 2) , radius, item.icon);
-//            Ref.textMan.AddText(new Vector2f(res.x - radius * 2 , res.y * 0.7f + i * radius * 2 +5), ""+sec, Align.CENTER, Type.HUD);
-//        }
-
         // Handle changes from server
-
         if(game.cg.showScores)
             DrawScoreboard();
 
@@ -417,18 +408,29 @@ public class CGameRender {
             Ref.client.AddReliableCommand("score", false);
         }
 
+        Vector2f res = Ref.glRef.GetResolution();
+
         Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(new Vector2f(0.1f, 0.1f), new Vector2f(0.8f, 0.8f), null, null, null);
+        spr.Set(new Vector2f(0.1f*res.x, 0.1f*res.y), new Vector2f(0.8f*res.x, 0.8f*res.y), null, null, null);
         spr.SetColor(0, 0, 0, 127);
-        float yOffset = 100;
+        float yOffset = 0.1f*res.y + 8;
         float lineHeight = Ref.textMan.GetCharHeight();
-        for (int i= 0; i < game.cg.scores.length; i++) {
-            Score score = game.cg.scores[i];
 
-
-            DrawClientScore(yOffset - lineHeight * i, score);
+        spr = Ref.SpriteMan.GetSprite(Type.HUD);
+        float hearderSize = lineHeight;
+        spr.Set(new Vector2f(0.1f*res.x, res.y - yOffset - hearderSize-1), new Vector2f(0.8f*res.x, hearderSize+8+1), null, null, null);
+        spr.SetColor(0, 0, 0, 127);
+        
+        Ref.textMan.AddText(new Vector2f(0.1f * res.x, yOffset), "Players:", Align.LEFT, Type.HUD);
+        Ref.textMan.AddText(new Vector2f(0.8f * res.x, yOffset), "Score:", Align.CENTER, Type.HUD);
+        Ref.textMan.AddText(new Vector2f(0.9f * res.x, yOffset), "Ping:", Align.RIGHT, Type.HUD);
+        yOffset += lineHeight+5;
+        Score[] scores = game.cg.scores.getValidScores(true);
+        for (int i= 0; i < scores.length; i++) {
+            Score score = scores[i];
+            DrawClientScore(yOffset + lineHeight * i, score);
         }
-        drawprofiler();
+        if(Ref.common.developer.isTrue()) drawprofiler();
     }
 
     private void drawprofiler() {
@@ -444,6 +446,25 @@ public class CGameRender {
         Vector2f res = Ref.glRef.GetResolution();
         float x = 100;
         float y = res.y - 100;
+
+        float[] frametimes = Profiler.getFrameTimes();
+        int frametimesOffset  =Profiler.getFrametimeOffset();
+        float width = (res.x-150) / frametimes.length;
+        float height = 90;
+        for (int i= 0; i < frametimes.length; i++) {
+            float time = frametimes[(i+frametimesOffset)%frametimes.length];
+            time /= 1000/60f;
+            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            spr.Set(new Vector2f(x - 25 + (i)*width, 15), new Vector2f(width-2, height*time), null, null, null);
+            spr.SetColor(255, 0, 0, 150);
+        }
+
+        Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+        spr.Set(new Vector2f(x-25, 10), new Vector2f(res.x-150, 100), null, null, null);
+        spr.SetColor(0, 0, 0, 200);
+
+        
+
         if(totalTime > 25) {
             Common.Log("Frame took %d ms. Sub-times:", (int)totalTime);
         }
@@ -457,7 +478,7 @@ public class CGameRender {
             }
             Vector2f position = new Vector2f(x, y);
 
-            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            spr = Ref.SpriteMan.GetSprite(Type.HUD);
             spr.Set(new Vector2f(position.x+1, res.y - position.y - Ref.textMan.GetCharHeight()),
                     new Vector2f((spacing-2)*percentage[i], Ref.textMan.GetCharHeight()), null, null, null);
             spr.SetColor(50,50,200,127);
@@ -478,27 +499,33 @@ public class CGameRender {
             Ref.cgame.Print("DrawClientScore: Invalid ci index: " + score.client);
             return;
         }
-
+        Vector2f res = Ref.glRef.GetResolution();
         ClientInfo ci = game.cgs.clientinfo[score.client];
-
-        if(ci == null || ci.name == null) {
-            int test = 2;
-        }
-
         if(score.client == game.cg.snap.ps.clientNum) {
             Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
-            spr.Set(new Vector2f(0.1f, yOffset-0.01f), new Vector2f(0.8f, 0.07f), null, null, null);
+            spr.Set(new Vector2f(0.1f* res.x, res.y-(yOffset-0.01f)-Ref.textMan.GetCharHeight()), new Vector2f(0.8f* res.x, Ref.textMan.GetCharHeight()), null, null, null);
             spr.SetColor(255,255,255,80);
-            // Highlight self
-            // TODO: Sprite bg
         }
 
         String extra = "";
-        if(score.ping == -1)
-            extra = "(Connecting...)";
-        Vector2f res = Ref.glRef.GetResolution();
-        Ref.textMan.AddText(new Vector2f(0.1f * res.x, yOffset), String.format("%s%s", ci.name, extra), Align.LEFT, Type.HUD);
-        Ref.textMan.AddText(new Vector2f(0.9f * res.y, yOffset), String.format("ping:%d time:%d", score.ping, score.time), Align.RIGHT, Type.HUD);
+        if(score.ping == -2) // disable for now
+            extra = " ^0(Connecting...)";
+
+        String ping;
+        if(score.ping == -1) ping = "Bot";
+        else ping = String.format("%d", score.ping);
+
+        if(score.isDead) {
+            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            spr.Set(new Vector2f(0.1f* res.x+2, res.y-(yOffset-0.01f)-Ref.textMan.GetCharHeight()+2),
+                    new Vector2f(28,28),
+                    Ref.ResMan.LoadTexture("data/dead.png"), null, null);
+            spr.SetColor(255, 255,255, 210);
+        }
+
+        Ref.textMan.AddText(new Vector2f(0.1f * res.x + 32, yOffset), String.format("%s%s", ci.name, extra), Align.LEFT, Type.HUD);
+        Ref.textMan.AddText(new Vector2f(0.8f * res.x, yOffset), String.format("%d", score.score), Align.LEFT, Type.HUD);
+        Ref.textMan.AddText(new Vector2f(0.9f * res.x, yOffset), ping, Align.RIGHT, Type.HUD);
     }
 
     private void DrawChat() {
@@ -513,11 +540,11 @@ public class CGameRender {
             Color color = new Color(255,255,255,255);
 
             if(time - line.time >= game.cg_chattime.iValue) {
-                color.setAlpha((int)((1-((time - line.time - game.cg_chattime.iValue)/game.cg_chatfadetime.fValue))*255));
+                color.setAlpha((int)(1-(time - line.time - game.cg_chattime.iValue)/game.cg_chatfadetime.fValue)*255);
             }
 
-            float height = Ref.textMan.AddText(new Vector2f(10, Ref.glRef.GetResolution().y - (200 + lineHeight * lineIndex)), line.str, Align.LEFT, color, null, Type.HUD,1).y;
-            //height /= Ref.textMan.GetCharHeight();
+            Ref.textMan.AddText(new Vector2f(10, Ref.glRef.GetResolution().y - (200 + lineHeight * lineIndex)),
+                    line.str, Align.LEFT, color, null, Type.HUD,1);
 
             lineIndex ++;
         }
@@ -637,14 +664,6 @@ public class CGameRender {
             spr.SetDepth(CGame.PLAYER_LAYER-1);
             spr.SetColor(0, 255, 255, 127);
         }
-    }
-
-    private void RenderModel(int index, Vector2f position, int layer) {
-        index = Ref.cm.cm.InlineModel(index);
-
-        // Get bounds
-        BlockModel model = Ref.cm.cm.getModel(index);
-        model.moveTo(position);
     }
 
     void DrawBin() {
@@ -810,9 +829,15 @@ public class CGameRender {
 	// so it doesn't seem so linear
         swing = Helper.AngleSubtract(dest, angle);
         float scale = Math.abs(swing);
-        scale /= swingTolerance;
-        if(scale < 0.05) scale = 0.05f;
-        if(scale > 2.0) scale = 2.0f;
+        scale /= clampTolerance;
+//        scale /= swingTolerance;
+        if(scale < 0.0) scale = 0.0f;
+        if(scale > 1.0) scale = 1.0f;
+        float minscale = 0.1f;
+        scale *= 1f/(1f+minscale);
+        scale += minscale;
+        scale = Helper.SimpleSpline(scale);
+        
 
         // swing towards the destination angle
         float move;
