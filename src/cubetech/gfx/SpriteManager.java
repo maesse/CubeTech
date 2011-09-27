@@ -166,7 +166,7 @@ public class SpriteManager {
             return;
         } else if(indexVBOId == -1) {
             indexVBOId = Ref.glRef.createVBOid();
-            Ref.glRef.sizeVBO(BufferTarget.Index, indexVBOId, MAX_SPRITES*6);
+            Ref.glRef.sizeVBO(BufferTarget.Index, indexVBOId, MAX_SPRITES*6*4);
             BuildIndexBuffer();
             return;
         }

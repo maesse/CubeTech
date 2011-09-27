@@ -76,26 +76,27 @@
     nbproject/build-impl.xml file. 
 
     -->
-<target name="-post-jar">
-            <exec dir="." executable="cmd">
-		<arg line="/c postbuild.bat"/>
+<condition property="isWindows">
+	<os family="windows" />
+</condition>
+<condition property="isUnix">
+	<os family="unix" />
+</condition>
+
+<target name="doWindows" if="isWindows">
+<exec dir="." executable="cmd">
+                <arg line="/c postbuild.bat"/>
             </exec>
-        </target>
 
-<target name="instrument-classes">
-    <taskdef name="instrument-stack"
-        classname="cz.advel.stack.instrument.InstrumentationTask"
-        classpath="${run.classpath}">
-    </taskdef>
- 
-    <instrument-stack dest="${build.classes.dir}" packageName="com.bulletphysics">
-        <fileset dir="${build.classes.dir}" includes="**/*.class"/>
-    </instrument-stack>
 </target>
-  
-<!--  
-<target name="-post-compile" depends="instrument-classes"> </target>
--->
+<target name="doUnix" if="isUnix">
+<exec dir="." executable="sh">
+		<arg line="postbuild.sh"/>
+            </exec>
 
+</target>
+
+<target name="-post-jar" depends="doWindows,doUnix">
+        </target>
 
 </project>

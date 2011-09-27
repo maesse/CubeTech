@@ -63,6 +63,9 @@ public class ShadowManager {
         for (int i= 0; i < shadowFrustum.length; i++) {
             shadowFrustum[i] = new Vector3f();
         }
+        for (int i = 0; i < shadowProjections.length; i++) {
+            shadowProjections[i] = new Matrix4f();
+        }
         Ref.cvars.Get("shadow_view", "0", EnumSet.of(CVarFlags.NONE));
 
         shadow_resolution = Helper.get2Fold(shadow_resolution);
@@ -122,17 +125,17 @@ public class ShadowManager {
         }
     };
 
-    public Vector4f[] getCascadeDepths() {
-        Vector4f[] out = new Vector4f[2];
-        out[0] = new Vector4f(cascadeEyespaceDepths[0],
+    public Vector4f getCascadeDepths() {
+        //Vector4f[] out = new Vector4f[2];
+        return new Vector4f(cascadeEyespaceDepths[0],
                 cascadeEyespaceDepths[1],
                 cascadeEyespaceDepths[2],
                 cascadeEyespaceDepths[3]);
-        out[1] = new Vector4f(cascadeEyespaceDepths[4],
-                cascadeEyespaceDepths[5],
-                cascadeEyespaceDepths[6],
-                cascadeEyespaceDepths[7]);
-        return out;
+//        out[1] = new Vector4f(cascadeEyespaceDepths[4],
+//                cascadeEyespaceDepths[5],
+//                cascadeEyespaceDepths[6],
+//                cascadeEyespaceDepths[7]);
+        //return out;
     }
 
     public CubeTexture getDepthTexture() {

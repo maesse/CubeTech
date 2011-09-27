@@ -134,13 +134,15 @@ public class Common {
             }
             
             Ref.InitRef(applet != null,noSound);
+            
+            if(config != null) Ref.commands.ExecuteText(Commands.ExecType.NOW, "exec " + config);
 
             Ref.glRef.InitWindow(parentDisplay, applet, lowGraphics);
             Ref.Input.Init(); // Initialize mouse and keyboard
             Ref.common.Init();
 
-            if(config != null)
-                Ref.commands.ExecuteText(Commands.ExecType.INSERT, "exec " + config);
+            
+                
         } catch (Exception ex) {
             String exString = getExceptionString(ex);
             System.out.println("Fatal crash: " + exString);

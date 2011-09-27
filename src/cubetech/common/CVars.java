@@ -98,7 +98,7 @@ public class CVars {
                 }
 
                 Ref.commands.ExecuteText(Commands.ExecType.INSERT, str.toString());
-                
+                Ref.commands.Execute();
             } catch (IOException ex) {
                 Common.LogDebug(Common.getExceptionString(ex));
             }

@@ -522,9 +522,9 @@ public class IQMModel {
         depth.Bind();
 
         Matrix4f[] shadowmat = Ref.cgame.shadowMan.getShadowViewProjections(4);
-        Vector4f[] shadowDepths = Ref.cgame.shadowMan.getCascadeDepths();
+        Vector4f shadowDepths = Ref.cgame.shadowMan.getCascadeDepths();
         shader.setUniform("shadowMatrix", shadowmat);
-        shader.setUniform("cascadeDistances", shadowDepths[0]);
+        shader.setUniform("cascadeDistances", shadowDepths);
         shader.setUniform("shadow_bias", Ref.cvars.Find("shadow_bias").fValue);
         shader.setUniform("shadow_factor", Ref.cvars.Find("shadow_factor").fValue);
         shader.setUniform("pcfOffsets", Ref.cgame.shadowMan.getPCFoffsets());

@@ -194,6 +194,7 @@ public class GLRef {
             String subTokens[] = token.split("\\.");
             if(subTokens.length < 2)
                 continue;
+            if(subTokens[0].length() > 1) continue;
             if(Character.isDigit(subTokens[0].charAt(0)) && subTokens[0].charAt(0) <= '1') {
                 shadersSupported = false;
                 Common.Log("WARNING: Your graphics card does not support shaders");
@@ -224,8 +225,8 @@ public class GLRef {
         intBuf16.put(255).put(255).put(255).put(255);
         intBuf16.flip();
         glFog(GL_FOG_COLOR, intBuf16);
-
-        glClearColor(0.823f,0.7f,0.486f,1);
+        //0.823,0.7,0.486
+        glClearColor(95/255f,87/255f,67/255f,1);
         glDepthMask(true);
         glLineWidth(2f);
         glDepthFunc(GL_LEQUAL);
@@ -236,14 +237,14 @@ public class GLRef {
         
 
 //        glDisable(GL_CULL_FACE);
-        try {
-            srgbBuffer = new FrameBuffer(true, true, (int)GetResolution().x, (int)GetResolution().y);
-//             srgbBuffer.Bind();
-        } catch(Exception ex) {
-//            // Aww man..
-            Ref.ResMan.autoSrgb  = false; // don't set SRGB flag on textures
-        }
-//       
+//        try {
+//            srgbBuffer = new FrameBuffer(true, true, (int)GetResolution().x, (int)GetResolution().y);
+////             srgbBuffer.Bind();
+//        } catch(Exception ex) {
+////            // Aww man..
+//            Ref.ResMan.autoSrgb  = false; // don't set SRGB flag on textures
+//        }
+        Ref.ResMan.autoSrgb = false;
         //InitFBO();
         Ref.render = new Render();
 
@@ -528,6 +529,11 @@ public class GLRef {
 
                     break;
                 }
+            }
+            
+            if(newmode == null) {
+                // Just bruteforce one
+                newmode = new DisplayMode(width, height);
             }
             
             if(Display.isFullscreen() && !newmode.isFullscreenCapable()) {
