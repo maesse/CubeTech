@@ -2,11 +2,18 @@ package cubetech.collision;
 
 import cern.colt.function.LongObjectProcedure;
 import cern.colt.map.OpenLongObjectHashMap;
+import cubetech.CGame.ChunkRender;
 import cubetech.common.Common;
+import cubetech.common.Common.ErrorCode;
 import cubetech.misc.Ref;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.zip.DataFormatException;
 import org.lwjgl.util.vector.Vector3f;
 
 /**
@@ -31,9 +38,150 @@ public class CubeMap {
     private static Vector3f tempStart = new Vector3f();
     private static Vector3f tempEnd = new Vector3f();
 
+    private static byte[] uncompressBuffer = new byte[CubeChunk.CHUNK_SIZE + 1 + 8]; // max possible size
+    static int nChunkUpdates = 0;
     public CubeMap(IChunkGenerator gen, int w, int h, int d) {
         chunkGen = gen;
         fillInitialArea(w, h, d);
+    }
+
+    public static void serializeChunks(FileChannel out,OpenLongObjectHashMap chunks) throws IOException {
+        ByteBuffer tempBuf = ByteBuffer.allocate(8);
+        tempBuf.order(ByteOrder.nativeOrder());
+        // Write header
+        // 8b long chunkcount
+        // 56b reserved
+        int count = chunks.size();
+        tempBuf.putLong(0, count).position(0);
+        
+        out.write(tempBuf);
+        out.write(ByteBuffer.allocate(56));
+
+        // write chunks
+        Common.Log("Writing %d cube chunks to file", count);
+        int totalChunkSize = 0;
+        for (Object object : chunks.values().elements()) {
+            CubeChunk chunk = (CubeChunk)object;
+
+            // write compressed chunk data
+            ByteBuffer chunkData = chunk.createByteBuffer();
+            totalChunkSize += chunkData.limit();
+            out.write(chunkData);
+        }
+        Common.Log("Compressed map data: %d kbytes", totalChunkSize/1024);
+    }
+
+    public static void parseCubeData(ByteBuffer download, int count,OpenLongObjectHashMap chunks) {
+        // need a backing array
+        if(!download.hasArray()) {
+            Ref.common.Error(ErrorCode.FATAL, "parseCubeDatas underlying download bytebuffer doesn't have a backing array");
+        }
+        byte[] src = download.array();
+        download.order(ByteOrder.nativeOrder());
+        int offset = download.position();
+        // Handle multiple chunks in one stream
+        while(offset < src.length && (count > 0 || count == -1)) {
+            download.position(offset);
+            // Read header
+            byte control = download.get();
+            long chunkid = download.getLong();
+            
+            int compressedSize = download.getInt();
+            offset = download.position(); // get data offset
+
+            // uncompress data
+            ByteBuffer data = uncompressCubeData(src, offset, compressedSize);
+
+            // Unpack and handle data
+            parseSingleCubeData(data, control, chunkid, chunks);
+            nChunkUpdates++;
+
+            // move offset to next data
+            offset += compressedSize;
+            if(count > 0) count--;
+        }
+        // there might be more in this file, so ensure that buffer is positioned correctly
+        if(offset < src.length) download.position(offset);
+
+    }
+
+
+    private static ByteBuffer uncompressCubeData(byte[] src, int offset, int lenght) {
+        byte[] dest = uncompressBuffer;
+        int len = 0;
+        try {
+            len = CubeChunk.uncompressData(src, offset, lenght, dest);
+        } catch (DataFormatException ex) {
+            Common.Log("Got a chunkError:" + Common.getExceptionString(ex));
+        }
+        ByteBuffer download = ByteBuffer.wrap(dest, 0, len);
+        download.order(ByteOrder.nativeOrder());
+        return download;
+    }
+
+    private static void parseSingleCubeData(ByteBuffer download, byte control, long chunkIndex,OpenLongObjectHashMap chunks) {
+        // Check control byte
+//        byte control = download.get();
+        if(control != 1 && control != 2) return; // problem
+
+        // extract chunk index
+//        long chunkIndex = download.getLong();
+        CubeChunk c = (CubeChunk)chunks.get(chunkIndex);
+        if(c == null) {
+            // First time we recieve data for this chunk -- create it
+            int[] p = CubeMap.lookupToPosition(chunkIndex);
+            c = new CubeChunk(chunks, p[0], p[1], p[2]);
+            if(Ref.cgame != null && Ref.cgame.map.chunks == chunks) {
+                c.render = new ChunkRender(c);
+            }
+            chunks.put(chunkIndex, c);
+        }
+
+        if(control == 1) {
+            // get entry count
+            int startVersion = download.getInt();
+            byte count = download.get();
+            if(download.limit() - download.position() < count * 4) {
+                // Buffer doesn't contain the complete data for some reason..
+                Common.Log("Got invalid delta chunk data");
+                return;
+            }
+            for (int i= 0; i < count; i++) {
+                int data = download.getInt();
+                int[] delta = CubeChunk.unpackChange(data);
+                // 0-2 = cube index, 3 = cube type
+                byte type = (byte) delta[3];
+                c.setCubeType(delta[0], delta[1], delta[2], type, true);
+            }
+        } else if(control == 2) {
+            // Fill chunk
+            for (int z= 0; z < CubeChunk.SIZE; z++) {
+                for (int y= 0; y < CubeChunk.SIZE; y++) {
+                    for (int x= 0; x < CubeChunk.SIZE; x++) {
+                        byte b = download.get();
+                        c.setCubeType(x, y, z, b, false);
+                    }
+                }
+            }
+            if(c.render != null) {
+                c.render.setDirty(true, true);
+                // notify all neighbours
+                c.render.notifyChange();
+            }
+        }
+    }
+
+    public static void unserialize(ByteBuffer buf,OpenLongObjectHashMap chunks) {
+        int start = buf.position();
+        long count = buf.getLong();
+        Common.Log("Reading %d chunks from file", count);
+        buf.position(start+64); // offset by header size
+        int size = buf.position();
+        if(count > 0) {
+            parseCubeData(buf, (int) count,chunks);
+        }
+        size = buf.position() - size;
+        Common.Log("Loaded %d kb of compressed map data", size/1024);
     }
 
     void destroy() {
@@ -247,7 +395,7 @@ public class CubeMap {
         return null; // no collision
     }
 
-    
+    public float totalGenTime = 0;
     private CubeChunk generateChunk(int x, int y, int z, boolean queue) {
         if(z < MIN_Z || z >= MAX_Z)
             return null;
@@ -267,9 +415,10 @@ public class CubeMap {
         long end = System.nanoTime();
 
         float time = (end-start) / 1000000f;
-        if(time > 1f && Ref.common.developer.isTrue()) {
-            Common.Log("Generate Chunk took %.0f ms", time);
-        }
+        totalGenTime += time;
+//        if(time > 1f && Ref.common.developer.isTrue()) {
+//            Common.Log("Generate Chunk took %.0f ms", time);
+//        }
 
 //        chunk.notifyChange();
         

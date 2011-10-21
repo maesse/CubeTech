@@ -1,7 +1,6 @@
 package cubetech.Game;
 
 import cubetech.Game.Bot.GBot;
-import cubetech.Block;
 import cubetech.collision.CubeChunk;
 import cubetech.common.CS;
 import cubetech.common.CVar;
@@ -26,6 +25,8 @@ import cubetech.server.SvFlags;
 import cubetech.spatial.SectorQuery;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.lwjgl.util.vector.Vector3f;
 
 /**
@@ -117,23 +118,18 @@ public class Game {
         
         // initialize all entities for this game
         g_entities = new Gentity[Common.MAX_GENTITIES];
+        g_clients = new GameClient[level.maxclients];
         level.sentities = new SharedEntity[Common.MAX_GENTITIES];
         for (int i= 0; i < Common.MAX_GENTITIES; i++) {
             if(i < level.maxclients) {
                 g_entities[i] = new GameClient();
                 g_entities[i].s.ClientNum = i;
+                g_clients[i] = (GameClient)g_entities[i];
             }
-            else
-                g_entities[i] = new Gentity();
+            else g_entities[i] = new Gentity();
             level.sentities[i] = g_entities[i].shEnt;
         }
         level.gentities = g_entities;
-
-        
-        g_clients = new GameClient[level.maxclients];
-        for (int i= 0; i < level.maxclients; i++) {
-            g_clients[i] = (GameClient)g_entities[i];
-        }
         level.clients = g_clients;
 
         // always leave room for the max number of clients,
@@ -242,9 +238,10 @@ public class Game {
      * @param evt the event type
      * @return a linked temporary Gentity
      */
-    public Gentity TempEntity(Vector3f origin, int evt) {
+    public Gentity TempEntity(Vector3f origin, int evt, int params) {
         Gentity e = Spawn();
         e.s.eType = EntityType.EVENTS + evt;
+        e.s.evtParams = params;
         e.classname = "tempentity";
         e.eventTime = level.time;
         e.freeAfterEvent = true;
@@ -254,12 +251,19 @@ public class Game {
 
         return e;
     }
+    public Gentity TempEntity(Vector3f origin, int evt) {
+        return TempEntity(origin, evt, 0);
+    }
+    
 
+    public Gentity Spawn() {
+        return Spawn(Gentity.class);
+    }
     /**
      * Finds and returns a free entity
      * @return
      */
-    public Gentity Spawn() {
+    public Gentity Spawn(Class<? extends Gentity> type) {
         int i = 0;
         Gentity e = null;
         for(int force = 0; force < 2; force++) {
@@ -274,6 +278,14 @@ public class Game {
                 // freeing and allocating, so relax the replacement policy
                 if(force == 0 && e.freetime > level.startTime + 2000 && level.time - e.freetime < 1000)
                     continue;
+
+                try {
+                    g_entities[i] = e = type.newInstance();
+                    level.sentities[i] = e.shEnt;
+                    Ref.server.LocateGameData(level.sentities, level.num_entities, level.clients);
+                } catch (Exception ex) {
+                    Common.Log(ex);
+                }
 
                 // A free entity is always clean, so just init a few things
                 e.Init(i);
@@ -294,9 +306,17 @@ public class Game {
         // open up a new slot
         level.num_entities++;
 
+        //e = g_entities[level.num_entities-1];
+        try {
+            g_entities[level.num_entities-1] = e = type.newInstance();
+            level.sentities[level.num_entities-1] = e.shEnt;
+        } catch (Exception ex) {
+            Common.Log(ex);
+        }
+
         // let the server system know that there are more entities
         Ref.server.LocateGameData(level.sentities, level.num_entities, level.clients);
-        e = g_entities[level.num_entities-1];
+
         e.Init(level.num_entities-1);
         return e;
     }

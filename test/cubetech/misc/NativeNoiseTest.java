@@ -45,7 +45,7 @@ public class NativeNoiseTest {
         System.out.println("test");
         NativeNoise instance = new NativeNoise();
         long start = System.nanoTime();
-        for (int i= 0; i < 100; i++) {
+        for (int i= 0; i < 1000; i++) {
              instance.test();
         }
         long end = System.nanoTime();
@@ -54,8 +54,8 @@ public class NativeNoiseTest {
         System.out.println(delta/100 + "ms pr noise");
 
         start = System.nanoTime();
-        for (int i= 0; i < 100; i++) {
-             for (int j= 0; j < 5*5*5; j++) {
+        for (int i= 0; i < 1000; i++) {
+             for (int j= 0; j < 32*32*32; j++) {
                 double d = SimplexNoise.noise(1f,1f,1f);
             }
         }

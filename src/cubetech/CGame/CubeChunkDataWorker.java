@@ -455,7 +455,8 @@ public class CubeChunkDataWorker extends Thread {
     }
 
     private CubeChunk getChunkInDirection(int[] dir) {
-        return CubeMap.getChunk(chunk.p[0]+dir[0], chunk.p[1]+dir[1], chunk.p[2]+dir[2], false, chunk.chunks);
+        int index = (dir[2]+1) * 3 * 3 + (dir[1]+1) * 3 + (dir[0]+1);
+        return job.neighbors[index];
     }
 
 }

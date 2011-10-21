@@ -7,7 +7,9 @@ package cubetech.common;
  */
 public enum Animations {
     WALK,
+    WALK_GUN1,
     IDLE,
+    IDLE_GUN1,
     JUMP,
     CROUCH_IDLE,
     CROUCH_WALK,

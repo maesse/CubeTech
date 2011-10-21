@@ -10,6 +10,5 @@ import cubetech.gfx.CubeTexture;
  */
 public interface IEntity {
     public void init(Gentity ent);
-    public CubeTexture getIcon(); // icon for editor
     public String getClassName();
 }

@@ -197,13 +197,13 @@ public class ShadowManager {
     private void setPcfOffsets() {
         float dist = shadow_kernel.fValue/shadow_resolution;
 
-        pcfOffsets[0].x = -dist;
-        pcfOffsets[0].y = -dist;
+        pcfOffsets[0].x = -dist*3f;
+        pcfOffsets[0].y = -dist*3f;
 
         pcfOffsets[1].x = dist;
-        pcfOffsets[1].y = -dist;
+        pcfOffsets[1].y = -dist*3f;
 
-        pcfOffsets[2].x = -dist;
+        pcfOffsets[2].x = -dist*3f;
         pcfOffsets[2].y = dist;
 
         pcfOffsets[3].x = dist;
@@ -298,7 +298,7 @@ public class ShadowManager {
         GL11.glCullFace(GL11.GL_BACK);
         GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
         
-        if(Ref.glRef.srgbBuffer != null) Ref.glRef.srgbBuffer.Bind();
+        if(Ref.glRef.srgbBuffer != null && Ref.ResMan.isSRGB()) Ref.glRef.srgbBuffer.Bind();
     }
 
     private void setDepthFiltering(boolean point) {

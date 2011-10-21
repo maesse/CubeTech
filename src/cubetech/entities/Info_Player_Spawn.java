@@ -19,7 +19,7 @@ public class Info_Player_Spawn implements IEntity {
     }
 
     public CubeTexture getIcon() {
-        return Ref.ResMan.LoadTexture("data/tool_spawn.png");
+        return Ref.ResMan.LoadTexture("data/textures/tile.png");
     }
 
 }

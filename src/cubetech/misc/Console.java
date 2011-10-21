@@ -20,8 +20,11 @@ import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintStream;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.logging.Level;
@@ -46,7 +49,7 @@ public class Console implements KeyEventListener, LogEventListener {
     private boolean isScrollingCommands = false; // True if scrolled up in the console log
     private int nConsecutiveTabs = 0; // At 2*tab, do autocompletion
     PrintStream stdout; // Original System.out stream
-    CubeTexture scrollArrowTex = Ref.ResMan.LoadTexture("data/arrow.png");
+    CubeTexture scrollArrowTex = Ref.ResMan.LoadTexture("data/textures/arrow.png");
 
 
 
@@ -57,7 +60,21 @@ public class Console implements KeyEventListener, LogEventListener {
         con_scale = Ref.cvars.Get("con_scale", "1", EnumSet.of(CVarFlags.NONE));
         Ref.commands.AddCommand("console", cmd_console);
         Ref.commands.AddCommand("echo", cmd_echo);
+        Ref.commands.AddCommand("run", cmd_run);
     }
+
+    Process current_process = null;
+
+    ICommand cmd_run = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(args.length < 2) return;
+            try {
+                current_process = Runtime.getRuntime().exec("cmd /c " + Commands.ArgsFrom(args, 1));
+            } catch (IOException ex) {
+                Common.Log(ex);
+            }
+        }
+    };
 
     private ICommand cmd_echo = new ICommand() {
         public void RunCommand(String[] args) {
@@ -92,7 +109,12 @@ public class Console implements KeyEventListener, LogEventListener {
 
     public void Log(String str) {
         boolean scrolling = isScrolling();
-        logList.add(str);
+        String[] lines = str.split("\n");
+        for (String string : lines) {
+            String trimmed = string.trim();
+            if(trimmed.isEmpty()) continue;
+            logList.add(trimmed);
+        }
         if(!scrolling)
             ScrollToEnd();
     }
@@ -106,7 +128,19 @@ public class Console implements KeyEventListener, LogEventListener {
         }
 
         Common.Log(con_cmdprefix.sValue + str);
-        Ref.commands.ExecuteText(Commands.ExecType.INSERT, str);
+
+        if(current_process == null) {
+            Ref.commands.ExecuteText(Commands.ExecType.INSERT, str);
+        } else {
+            String ln = str + "\r\n";
+            try {
+                current_process.getOutputStream().write(ln.getBytes(Charset.defaultCharset()));
+                current_process.getOutputStream().flush();
+            } catch (IOException ex) {
+                Common.Log(ex);
+            }
+        }
+
         if(!commandLog.isEmpty() && commandLog.get(commandLog.size()-1).equalsIgnoreCase(str))
             return; // same as last line, don't add to commandlog
         commandLog.add(str);
@@ -325,7 +359,7 @@ public class Console implements KeyEventListener, LogEventListener {
     private void ScrollUp(int lines) {
         currentLine -= lines;
         // Just scroll up so we can see the whole top page
-        int topline = Math.min(MaxVisibleLines()-1, logList.size());
+        int topline = Math.min(MaxVisibleLines()-3, logList.size());
         if(currentLine < topline)
             currentLine = topline;
         nConsecutiveTabs = 0;
@@ -345,7 +379,7 @@ public class Console implements KeyEventListener, LogEventListener {
     }
 
     private void ScrollToBegin() {
-        currentLine = Math.min(MaxVisibleLines()-1, logList.size());
+        currentLine = Math.min(MaxVisibleLines()-3, logList.size());
         nConsecutiveTabs = 0;
     }
 
@@ -355,6 +389,35 @@ public class Console implements KeyEventListener, LogEventListener {
     }
 
     public void Render() {
+        if(current_process != null) {
+            InputStream in = current_process.getInputStream();
+            int bytesAvail;
+            try {
+                bytesAvail = in.available();
+                if(bytesAvail > 0) {
+                    byte[] data = new byte[bytesAvail];
+                    int read = in.read(data);
+                    System.out.print(new String(data, 0, read, Charset.defaultCharset()));
+                }
+                in = current_process.getErrorStream();
+                bytesAvail = in.available();
+                if(bytesAvail > 0) {
+                    byte[] data = new byte[bytesAvail];
+                    int read = in.read(data);
+                    System.out.print(new String(data, 0, read, Charset.defaultCharset()));
+                }
+            } catch (IOException ex) {
+                Common.Log(ex);
+            }
+            try {
+                current_process.exitValue();
+                current_process = null;
+                Common.Log("Program exited");
+            } catch(IllegalThreadStateException ex) {
+                // not finished yet
+            }
+        }
+
         if((Ref.Input.GetKeyCatcher() & Input.KEYCATCH_CONSOLE) == 0)
             return;
 
@@ -367,16 +430,18 @@ public class Console implements KeyEventListener, LogEventListener {
 
         // Commandline background
         spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-        spr.Set(new Vector2f(2, Ref.glRef.GetResolution().y-charHeight), new Vector2f(Ref.glRef.GetResolution().x,charHeight), null, null, null);
-        spr.SetColor(30,30,30,255);
-
+        spr.Set(new Vector2f(1, charHeight+2), new Vector2f(Ref.glRef.GetResolution().x-2, 1f), null, null, null);
+        spr.SetColor(255,255,255,50);
+        
         spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.HUD);
-        spr.Set(new Vector2f(0.0025f, 0.054f), new Vector2f(Ref.glRef.GetResolution().x, 0.005f), null, null, null);
-        spr.SetColor(255,255,255,30);
+        spr.Set(new Vector2f(2, 1), new Vector2f(Ref.glRef.GetResolution().x-4,charHeight+1), null, null, null);
+        spr.SetColor(0,0,0,128);
+
+        
 
         // Commandline
         String commandline = con_cmdprefix.sValue + cmdLine;
-        if(((Ref.client.realtime >> 8) & 0x1) == 1) // MAGIC! well..not really :(
+        if(((Ref.common.frametime >> 7) & 0x1) == 1) // MAGIC! well..not really :(
             commandline += "_";
         Ref.textMan.AddText(new Vector2f(0,Ref.glRef.GetResolution().y-charHeight), commandline, TextManager.Align.LEFT, Type.HUD, con_scale.fValue);
 

@@ -3,6 +3,8 @@ package cubetech.client;
 import cubetech.common.items.Weapon;
 import cubetech.CGame.CGame;
 import cubetech.CGame.Snapshot;
+import cubetech.CGame.ViewParams;
+import cubetech.Game.Gentity;
 import cubetech.collision.ClientCubeMap;
 import cubetech.collision.CubeChunk;
 import cubetech.collision.CubeMap;
@@ -332,17 +334,19 @@ public class Client {
 
         // uncompress
         int endPos = buf.limit() - 4;
-        NetBuffer uncompressed = NetBuffer.GetNetBuffer(false, true);
-        byte[] dst = uncompressed.GetBuffer().array();
-        try {
-            int read = CubeChunk.uncompressData(data.buf.GetBuffer().array(), currPos, endPos, dst);
-            uncompressed.GetBuffer().limit(read+4);
-            uncompressed.GetBuffer().putInt(read, SVC.OPS_EOF);
-            uncompressed.GetBuffer().position(0);
-            data.buf = uncompressed;
-        } catch (Exception ex) {
-            Common.Log("Failed to uncompress packet: " + ex.toString());
-            return;
+        if(endPos > currPos) {
+            NetBuffer uncompressed = NetBuffer.GetNetBuffer(false, true);
+            byte[] dst = uncompressed.GetBuffer().array();
+            try {
+                int read = CubeChunk.uncompressData(data.buf.GetBuffer().array(), currPos, endPos, dst);
+                uncompressed.GetBuffer().limit(read+4);
+                uncompressed.GetBuffer().putInt(read, SVC.OPS_EOF);
+                uncompressed.GetBuffer().position(0);
+                data.buf = uncompressed;
+            } catch (Exception ex) {
+                Common.Log("Failed to uncompress packet: " + ex.toString());
+                return;
+            }
         }
 
         ParseServerMessage(data.buf);
@@ -1189,70 +1193,65 @@ public class Client {
     }
 
     private void BeginFrame() {
-        if(Ref.ui.IsFullscreen() || true)
-            GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
-//       GL11.glClearDepth(1);
-//       GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
-//       GL11.glClearDepth(1000);
+       GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
        Ref.SpriteMan.Reset();
     }
 
     private void EndFrame() {
-        SecTag s = Profiler.EnterSection(Sec.RENDER);
+        SecTag s = Profiler.EnterSection(Sec.ENDFRAME);
         nFrames++;
         if(realtime >= lastFpsUpdateTime + 1000) {
             currentFPS = nFrames;
             nFrames = 0;
             lastFpsUpdateTime = realtime;
         }
-//        if(true) {
-//        Ref.SpriteMan.Reset();
-//        return;
-//        }
+
+        if(Ref.cgame != null && Ref.cgame.cg.refdef != null) {
+            if(Ref.cgame.shadowMan.isEnabled()) {
+                Ref.cgame.shadowMan.renderShadowCascades(Ref.cgame.cg.refdef, new IThinkMethod() {
+                    public void think(Gentity ent) {
+                        Ref.render.renderAll(Ref.cgame.cg.refdef, true);
+                    }
+                });
+            }
+        }
+        
         // Render normal sprites
         Ref.SpriteMan.DrawNormal();
 
-        Ref.render.renderAll(false);
-        Ref.render.reset();
-
+        ViewParams view = null;
+        if(Ref.cgame != null && Ref.cgame.cg != null) view = Ref.cgame.cg.refdef;
         
+        Ref.render.renderAll(view, false);
+        Ref.render.reset();
        
         // Set HUD render projection
-        GL11.glViewport(0, 0, (int)Ref.glRef.GetResolution().x, (int)Ref.glRef.GetResolution().y);
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glLoadIdentity();
-        //GL11.glOrtho(0, 1,1, 0, 1,-1000);
         GL11.glOrtho(0, (int)Ref.glRef.GetResolution().x, 0, (int)Ref.glRef.GetResolution().y, 1,-1000);
 
         GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glLoadIdentity();
         
-//        Ref.textMan.Render();
-        Ref.SpriteMan.DrawHUD();
-        Ref.SpriteMan.Reset();
-
         // Queue HUD renders
         Ref.Console.Render();
         if(cl_showfps.iValue == 1)
             Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x, 0), ""+currentFPS, Align.RIGHT, Type.HUD);
-//        Ref.textMan.Render();
         Ref.SpriteMan.DrawHUD();
         Ref.textMan.Render(); // Draw remaining text - shouldn't be any
 
 
-        if(Ref.glRef.srgbBuffer != null) Ref.glRef.srgbBuffer.BlitFBO();
+        if(Ref.glRef.srgbBuffer != null && Ref.ResMan.isSRGB()) {
+            Ref.glRef.srgbBuffer.BlitFBO();
+        }
 
         if(cl.screenshot || (demo.isPlaying() && Ref.cvars.Find("cl_demorecord").isTrue())) {
             takeScreenshot();
         }
-        
-        //Ref.glRef.srgbBuffer.Unbind();
-        // Display frame
-//        Display.sync(60);
-        updateScreen();
-//        GL11.glGetError();
         s.ExitSection();
+        
+        updateScreen();
     }
 
     ICommand cmd_screenshot = new ICommand() {
@@ -1601,9 +1600,9 @@ public class Client {
 
     private void InitDownloads() {
         // ListenServer client doesn't need the map
-        String map = Info.ValueForKey(cl.GameState.get(CS.CS_SERVERINFO), "mapname");
-        if(Ref.common.sv_running.iValue == 0 && (map.equalsIgnoreCase("custom") || map.equalsIgnoreCase("data/custom") || !ResourceManager.FileExists(map)))
-            clc.downloadList.add("map");
+//        String map = Info.ValueForKey(cl.GameState.get(CS.CS_SERVERINFO), "mapname");
+//        if(Ref.common.sv_running.iValue == 0 && (map.equalsIgnoreCase("custom") || map.equalsIgnoreCase("data/custom") || !ResourceManager.FileExists(map)))
+//            clc.downloadList.add("map");
         if(clc.downloadList != null) {
             state = ConnectState.CONNECTED;
             clc.downloadName = null;
@@ -1772,7 +1771,9 @@ public class Client {
         clc.download.position(0);
         try {
             if(clc.downloadName.equals("@cube")) {
-                Ref.cgame.map.parseCubeData(clc.download, -1);
+                if(Ref.cgame != null && Ref.cgame.map != null) {
+                    CubeMap.parseCubeData(clc.download, -1, Ref.cgame.map.chunks);
+                }
             }
             else if(clc.downloadName.equalsIgnoreCase("map")) {
                 // load map

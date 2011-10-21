@@ -82,7 +82,7 @@ public class Common {
         DISCONNECT // client disconnected from the server
     }
 
-    public void Init() {
+    private void Init() {
         lasttime = Milliseconds();
         // Set up cvars
         maxfps = Ref.cvars.Get("maxfps", "100", EnumSet.of(CVarFlags.ARCHIVE));
@@ -105,11 +105,7 @@ public class Common {
         useSysTimer = com_timer.iValue == 1;
         errorMessage.modified = false;
 
-        items = new ItemList();
-        // Init client and server
-        Ref.server = new Server();
-//        Ref.server.Init();
-        Ref.client.Init();
+        
     }
 
     // Where the program starts
@@ -118,6 +114,7 @@ public class Common {
         try {
             boolean noSound = false;
             boolean lowGraphics = false;
+            boolean undecorated = false;
             String config = null;
 
             if(args != null) {
@@ -128,19 +125,25 @@ public class Common {
                     else if(s.equalsIgnoreCase("-lowgfx"))
                         lowGraphics = true;
                     else if(s.equalsIgnoreCase("-cfg") && i+1 < args.length) {
-                        config = args[i+1];
+                        config = args[++i];
+                    } else if(s.equalsIgnoreCase("-undecorated")) {
+                        undecorated = true;
                     }
                 }
             }
-            
+            System.setProperty("org.lwjgl.opengl.Window.undecorated", undecorated?"true":"false");
             Ref.InitRef(applet != null,noSound);
-            
+            Ref.common.Init();
             if(config != null) Ref.commands.ExecuteText(Commands.ExecType.NOW, "exec " + config);
 
             Ref.glRef.InitWindow(parentDisplay, applet, lowGraphics);
             Ref.Input.Init(); // Initialize mouse and keyboard
-            Ref.common.Init();
-
+            
+            Ref.common.items = new ItemList();
+            // Init client and server
+            Ref.server = new Server();
+    //        Ref.server.Init();
+            Ref.client.Init();
             
                 
         } catch (Exception ex) {
@@ -153,8 +156,9 @@ public class Common {
 
             if(Ref.glRef != null && Ref.glRef.isApplet())
                 RunBrowserURL("javascript:handleError(\"CubeTech suffered a fatal crash :(\\r\\nCrashlog: " + exString + "\")");
-            else
-                JOptionPane.showMessageDialog(parentDisplay, "CubeTech suffered a fatal crash :(\nCrashlog: " + exString, "Fatal Crash", JOptionPane.ERROR_MESSAGE);
+            else {
+                Sys.alert("Fatal Crash", "CubeTech suffered a fatal crash :(\nCrashlog: " + exString);
+            }
 
             
             System.exit(-1);
@@ -334,7 +338,7 @@ public class Common {
             if(Ref.glRef != null && Ref.glRef.isApplet())
                 RunBrowserURL("javascript:handleError(\"CubeTech suffered a fatal crash :(\\r\\nCrashlog: " + str + "\")");
             else {
-                JOptionPane.showMessageDialog(Display.getParent(), "CubeTech suffered a fatal crash :(\nCrashlog: " + str, "Fatal Crash", JOptionPane.ERROR_MESSAGE);
+                Sys.alert("Fatal Crash", "CubeTech suffered a fatal crash :(\nCrashlog: " + str);
             }
             Shutdown();
         }
@@ -391,10 +395,8 @@ public class Common {
     }
 
     public boolean isDeveloper() {
-        return developer.iValue == 1;
+        return developer != null && developer.isTrue();
     }
-
-    
 
     // This pumps the network system and hands off packets to the client and server
     // to handle. When there is no more packets, it returns the time.

@@ -32,15 +32,15 @@ public class RocketLauncher extends WeaponItem {
     private WeaponInfo wi = new WeaponInfo();
 
     public RocketLauncher() {
-        wi.missileModel = Ref.ResMan.loadModel("data/rocket.iqm");
+        wi.missileModel = Ref.ResMan.loadModel("data/weapons/rocketlauncher/rocket.iqm");
         wi.missileTrailFunc = missileTrailFunc;
-        wi.viewModel = Ref.ResMan.loadModel("data/rocket_vmodel.iqm");
-        wi.fireSound = "data/TF2RL_Fire.wav";
-        wi.missileSound = "data/TF2RL_Loop.wav";
+        wi.viewModel = Ref.ResMan.loadModel("data/weapons/rocketlauncher/rocket_vmodel.iqm");
+        wi.fireSound = "data/weapons/rocketlauncher/TF2RL_Fire.wav";
+        wi.missileSound = "data/weapons/rocketlauncher/TF2RL_Loop.wav";
         wi.trailRadius = 16f;
-        wi.explodeSound = "data/80401__steveygos93__explosion2.wav";
+        wi.explodeSound = "data/sounds/80401__steveygos93__explosion2.wav";
         wi.trailTime = 1500f;
-        wi.worldModel = Ref.ResMan.loadModel("data/rocket_vmodel.iqm");
+        wi.worldModel = Ref.ResMan.loadModel("data/weapons/rocketlauncher/rocket_vmodel.iqm");
     }
 
     IMethodCentity missileTrailFunc = new IMethodCentity() {
@@ -62,7 +62,7 @@ public class RocketLauncher extends WeaponItem {
             Vector3f dir = new Vector3f(es.pos.delta);
             dir.normalise();
             Vector3f rndOffset = new Vector3f();
-            CubeMaterial mat = Ref.ResMan.LoadTexture("data/smokepuff.png").asMaterial();
+            CubeMaterial mat = Ref.ResMan.LoadTexture("data/textures/smokepuff.png").asMaterial();
             for (;t <= ent.trailTime; t += step) {
                 es.pos.Evaluate(t, lastPos);
                 Helper.VectorMA(lastPos, -16f, dir, lastPos);

@@ -70,12 +70,12 @@ public class CGWeapons {
                 }
                 dir.normalise();
 
-                mark = Ref.ResMan.LoadTexture("data/explosionmark.png");
+                mark = Ref.ResMan.LoadTexture("data/textures/explosionmark.png");
                 markRadius = radius*0.5f;
                 Ref.cgame.physics.explosionImpulse(origin, radius, radius, true);
                 break;
             case AK47:
-                mark = Ref.ResMan.LoadTexture("data/explosionmark.png");
+                mark = Ref.ResMan.LoadTexture("data/textures/explosionmark.png");
                 markRadius = 5f;
                 break;
         }
@@ -92,7 +92,7 @@ public class CGWeapons {
         }
         if(flesh) {
             bleed(end, fleshEntityNum);
-            String sound = "data/bloodsplat" + (Ref.rnd.nextInt(3)+1) +  ".wav";
+            String sound = "data/sounds/bloodsplat" + (Ref.rnd.nextInt(3)+1) +  ".wav";
             if(sound != null) {
                 Ref.soundMan.startSound(end, fleshEntityNum, Ref.soundMan.AddWavSound(sound), SoundChannel.AUTO, 1f);
             }

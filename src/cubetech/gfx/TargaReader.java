@@ -1,26 +1,17 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.gfx;
 // http://paulbourke.net/dataformats/tga/
 // little endian multi-byte integers: "low-order byte,high-order byte"
 
 import java.awt.image.BufferedImage;
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 //          00,04 -> 04,00 -> 1024
 class TargaReader {
         public static BufferedImage getImage(String fileName) throws IOException {
-                File f = new File(fileName);
-                byte[] buf = new byte[(int)f.length()];
-                BufferedInputStream bis = new BufferedInputStream(new FileInputStream(f));
-                bis.read(buf);
-                bis.close();
+                ByteBuffer data = ResourceManager.OpenFileAsByteBuffer(fileName, true).getKey();
+                byte[] buf = new byte[data.limit()];
+                data.get(buf);
                 return decode(buf);
         }
 

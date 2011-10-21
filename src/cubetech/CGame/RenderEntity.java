@@ -37,6 +37,8 @@ public class RenderEntity {
     public Vector3f[] axis  =new Vector3f[3]; // rotation vectors
     public Vector3f origin = new Vector3f();
 
+    public Object controllers = null;
+
     public int frame;
 
     // previous data for frame interpolation
@@ -80,6 +82,7 @@ public class RenderEntity {
     void clear() {
         model = null;
         color.set(255,255,255,255);
+        outcolor.set(255,255,255,255);
         origin.set(0,0,0);
         axis[0].set(1,0,0);
         axis[1].set(0,1,0);
@@ -87,6 +90,7 @@ public class RenderEntity {
         frame = 0;
         oldframe = 0;
         backlerp = 0;
+        controllers = null;
         flags = 0;
         mat = null;
         Type = null;

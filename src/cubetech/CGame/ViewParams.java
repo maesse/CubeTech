@@ -81,11 +81,8 @@ public class ViewParams {
         if(Ref.cgame.cg.playingdemo && Ref.cgame.cg_freecam.isTrue()) {
             fov = Ref.cgame.cg.demofov;
         }
-        setup3DProjection(fov * aspect, aspect, near, far);
-        
-        
-//        Angles.x *= -1f;
-//        Angles.y *= -1f;
+        setup3DProjection(fov * aspect, aspect, 64, near, far);
+
         ViewAxis = Helper.AnglesToAxis(Angles, ViewAxis);
         
         view[0] = ViewAxis[0].x;
@@ -105,20 +102,6 @@ public class ViewParams {
 
         view[3] = view[7] = view[11] = 0;
         view[15] = 1;
-
-        //Vector3f org = new Vector3f(-Origin.x, -Origin.y, -Origin.z);
-//        ViewAxis[0].scale(-1);
-//        ViewAxis[1].scale(-1);
-        
-//        viewbuffer.put(ViewAxis[0].x); viewbuffer.put(ViewAxis[1].x); viewbuffer.put(ViewAxis[2].x); viewbuffer.put(0);
-//        viewbuffer.put(ViewAxis[0].y); viewbuffer.put(ViewAxis[1].y); viewbuffer.put(ViewAxis[2].y); viewbuffer.put(0);
-//        viewbuffer.put(ViewAxis[0].z); viewbuffer.put(ViewAxis[1].z); viewbuffer.put(ViewAxis[2].z); viewbuffer.put(0);
-//        viewbuffer.put(-org.x * ViewAxis[0].x + -org.y * ViewAxis[0].y + -org.z * ViewAxis[0].z);
-//        viewbuffer.put(-org.x * ViewAxis[1].x + -org.y * ViewAxis[1].y + -org.z * ViewAxis[1].z);
-//        viewbuffer.put(-org.x * ViewAxis[2].x + -org.y * ViewAxis[2].y + -org.z * ViewAxis[2].z);
-//        viewbuffer.put(1);
-//
-//        viewbuffer.flip();
         
         // convert from our coordinate system (looking down X)
 	// to OpenGL's coordinate system (looking down -Z)
@@ -139,36 +122,94 @@ public class ViewParams {
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         
         GL11.glLoadMatrix(viewbuffer);
-
-//        GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projbuffer);
-//        Matrix4f prov = (Matrix4f) new Matrix4f().load(projbuffer);
-        
-//        projbuffer.position(0);
-//
-//        Matrix4f mvp = Matrix4f.mul(view, prov, null);
-        
-        // create the near plane
-        Vector3f derps = new Vector3f(ViewAxis[0]);
-        derps.scale(-1f);
-        float d = Vector3f.dot(derps, Origin);
-
-        planes[0].set(derps.x, derps.y, derps.z, d);
-        planes[0].normalize();
     }
 
-    private void setup3DProjection(float fov, float aspect, float znear, float zfar) {
-        GL11.glMatrixMode(GL11.GL_PROJECTION);
-        GL11.glLoadIdentity();
-        GLU.gluPerspective(fov, 1f/aspect, znear, zfar);
-        farDepth = zfar;
-        GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projbuffer);
-        if(ProjectionMatrix == null) {
-            ProjectionMatrix = new Matrix4f();
+    private void setup3DProjection(float fov, float aspect, float zproj, float znear, float zfar) {
+        boolean useGLU = false;
+        if(useGLU) {
+            GL11.glMatrixMode(GL11.GL_PROJECTION);
+            GL11.glLoadIdentity();
+            GLU.gluPerspective(fov, 1f/aspect, znear, zfar);
+            farDepth = zfar;
+            GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projbuffer);
+            if(ProjectionMatrix == null) {
+                ProjectionMatrix = new Matrix4f();
+            }
+            ProjectionMatrix.load(projbuffer);
+            projbuffer.position(0);
+        } else {
+            if(ProjectionMatrix == null) ProjectionMatrix = new Matrix4f();
+            else ProjectionMatrix.setZero();
+            
+            float fovy = fov;
+            float fovx = fov / aspect;
+            float _ymax = (float) (zproj * Math.tan(fovy * Math.PI / 360f));
+            float _ymin = -_ymax;
+            float _xmax = (float) (zproj * Math.tan(fovx * Math.PI / 360f));
+            float _xmin = -_xmax;
+            float _width = _xmax - _xmin;
+            float _height = _ymax - _ymin;
+            float stereoSep = 0f;
+            float depth = zfar - znear;
+
+            ProjectionMatrix.m00 = 2f * zproj / _width;
+            ProjectionMatrix.m10 = 0;
+            ProjectionMatrix.m20 = (_xmax + _xmin + 2f * stereoSep) / _width;
+            ProjectionMatrix.m30 = 2f * zproj * stereoSep / _width;
+
+            ProjectionMatrix.m01 = 0;
+            ProjectionMatrix.m11 = 2f * zproj / _height;
+            ProjectionMatrix.m21 = (_ymax + _ymin) / _height;
+            ProjectionMatrix.m31 = 0;
+
+            ProjectionMatrix.m02 = 0;
+            ProjectionMatrix.m12 = 0;
+            ProjectionMatrix.m22 = -(zfar + znear) / depth;
+            ProjectionMatrix.m32 = -2f * zfar * znear / depth;
+
+            ProjectionMatrix.m03 = 0;
+            ProjectionMatrix.m13 = 0;
+            ProjectionMatrix.m23 = -1;
+            ProjectionMatrix.m33 = 0;
+
+            GL11.glMatrixMode(GL11.GL_PROJECTION);
+            projbuffer.clear();
+            ProjectionMatrix.store(projbuffer);
+            projbuffer.flip();
+            GL11.glLoadMatrix(projbuffer);
+            projbuffer.position(0);
+            setupFrustum(_xmin, _xmax, _ymax, zproj, stereoSep);
+        }        
+    }
+
+    private void setupFrustum(float _xmin, float _xmax, float _ymax, float zproj, float stereo) {
+        if(stereo == 0f && _xmin == -_xmax) {
+            // symmetric case can be simplified
+            float len = (float) Math.sqrt(_xmax * _xmax + zproj * zproj);
+            float opplen = _xmax / len;
+            float adjlen = zproj / len;
+
+            planes[0].normal.set(ViewAxis[0]).scale(opplen);
+            Helper.VectorMA(planes[0].normal, adjlen, ViewAxis[1], planes[0].normal);
+            
+            planes[1].normal.set(ViewAxis[0]).scale(opplen);
+            Helper.VectorMA(planes[1].normal, -adjlen, ViewAxis[1], planes[1].normal);
         }
-        ProjectionMatrix.load(projbuffer);
-        projbuffer.position(0);
-        return;
-        
+
+        float len = (float)Math.sqrt(_ymax * _ymax + zproj * zproj);
+        float opplen = _ymax / len;
+        float adjlen = zproj / len;
+
+        planes[2].normal.set(ViewAxis[0]).scale(opplen);
+        Helper.VectorMA(planes[2].normal, adjlen, ViewAxis[2], planes[2].normal);
+
+        planes[3].normal.set(ViewAxis[0]).scale(opplen);
+        Helper.VectorMA(planes[3].normal, -adjlen, ViewAxis[2], planes[3].normal);
+
+        for (int i= 0; i < 4; i++) {
+            planes[i].dist = Vector3f.dot(Origin, planes[i].normal);
+
+        }
     }
 
     public void CalcVRect() {

@@ -73,7 +73,7 @@ public class CubeTexture {
             
 //            Ref.glRef.shader.setUniform(Ref.glRef.shader.GetTextureIndex(textureSlot), textureSlot);
             
-            GLRef.checkError();
+//            GLRef.checkError();
             
         } else {
             Ref.ResMan.getWhiteTexture().Bind();

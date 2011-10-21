@@ -42,6 +42,21 @@ public class HelperTest {
     public void tearDown() {
     }
 
+    @Test
+    public void testSolidPacking() {
+        System.out.println("Solid packing");
+        Vector3f mins = new Vector3f();
+        Vector3f maxs = new Vector3f();
+        maxs.set(Ref.rnd.nextInt(127),Ref.rnd.nextInt(127),Ref.rnd.nextInt(127));
+        mins.set(maxs);
+        mins.scale(-1f);
+        int solid = Helper.boundsToSolid(mins, maxs);
+        Vector3f[] out = Helper.solidToBounds(solid);
+
+        assertTrue(Helper.Equals(mins, out[0]));
+        assertTrue(Helper.Equals(maxs, out[1]));
+    }
+
     /**
      * Test of VectorCopy method, of class Helper.
      */

@@ -1,12 +1,18 @@
 package cubetech.collision;
 
+import cubetech.gfx.ResourceManager;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 
 /**
  * Contains the currently loaded level. Handles all collision with it
  * @author mads
  */
 public class ClipMap {
-    public CMap cm; // Currently loaded block map
     public CubeMap cubemap = null; // Currently loaded cube map
    
 
@@ -46,7 +52,18 @@ public class ClipMap {
         cubemap = new CubeMap();
     }
 
-    
+    public void loadMap(String filename) throws IOException {
+        if(filename == null || filename.isEmpty()) return;
+        ByteBuffer data =  ResourceManager.OpenFileAsByteBuffer("maps\\" + filename + ".map", false).getKey();
+
+        IChunkGenerator gen = new PerlinChunkGenerator();
+        //gen.setSeed(seed);
+        cubemap = new CubeMap();
+        CubeMap.unserialize(data, cubemap.chunks);
+        cubemap.chunkGen = gen;
+        
+
+    }
 
 //    public int LoadBlockMap(String name, boolean clientLoad) throws ClipmapException {
 //        if(name == null || name.isEmpty())

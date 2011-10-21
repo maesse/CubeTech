@@ -1,12 +1,12 @@
 package cubetech.collision;
 
-import cubetech.Block;
+
 import cubetech.common.Common;
 import cubetech.common.Content;
 
 import cubetech.misc.Ref;
-import cubetech.spatial.SpatialQuery;
-import java.util.HashMap;
+
+
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 
@@ -457,8 +457,8 @@ public class Collision {
     }
 
     public void SetSubModel(int index, Vector3f origin) {
-        boxTrace = false; // next boxTrace wont use the boxmodel
-        throw new IllegalArgumentException();
+        boxTrace = true;
+        
         
     }
 }

@@ -1,5 +1,7 @@
 package cubetech.CGame;
 
+import cubetech.collision.ClientCubeMap;
+import cubetech.collision.CubeChunk;
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
 import cubetech.common.Common.ErrorCode;
@@ -10,6 +12,7 @@ import cubetech.gfx.GLRef;
 import cubetech.gfx.GLState;
 import cubetech.gfx.Shader;
 import cubetech.gfx.ShadowManager;
+import cubetech.iqm.BoneController;
 import cubetech.misc.Ref;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -32,6 +35,8 @@ public class Render {
 
     Shader softSprite = null;
     CVar r_gpuskin = Ref.cvars.Get("r_gpuskin", "1", EnumSet.of(CVarFlags.NONE));
+    public CVar r_nocull = Ref.cvars.Get("r_nocull", "0", EnumSet.of(CVarFlags.TEMP));
+    ViewParams view = null;
 
     public Render() {
         for (int i= 0; i < MAX_RENDER_ENTITIES; i++) {
@@ -42,7 +47,8 @@ public class Render {
         }
     }
 
-    public void renderAll(boolean shadowPass) {
+    public void renderAll(ViewParams view, boolean shadowPass) {
+        this.view = view;
         GLRef.checkError();
         for (RenderEntity re : renderList) {
             if(shadowPass) {
@@ -52,6 +58,9 @@ public class Render {
             }
             
             switch(re.Type) {
+                case WORLD:
+                    renderWorld(re);
+                    break;
                 case MODEL:
                     renderModel(re);
                     break;
@@ -76,8 +85,13 @@ public class Render {
         GLRef.checkError();
     }
 
+    private void renderWorld(RenderEntity ent) {
+        CubeChunk[] chunkList = (CubeChunk[]) ent.controllers;
+        ClientCubeMap.renderChunkList(chunkList, view);
+    }
+
     public void renderPoly(RenderEntity ent) {
-        Ref.glRef.PushShader(Ref.glRef.getShader("sprite"));
+        Ref.glRef.PushShader(Ref.glRef.getShader("WorldFog"));
 //        GL11.glDisable(GL11.GL_CULL_FACE);
         Helper.col(ent.color);
         GL11.glEnable(GL11.GL_BLEND);
@@ -193,6 +207,9 @@ public class Render {
 
         //float frame = ent.oldframe * ent.backlerp + ent.frame * (1f-ent.backlerp);
         ent.model.gpuskinning = (ent.flags & RenderEntity.FLAG_GPUSKINNED) != 0;
+        if(ent.controllers == null) ent.model.controllers = null;
+        else  ent.model.controllers = (BoneController[]) ent.controllers;
+        
         ent.model.animate(ent.frame, ent.oldframe, ent.backlerp);
         //Vector3f org = new Vector3f(ent.origin);
 
@@ -284,6 +301,8 @@ public class Render {
             tex.textureSlot = 1;
             tex.loaded = true;
             tex.Bind();
+        } else {
+            Ref.glRef.PushShader(Ref.glRef.getShader("WorldFog"));
         }
 
         GL11.glDepthMask(false); // dont write to depth
@@ -321,8 +340,8 @@ public class Render {
 
         if(useSoftSprites) {
             tex.Unbind();
-            Ref.glRef.PopShader();
         }
+        Ref.glRef.PopShader();
         
     }
 

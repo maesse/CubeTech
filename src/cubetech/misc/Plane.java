@@ -8,42 +8,42 @@ import org.lwjgl.util.vector.Vector3f;
  * @author mads
  */
 public class Plane {
-    public float a,b,c,d;
+    public Vector3f normal = new Vector3f();
+    public float dist;
 
     public Plane(float a, float b, float c, float d) {
-        this.a = a; this.b = b; this.c = c; this.d = d;
+        set(a,b,c,d);
     }
 
-    public void set(float a, float b, float c, float d) {
-        this.a = a; this.b = b; this.c = c; this.d = d;
+    public final void set(float a, float b, float c, float d) {
+        normal.set(a,b,c);
+        dist = d;
     }
 
     public Plane normalize() {
-        double len = Math.sqrt(a * a + b * b + c * c);
+        float len = normal.length();
         if(len == 0)
             return this;
-        a /= len;
-        b /= len;
-        c /= len;
-        d /= len;
-//        d *= 2f;
+        normal.scale(1f/len);
+        dist /= len;
         return this;
     }
 
     public float findIntersection(Vector3f start, Vector3f delta) {
         // n dot u
-        float dist = delta.x * a + delta.y * b + delta.z * c;
-        if(dist == 0f) return 0f;
+        float ddist = Vector3f.dot(delta, normal);
+        if(ddist == 0f) return 0f;
 
-        float scalar = (d - (start.x * a + start.y * b + start.z * c)) / dist;
+        float scalar = (dist - Vector3f.dot(start,normal));
+        scalar /= ddist;
         if(scalar > 1.0f) scalar = 1.0f;
             if(scalar < 0) scalar = 0;
         return scalar;
     }
 
     public float testPoint(float x, float y, float z) {
-        float dist = a * x + b * y + c * z - d;
-        return dist;
+        float ddist = normal.x * x + normal.y * y + normal.z * z - dist;
+        return ddist;
     }
 
     public void DebugRender(Vector3f origin) {
@@ -69,14 +69,14 @@ public class Plane {
     }
 
     public Vector3f projectOnPlane(float x, float y, float z) {
-        Vector3f dest = new Vector3f(x-a*d,y-b*d,z-c*d);
-        float dist = a * dest.x + b * dest.y + c * dest.z;
-        dest.set(x - a * dist, y - b * dist, z - c * dist);
+        Vector3f dest = new Vector3f();
+        float ddist = normal.x * x + normal.y * y + normal.z * z;
+        dest.set(x - normal.x * ddist, y - normal.y * ddist, z - normal.z * ddist);
         return dest;
     }
 
     @Override
     public String toString() {
-        return String.format("n:(%.2f,%.2f,%.2f) d:%.2f", a,b,c,d);
+        return String.format("n:(%.2f,%.2f,%.2f) d:%.2f", normal.x, normal.y, normal.z,dist);
     }
 }

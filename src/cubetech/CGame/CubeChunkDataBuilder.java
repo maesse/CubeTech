@@ -39,6 +39,7 @@ public class CubeChunkDataBuilder {
     
     public class WorkerJob {
         public CubeChunk chunk;
+        public CubeChunk[] neighbors = new CubeChunk[27];
         public int visibleSides;
         WorkerJob(CubeChunk chunk) {
             this.chunk = chunk;
@@ -67,7 +68,20 @@ public class CubeChunkDataBuilder {
     }
 
     public WorkerJob getWork() {
-        return workList.remove(0);
+        WorkerJob job = workList.remove(0);
+        // Fill in the neighbors before passing on to the worker
+        int index = 0;
+        for (int z= -1; z <= 1; z++) {
+            for (int y= -1; y <= 1; y++) {
+                for (int x= -1; x <= 1; x++) {
+                    job.neighbors[index++] = CubeMap.getChunk(
+                            job.chunk.p[0]+x, job.chunk.p[1]+y, job.chunk.p[2]+z,
+                            false, job.chunk.chunks);
+                }
+            }
+        }
+        
+        return job;
     }
 
     public void finishedWork(WorkerJob job) {
@@ -98,6 +112,9 @@ public class CubeChunkDataBuilder {
             for (WorkerJob job : finishedList) {
                 long chunkid = CubeMap.positionToLookup(job.chunk.p[0], job.chunk.p[1], job.chunk.p[2]);
                 ByteBuffer data = getBuffer(chunkid);
+                if(data == null) {
+                    int test = 2;
+                }
                 job.chunk.render.updateVBO(data, job.visibleSides);
                 releaseBuffer(chunkid);
             }

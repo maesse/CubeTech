@@ -14,8 +14,8 @@ uniform samplerCube envmap;
 uniform sampler2D tex;
 
 varying vec2 coords;
-varying vec4 diffuse, ambient;
-varying vec3 normal, lightDir, halfVector;
+#pragma include "lighting.glsl"
+
 varying vec3 reflectDir;
 varying vec4 col;
 
@@ -41,19 +41,6 @@ float getShadowFraction()
         lightDist /= SHADOW_SAMPLES;
     }
     return lightDist;
-}
-
-vec4 getLighting(in vec4 texcol)
-{
-    vec3 n = normalize(normal); // normalize the interpolated normal
-    float NdotL = (max(dot(n, lightDir), 0.0)*shadow_factor)+(1.0-shadow_factor);
-    vec3 halfV = normalize(halfVector);
-    float NdotHV = max(dot(n, halfV), 0.0);
-
-    vec4 lightColor = diffuse * NdotL;
-    lightColor += texcol
-            * pow(NdotHV, gl_FrontMaterial.shininess) * texcol.a * 5.0;
-    return lightColor;
 }
 
 void main()

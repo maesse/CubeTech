@@ -300,18 +300,10 @@ public class NetBuffer {
         
         byte[] data = buffer.array();
         int srclen = buffer.position();
-        byte[] dest = new byte[srclen+64];
-        int wrote = CubeChunk.compressData(data, srclen, dest, 4, false);
+        byte[] dest = new byte[srclen+84];
+        int wrote = CubeChunk.compressData(data, srclen, dest, 0, 4);
         buffer.clear();
         buffer.put(dest, 0, wrote);
     }
-
-    
-
-//    public <T extends Enum<T>> T ReadEnum(T t) {
-//        byte b = ReadByte();
-//        if(b < 0)return null;
-//        return t.getDeclaringClass().getEnumConstants()[b];
-//    }
 
 }

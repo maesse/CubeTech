@@ -16,28 +16,33 @@ varying vec4 col;
 varying vec4 vPosition;
 varying float vDepth;
 
+void setLightVars(in vec3 in_normal,in vec3 vertexPos)
+{
+    normal = in_normal;
+
+    lightDir = vec3(gl_LightSource[0].position);
+    diffuse = gl_LightSource[0].diffuse; // gl_FrontMaterial.diffuse
+    ambient = gl_LightModel.ambient;
+
+    // Get halfvector
+#ifdef PHONG
+    halfVector = normalize( vertexPos);
+#else
+    halfVector = normalize( normalize(lightDir)-normalize(vertexPos));
+#endif
+}
+
 void main()
 {
     // Get vertex normal
     normal = normalize( vec3(Modell * vec4(v_normal,0.0)));
     reflectDir = normal;
 
-    // Get light direction
-    // vec3(gl_LightSource[0].position)
-    lightDir = lightDirection;
-
-    // Get halfvector
-    vec3 vertexPos = vec3(gl_ModelViewMatrix * vec4( v_position, 1.0));
-    //halfVector = normalize(gl_LightSource[0].halfVector.xyz);
-    halfVector = normalize(normalize(vertexPos) + lightDirection);
-
-    // compute diffuse term
-    diffuse = gl_LightSource[0].diffuse; // gl_FrontMaterial.diffuse
-    ambient = gl_LightModel.ambient;
-    col = vec4(1,1,1,1);
+    setLightVars(gl_NormalMatrix * normal, vec3(gl_ModelViewMatrix * (Modell * vec4( v_position, 1.0))));
 
     gl_Position =  gl_ModelViewProjectionMatrix * Modell *  vec4( v_position, 1.0);
     coords = v_coords;
+    col = vec4(1,1,1,1);
 
     // shadow out
     vPosition = Modell * vec4( v_position, 1.0);

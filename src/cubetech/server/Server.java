@@ -9,7 +9,6 @@ import cubetech.Game.Bot.GBot;
 import cubetech.Game.Game;
 import cubetech.Game.GameClient;
 import cubetech.client.CLSnapshot;
-import cubetech.collision.BlockModel;
 import cubetech.collision.ClipmapException;
 import cubetech.collision.CollisionResult;
 import cubetech.collision.CubeCollision;
@@ -41,10 +40,16 @@ import cubetech.server.ServerRun.ServerState;
 import cubetech.server.SvClient.ClientState;
 import cubetech.spatial.SectorQuery;
 import cubetech.spatial.WorldSector;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.lwjgl.util.vector.Quaternion;
 
 
@@ -281,12 +286,17 @@ public class Server implements ITrace {
         ClearServer();
         sv.configstrings.clear();
         Ref.cvars.Set2("cl_paused", "0", true);
-        Ref.cm.GenerateCubeMap(System.currentTimeMillis());
-//        try {
-//            Ref.cm.LoadBlockMap(mapname, false);
-//        } catch (ClipmapException ex) {
-//            Ref.common.Error(Common.ErrorCode.DROP, Common.getExceptionString(ex));
-//        }
+
+        if(mapname != null) {
+            try {
+                Ref.cm.loadMap(mapname);
+            } catch (IOException ex) {
+                Ref.common.Error(Common.ErrorCode.DROP, Common.getExceptionString(ex));
+            }
+        } else {
+            Ref.cm.GenerateCubeMap(System.currentTimeMillis());
+        }
+
         Ref.cvars.Set2("mapname", mapname, true);
 //        Ref.cvars.Set2("sv_mapChecksum", ""+Ref.cm.cm.checksum, true);
 
@@ -345,6 +355,44 @@ public class Server implements ITrace {
         Ref.cvars.modifiedFlags.remove(CVarFlags.SERVER_INFO);
 
         sv.state = ServerRun.ServerState.GAME;
+    }
+
+    // Registers the sound name in the gamestate stringtable
+    // returns the index into the sound sub-section of the stringtable
+    public int registerSound(String soundname) {
+        // Check if this sound is already registered
+        int i;
+        for (i= 0; i < 255; i++) {
+            if(!sv.configstrings.containsKey(CS.CS_SOUNDS+i)) break; // use this
+            String sound = sv.configstrings.get(CS.CS_SOUNDS+i);
+            if(sound.equals(soundname)) return i; // already registered
+        }
+
+        if(i == 255) {
+            Common.Log("Can't register sound, no more room");
+            return 0;
+        }
+
+        SetConfigString(CS.CS_SOUNDS+i, soundname);
+        return i;
+    }
+
+    public int registerModel(String modelname) {
+        // Check if this sound is already registered
+        int i;
+        for (i= 0; i < 255; i++) {
+            if(!sv.configstrings.containsKey(CS.CS_MODELS+i)) break; // use this
+            String sound = sv.configstrings.get(CS.CS_MODELS+i);
+            if(sound.equals(modelname)) return i+1; // already registered
+        }
+
+        if(i == 255) {
+            Common.Log("Can't register sound, no more room");
+            return 0;
+        }
+
+        SetConfigString(CS.CS_MODELS+i, modelname);
+        return i+1;
     }
 
     public void SetConfigString(int index, String p) {
@@ -757,13 +805,9 @@ public class Server implements ITrace {
 
         if(gent.r.bmodel)
             gent.s.solid = EntityState.SOLID_BMODEL;
-        else if((gent.r.contents & (Content.BODY | Content.SOLID)) > 0) {
-            int x = Helper.Clamp((int) gent.r.maxs.x, 1, 255);
-            int y = Helper.Clamp((int) gent.r.maxs.y, 1, 255);
-            int height = Helper.Clamp((int)(gent.r.maxs.z - gent.r.mins.z), 1, 255);
-            int minzLenght = Helper.Clamp((int)(- gent.r.mins.z), 0, 127);
-
-            gent.s.solid = (minzLenght<<24) | (height<<16) | (y<<8) | x;
+        else if((gent.r.contents & (Content.BODY | Content.SOLID)) != 0) {
+            gent.s.solid = Helper.boundsToSolid(gent.r.mins, gent.r.maxs);
+            
         } else
             gent.s.solid = 0;
 
@@ -942,6 +986,7 @@ public class Server implements ITrace {
                     clip.entitynum = touch.s.ClientNum;
                     clip.hitAxis = res.hitAxis;
                     clip.hitmask = touch.r.contents;
+                    clip.startsolid = res.startsolid;
                 }
             }
 
@@ -953,21 +998,20 @@ public class Server implements ITrace {
     }
 
     public void SetBrushModel(SharedEntity shEnt, int index) {
-        if(index <= 0)
-            Ref.common.Error(Common.ErrorCode.DROP, "SetBrushModel: Invalid index " + index);
+        Ref.common.Error(Common.ErrorCode.DROP, "SetBrushModel: Invalid index " + index);
 
-        shEnt.s.modelindex = index;
-        int h = Ref.cm.cm.InlineModel(shEnt.s.modelindex);
-
-        BlockModel model = Ref.cm.cm.getModel(h);
-        model.attachEntity(shEnt.s.ClientNum);
-        shEnt.r.mins.set(model.size.x, model.size.y);
-        shEnt.r.mins.scale(-0.5f);
-        shEnt.r.maxs.set(model.size.x, model.size.y);
-        shEnt.r.maxs.scale(0.5f);
-        shEnt.r.bmodel = true;
-        shEnt.r.contents = 1;
-        LinkEntity(shEnt);
+//        shEnt.s.modelindex = index;
+//        int h = Ref.cm.cm.InlineModel(shEnt.s.modelindex);
+//
+//        BlockModel model = Ref.cm.cm.getModel(h);
+//        model.attachEntity(shEnt.s.ClientNum);
+//        shEnt.r.mins.set(model.size.x, model.size.y);
+//        shEnt.r.mins.scale(-0.5f);
+//        shEnt.r.maxs.set(model.size.x, model.size.y);
+//        shEnt.r.maxs.scale(0.5f);
+//        shEnt.r.bmodel = true;
+//        shEnt.r.contents = 1;
+//        LinkEntity(shEnt);
     }
 
     /*
@@ -1131,9 +1175,53 @@ public class Server implements ITrace {
                 cmd_Map(args);
             }
         });
+        Ref.commands.AddCommand("savemap", cmd_savemap);
         Ref.commands.AddCommand("kick", cmd_kick);
 
     }
+
+    private ICommand cmd_savemap = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(args.length < 2) {
+                Common.Log("usage: savemap <mapname>");
+                return;
+            }
+
+            if(!Ref.common.sv_running.isTrue()) {
+                Common.Log("No server running");
+                return;
+            }
+
+            String demoDir = "maps\\";
+            File dir = new File(demoDir);
+            if(!dir.exists()) {
+                dir.mkdir();
+            }
+            String filename = Commands.ArgsFrom(args, 1);
+            File filehandle = new File(demoDir+filename+".map");
+            FileChannel fc = null;
+            boolean fileOk = true;
+            try {
+                filehandle.createNewFile();
+                fc = new FileOutputStream(filehandle, false).getChannel();
+            } catch (IOException ex) {
+                Common.Log(Common.getExceptionString(ex));
+                fileOk = false;
+            }
+
+            if(!fileOk) {
+                Common.Log("Couldn't create file for map");
+                return;
+            }
+            try {
+                CubeMap.serializeChunks(fc, Ref.cm.cubemap.chunks);
+                fc.close();
+            } catch (IOException ex) {
+                Common.Log(ex);
+                return;
+            }
+        }
+    };
 
     private ICommand cmd_kick = new ICommand() {
         public void RunCommand(String[] args) {
@@ -1165,26 +1253,21 @@ public class Server implements ITrace {
     }
 
     private void cmd_Map(String[] tokens) {
-        if(tokens.length < 2) {
-            Common.Log("usage: map <mapname>");
-            return;
+        String mapname = null;
+        if(tokens.length == 2) {
+            // Try to load a map
+            mapname = tokens[1];
         }
-
-        // Check if map exists before changing
-        if(!tokens[1].equals("newmap") && !ResourceManager.FileExists(tokens[1])) {
-            Common.Log("Cannot find map: " + tokens[1]);
-            return;
-        }
-
 
         Ref.cvars.Get("g_gametype", "0", EnumSet.of(CVarFlags.LATCH, CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
-        SpawnServer(tokens[1]);
+        SpawnServer(mapname);
     }
 
     private void ClipHandleForEntity(SharedEntity touch) {
-        if(touch.r.bmodel) {
-            Ref.collision.SetSubModel(touch.s.modelindex, touch.r.currentOrigin);
-        } else {
+//        if(touch.r.bmodel) {
+//            Ref.collision.SetSubModel(touch.s.modelindex, touch.r.currentOrigin);
+//        } else
+        {
             
             Ref.collision.SetBoxModel(touch.r.mins, touch.r.maxs, touch.r.currentOrigin);
         }
@@ -1222,6 +1305,8 @@ public class Server implements ITrace {
     public SvClient getClient(int clientIndex) {
         return clients[clientIndex];
     }
+
+    
 
 
     

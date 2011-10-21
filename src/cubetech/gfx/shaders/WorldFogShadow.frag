@@ -1,7 +1,7 @@
 #version 120
 // Shadow mapping uses all this stuff
 #extension GL_EXT_texture_array : enable
-#define SHADOW_SAMPLES 1
+#define SHADOW_SAMPLES 4
 uniform sampler2D tex;
 
 // Shadow

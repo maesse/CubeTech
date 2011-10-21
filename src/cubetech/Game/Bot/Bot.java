@@ -36,8 +36,8 @@ public class Bot {
 
         if(looklen < 100) cmd.buttons[2] = true;
         else {
-            cmd.Forward = true;
-            if(((Ref.game.level.time / 1000) & 1) == 1) cmd.Up = true;
+//            cmd.Forward = true;
+//            if(((Ref.game.level.time / 1000) & 1) == 1) cmd.Up = true;
         }
         return cmd;
     }

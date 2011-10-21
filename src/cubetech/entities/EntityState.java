@@ -1,5 +1,6 @@
 package cubetech.entities;
 
+import cubetech.common.Animations;
 import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.common.PlayerState;
@@ -45,6 +46,15 @@ public class EntityState {
     public Vector3f Angles = new Vector3f();
     public Vector3f Angles2 = new Vector3f();
     public int time;
+
+    public Animations frameAsAnimation() {
+        int animFrame = frame & ~128;
+        if(animFrame < 0 || animFrame >= Animations.values().length) {
+            return null;
+        }
+        Animations anim = Animations.values()[animFrame];
+        return anim;
+    }
 
     public void Clear() {
         Angles = new Vector3f();

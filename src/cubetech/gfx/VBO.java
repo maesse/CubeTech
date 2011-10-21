@@ -1,37 +1,56 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.gfx;
 
 import cubetech.common.Common.ErrorCode;
-import cubetech.gfx.GLRef.BufferTarget;
 import cubetech.misc.Ref;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.HashMap;
+import static org.lwjgl.opengl.ARBVertexBufferObject.*;
 
 /**
  *
  * @author mads
  */
 public class VBO {
-    private int vboId = -1;
-    private int sizeInBytes;
-    private BufferTarget target;
-    private ByteBuffer mappedBuffer = null;
-    public float resizeMultiplier = 1f;
-
+    private static HashMap<Integer, ByteBuffer> cachedBuffers = new HashMap<Integer, ByteBuffer>();
     public static int TotalBytes = 0;
+    private int vboId = -1; // opengl handle
+    private int sizeInBytes; // current size
+    private BufferTarget target; // vertex or index buffer
+    private Usage usage;
+    private ByteBuffer mappedBuffer = null; // currently mapped buffer
+    
+    public float resizeMultiplier = 1f; // multiplier for resize when mapping
+    public enum BufferTarget {
+        Vertex,
+        Index
+    }
+    public enum Usage {
+        STATIC, // set once, used many times
+        DYNAMIC, // updated and rendered many times
+        STREAM // update once, use once
+    }
 
     public VBO(int sizeInBytes, BufferTarget target) {
+        this(sizeInBytes, target, Usage.STATIC);
+    }
+
+    private static int usageToInt(Usage u) {
+        if(u == Usage.STATIC) return GL_STATIC_DRAW_ARB;
+        if(u == Usage.DYNAMIC) return GL_DYNAMIC_DRAW_ARB;
+        else return GL_STREAM_DRAW_ARB;
+    }
+    
+    public VBO(int sizeInBytes, BufferTarget target, Usage usage) {
         this.sizeInBytes = sizeInBytes;
         this.target = target;
-
-        if(!Ref.glRef.fboSupported)
+        this.usage = usage;
+        if(!Ref.glRef.caps.GL_ARB_vertex_buffer_object)
             Ref.common.Error(ErrorCode.FATAL, "VBO(): VBOs are not supported on this graphics card");
 
-        vboId = Ref.glRef.createVBOid();
-        Ref.glRef.sizeVBO(target, vboId, sizeInBytes);
+        // create buffer id
+        vboId = glGenBuffersARB();
+        resize(sizeInBytes);
         TotalBytes += sizeInBytes;
     }
 
@@ -40,7 +59,9 @@ public class VBO {
     }
 
     public void bind() {
-        Ref.glRef.bindVBO(target, vboId);
+        int t = BufferTargetToOpenGL(target);
+        glBindBufferARB(t, vboId);
+//        GLRef.checkError();
     }
 
     public ByteBuffer map() {
@@ -53,20 +74,40 @@ public class VBO {
             Ref.common.Error(ErrorCode.FATAL, "VBO.map(): Buffer is already mapped.");
         }
 
+        // Bind
+        bind();
+
+        // Resize to fit
         if(bytes > sizeInBytes) {
             // create a new VBO
-            //Ref.glRef.destroyVBO(vboId);
             TotalBytes -= sizeInBytes;
-            sizeInBytes = (int) (bytes * resizeMultiplier);
-            if(sizeInBytes < bytes) // just to be sure..
-                sizeInBytes = bytes;
+            if(resizeMultiplier >= 1f) sizeInBytes = (int) (bytes * resizeMultiplier);
             TotalBytes += sizeInBytes;
-            //vboId = Ref.glRef.createVBOid();
-            System.out.println("resizing");
-            Ref.glRef.sizeVBO(target, vboId, sizeInBytes);
+            resize(sizeInBytes);
         }
-        mappedBuffer = Ref.glRef.mapVBO(target, vboId, bytes);
+
+        // Check if we have a cached buffer
+        Integer bufferID = (target == BufferTarget.Index?0:1) + ((vboId+1) << 1);
+        ByteBuffer cachedBuf = cachedBuffers.get(bufferID);
+        boolean newBuffer = false;
+        if(cachedBuf != null && cachedBuf.capacity() < bytes) {
+            // We're requesting a buffer buffer now, so remove the old from the cache
+            cachedBuffers.remove(bufferID);
+            newBuffer = true;
+        } else if(cachedBuf == null) {
+            newBuffer = true;
+        }
+
+        // Map it
+        ByteBuffer buf =  glMapBufferARB(BufferTargetToOpenGL(target),
+                GL_WRITE_ONLY_ARB, bytes, cachedBuf);
+        buf.order(ByteOrder.nativeOrder());
+        mappedBuffer = buf;
         mappedBuffer.clear();
+
+        // Put in cache
+        if(newBuffer) cachedBuffers.put(bufferID, buf);
+
         return mappedBuffer;
     }
 
@@ -81,16 +122,19 @@ public class VBO {
         // Assume buffer hasn't been flipped if it isn't positioned at 0
         if(mappedBuffer.position() != 0) mappedBuffer.flip();
         
-        Ref.glRef.unmapVBO(target, false);
+        int t = BufferTargetToOpenGL(target);
+        glUnmapBufferARB(t);
         mappedBuffer = null;
     }
 
     public void unbind() {
-        Ref.glRef.unbindVBO(target);
+        unbind(target);
     }
 
-    public static void unbindVertexBuffer() {
-        Ref.glRef.unbindVBO(BufferTarget.Vertex);
+    public static void unbind(BufferTarget target) {
+        int t = BufferTargetToOpenGL(target);
+        glBindBufferARB(t, 0);
+        GLRef.checkError();
     }
 
     public void destroy() {
@@ -98,7 +142,40 @@ public class VBO {
         if(mappedBuffer != null) {
             unbind();
         }
-        Ref.glRef.destroyVBO(vboId);
+        // Remove cached index & vertex buffers
+        Integer bufferID = (vboId+1) << 1;
+        cachedBuffers.remove(bufferID);
+        cachedBuffers.remove(bufferID++);
+
+
+        glDeleteBuffersARB(vboId);
+        GLRef.checkError();
         sizeInBytes = 0;
+    }
+
+    public void discard() {
+        bind();
+        glBufferDataARB(BufferTargetToOpenGL(target), 0, usageToInt(usage));
+        // Remove cached index & vertex buffers
+        Integer bufferID = (vboId+1) << 1;
+        cachedBuffers.remove(bufferID);
+        cachedBuffers.remove(bufferID++);
+        sizeInBytes = 0;
+        GLRef.checkError();
+    }
+
+    private static int BufferTargetToOpenGL(BufferTarget value) {
+        int t = GL_ARRAY_BUFFER_ARB;
+        if(value == BufferTarget.Index)
+            t = GL_ELEMENT_ARRAY_BUFFER_ARB;
+        return t;
+    }
+
+    // Size is in elements, so 1 int = 1 size
+    private void resize(int size) {
+        int t = BufferTargetToOpenGL(target);
+        bind();
+        glBufferDataARB(t, size, usageToInt(usage));
+        GLRef.checkError();
     }
 }

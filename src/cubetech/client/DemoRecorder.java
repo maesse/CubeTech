@@ -1,6 +1,7 @@
 package cubetech.client;
 
 import cubetech.collision.ClientCubeMap;
+import cubetech.collision.CubeMap;
 import cubetech.common.Common;
 import cubetech.common.ICommand;
 import cubetech.entities.EntityState;
@@ -87,7 +88,7 @@ public class DemoRecorder {
         demowaiting = true;
         try {
             // Save clients current view of the map
-            Ref.cgame.map.serializeClientMap(fc);
+            CubeMap.serializeChunks(fc, Ref.cgame.map.chunks);
         } catch (IOException ex) {
             Common.Log(Common.getExceptionString(ex));
             recording = false;
@@ -316,8 +317,8 @@ public class DemoRecorder {
 
             ClientCubeMap cmap = new ClientCubeMap();
             if(Ref.cgame != null && Ref.cgame.map != null) Ref.cgame.map.dispose();
-            
-            cmap.unserialize(fileBuffer);
+
+            CubeMap.unserialize(fileBuffer, cmap.chunks);
 
             // read demo messages until connected
             while(cl.state.ordinal() >= ConnectState.CONNECTED.ordinal()

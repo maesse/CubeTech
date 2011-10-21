@@ -33,7 +33,7 @@ public class CubeText {
     int colorcycle = 0;
     boolean colorcycleasc = true;
     public CubeText() {
-        cubes = Ref.ResMan.LoadTexture("data/cubes.png");
+        cubes = Ref.ResMan.LoadTexture("data/textures/cubes.png");
         charmap.put(0, "XXXX XXXXX XX X");
         charmap.put(1, "XXXX XXX X XXXX");
         charmap.put(2, "XXXX  X  X  XXX");

@@ -1,7 +1,9 @@
 package cubetech.gfx;
 
 import cubetech.common.Common;
-import cubetech.gfx.GLRef.BufferTarget;
+import cubetech.gfx.VBO.BufferTarget;
+import cubetech.gfx.VBO.Usage;
+
 import cubetech.misc.Ref;
 import java.nio.ByteBuffer;
 import java.util.AbstractMap.SimpleEntry;
@@ -49,9 +51,11 @@ public class SpriteManager {
 
     public int[] HUDSprites = new int[MAX_SPRITES];
     public int HUDSpriteOffset = 0;
-    
-    private int vertexVBOId = -1;
-    private int indexVBOId = -1;
+
+    private VBO vertexBuffer;
+    private VBO indexBuffer;
+
+    private int vboNormalOffset = 0;
 
     public enum Type {
         GAME,
@@ -91,7 +95,9 @@ public class SpriteManager {
 
     // The index buffer never changes, so just have it built once
     private void BuildIndexBuffer() {
-        ByteBuffer buf = Ref.glRef.mapVBO(BufferTarget.Index, indexVBOId, MAX_SPRITES*6*4);
+        if(indexBuffer != null) return; // already created
+        indexBuffer = new VBO(MAX_SPRITES*6*4, BufferTarget.Index);
+        ByteBuffer buf = indexBuffer.map();
         for (int i= 0; i < MAX_SPRITES; i++) {
             buf.putInt((0) + i * 4);
             buf.putInt((1) + i * 4);
@@ -103,7 +109,7 @@ public class SpriteManager {
 
         // Let openGL digest them
         buf.flip();
-        Ref.glRef.unmapVBO(BufferTarget.Index, true);
+        indexBuffer.unmap();
     }
 
     private void DrawNormalFixedFunction() {
@@ -151,31 +157,33 @@ public class SpriteManager {
             spr.DrawFromBuffer();
         }
     }
+
+    private void initBuffers() {
+        if(vertexBuffer == null) {
+            vertexBuffer = new VBO(MAX_SPRITES*8*4, BufferTarget.Vertex, Usage.STREAM);
+        }
+        if(indexBuffer == null) {
+            BuildIndexBuffer();
+        }
+    }
     
     public void DrawNormal() {
-        GLRef.checkError();
-//        if(true)return;
+        // Oldschool
         boolean useVBO = Ref.glRef.isShadersSupported();
         if(!useVBO) {
             DrawNormalFixedFunction();
             return;
         }
-        if(vertexVBOId == -1) {
-            vertexVBOId = Ref.glRef.createVBOid();
-            Ref.glRef.sizeVBO(BufferTarget.Vertex, vertexVBOId, MAX_SPRITES*8*4);
-            return;
-        } else if(indexVBOId == -1) {
-            indexVBOId = Ref.glRef.createVBOid();
-            Ref.glRef.sizeVBO(BufferTarget.Index, indexVBOId, MAX_SPRITES*6*4);
-            BuildIndexBuffer();
-            return;
-        }
+
+        // Newschool
+        initBuffers();
         
         if(NormalSpriteOffset == 0)
             return;
 
         // nSprites * Sprite.Stride * 4 verts pr sprite
-        ByteBuffer vboBuffer = Ref.glRef.mapVBO(BufferTarget.Vertex, vertexVBOId, NormalSpriteOffset*Sprite.STRIDE*4);
+        vertexBuffer.discard();
+        ByteBuffer vboBuffer = vertexBuffer.map(NormalSpriteOffset*Sprite.STRIDE*4);
         ArrayList<SimpleEntry<Integer, CubeTexture>> textureChanges = new ArrayList<SimpleEntry<Integer, CubeTexture>>();
         CubeTexture tex = null;
         int spriteIndex = 0;
@@ -222,11 +230,11 @@ public class SpriteManager {
         //System.out.println("-----------");
         // Fill the OpenGL buffer
         vboBuffer.flip();
-        Ref.glRef.unmapVBO(BufferTarget.Vertex, false);
+        vertexBuffer.unmap();
 
         // Ensure our buffer is bound
         //Ref.glRef.bindVBO(BufferTarget.Vertex, vertexVBOId);
-        Ref.glRef.bindVBO(BufferTarget.Index, indexVBOId);
+        indexBuffer.bind();
         
         int stride = Sprite.STRIDE;
 //        GL11.glEnableClientState(GL11.GL_VERTEX_ARRAY);
@@ -280,21 +288,26 @@ public class SpriteManager {
         }
 
         // Clean up
-//        GL11.glDisableClientState(GL11.GL_VERTEX_ARRAY);
-//        GL11.glDisableClientState(GL11.GL_COLOR_ARRAY);
-//        GL11.glDisableClientState(GL11.GL_TEXTURE_COORD_ARRAY);
         GL20.glDisableVertexAttribArray(0);
         GL20.glDisableVertexAttribArray(1);
         GL20.glDisableVertexAttribArray(2);
-        Ref.glRef.unbindVBO(BufferTarget.Vertex);
-        Ref.glRef.unbindVBO(BufferTarget.Index);
+        vertexBuffer.unbind();
+        indexBuffer.unbind();
         GLRef.checkError();
     }
 
-    public void DrawHUD() {
+    // use vbo for HUD sprites
+    int[] events = new int[1000];
+    private void drawHUDVBO() {
+        initBuffers();
+        if(HUDSpriteOffset == 0) return;
+        // render info
+        int nEvents = 0;
+
+        vertexBuffer.discard();
+        ByteBuffer buffer = vertexBuffer.map(HUDSpriteOffset*Sprite.STRIDE*4);
         CubeTexture tex = Ref.ResMan.getWhiteTexture();
-        Ref.glRef.PushShader(Ref.glRef.getShader("sprite"));
-        tex.Bind();
+        CubeTexture nulltex = tex;
         for (int i= 0; i < HUDSpriteOffset; i++) {
             int index = HUDSprites[i];
             Sprite spr = Sprites[index];
@@ -302,15 +315,100 @@ public class SpriteManager {
                 Common.LogDebug("Invalid sprite");
                 spr.invalid = false;
             }
-            if(spr.Texture != tex) {
+
+            boolean special = spr.special != 0;
+            boolean texturechange = !special && (spr.Texture == null ? (tex != nulltex):(spr.Texture != tex));
+            if(!special) spr.FillBuffer(buffer);
+            if(texturechange) {
                 tex = spr.Texture;
-                if(tex != null)
-                    tex.Bind();
-                else
-                    Ref.ResMan.SetWhiteTexture();
             }
-                
-            Sprites[index].DrawFromBuffer();
+
+            // register events that require a new drawcall
+            if(special || texturechange) events[nEvents++] = i;
+            if(nEvents >= events.length) {
+                // resize event array
+                int[] newevents = new int[events.length*2];
+                System.arraycopy(events, 0, newevents, 0, events.length);
+                events = newevents;
+            }
+        }
+        vertexBuffer.unmap();
+
+
+        // Now set up the render state
+        indexBuffer.bind();
+
+        ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_POSITION); // position
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_POSITION, 2, GL11.GL_FLOAT, false, Sprite.STRIDE, 0);
+        ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COLOR); // color
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COLOR, 4, GL11.GL_UNSIGNED_BYTE, true, Sprite.STRIDE, 2*4);
+        ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COORDS); // coords
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS, 1, GL11.GL_FLOAT, false, Sprite.STRIDE, 3*4);
+
+        
+        tex = nulltex;
+        tex.Bind();
+        int offset = 0;
+        for (int i= 0; i <= nEvents; i++) {
+            // Go over the events, doing batched renders
+            int batchStart = i == 0?0:events[i-1];
+            int batchNext = i == nEvents?HUDSpriteOffset:events[i];
+            int batchLenght = batchNext - batchStart;
+            if(batchLenght > 0) {
+                // Draw
+                GL12.glDrawRangeElements(GL11.GL_TRIANGLES,batchStart*4,(batchNext*4)-1,6*batchLenght,GL11.GL_UNSIGNED_INT, offset);
+                offset += batchLenght*6*4;
+            }
+
+            // Handle event for next batch
+            if(i != nEvents) {
+                Sprite spr = Sprites[HUDSprites[events[i]]];
+                boolean special = spr.special != 0;
+                boolean texturechange = !special && (spr.Texture == null ? (tex != nulltex):(spr.Texture != tex));
+                if(special) {
+                    spr.doSpecial();
+                } else if(texturechange) {
+                    tex = spr.Texture;
+                    if(tex == null) nulltex.Bind();
+                    else tex.Bind();
+                }
+            }
+        }
+
+        // Clean up
+        GL20.glDisableVertexAttribArray(Shader.INDICE_POSITION);
+        GL20.glDisableVertexAttribArray(Shader.INDICE_COLOR);
+        GL20.glDisableVertexAttribArray(Shader.INDICE_COORDS);
+        vertexBuffer.unbind();
+        indexBuffer.unbind();
+    }
+
+    public void DrawHUD() {
+        if(HUDSpriteOffset == 0) return;
+        
+        Ref.glRef.PushShader(Ref.glRef.getShader("sprite"));
+        if(Ref.glRef.isShadersSupported()) {
+            drawHUDVBO();
+        } else {
+            CubeTexture tex = Ref.ResMan.getWhiteTexture();
+            tex.Bind();
+            for (int i= 0; i < HUDSpriteOffset; i++) {
+                int index = HUDSprites[i];
+                Sprite spr = Sprites[index];
+                if(spr.invalid) {
+                    Common.LogDebug("Invalid sprite");
+                    spr.invalid = false;
+                }
+                if(spr.Texture != tex) {
+                    tex = spr.Texture;
+                    if(tex != null)
+                        tex.Bind();
+                    else
+                        Ref.ResMan.SetWhiteTexture();
+                }
+
+                Sprites[index].DrawFromBuffer();
+            }
         }
         Ref.glRef.PopShader();
     }

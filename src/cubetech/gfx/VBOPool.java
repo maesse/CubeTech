@@ -25,7 +25,7 @@ public class VBOPool {
         return freeList.size();
     }
 
-    public VBO allocateVBO(int size, GLRef.BufferTarget target) {
+    public VBO allocateVBO(int size, VBO.BufferTarget target) {
         VBO vbo = poolFreeList(size, target);
         if(vbo == null) {
 //            Common.Log("Pool empty. Creating new VBO");
@@ -44,7 +44,7 @@ public class VBOPool {
         }
     }
 
-    private VBO poolFreeList(int size, GLRef.BufferTarget target) {
+    private VBO poolFreeList(int size, VBO.BufferTarget target) {
         for (int i= 0; i < freeList.size(); i++) {
             VBO vbo = freeList.get(i);
             if(vbo.getSize() >= size && vbo.getTarget() == target) {

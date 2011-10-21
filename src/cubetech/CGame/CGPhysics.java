@@ -11,7 +11,6 @@ import cubetech.collision.CubeChunk;
 import cubetech.common.CVar;
 import cubetech.common.Helper;
 import cubetech.common.ICommand;
-import cubetech.gfx.GLRef.BufferTarget;
 import cubetech.gfx.VBO;
 import cubetech.misc.Ref;
 import java.nio.ByteBuffer;
@@ -73,7 +72,7 @@ public class CGPhysics {
         int stride = 32; // 32bytes for each point
 
         // Create a VBO and grab a mapped bytebuffer
-        vertexBuffer = new VBO(nVerts * stride, BufferTarget.Vertex);
+        vertexBuffer = new VBO(nVerts * stride, VBO.BufferTarget.Vertex);
         ByteBuffer data = vertexBuffer.map();
 
         // Fill the buffer

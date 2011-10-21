@@ -33,7 +33,7 @@ public class SkyBox {
     }
 
     public void Render(ViewParams view) {
-        Ref.glRef.PushShader(Ref.glRef.getShader("sprite"));
+        Ref.glRef.PushShader(Ref.glRef.getShader("World"));
    
         // Render thyme!
         Vector4f tx = new Vector4f(0,0,1,1);

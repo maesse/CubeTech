@@ -16,6 +16,7 @@ public class Profiler {
         SHADOWS,
         CLIENTCUBES
     ,   PHYSICS,
+    ENDFRAME,
     SV_PACKET,
     CL_PACKET}
 
@@ -63,12 +64,11 @@ public class Profiler {
         }
 
         // Going to cheat a bit.. Pull out render time from client times
-
-        msTable[Sec.RENDER.ordinal()] -= msTable[Sec.SHADOWS.ordinal()];
+        msTable[Sec.CLIENT.ordinal()] -= msTable[Sec.ENDFRAME.ordinal()];
         msTable[Sec.CLIENT.ordinal()] -= msTable[Sec.RENDER.ordinal()];
-        msTable[Sec.CLIENT.ordinal()] -= msTable[Sec.SHADOWS.ordinal()];
+        msTable[Sec.RENDER.ordinal()] -= msTable[Sec.SHADOWS.ordinal()];
+        msTable[Sec.CLIENT.ordinal()] -= msTable[Sec.RENDERWAIT.ordinal()];
         msTable[Sec.CLIENT.ordinal()] -= msTable[Sec.PHYSICS.ordinal()];
-        msTable[Sec.RENDER.ordinal()] -= msTable[Sec.RENDERWAIT.ordinal()];
 
         int thisTime = Ref.common.frametime;
         if(lastFrame != 0) {

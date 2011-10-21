@@ -1,10 +1,9 @@
 package cubetech.CGame;
 
 import cubetech.common.Score;
-import cubetech.Block;
 import cubetech.Game.Game;
 import cubetech.Game.Gentity;
-import cubetech.collision.BlockModel;
+import cubetech.Game.GentityFilter;
 import cubetech.collision.CubeChunk;
 import cubetech.collision.SingleCube;
 import cubetech.common.*;
@@ -12,6 +11,9 @@ import cubetech.common.items.*;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
+import cubetech.entities.Vehicle;
+import cubetech.entities.Vehicle.VehicleControls;
+import cubetech.entities.Vehicle.VehicleState;
 import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
@@ -20,11 +22,11 @@ import cubetech.gfx.TextManager.Align;
 import cubetech.gfx.VBO;
 import cubetech.gfx.VBOPool;
 import cubetech.iqm.BoneAttachment;
+import cubetech.iqm.BoneController;
 import cubetech.iqm.IQMAnim;
 import cubetech.iqm.IQMModel;
 import cubetech.misc.Profiler;
 import cubetech.misc.Ref;
-import cubetech.spatial.Bin;
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -68,7 +70,23 @@ public class CGameRender {
             case EntityType.MISSILE:
                 missile(cent);
                 break;
+            case EntityType.GENERAL:
+                general(cent);
+                break;
         }
+    }
+
+    private void general(CEntity cent) {
+        EntityState es = cent.currentState;
+        if(es.modelindex == 0) return;
+
+        RenderEntity ref = Ref.render.createEntity(REType.MODEL);
+        String modelname = Ref.client.cl.GameState.get(CS.CS_MODELS+es.modelindex-1);
+        IQMModel model = Ref.ResMan.loadModel(modelname);
+        ref.model = model;
+        es.pos.Evaluate(game.cg.time, ref.origin);
+        ref.axis = Helper.AnglesToAxis(es.Angles);
+        Ref.render.addRefEntity(ref);
     }
 
     private void missile(CEntity cent) {
@@ -176,18 +194,19 @@ public class CGameRender {
         Helper.VectorMA(ent.origin, game.cg.cg_gun_x.fValue, ent.axis[0], ent.origin);
         Helper.VectorMA(ent.origin, game.cg.cg_gun_y.fValue, ent.axis[1], ent.origin);
         Helper.VectorMA(ent.origin, game.cg.cg_gun_z.fValue, ent.axis[2], ent.origin);
-        
+        boolean isFiring = ps.weaponState == WeaponState.FIRING &&
+                    ps.stats.getAmmo(ps.weapon)>0;
         if(ent.model.anims != null && ent.model.anims.length > 0) {
             IQMAnim anim = ent.model.anims[0];
 
             if(ps.weaponState == WeaponState.READY && ent.model.getAnimation(Animations.READY) != null) {
                 anim = ent.model.getAnimation(Animations.READY);
-            } else if(ps.weaponState == WeaponState.FIRING && ent.model.getAnimation(Animations.FIRING) != null) {
+            } else if(isFiring && ent.model.getAnimation(Animations.FIRING) != null ) {
                 anim = ent.model.getAnimation(Animations.FIRING);
             }
             int num = anim.num_frames;
             int first = anim.first_frame;
-            if(ps.weaponTime > 0 && ps.weaponState == WeaponState.FIRING) {
+            if(ps.weaponTime > 0 && isFiring) {
                 float frac = 1f-(ps.weaponTime / (float)wi.getFireTime());
                 ent.frame = (int) Math.ceil(frac * num);
                 
@@ -323,13 +342,65 @@ public class CGameRender {
         ent.color = new Vector4f(255, 255, 255, 255f);
 
         Ref.render.addRefEntity(ent);
+        addWeaponToPlayer(cent, ent);
+        
+    }
+
+    private void addWeaponToPlayer(CEntity cent, RenderEntity ent) {
+        // Add player weapon
+        if(cent.currentState.weapon == Weapon.NONE) return;
+
+        WeaponItem w = Ref.common.items.getWeapon(cent.currentState.weapon);
+        IQMModel weaponModel = w.getWeaponInfo().worldModel;
+        if(weaponModel == null) return;
+
+        ent.model.animate(ent.frame, ent.oldframe, ent.backlerp);
+        BoneAttachment bone = ent.model.getAttachment("weapon");
+        if(bone == null) return;
+
+        Vector3f boneOrigin = new Vector3f(bone.lastposition.x
+                    , bone.lastposition.y
+                    , bone.lastposition.z);
+
+
+
+        RenderEntity went = Ref.render.createEntity(REType.MODEL);
+        went.color.set(255,255,255,255);
+        went.model = weaponModel;
+        weaponModel.animate(0, 0, 0);
+
+        Helper.transform(ent.axis, ent.origin, boneOrigin);
+        went.origin.set(boneOrigin);
+
+        Vector3f[] test = new Vector3f[3];
+        test[1] = new Vector3f(0,3,0);
+        test[2] = new Vector3f(0,0,3);
+        test[0] = new Vector3f(3,0,0);
+
+        Helper.mul(test, bone.axis, test);
+        Helper.mul(test, ent.axis, test);
+
+        went.axis = test;
+
+        Ref.render.addRefEntity(went);
     }
 
     private void playerAnimation(CEntity cent, RenderEntity ent) {
         float speedScale = 1.0f;
         
         ClientInfo ci = Ref.cgame.cgs.clientinfo[cent.currentState.ClientNum];
-        runLerpFrame(ci, cent.pe.torso, cent.currentState.frame, speedScale);
+        // Change animation based on what weapon the client has
+        // Figure out what animation was requested
+        Animations anim = cent.currentState.frameAsAnimation();
+        if(anim == null) {
+            Common.LogDebug("Invalid animation %d", cent.currentState.frame);
+            return;
+        }
+        if(cent.currentState.weapon == Weapon.AK47) {
+            if(anim == Animations.IDLE) anim = Animations.IDLE_GUN1;
+            if(anim == Animations.WALK) anim = Animations.WALK_GUN1;
+        }
+        runLerpFrame(ci, cent.pe.torso, anim.ordinal(), speedScale);
 
         ent.oldframe = cent.pe.torso.oldFrame;
         ent.frame = cent.pe.torso.frame;
@@ -398,6 +469,22 @@ public class CGameRender {
             Vector2f pos = new Vector2f(Ref.glRef.GetResolution());
             pos.scale(0.5f);
             Ref.textMan.AddText(pos, "^3PAUSED", Align.CENTER, Type.HUD, 2,0);
+        }
+
+        if(Ref.client.servername.equals("localhost")) {
+            Gentity ent = Ref.game.Find(null, GentityFilter.CLASSNAME, "vehicle");
+            if(ent != null) {
+                Vehicle v = (Vehicle)ent;
+                VehicleState state = v.getState();
+                float x = Ref.glRef.GetResolution().x * 0.8f;
+                Ref.textMan.AddText(new Vector2f(x, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*1),
+                        "RPM: " + state.rpm, Align.LEFT, Type.HUD);
+                Ref.textMan.AddText(new Vector2f(x, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*2),
+                        "Torque: " + state.torque, Align.LEFT, Type.HUD);
+                VehicleControls ctrl = v.getControls();
+                Ref.textMan.AddText(new Vector2f(x, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*3),
+                        (ctrl.brake>0?" ^2BRK":"") + (ctrl.throttle>0?" ^3THR":""), Align.LEFT, Type.HUD);
+            }
         }
     }
 
@@ -519,7 +606,7 @@ public class CGameRender {
             Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
             spr.Set(new Vector2f(0.1f* res.x+2, res.y-(yOffset-0.01f)-Ref.textMan.GetCharHeight()+2),
                     new Vector2f(28,28),
-                    Ref.ResMan.LoadTexture("data/dead.png"), null, null);
+                    Ref.ResMan.LoadTexture("data/textures/dead.png"), null, null);
             spr.SetColor(255, 255,255, 210);
         }
 
@@ -590,95 +677,8 @@ public class CGameRender {
 //        Common.Log(graph_text);
         Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x - size.x, Ref.glRef.GetResolution().y-size.y), graph_text, Align.LEFT, Type.HUD);
     }
+    
 
-    public void RenderBackground() {
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-
-        ViewParams view = game.cg.refdef;
-
-        float yfrac;
-        try {
-            yfrac = view.Origin.y / Ref.cvars.Find("g_killheight").fValue;
-        } catch(NullPointerException ex) {
-            yfrac = 0f;
-        }
-        if(yfrac < -1f)
-            yfrac = -1f;
-        if(yfrac > 1)
-            yfrac = 1f;
-
-        float xfrac = view.Origin.x / 5000f;
-
-        Vector2f texSize = new Vector2f(1, 0.8f);
-        Vector2f texoffset = new Vector2f(0+xfrac,0.1f + yfrac * -0.1f);
-
-        spr.Set(new Vector2f(view.Origin.x + view.xmin, view.Origin.y + view.ymin),
-                new Vector2f(view.w, view.h), Ref.ResMan.LoadTexture("data/background_1.png"), texoffset, texSize);
-        spr.SetDepth(CGame.PLAYER_LAYER - 200);
-    }
-
-
-    //
-    // Misc.
-    //
-    void DrawEntities() {
-        if(game.cg_drawentities.iValue == 0 || Ref.game == null || Ref.game.g_entities == null)
-            return;
-
-        for (int i= 0; i < Ref.game.level.num_entities; i++) {
-            Gentity ent = Ref.game.g_entities[i];
-            if(!ent.inuse || ent.s.eType == EntityType.PLAYER)
-                continue; // ignore players and unused entities
-
-            if(!ent.r.linked)
-                continue;
-
-            Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-            Vector2f size = new Vector2f();
-            // FIX
-            size.x = ent.r.absmax.x - ent.r.absmin.x;
-            size.y = ent.r.absmax.y - ent.r.absmin.y;
-
-            // Figure out what texture to display
-            CubeTexture tex = null;
-            switch(ent.s.eType) {
-                case EntityType.ITEM:
-                    tex = Ref.ResMan.LoadTexture("data/tool_item.png");
-                    break;
-                case EntityType.MOVER:
-                    tex = Ref.ResMan.LoadTexture("data/tool_mover.png");
-                    break;
-                case EntityType.TRIGGER:
-                    tex = Ref.ResMan.LoadTexture("data/tool_trigger.png");
-                    break;
-            }
-
-            // Unclaimed by the switch, but has a trigger.
-            if(tex == null && (ent.r.contents & Content.TRIGGER) == Content.TRIGGER)
-                tex = Ref.ResMan.LoadTexture("data/tool_trigger.png");
-
-            if(tex == null)
-                Ref.ResMan.getWhiteTexture();
-
-            spr.Set(new Vector2f(ent.r.absmin.x, ent.r.absmin.y), size, tex, null, null);
-            spr.SetDepth(CGame.PLAYER_LAYER-1);
-            spr.SetColor(0, 255, 255, 127);
-        }
-    }
-
-    void DrawBin() {
-        ViewParams view = game.cg.refdef;
-        ArrayList<Bin> bins = Ref.spatial.getBins(view.Origin.x + Game.PlayerMins.x, view.Origin.y + Game.PlayerMins.y, view.Origin.x + Game.PlayerMaxs.x, view.Origin.y + Game.PlayerMaxs.y);
-        ArrayList<Block> blocks = new ArrayList<Block>();
-        for (int i= 0; i < bins.size(); i++) {
-            Bin bin = bins.get(i);
-            bin.getBlocks(blocks);
-        }
-
-        for (Block block : blocks) {
-            block.Render();
-        }
-    }
 
     private void runLerpFrame(ClientInfo ci, LerpFrame lf, int newanimation, float speedScale) {
         // see if the animation sequence is switching
@@ -752,7 +752,6 @@ public class CGameRender {
         }
         Animations animation = Animations.values()[newanimation];
 
-
         // Try to load the model
         IQMModel model = Ref.ResMan.loadModel(ci.modelName);
         if(model == null) {
@@ -778,6 +777,7 @@ public class CGameRender {
     private static final int[] moveOffsets = new int[] {0,22,45,-22,0,22,-45,-22};
     private void playerAngles(CEntity cent, RenderEntity rent) {
         Vector3f headAngle = new Vector3f(cent.lerpAngles);
+
         headAngle.y = Helper.AngleMod(headAngle.y);
 
         int dir = (int)cent.currentState.Angles2.y;
@@ -785,13 +785,28 @@ public class CGameRender {
             Common.LogDebug("Invalid movedirection %d", dir);
             return;
         }
+        Vector3f legsAngle = new Vector3f();
+//        cent.pe.legs.yawing = true;
+        cent.pe.legs.pitching = false;
+
         Vector3f torsoAngle = new Vector3f();
-        cent.pe.torso.yawing = true;
-        cent.pe.torso.pitching = true;
+//        cent.pe.torso.yawing = true;
+        cent.pe.torso.pitching = false;
         // yaw
-        torsoAngle.y = headAngle.y + 0.5f * moveOffsets[dir];
+        torsoAngle.y = headAngle.y + 0.35f * moveOffsets[dir];
+        legsAngle.y = headAngle.y + moveOffsets[dir];
         swingAngles(torsoAngle.y, 25, 90, game.cg_swingspeed.fValue, cent.pe.torso, true); // yaw
+        Animations anim = cent.currentState.frameAsAnimation();
+        if(anim != null && anim == Animations.IDLE) {
+            cent.pe.legs.yawing = false;
+            swingAngles(legsAngle.y, 20, 110, game.cg_swingspeed.fValue*0.5f, cent.pe.legs, true); // yaw
+        } else if(cent.pe.legs.yawing) {
+            swingAngles(legsAngle.y, 0, 110, game.cg_swingspeed.fValue, cent.pe.legs, true); // yaw
+        } else {
+            swingAngles(legsAngle.y, 40, 110, game.cg_swingspeed.fValue, cent.pe.legs, true); // yaw
+        }
         torsoAngle.y = cent.pe.torso.yawAngle;
+        legsAngle.y = cent.pe.legs.yawAngle;
 
         // pitch
         float dest;
@@ -803,8 +818,11 @@ public class CGameRender {
             if(dest> 30) dest = 30;
         }
         swingAngles(dest, 15, 30, 0.1f, cent.pe.torso, false);
-        torsoAngle.x = cent.pe.torso.pitchAngle;
-        
+//        torsoAngle.x = cent.pe.torso.pitchAngle;
+        BoneController legController1 = new BoneController("Bone.007", new Vector3f(-torsoAngle.x, legsAngle.y-torsoAngle.y, 0));
+        BoneController legController2 = new BoneController("Hips", new Vector3f(-torsoAngle.x, legsAngle.y-torsoAngle.y, 0));
+        BoneController legController3 = new BoneController("Head", new Vector3f(-torsoAngle.x, headAngle.y-torsoAngle.y, 0));
+        rent.controllers = new BoneController[] {legController1,legController2,legController3};
         rent.axis = Helper.AnglesToAxis(torsoAngle, rent.axis);
     }
 

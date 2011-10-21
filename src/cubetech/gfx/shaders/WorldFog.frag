@@ -11,5 +11,6 @@ void main()
     vec4 dest = texture2D(tex, coords) * color;
     //vec4 dest = vec4(0.8,0.8,0.8,1.0) * color;
     float fogFactor = exp(-pow((fog_factor * gl_FogFragCoord), 2.0));
-    gl_FragColor = mix(fog_color, dest, fogFactor);
+    gl_FragColor.rgb = mix(fog_color.rgb, dest.rgb, fogFactor);
+    gl_FragColor.a = dest.a;
 }

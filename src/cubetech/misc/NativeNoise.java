@@ -1,8 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.misc;
 
 import java.nio.ByteBuffer;
@@ -44,7 +39,7 @@ public class NativeNoise {
 
     public void test() {
         init();
-        int axissize = 5;
+        int axissize = 32;
         if(buffer == null || buffer.capacity() < axissize * axissize * axissize * 4) {
             buffer = ByteBuffer.allocateDirect(axissize * axissize * axissize * 4);
         }

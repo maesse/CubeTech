@@ -13,7 +13,7 @@ import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Helper;
 import cubetech.gfx.*;
-import cubetech.gfx.GLRef.BufferTarget;
+
 import cubetech.misc.Profiler;
 import cubetech.misc.Profiler.Sec;
 import cubetech.misc.Profiler.SecTag;
@@ -67,7 +67,8 @@ public class ChunkRender {
         if(vbo == null) return;
         VBOPool.Global.freeVBO(vbo);
         vbo = null;
-        state = State.DIRTY;
+        if(state != State.BUILDING && state != State.WAITING) state = State.DIRTY;
+        
         vboReady = false;
     }
 
@@ -87,9 +88,11 @@ public class ChunkRender {
     
     private void renderVBO() {
         vbo.bind();
-        preVbo();
-            
-        GL11.glDrawArrays(GL11.GL_QUADS, 0, vbo_nFaces*4);
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_POSITION, 3, GL11.GL_FLOAT, false, 32, 0);
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COLOR, 4, GL11.GL_UNSIGNED_BYTE, true, 32, 3*4);
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS, 2, GL11.GL_FLOAT, false, 32, 4*4);
+        GL12.glDrawRangeElements(GL11.GL_TRIANGLES, 0, vbo_nFaces*4 - 1, vbo_nFaces*6, GL11.GL_UNSIGNED_INT, 0);
+        //GL11.glDrawArrays(GL11.GL_QUADS, 0, vbo_nFaces*4);
     }
 
     // notify all neighboughrs
@@ -128,19 +131,17 @@ public class ChunkRender {
     }
 
     public static void preVbo() {
-        int stride = 32;
         ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_POSITION); // position
-        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_POSITION, 3, GL11.GL_FLOAT, false, stride, 0);
         ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COLOR); // color
-        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COLOR, 4, GL11.GL_UNSIGNED_BYTE, true, stride, 3*4);
         ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COORDS); // coords
-        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS, 2, GL11.GL_FLOAT, false, stride, 4*4);
+        
+        
     }
 
     public static void postVbo() {
-        GL20.glDisableVertexAttribArray(0);
-        GL20.glDisableVertexAttribArray(1);
-        GL20.glDisableVertexAttribArray(2);
+        GL20.glDisableVertexAttribArray(Shader.INDICE_POSITION);
+        GL20.glDisableVertexAttribArray(Shader.INDICE_COLOR);
+        GL20.glDisableVertexAttribArray(Shader.INDICE_COORDS);
     }
 
     private CubeChunk getChunkInDirection(int[] dir) {
@@ -167,7 +168,7 @@ public class ChunkRender {
         boolean newVBO = vbo == null;
         if(vbo == null) {
             // Start off with an exact vbo size.
-            vbo = VBOPool.Global.allocateVBO(PLANE_SIZE * sidesRendered, BufferTarget.Vertex);
+            vbo = VBOPool.Global.allocateVBO(PLANE_SIZE * sidesRendered, VBO.BufferTarget.Vertex);
             // overgrow a bit when resizing
             vbo.resizeMultiplier = VBO_RESIZE_MULTIPLIER;
         } else if(vbo.getSize() < PLANE_SIZE * sidesRendered) {
@@ -178,8 +179,11 @@ public class ChunkRender {
 
         // Copy data to VBO
         boolean vboResized = vbo.getSize() < PLANE_SIZE * sidesRendered; // shouldn't happen
+        vbo.discard();
         ByteBuffer buffer = vbo.map(PLANE_SIZE * sidesRendered);
         long startTime2 = System.nanoTime();
+        if(buffer == null) Ref.common.Error(ErrorCode.FATAL, "vbo.map == null");
+        if(src == null) Ref.common.Error(ErrorCode.FATAL, "src == null");
         if(buffer.limit()-buffer.position() < src.limit()) {
             Ref.common.Error(ErrorCode.FATAL, "bytebuffer -> vbo overflow in chunkRender");
         }

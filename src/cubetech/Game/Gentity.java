@@ -136,7 +136,7 @@ public class Gentity {
         r.currentOrigin.z = org.z;
     }
 
-    void Init(int i) {
+    public void Init(int i) {
         inuse = true;
         classname = "noclass";
         s.ClientNum = i;

@@ -4,7 +4,11 @@ import cern.colt.function.LongObjectProcedure;
 import cern.colt.map.OpenLongObjectHashMap;
 import cubetech.CGame.ChunkRender;
 import cubetech.CGame.CubeChunkDataBuilder;
+import cubetech.CGame.REType;
+import cubetech.CGame.RenderEntity;
 import cubetech.CGame.ViewParams;
+import cubetech.common.CVar;
+import cubetech.common.CVarFlags;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.ICommand;
@@ -19,6 +23,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
@@ -34,33 +40,48 @@ import org.lwjgl.util.vector.Vector4f;
  * @author mads
  */
 public class ClientCubeMap {
+
+
     public OpenLongObjectHashMap chunks = new OpenLongObjectHashMap();
     public Color[] lightSides = new Color[6];
 
     // render stats
-    public int nSides = 0; // sides rendered this frame
-    public int nChunks = 0;
-    public int nVBOthisFrame = 0; // vbo's updated this frame
+    public static int nSides = 0; // sides rendered this frame
+    public static int nChunks = 0;
+    public static int nVBOthisFrame = 0; // vbo's updated this frame
 
-    Shader shader = null;
-    Shader shadowShader = null;
+    private static Shader shader = null;
+    private static Shader shadowShader = null;
 
     // Vertex data builder
     public CubeChunkDataBuilder builder = new CubeChunkDataBuilder();
    
     // Recieving of chunks
-    int nChunkUpdates = 0;
     int lastRefresh = 0;
     public int chunkPerSecond = 0;
-    private byte[] uncompressBuffer = new byte[CubeChunk.CHUNK_SIZE + 1 + 8]; // max possible size
+    
 
     // For keeping track of last rendertime for chunks
-    private HashMap<CubeChunk, MutableInteger> chunksWithVBO = new HashMap<CubeChunk, MutableInteger>();
+    private static HashMap<CubeChunk, MutableInteger> chunksWithVBO = new HashMap<CubeChunk, MutableInteger>();
+    private static VBO indexBuffer = null;
+
+    private static CVar r_world = Ref.cvars.Get("r_world", "1", EnumSet.of(CVarFlags.CHEAT));
 
     public ClientCubeMap() {
         shader = Ref.glRef.getShader("WorldFog");
         buildLight();
         Ref.commands.AddCommand("cube_refresh", cmd_cube_refresh);
+        indexBuffer = new VBO(32*32*32*4*6, VBO.BufferTarget.Index);
+        ByteBuffer data = indexBuffer.map();
+        for (int i = 0; i < 32*32*32; i++) {
+            data.putInt(i * 4 + 0);
+            data.putInt(i * 4 + 1);
+            data.putInt(i * 4 + 2);
+            data.putInt(i * 4 + 2);
+            data.putInt(i * 4 + 3);
+            data.putInt(i * 4 + 0);
+        }
+        indexBuffer.unmap();
     }
 
     public void dispose() {
@@ -68,6 +89,10 @@ public class ClientCubeMap {
         if(builder != null) {
             builder.dispose();
             builder = null;
+        }
+        if(indexBuffer != null) {
+            indexBuffer.destroy();
+            indexBuffer = null;
         }
 
         // Clear chunks
@@ -78,14 +103,46 @@ public class ClientCubeMap {
             }
         });
         chunks.clear();
+        chunksWithVBO.clear();
     }
 
     public void Render(ViewParams view) {
         if(Ref.cgame.cg.time - 1000 > lastRefresh) {
-            chunkPerSecond = nChunkUpdates;
-            nChunkUpdates = 0;
+            chunkPerSecond = CubeMap.nChunkUpdates;
+            CubeMap.nChunkUpdates = 0;
             lastRefresh = Ref.cgame.cg.time;
         }
+
+        // chunk render distance
+        int chunkDistance = (int) (view.farDepth * 1f / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE))+1;
+        if(chunkDistance <= 0)
+            chunkDistance = 1;
+
+        // Origin in chunk coordinates
+        int orgX =  (int)Math.floor (view.Origin.x / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+        int orgY =  (int)Math.floor (view.Origin.y / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+        int orgZ =  (int)Math.floor (view.Origin.z / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
+
+        CubeChunk[] renderList = getChunksWithinDistance(orgX, orgY, orgZ, chunkDistance);
+
+        RenderEntity ent = Ref.render.createEntity(REType.WORLD);
+        ent.controllers = renderList;
+
+        Ref.render.addRefEntity(ent);
+
+        if(!Ref.cgame.shadowMan.isRendering()) {
+            builder.markLockedChunks(chunks); // push vertex data off to the chunks
+            wipeOldChunkVBO(5000); // remove vbo's that hasn't been rendering for 5secs
+        }
+        
+    }
+
+    public static void renderChunkList(CubeChunk[] renderlist, ViewParams view) {
+        // clear render stats
+        nSides = 0;
+        nChunks = 0;
+        nVBOthisFrame = 0;
+        if(!r_world.isTrue()) return;
 
         // Set shader (+ uniforms)
         boolean shadowPass = Ref.cgame.shadowMan.isRendering();
@@ -120,21 +177,20 @@ public class ClientCubeMap {
             GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_LINE);
         }
 
-        // clear render stats
-        nSides = 0;
-        nChunks = 0;
+        if(!shadowPass)  {
+            // Mark visible chunks before doing frustum culling,
+            // as to keep chunks loaded while you have your back to them
+            for (int i= 0; i < renderlist.length; i++) {
+                if(renderlist[i].render.getRenderFaces() == 0) continue;
+                markChunk(renderlist[i]);
+            }
 
-        // chunk render distance
-        int chunkDistance = (int) (view.farDepth * 1f / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE))+1;
-        if(chunkDistance <= 0)
-            chunkDistance = 1;
+            // Perform frustum culling
+            cullList(renderlist, view);
+        }
 
-        // Origin in chunk coordinates
-        int orgX =  (int)Math.floor (view.Origin.x / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
-        int orgY =  (int)Math.floor (view.Origin.y / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
-        int orgZ =  (int)Math.floor (view.Origin.z / (CubeChunk.SIZE * CubeChunk.BLOCK_SIZE));
-
-        renderFromOrigin(orgX, orgY, orgZ, chunkDistance, !Ref.cgame.shadowMan.isRendering(), view.planes);
+        // Actually render
+        renderChunkList(renderlist);
 
         if(renderingShadows) {
             depth.Unbind();
@@ -149,47 +205,79 @@ public class ClientCubeMap {
         }
     }
 
-    private void renderFromOrigin(int orgX, int orgY, int orgZ, int chunkDistance, boolean enqueue, Plane[] frustum) {
-        nVBOthisFrame = 0;
-        if(enqueue) {
-            builder.markLockedChunks(chunks); // push vertex data off to the chunks
-            wipeOldChunkVBO(5000); // remove vbo's that hasn't been rendering for 5secs
+    private static void cullList(CubeChunk[] renderlist, ViewParams view) {
+        if(Ref.render.r_nocull.isTrue()) return;
+
+        Vector3f center = new Vector3f();
+        float radius = (float) Math.sqrt((0.5f * 32 * 32) * (0.5f * 32 * 32)) + 512f;
+        for (int i= 0; i < renderlist.length; i++) {
+            CubeChunk chunk = renderlist[i];
+            center.set(chunk.absmin[0] + 32 * 32 * 0.5f,
+                    chunk.absmin[1] + 32 * 32 * 0.5f,
+                    chunk.absmin[2] + 32 * 32 * 0.5f);
+
+
+            if(cullCircle(center, radius, view)) {
+                renderlist[i] = null;
+            }
         }
-        initOpengGLRender();
-        
+    }
+
+    private static boolean cullCircle(Vector3f center, float radius, ViewParams view) {
+        for (int j= 0; j < 4; j++) {
+            Plane p = view.planes[j];
+            float dist = Vector3f.dot(center, p.normal) - p.dist;
+            if(dist < -radius) return true;
+        }
+        return false;
+    }
+
+    private CubeChunk[] getChunksWithinDistance(int x, int y, int z, int dist) {
+        ArrayList<CubeChunk> chunkList = new ArrayList<CubeChunk>();
         // Render chunks
-        for (int z= -chunkDistance; z <= chunkDistance; z++) {
-            for (int y= -chunkDistance; y <= chunkDistance; y++) {
-                for (int x= -chunkDistance; x <= chunkDistance; x++) {
-                    long lookup = CubeMap.positionToLookup(orgX + x, orgY + y, orgZ + z);
+        for (int orgz= -dist; orgz <= dist; orgz++) {
+            for (int orgy= -dist; orgy <= dist; orgy++) {
+                for (int orgx= -dist; orgx <= dist; orgx++) {
+                    long lookup = CubeMap.positionToLookup(orgx + x, orgy + y, orgz + z);
                     CubeChunk chunk = (CubeChunk) chunks.get(lookup);
                     if(chunk == null) continue; // Chunk not generated yet
-
-                    // First time we're trying to render this chunk
-                    // TODO: only create if containing cubes
-                    if(chunk.render == null) chunk.render = new ChunkRender(chunk);
-
-                    // Render chunk
-                    chunk.render.Render();
-
-                    nSides += chunk.render.getRenderFaces();
-                    // don't count empty chunks
-                    if(chunk.render.getRenderFaces() > 0) {
-                        markChunk(chunk); // mark as used
-                        nChunks++;
+                    if(chunk.render == null) {
+                        if(chunk.nCubes == 0) continue;
+                        else chunk.render = new ChunkRender(chunk);
                     }
+                    chunkList.add(chunk);
                 }
             }
         }
-        if(nChunks > 0) {
-            ChunkRender.postVbo();
-            VBO.unbindVertexBuffer();
+        CubeChunk[] arr = new CubeChunk[chunkList.size()];
+        return chunkList.toArray(arr);
+    }
+
+    private static void renderChunkList(CubeChunk[] renderList) {
+        // Prepare opengl
+        initOpengGLRender();
+        indexBuffer.bind();
+
+        // Render all the chunks
+        for (int i= 0; i < renderList.length; i++) {
+            CubeChunk chunk = renderList[i];
+            if(chunk == null) continue;
+            chunk.render.Render();
+
+            // Count rendered faces
+            int nFaces = chunk.render.getRenderFaces();
+            nSides += nFaces;
+            if(nFaces > 0) {
+                nChunks++;
+            }
         }
-        int chunksRendered = nChunks;
+        
+        ChunkRender.postVbo();
+        indexBuffer.unbind();
     }
 
     // Marks chunks for VBO unloading
-    private void markChunk(CubeChunk chunk) {
+    private static void markChunk(CubeChunk chunk) {
         if(chunk.render == null || chunk.render.state != ChunkRender.State.READY) return;
         MutableInteger cached = chunksWithVBO.get(chunk);
         int time = Ref.common.frametime;
@@ -218,36 +306,9 @@ public class ClientCubeMap {
         }
     }
 
-    public void unserialize(ByteBuffer buf) {
-        long count = buf.getLong();
-        Common.Log("Reading %d chunks from demo file", count);
-        int size = buf.position();
-        if(count > 0) {
-            parseCubeData(buf, (int) count);
-        }
-        size = buf.position() - size;
-        Common.Log("Loaded %d bytes of compressed map data", size);
-    }
+    
 
-    public void serializeClientMap(FileChannel out) throws IOException {
-        ByteBuffer tempBuf = ByteBuffer.allocate(8);
-        tempBuf.order(ByteOrder.nativeOrder());
-        // Write chunk count
-        int count = chunks.size();
-        tempBuf.putLong(0, count).position(0);
-        out.write(tempBuf);
-        Common.Log("Writing %d cube chunks to demo file", count);
-        int totalChunkSize = 0;
-        for (Object object : chunks.values().elements()) {
-            CubeChunk chunk = (CubeChunk)object;
-
-            // write chunk data
-            ByteBuffer chunkData = chunk.createByteBuffer();
-            totalChunkSize += chunkData.limit();
-            out.write(chunkData);
-        }
-        Common.Log("Compressed map data: %d kbytes", totalChunkSize/1024);
-    }
+    
 
     private void buildLight() {
         // Default white
@@ -301,106 +362,18 @@ public class ClientCubeMap {
         }
     }
 
-    private void initOpengGLRender() {
-        CubeTexture tex = Ref.ResMan.LoadTexture("data/terrain.png");
+    private static void initOpengGLRender() {
+        CubeTexture tex = Ref.ResMan.LoadTexture("data/textures/terrain.png");
         tex.setFiltering(false, GL11.GL_NEAREST);
         tex.setWrap(GL12.GL_CLAMP_TO_EDGE);
-        GL11.glTexParameteri(tex.getTarget(), GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST_MIPMAP_LINEAR);
+        tex.setFiltering(true, GL11.GL_NEAREST_MIPMAP_LINEAR);
         GL11.glTexParameteri(tex.getTarget(), GL12.GL_TEXTURE_MIN_LOD, 0);
         GL11.glTexParameteri(tex.getTarget(), GL12.GL_TEXTURE_MAX_LOD, 2);
+        
+        ChunkRender.preVbo();
     }
     
-    public void parseCubeData(ByteBuffer download, int count) {
-        // need a backing array
-        if(!download.hasArray()) {
-            Ref.common.Error(ErrorCode.FATAL, "parseCubeDatas underlying download bytebuffer doesn't have a backing array");
-        }
-        byte[] src = download.array();
-        download.order(ByteOrder.nativeOrder());
-        int offset = download.position();
-        // Handle multiple chunks in one stream
-        while(offset < src.length && (count > 0 || count == -1)) {
-            download.position(offset);
-            int chunkSize = download.getInt();
-            offset += 4; // move past the size
-            
-            // uncompress data
-            ByteBuffer data = uncompressCubeData(src, offset, chunkSize);
-            parseSingleCubeData(data);
-            nChunkUpdates++;
-
-            // move offset to next data
-            offset += chunkSize;
-            if(count > 0) count--;
-        }
-        // there might be more in this file, so ensure that buffer is positioned correctly
-        if(offset < src.length) download.position(offset);
-
-    }
-
     
-    private ByteBuffer uncompressCubeData(byte[] src, int offset, int lenght) {
-        byte[] dest = uncompressBuffer;
-        int len = 0;
-        try {
-            len = CubeChunk.uncompressData(src, offset, lenght, dest);
-        } catch (DataFormatException ex) {
-            Common.Log("Got a chunkError:" + Common.getExceptionString(ex));
-        }
-        ByteBuffer download = ByteBuffer.wrap(dest, 0, len);
-        download.order(ByteOrder.nativeOrder());
-        return download;
-    }
-
-    private void parseSingleCubeData(ByteBuffer download) {
-        // Check control byte
-        byte control = download.get();
-        if(control != 1 && control != 2) return; // problem
-
-        // extract chunk index
-        long chunkIndex = download.getLong();
-        CubeChunk c = (CubeChunk)chunks.get(chunkIndex);
-        if(c == null) {
-            // First time we recieve data for this chunk -- create it
-            int[] p = CubeMap.lookupToPosition(chunkIndex);
-            c = new CubeChunk(chunks, p[0], p[1], p[2]);
-            c.render = new ChunkRender(c);
-            chunks.put(chunkIndex, c);
-        }
-
-        if(control == 1) {
-            // get entry count
-            int startVersion = download.getInt();
-            byte count = download.get();
-            if(download.limit() - download.position() < count * 4) {
-                // Buffer doesn't contain the complete data for some reason..
-                Common.Log("Got invalid delta chunk data");
-                return;
-            }
-            for (int i= 0; i < count; i++) {
-                int data = download.getInt();
-                int[] delta = CubeChunk.unpackChange(data);
-                // 0-2 = cube index, 3 = cube type
-                byte type = (byte) delta[3];
-                c.setCubeType(delta[0], delta[1], delta[2], type, true);
-                changedBlock(c, delta[0], delta[1], delta[2], type);
-            }
-        } else if(control == 2) {
-            // Fill chunk
-            for (int z= 0; z < CubeChunk.SIZE; z++) {
-                for (int y= 0; y < CubeChunk.SIZE; y++) {
-                    for (int x= 0; x < CubeChunk.SIZE; x++) {
-                        byte b = download.get();
-                        c.setCubeType(x, y, z, b, false);
-                        changedBlock(c, x, y, z, b);
-                    }
-                }
-            }
-            c.render.setDirty(true, true);
-            // notify all neighbours
-            c.render.notifyChange();
-        }
-    }
 
     private ICommand cmd_cube_refresh = new ICommand() {
         public void RunCommand(String[] args) {

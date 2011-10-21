@@ -294,6 +294,7 @@ public class Move {
     static void handleDuck(MoveQuery pm) {
         boolean duckPressed = !pm.ps.oldButtons[2] && pm.cmd.buttons[2];
         boolean duckReleased = pm.ps.oldButtons[2] && !pm.cmd.buttons[2];
+        // todo: remove this from Move()
         System.arraycopy(pm.cmd.buttons, 0, pm.ps.oldButtons, 0, pm.ps.oldButtons.length);
         
 

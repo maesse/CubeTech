@@ -1,24 +1,20 @@
 package cubetech.CGame;
 
-import cubetech.common.Score;
-import cubetech.Block;
 import cubetech.Game.Gentity;
 import cubetech.collision.*;
 import cubetech.common.*;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
 import cubetech.gfx.*;
-import cubetech.gfx.SpriteManager.Type;
 import cubetech.input.*;
+import cubetech.iqm.IQMModel;
 import cubetech.misc.Profiler;
 import cubetech.misc.Profiler.Sec;
 import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
-import cubetech.spatial.SpatialQuery;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 
@@ -40,8 +36,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_depthnear = Ref.cvars.Get("cg_depthnear", "1", EnumSet.of(CVarFlags.CHEAT));
     CVar cg_depthfar = Ref.cvars.Get("cg_depthfar", "8000", EnumSet.of(CVarFlags.CHEAT));
     CVar cg_viewmode = Ref.cvars.Get("cg_viewmode", "1", EnumSet.of(CVarFlags.NONE));
-    CVar cg_drawentities = Ref.cvars.Get("cg_drawentities", "0", EnumSet.of(CVarFlags.ROM));
-    CVar cg_drawbin = Ref.cvars.Get("cg_drawbin", "0", EnumSet.of(CVarFlags.NONE));
+//    CVar cg_drawentities = Ref.cvars.Get("cg_drawentities", "0", EnumSet.of(CVarFlags.ROM));
+//    CVar cg_drawbin = Ref.cvars.Get("cg_drawbin", "0", EnumSet.of(CVarFlags.NONE));
     CVar cg_swingspeed = Ref.cvars.Get("cg_swingspeed", "0.8", EnumSet.of(CVarFlags.CHEAT));
     CVar cg_freecam = Ref.cvars.Get("cg_freecam", "0", EnumSet.of(CVarFlags.CHEAT));
 
@@ -59,13 +55,14 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     public CEntity[] cg_entities;
     public int cg_numSolidEntities;
     public int cg_numTriggerEntities;
-    public CEntity[] cg_solidEntities = new CEntity[256];
+    public ArrayList<CEntity> cg_solidEntities = new ArrayList<CEntity>(256);
+//    public CEntity[] cg_solidEntities = new CEntity[256];
     public CEntity[] cg_triggerEntities = new CEntity[256];
     private HashMap<String, ICommand> commands = new HashMap<String, ICommand>();
     public float speed;
     public Marks marks;
 
-    SkyBox skyBox = new SkyBox("data/sky");
+    SkyBox skyBox = new SkyBox("data/textures/skybox/sky");
     private CVar cg_skybox;
     public ShadowManager shadowMan = new ShadowManager();
     public CGPhysics physics = new CGPhysics();
@@ -196,31 +193,39 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
         physics.renderBodies();
 
-        if(shadowMan.isEnabled()) {
-            shadowMan.renderShadowCascades(cg.refdef, new IThinkMethod() {
-                public void think(Gentity ent) {
-                    if(map != null) {
-                        map.Render(cg.refdef);
-                        Ref.render.renderAll(true);
-                    }
-                }
-            });
-        }
+        
 
         if(map != null) {
-            if(cg_skybox.isTrue()) skyBox.Render(cg.refdef);
+//            if(cg_skybox.isTrue()) skyBox.Render(cg.refdef);
             map.Render(cg.refdef);
         }
         
-        
-        //cgr.RenderScene(cg.refdef);
-
         ParticleSystem.update();
-        
-//        cgr.DrawEntities();
         LocalEntities.addLocalEntities();
 
-        drawSolid();
+        if(cg_drawSolid.isTrue()) {
+            for (CEntity cEntity : cg_solidEntities) {
+                // Try to extract the bounds
+                Vector3f[] bounds = Helper.solidToBounds(cEntity.nextState.solid);
+
+                if(cEntity.nextState.solid == EntityState.SOLID_BMODEL
+                        && cEntity.currentState.modelindex != 0) {
+                    bounds = new Vector3f[2];
+                    IQMModel model = Ref.ResMan.loadModel(
+                            Ref.client.cl.GameState.get(
+                            CS.CS_MODELS-1+cEntity.currentState.modelindex));
+                    bounds[0] = model.getMins();
+                    bounds[1] = model.getMaxs();
+                }
+
+                if(bounds != null) {
+                    RenderEntity ent = Ref.render.createEntity(REType.BBOX);
+                    Vector3f.add(cEntity.lerpOrigin, bounds[0], ent.origin);
+                    Vector3f.sub(bounds[1], bounds[0], ent.oldOrigin);
+                    Ref.render.addRefEntity(ent);
+                }
+            }
+        }
         
         // UI
         cgr.Draw2D();
@@ -461,76 +466,6 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
     }
 
-    private void drawSolid() {
-        // Draw bounding boxes for solid entities
-        if(cg_drawSolid.iValue > 0) {
-            for (int i = 0; i < cg_numSolidEntities; i++) {
-                CEntity cent = cg_solidEntities[i];
-                int x, y;
-                int pack = cent.nextState.solid;
-                if(pack == EntityState.SOLID_BMODEL && cg_drawSolid.iValue < 2) {
-                    BlockModel model = Ref.cm.cm.getModel(cent.currentState.modelindex);
-
-                    Sprite spr = Ref.SpriteMan.GetSprite(Type.GAME);
-                    spr.Set(model.mins, model.size, null, null, null);
-                    spr.SetColor(255, 128, 0, 80);
-                    for (Block block : model.blocks) {
-                        if(!block.Collidable)
-                            continue;
-                        spr = Ref.SpriteMan.GetSprite(Type.GAME);
-                        spr.Set(new Vector2f(block.GetCenter().x - block.getAbsExtent().x, block.GetCenter().y - block.getAbsExtent().y), block.getAbsSize(), null, null, null);
-                        spr.SetColor(255, 255, 0, 128);
-                        spr.SetDepth(block.getLayer()+1);
-                    }
-                } else if(pack != EntityState.SOLID_BMODEL) {
-                    x = pack & 255;
-                    y = (pack >> 8) & 255;
-
-                    if(x == 0 || y == 0)
-                        continue;
-
-                    int zmin = (pack >> 24) & 127;
-                    int zmax = ((pack >> 16) & 255)-zmin;
-
-                    GL11.glDepthFunc(GL11.GL_ALWAYS);
-                    Ref.glRef.PushShader(Ref.glRef.getShader("sprite"));
-                    Helper.renderBBoxWireframe(cent.lerpOrigin.x-x, cent.lerpOrigin.y-y, cent.lerpOrigin.z-zmin,
-                            cent.lerpOrigin.x + x, cent.lerpOrigin.y + y, cent.lerpOrigin.z+zmax,null);
-                    Ref.glRef.PopShader();
-                    GL11.glDepthFunc(GL11.GL_LEQUAL);
-                }
-            }
-        }
-        if(cg_drawSolid.iValue > 1) {
-            // Draw the solid blocks too
-            SpatialQuery result = Ref.spatial.Query(cg.refdef.Origin.x - cg.refdef.FovX, cg.refdef.Origin.y - cg.refdef.FovY, cg.refdef.Origin.x + cg.refdef.FovX, cg.refdef.Origin.y + cg.refdef.FovY);
-            int queryNum = result.getQueryNum();
-            Object object;
-            while((object = result.ReadNext()) != null) {
-                if(object.getClass() != Block.class)
-                    continue;
-                Block block = (Block)object;
-                if(block.LastQueryNum == queryNum)
-                    continue; // duplicate
-                block.LastQueryNum = queryNum;
-
-                if(!block.Collidable)
-                    continue;
-
-    //            if(!BlockVisible(block))
-    //                continue;
-
-                Sprite spr = Ref.SpriteMan.GetSprite(SpriteManager.Type.GAME);
-                spr.Set(block.getPosition(), block.getSize(), Ref.ResMan.getWhiteTexture(), block.Material.getTextureOffset(), block.Material.getTextureSize());
-                spr.SetAngle(block.getAngle());
-                spr.SetDepth(block.getLayer()+1);
-                if(block.isModel())
-                    spr.SetColor(255, 128, 0, 120);
-                else
-                    spr.SetColor(255, 255, 0, 100);
-            }
-        }
-    }
 
     public void KeyPressed(KeyEvent evt) {
         
@@ -579,14 +514,13 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     ====================
     */
     void BuildSolidList() {
-        cg_numSolidEntities = 0;
+        cg_solidEntities.clear();
         cg_numTriggerEntities = 0;
 
-        Snapshot snap = null;
-        if(cg.nextSnap != null && !cg.nextFrameTeleport && !cg.thisFrameTeleport)
+        Snapshot snap = cg.snap;
+        if(cg.nextSnap != null && !cg.nextFrameTeleport && !cg.thisFrameTeleport) {
             snap = cg.nextSnap;
-        else
-            snap = cg.snap;
+        }
 
         for (int i= 0; i < snap.numEntities; i++) {
             CEntity cent = cg_entities[snap.entities[i].ClientNum];
@@ -597,8 +531,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                 continue;
             }
 
-            if(cent.nextState.solid > 0) {
-                cg_solidEntities[cg_numSolidEntities++] = cent;
+            if(cent.nextState.solid != 0) {
+                cg_solidEntities.add(cent);
                 continue;
             }
         }
@@ -643,8 +577,6 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             cg.scores.parseScores(tokens);
             return;
         }
-
-
 
         if(cmd.equalsIgnoreCase("map_restart"))
         {
@@ -735,49 +667,27 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         return worldResult;
     }
 
-    private void ClipMoveToEntities(Vector3f start, Vector3f end, Vector3f mins, Vector3f maxs, int passEntityNum, int tracemask, CollisionResult worldResult) {
-        for (int i= 0; i < cg_numSolidEntities; i++) {
-            CEntity cent = cg_solidEntities[i];
-            EntityState ent = cent.currentState;
+    private void ClipMoveToEntities(Vector3f start, Vector3f end, Vector3f mins, Vector3f maxs,
+            int passEntityNum, int tracemask, CollisionResult worldResult) {
+        for (CEntity cent : cg_solidEntities) {
+            EntityState ent = cent.nextState;
 
             if(ent.ClientNum == passEntityNum)
                 continue;
 
             // Extract encoded bbox
-            
-            int pack = ent.solid;
-            if(pack == EntityState.SOLID_BMODEL) {
-                // special value for bmodel
-                int index = Ref.cm.cm.InlineModel(ent.modelindex);
-                
-                Vector3f origin = new Vector3f();
-                ent.pos.Evaluate(cg.physicsTime, origin);
-
-                Ref.collision.SetSubModel(index, origin);
-            } else {
-                int x = pack & 255;
-                int y = (pack >> 8) & 255;
-                int height = (pack >> 16) & 255;
-                int zminLen = (pack >> 24) & 127;
-
-                if(x == 0 || y == 0 || height == 0) {
-                    Common.Log("Invalid entity bbox for unpacking ent:%d eType:%d", ent.ClientNum, ent.eType);
-                    continue;
-                }
-
-                // zmin = 10, height = 30
-                float z = height/2f;
-                Vector3f origin = new Vector3f(cent.lerpOrigin);
-                
-
-                float leftover = ((height-zminLen)-zminLen) / 2f;
-                //origin.z += leftover;
-                Vector3f tmins = new Vector3f(-x,-y,-zminLen);
-                Vector3f tmaxs = new Vector3f(x,y,height - zminLen);
-                Ref.collision.SetBoxModel(tmins, tmaxs, origin);
+            Vector3f[] bounds = Helper.solidToBounds(ent.solid);
+            if(bounds != null) {
+                Ref.collision.SetBoxModel(bounds[0], bounds[1], cent.lerpOrigin);
+            } else if(ent.solid == EntityState.SOLID_BMODEL) {
+                String modelname = Ref.client.cl.GameState.get(CS.CS_MODELS+ent.modelindex-1);
+                IQMModel model = Ref.ResMan.loadModel(modelname);
+                bounds = new Vector3f[2];
+                bounds[0] = model.getMins();
+                bounds[1] = model.getMaxs();
+                Ref.collision.SetBoxModel(bounds[0], bounds[1], cent.lerpOrigin);
             }
 
-            
             CollisionResult res = Ref.collision.TransformedBoxTrace(start, end, mins, maxs, tracemask);
 
             if(res.frac < worldResult.frac) {
@@ -796,37 +706,6 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         }
     }
 
-//    // User wants to see the scoreboard
-//    private class Cmd_ScoresDown implements ICommand {
-//        public void RunCommand(String[] args) {
-//            if(cg.scoresRequestTime + 2000 < cg.time) {
-//                // the scores are more than two seconds out of data,
-//		// so request new ones
-//                cg.scoresRequestTime = cg.time;
-//                Ref.client.AddReliableCommand("score", false);
-//
-//                // leave the current scores up if they were already
-//		// displayed, but if this is the first hit, clear them out
-//                if(!cg.showScores)
-//                {
-//                    cg.showScores = true;
-////                    cg.scores = new Score[0]; // empty array
-//                }
-//            } else {
-//                // show the cached contents even if they just pressed if it
-//		// is within two seconds
-//                cg.showScores = true;
-//            }
-//        }
-//    }
-//    // Users doesnt want to see the scoreboard anymore
-//    private class Cmd_ScoresUp implements ICommand {
-//        public void RunCommand(String[] args) {
-//            if(cg.showScores) {
-//                cg.showScores = false;
-//            }
-//        }
-//    }
 
     public int GetCurrentPlayerEntityNum() {
         if(cg.predictedPlayerState != null)

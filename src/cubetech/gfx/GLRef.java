@@ -1,14 +1,11 @@
 package cubetech.gfx;
 
+import org.lwjgl.Sys;
 import cubetech.common.Helper;
 import cubetech.CGame.Render;
-import cubetech.CGame.ViewParams;
 import java.nio.FloatBuffer;
 import java.util.Stack;
 import org.lwjgl.opengl.ARBShaderObjects;
-import org.lwjgl.util.Color;
-import org.lwjgl.opengl.EXTFramebufferObject;
-import org.lwjgl.opengl.GL13;
 import cubetech.ui.UI.MENU;
 import cubetech.common.Commands;
 import cubetech.common.Common;
@@ -18,8 +15,6 @@ import java.applet.Applet;
 import java.util.HashMap;
 import org.lwjgl.LWJGLException;
 import org.lwjgl.opengl.PixelFormat;
-import java.nio.ByteOrder;
-import java.nio.ByteBuffer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.lwjgl.opengl.GL12;
@@ -36,18 +31,14 @@ import cubetech.common.Common.ErrorCode;
 import cubetech.misc.Ref;
 import java.awt.Canvas;
 import java.net.MalformedURLException;
-import org.lwjgl.opengl.ARBTextureRectangle;
 import org.lwjgl.opengl.ARBVertexArrayObject;
-import org.lwjgl.opengl.ARBVertexBufferObject;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.DisplayMode;
 import org.lwjgl.opengl.EXTTextureFilterAnisotropic;
-import org.lwjgl.opengl.EXTTextureRectangle;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector3f;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL13.*;
-import static org.lwjgl.opengl.GL20.*;
 /**
  * Controls OpenGL
  * @author mads
@@ -69,6 +60,7 @@ public class GLRef {
     public CVar r_fill;
     public CVar r_softparticles;
     private Vector2f resolution;
+    CVar r_clearcolor;
 
     private ArrayList<Shader> shader_recompile_queue = new ArrayList<Shader>();
 
@@ -91,16 +83,12 @@ public class GLRef {
     private IntBuffer intBuf16 = BufferUtils.createIntBuffer(16);
     private FloatBuffer floatBuff16 = BufferUtils.createFloatBuffer(16);
     public FloatBuffer matrixBuffer = BufferUtils.createFloatBuffer(16);
-    private HashMap<Integer, ByteBuffer> cachedBuffers
-            = new HashMap<Integer, ByteBuffer>();
+    
 
     public boolean fboSupported = false;
     public FrameBuffer srgbBuffer = null;
 
-    public enum BufferTarget {
-        Vertex,
-        Index
-    }
+    
 
     public GLRef() {
         Init();
@@ -115,14 +103,10 @@ public class GLRef {
     }
 
     public void InitWindow(Canvas parent, Applet applet, boolean lowGraphics) throws Exception {
-
         this.applet = applet;
-
         availableModes = Display.getAvailableDisplayModes();
         shadersSupported = !lowGraphics;
         desktopMode = Display.getDesktopDisplayMode();
-
-        
 
         Common.Log("Desktop displaymode: " + desktopMode);
         displayParent = parent; // Save off canvas if there is one
@@ -133,13 +117,11 @@ public class GLRef {
             Display.setLocation(-1,-1);
         } else {
             Display.setParent(displayParent); // Applets use this
-
             if(applet != null)
                 isApplet = true;
         }
 
         // Create the display
-        //Display.create(new PixelFormat());
         Display.create(new PixelFormat(0, 0, 0, 0));
         checkError();
 
@@ -167,7 +149,7 @@ public class GLRef {
         String jvmVersion = System.getProperty("java.runtime.version");
         Common.Log("Operating System: " + osName + " - " + osVersion + " (" + osArch + ")");
         Common.Log("Java version: " + jvmVersion + " :: " + System.getProperty("java.vm.name") + " v: " + System.getProperty("java.vm.version"));
-        Common.Log("LWJGL version: " + Display.getVersion());
+        Common.Log("LWJGL version: " + Sys.getVersion());
         Common.Log("OpenGL version: " + glGetString(GL_VERSION));
         Common.Log("VBO support detected (V: " + maxVertices + ") (I: " + maxIndices + ")");
         caps = GLContext.getCapabilities();
@@ -178,12 +160,9 @@ public class GLRef {
 
     // Starts up stuff that was waiting for a display to be created
     public void OnPostDisplayCreate() throws Exception {
-
         currentMode = Display.getDisplayMode();
         checkError();
         resolution = new Vector2f(currentMode.getWidth(), currentMode.getHeight());
-
-        
 
         String v = glGetString(GL_VERSION);
         String[] tokens = Commands.TokenizeString(v, true);
@@ -202,8 +181,7 @@ public class GLRef {
             }
         }
 
-        if(isMac)
-            shadersSupported = false;
+        if(isMac) shadersSupported = false;
 
         if(!CheckCaps()) {
             //Ref.common.Error(ErrorCode.FATAL, "Your grahics card is not supported");
@@ -211,8 +189,8 @@ public class GLRef {
         }
         doVaoWorkaround();
 
-        if(shadersSupported)
-            loadShaders();
+        if(shadersSupported) loadShaders();
+            
 
         // Set default states
         glEnable(GL_TEXTURE_2D);
@@ -222,11 +200,9 @@ public class GLRef {
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
         intBuf16.position(0);
-        intBuf16.put(255).put(255).put(255).put(255);
-        intBuf16.flip();
+        intBuf16.put(255).put(255).put(255).put(255).flip();
         glFog(GL_FOG_COLOR, intBuf16);
-        //0.823,0.7,0.486
-        glClearColor(95/255f,87/255f,67/255f,1);
+        
         glDepthMask(true);
         glLineWidth(2f);
         glDepthFunc(GL_LEQUAL);
@@ -234,27 +210,20 @@ public class GLRef {
         glViewport(0, 0, currentMode.getWidth(), currentMode.getHeight());
         checkError();
 
-        
-
-//        glDisable(GL_CULL_FACE);
 //        try {
 //            srgbBuffer = new FrameBuffer(true, true, (int)GetResolution().x, (int)GetResolution().y);
-////             srgbBuffer.Bind();
 //        } catch(Exception ex) {
-////            // Aww man..
-//            Ref.ResMan.autoSrgb  = false; // don't set SRGB flag on textures
+//            Common.Log("SRGB backbuffer disabled.");
+//            // don't set SRGB flag on textures
+//            Ref.ResMan.srgbSupported  = false;
 //        }
-        Ref.ResMan.autoSrgb = false;
-        //InitFBO();
+        
         Ref.render = new Render();
 
         // Init systems waiting for opengl
-        if(Ref.textMan != null)
-            Ref.textMan.Init();
-        
-
-        if(isApplet())
-            setAppletSize();
+        if(Ref.textMan != null) Ref.textMan.Init();
+        if(isApplet()) setAppletSize();
+            
 
         // There may be an error sitting in OpenGL.
         // If it isn't cleared, it may trigger an exception later on.
@@ -339,7 +308,9 @@ public class GLRef {
         r_refreshrate = Ref.cvars.Get("r_refreshrate", "60", EnumSet.of(CVarFlags.ARCHIVE));
         r_toggleRes = Ref.cvars.Get("r_toggleRes", "0", EnumSet.of(CVarFlags.NONE));
         r_fill = Ref.cvars.Get("r_fill", "1", EnumSet.of(CVarFlags.ARCHIVE));
-        r_softparticles = Ref.cvars.Get("r_softparticles", "1", EnumSet.of(CVarFlags.ARCHIVE));
+        r_softparticles = Ref.cvars.Get("r_softparticles", "0", EnumSet.of(CVarFlags.ARCHIVE));
+        r_clearcolor = Ref.cvars.Get("r_clearcolor", "95,87,67", EnumSet.of(CVarFlags.ARCHIVE));
+        
         
         Ref.commands.AddCommand("listmodes", Cmd_listmodes);
         Ref.commands.AddCommand("shader", cmd_shader);
@@ -430,6 +401,22 @@ public class GLRef {
                     Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
+        }
+
+        if(r_clearcolor.modified) {
+            String[] subStr = r_clearcolor.sValue.split(",");
+            int[] color = {95,87,67};
+            if(subStr.length == 3) {
+                try {
+                    for (int i= 0; i < 3; i++) {
+                        color[i] = Integer.parseInt(subStr[i]);
+                        if(color[i] < 0) color[i] = 0;
+                        if(color[i] > 255) color[i] = 255;
+                    }
+                } catch(Exception ex) { Common.Log("Could not parse r_clearcolor");}
+            }
+            glClearColor(color[0]/255f,color[1]/255f,color[2]/255f,1);
+            r_clearcolor.modified = false;
         }
 
         for (Shader s : shader_recompile_queue) {
@@ -682,8 +669,16 @@ public class GLRef {
     private void loadShaders() {
         try {
 
-            // sprite shader
+            // sprite shader (w/ packed coords)
             ShaderBuilder builder = new ShaderBuilder("sprite");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.setAttribute("v_color", Shader.INDICE_COLOR);
+            builder.mapTextureUniform("tex", 0);
+            builder.createShader();
+
+            // World shader
+            builder = new ShaderBuilder("World");
             builder.setAttribute("v_position", Shader.INDICE_POSITION);
             builder.setAttribute("v_coords", Shader.INDICE_COORDS);
             builder.setAttribute("v_color", Shader.INDICE_COLOR);
@@ -728,11 +723,18 @@ public class GLRef {
             builder.mapTextureUniform("envmap", 2);
             builder.createShader();
 
+            // cube world recieving shadow
+            builder = new ShaderBuilder("gpuskinLit");
+            builder.setAttribute("vweights", Shader.INDICE_NORMAL);
+            builder.setAttribute("vbones", Shader.INDICE_COLOR);
+            builder.setAttribute("vtangent", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("tex", 0);
+            builder.mapTextureUniform("envmap", 2);
+            builder.createShader();
+
             // iqm model with no pixel color
             builder = new ShaderBuilder("unlitObject");
             builder.setAttribute("v_position", Shader.INDICE_POSITION);
-            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
-            builder.setAttribute("v_color", Shader.INDICE_COLOR);
             builder.createShader();
 
             // cube world with fog
@@ -756,7 +758,6 @@ public class GLRef {
             builder = new ShaderBuilder("RectBlit");
             builder.setAttribute("v_position", Shader.INDICE_POSITION);
             builder.setAttribute("v_coords", Shader.INDICE_COORDS);
-            builder.setAttribute("v_color", Shader.INDICE_COLOR);
             builder.mapTextureUniform("tex", 0);
             builder.createShader();
 
@@ -921,86 +922,10 @@ public class GLRef {
         checkError();
     }
 
-    public int createVBOid() {
-        ARBVertexBufferObject.glGenBuffersARB(intBuf);
-        GLRef.checkError();
-        return intBuf.get(0);
-    }
-
-    void destroyVBO(int vboId) {
-        // Remove cached index & vertex buffers
-        Integer bufferID = (vboId+1) << 1;
-        cachedBuffers.remove(bufferID);
-        cachedBuffers.remove(bufferID++);
-        
-
-        ARBVertexBufferObject.glDeleteBuffersARB(vboId);
-        GLRef.checkError();
-    }
-
-    private int BufferTargetToOpenGL(BufferTarget value) {
-        int t = ARBVertexBufferObject.GL_ARRAY_BUFFER_ARB;
-        if(value == BufferTarget.Index)
-            t = ARBVertexBufferObject.GL_ELEMENT_ARRAY_BUFFER_ARB;
-        return t;
+    public void pushShader(String string) {
+        PushShader(getShader(string));
     }
 
     
-
-    // Size is in bytes
-    public ByteBuffer mapVBO(BufferTarget target, int bufferId, int size) {
-        int t = BufferTargetToOpenGL(target);
-        ARBVertexBufferObject.glBindBufferARB(t, bufferId);
-        GLRef.checkError();
-        Integer bufferID = (target == BufferTarget.Index?0:1) + ((bufferId+1) << 1);
-        ByteBuffer cachedBuf = cachedBuffers.get(bufferID);
-        boolean newBuffer = cachedBuf == null || cachedBuf.capacity() < size;
-//        // Check if we're requesting a larger buffersize than last tie
-//        if(newBuffer && cachedBuf != null) {
-//            // not good
-//            throw new IllegalArgumentException("cached buffer size for this VBO is smaller than the requested size.");
-//        }
-        ByteBuffer buf =  ARBVertexBufferObject.glMapBufferARB(t, ARBVertexBufferObject.GL_WRITE_ONLY_ARB, size, cachedBuf);
-        GLRef.checkError();
-        buf.order(ByteOrder.nativeOrder());
-
-        if(newBuffer)
-            cachedBuffers.put(bufferID, buf);
-        
-        return buf;
-    }
-
-
-
-    public void unmapVBO(BufferTarget target, boolean unbind) {
-        int t = BufferTargetToOpenGL(target);
-        ARBVertexBufferObject.glUnmapBufferARB(t);
-        GLRef.checkError();
-        if(unbind) {
-            ARBVertexBufferObject.glBindBufferARB(t, 0);
-            GLRef.checkError();
-        }
-    }
-
-    void unbindVBO(BufferTarget target) {
-        int t = BufferTargetToOpenGL(target);
-        ARBVertexBufferObject.glBindBufferARB(t, 0);
-        GLRef.checkError();
-    }
-
-    void bindVBO(BufferTarget target, int bufferId) {
-        int t = BufferTargetToOpenGL(target);
-        ARBVertexBufferObject.glBindBufferARB(t, bufferId);
-        GLRef.checkError();
-    }
-
-    // Size is in elements, so 1 int = 1 size
-    public void sizeVBO(BufferTarget target, int bufferid, int size) {
-        int t = BufferTargetToOpenGL(target);
-        ARBVertexBufferObject.glBindBufferARB(t, bufferid);
-        GLRef.checkError();
-        ARBVertexBufferObject.glBufferDataARB(t, size, ARBVertexBufferObject.GL_STATIC_DRAW_ARB);
-        GLRef.checkError();
-    }
 
 }

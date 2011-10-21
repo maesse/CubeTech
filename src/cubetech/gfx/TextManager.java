@@ -123,12 +123,12 @@ public class TextManager {
             return;
         initialized = true;
         // Init textrendering
-        fontTex = (CubeTexture)Ref.ResMan.LoadTexture("data/mediumfont.png");
+        fontTex = (CubeTexture)Ref.ResMan.LoadTexture("data/textures/ui/mediumfont.png");
         for (int i= 0; i < charSizes.length; i++) {
             charSizes[i] = charsize;
         }
 
-        URL url = ResourceManager.getClassLoader().getResource("cubetech/data/MediumFont.csv");
+        URL url = ResourceManager.getClassLoader().getResource("cubetech/data/textures/ui/MediumFont.csv");
         if(url == null)
             throw new IOException("Mission font data: MediumFont.csv");
 

@@ -1,6 +1,5 @@
 package cubetech.Game;
 
-import cubetech.Block;
 import cubetech.collision.CollisionResult;
 import cubetech.collision.CubeChunk;
 import cubetech.collision.CubeMap;
@@ -14,6 +13,7 @@ import cubetech.common.items.WeaponState;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityType;
 import cubetech.entities.Event;
+import cubetech.entities.Vehicle;
 import cubetech.input.PlayerInput;
 import cubetech.iqm.IQMAnim;
 import cubetech.misc.Ref;
@@ -54,10 +54,14 @@ public class GameClient extends Gentity {
 
     ScoreList scores = new ScoreList();
 
+    // This is set if currently in a vehicle
+    Vehicle vehicle = null;
+
     void updatePlayerCubes() {
         if(r.svFlags.contains(SvFlags.BOT)) return;
         // Get a list of chunks surrounding the player
         lookupCache = Ref.cm.cubemap.getVisibleChunks(ps.origin, CubeMap.DEFAULT_GROW_DIST, lookupCache);
+        int nFullUpdates = 0;
         
         for (int i= 0; i < lookupCache.length; i++) {
             long index = lookupCache[i];
@@ -72,12 +76,12 @@ public class GameClient extends Gentity {
             {
                 // full transmit of this chunk
                 sendFullChunk(index);
+                nFullUpdates++;
             } else if(clEntry.lastSent < version) {
                 // partial transmit
                 sendPartialChunk(index, clEntry.lastSent);
                 // TODO: resend after some time?
             }
-            
         }
         ps.pers = pers;
     }
@@ -147,6 +151,8 @@ public class GameClient extends Gentity {
                 case HIT_WALL:
                 case GOAL:
                 case JUMP:
+                case CHANGE_WEAPON:
+                case NO_AMMO:
                     break;
 
                 case FIRE_WEAPON:
@@ -206,6 +212,8 @@ public class GameClient extends Gentity {
             cmd_God.RunCommand(tokens);
         } else if(cmd.equals("dropweapon")) {
             tossWeapon(ps.weapon);
+        }  else if(cmd.equals("use")) {
+            playerUse();
         } else
             SendServerCommand("print \"unknown command " + cmd + "\"");
     }
@@ -216,27 +224,35 @@ public class GameClient extends Gentity {
                 return;
 
             String name = Commands.Args(args).toLowerCase().trim();
-            boolean giveall = name.equals("all");
 
-            if(giveall || name.equals("health")) {
+            if(name.equals("health")) {
                 setHealth(ps.stats.MaxHealth);
-                if(!giveall) return;
+                return;
             }
 
             // Get a specific item for the player
-            if(!giveall) {
-                IItem item = Ref.common.items.findItemByClassname(name);
-                if(item == null)
-                    return;
-
+            IItem item = Ref.common.items.findItemByClassname(name);
+            if(item != null) {
                 Gentity ent = Ref.game.Spawn();
                 ent.s.origin.set(r.currentOrigin);
                 ent.classname = item.getClassName();
                 Ref.game.spawnItem(ent, item);
                 Ref.common.items.FinishSpawningItem.think(ent);
                 Ref.common.items.TouchItem.touch(ent, thisIsSilly);
-                if(ent.inuse)
-                    ent.Free();
+                if(ent.inuse) ent.Free();
+            } else if(name.equalsIgnoreCase("car")) {
+                Gentity ent = Ref.game.Spawn(Vehicle.class);
+                
+                // Get an x/y direciton vector
+                Vector3f forward = getForwardVector();
+                forward.z = 0f;
+                float len = Helper.Normalize(forward);
+                if(len == 0) forward.x = 1f;
+
+                Helper.VectorMA(r.currentOrigin, 200, forward, ent.r.currentOrigin);
+                ent.s.pos.type = Trajectory.STATIONARY;
+                ent.s.pos.base.set(ent.r.currentOrigin);
+                ent.Link();
             }
         }
     };
@@ -461,11 +477,8 @@ public class GameClient extends Gentity {
         pers.cmd = Ref.server.GetUserCommand(s.ClientNum);
         lastCmdTime = Ref.game.level.time;
 
-//        if(r.svFlags.contains(SvFlags.BOT)) return;
-
         // don't think if the client is not yet connected (and thus not yet spawned in)
-        if(pers.connected != ClientPersistant.ClientConnected.CONNECTED)
-            return;
+        if(pers.connected != ClientPersistant.ClientConnected.CONNECTED) return;
 
         PlayerInput cmd = pers.cmd;
         // sanity check the command time to prevent speedup cheating
@@ -473,23 +486,12 @@ public class GameClient extends Gentity {
             cmd.serverTime = Ref.game.level.time + 200;
         if(cmd.serverTime < Ref.game.level.time - 1000)
             cmd.serverTime = Ref.game.level.time -1000;
-
         int msec = cmd.serverTime - ps.commandTime;
-        if(msec < 1)
-            return;
-        if(msec > 200)
-            msec = 200;
+        if(msec < 1) return;
+        if(msec > 200) msec = 200;
 
-        ps.moveType = MoveType.NORMAL;
-        if(noclip)
-            ps.moveType = MoveType.NOCLIP;
-        else if(Ref.game.level.editmode)
-            ps.moveType = MoveType.EDITMODE;
-        else if(isDead())
-            ps.moveType = MoveType.DEAD;
-
-//        if(ps.moveType == MoveType.NORMAL)
-//            ps.applyPull = true;
+        // prethink
+//        playerUse();
 
         int oldEventSequence = ps.eventSequence;
 
@@ -499,12 +501,20 @@ public class GameClient extends Gentity {
         move.cmd = cmd;
         move.tracemask = Content.MASK_PLAYERSOLID;
 
-        // Do the move
-        Move.Move(move);
+        if(vehicle == null) {
+            // Do the move
+            ps.moveType = MoveType.NORMAL;
+            if(noclip) ps.moveType = MoveType.NOCLIP;
+            else if(isDead()) ps.moveType = MoveType.DEAD;
+            Move.Move(move);
+        } else {
+            vehicle.processMove(move);
+        }
+
+        System.arraycopy(cmd.buttons, 0, ps.oldButtons, 0, ps.oldButtons.length);
 
         // save results of pmove
-        if(ps.entityEventSequence != oldEventSequence)
-            eventTime = Ref.game.level.time;
+        if(ps.entityEventSequence != oldEventSequence) eventTime = Ref.game.level.time;
 
         ps.ToEntityState(s, false);
 
@@ -524,6 +534,9 @@ public class GameClient extends Gentity {
             
 
         // NOTE: now copy the exact origin over otherwise clients can be snapped into solid
+        if(!Helper.Equals(r.currentOrigin, ps.origin)) {
+            int test = 2;
+        }
         r.currentOrigin.set(ps.origin);
 
         // save results of triggers and client events
@@ -553,6 +566,40 @@ public class GameClient extends Gentity {
         if(ps.origin.z < Ref.game.g_killheight.iValue) {
             Die();
         }
+    }
+
+    private void playerUse() {
+        if(isDead()) return;
+        if(vehicle != null) {
+            // Send to vehicle if in one
+            vehicle.use.use(vehicle, this, this);
+        } else {
+            // Try to locate an entity
+            Gentity useEntity = findUseEntity();
+            if(useEntity != null && useEntity.use != null) {
+                useEntity.use.use(useEntity, this, this);
+            }
+        }
+        Gentity sound = Ref.game.TempEntity(ps.origin, Event.GENERAL_SOUND.ordinal());
+        int soundIndex = Ref.server.registerSound("data/sounds/ammoclick.wav");
+        sound.s.evtParams = soundIndex;
+    }
+
+    // Trace out a line in the look direction and try to grab a useable entity
+    private Gentity findUseEntity() {
+        int mask = Content.SOLID;
+
+        Vector3f eye = new Vector3f(ps.origin);
+        eye.z += ps.viewheight;
+
+        Vector3f end = getForwardVector();
+        Helper.VectorMA(eye, 200f, end, end);
+
+        CollisionResult res = Ref.server.Trace(eye, end, null, null, mask, clientIndex);
+        if(res.hit && res.entitynum != Common.ENTITYNUM_NONE) {
+            return Ref.game.g_entities[res.entitynum];
+        }
+        return null;
     }
 
     private static Vector3f touchRange  = new Vector3f(40,40,52);
@@ -788,4 +835,44 @@ public class GameClient extends Gentity {
         Helper.AngleVectors(ps.viewangles, fw, null, null);
         return fw;
     }
+
+    public void leaveVehicle() {
+        if(vehicle == null) return;
+
+        // Remove self from vehicle
+        vehicle.setPassenger(null);
+        ps.origin.set(vehicle.r.currentOrigin);
+        ps.origin.z += 200;
+        Link();
+        this.vehicle = null;
+        
+        ps.eFlags &= ~EntityFlags.NODRAW;
+        ps.moveType = MoveType.NORMAL;
+
+        
+    }
+
+    public boolean getInVehicle(Vehicle vehicle) {
+        if(vehicle.getPassenger() != null) return false;
+
+        ps.eFlags |= EntityFlags.NODRAW;
+        ps.velocity.set(0, 0, 0);
+        ps.moveType = MoveType.NOCLIP;
+
+        ps.ducking = false;
+        ps.ducked = false;
+        ps.viewheight = (int) Game.PlayerViewHeight;
+        ps.ducktime = 0;
+        ps.jumpTime = 0;
+
+        vehicle.setPassenger(this);
+        this.vehicle = vehicle;
+        
+        
+        // todo: setParent(vehicle)
+
+        return true;
+    }
+
+    
 }

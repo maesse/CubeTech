@@ -1,15 +1,22 @@
 package cubetech.gfx;
 
 import cubetech.Game.Gentity;
+import cubetech.common.Commands;
 import cubetech.common.Common;
+import cubetech.common.Helper;
 import cubetech.common.IThinkMethod;
 import cubetech.misc.FileWatcher;
 import cubetech.misc.Ref;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.nio.charset.Charset;
 import java.util.HashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.ARBFragmentShader;
 import org.lwjgl.opengl.ARBShaderObjects;
@@ -228,6 +235,39 @@ public class Shader {
 
         if(currentBound) Ref.glRef.shader.Bind();
     }
+
+    private String precompile(String data, String path, Target t) {
+        String[] lines = data.split("\n");
+        StringBuilder output = new StringBuilder(data.length());
+        for (String line : lines) {
+            if(line.startsWith("#pragma include ")) {
+                // Try to open file
+                String[] tokens = Commands.TokenizeString(line, false);
+                if(tokens.length == 3)  {
+                    try {
+                        ByteBuffer include = ResourceManager.OpenFileAsByteBuffer(path + tokens[2], false).getKey();
+                        byte[] includeData = new byte[include.limit()];
+                        include.get(includeData);
+                        String includeStr = new String(includeData, Charset.defaultCharset());
+                        String includePath = Helper.getPath(path + tokens[2]);
+                        String includeParsed = precompile(includeStr, includePath, t);
+                        output.append(includeParsed);
+                        output.append("\n");
+                    } catch (IOException ex) {
+                        Common.Log("[%s] failed include for: %s", shaderName, line);
+                        Common.Log(ex);
+                    }
+                } else {
+                    Common.Log("[%s] failed include for: %s", shaderName, line);
+                }
+            }
+            output.append(line);
+            output.append('\n');
+        }
+
+        
+        return output.toString();
+    }
     
     private int createShader(String name, Target t) {
         int target = targetToOpenGL(t);
@@ -248,9 +288,15 @@ public class Shader {
             System.err.println(ex);
             return 0;
         }
+        byte[] data = new byte[buf.limit()];
+        buf.get(data);
+        String strData = new String(data, Charset.defaultCharset());
+        strData = precompile(strData, Helper.getPath(name), t);
+
+
 
         // Compile
-        ARBShaderObjects.glShaderSourceARB(shaderid, buf);
+        ARBShaderObjects.glShaderSourceARB(shaderid, strData);
         ARBShaderObjects.glCompileShaderARB(shaderid);
 
         // Check it

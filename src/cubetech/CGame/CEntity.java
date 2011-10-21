@@ -1,5 +1,6 @@
 package cubetech.CGame;
 
+import cubetech.common.CS;
 import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.common.Trajectory;
@@ -11,6 +12,7 @@ import cubetech.entities.EntityType;
 import cubetech.entities.Event;
 import cubetech.misc.Ref;
 import cubetech.snd.SoundChannel;
+import cubetech.snd.SoundHandle;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 
@@ -213,16 +215,22 @@ public class CEntity {
                 Ref.soundMan.startSound(null,currentState.ClientNum, Ref.cgame.cgs.media.s_itemRespawn, SoundChannel.AUTO, 1.0f);
                 break;
             case DIED:
-                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/die.wav"), SoundChannel.AUTO, 1.0f);
+                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/sounds/die.wav"), SoundChannel.AUTO, 1.0f);
                 break;
             case GOAL:
-                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/ouch.wav"), SoundChannel.AUTO, 1.0f);
+                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/sounds/ouch.wav"), SoundChannel.AUTO, 1.0f);
                 break;
             case HIT_WALL:
-                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/ouch.wav"), SoundChannel.AUTO, 1.0f);
+                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/sounds/ouch.wav"), SoundChannel.AUTO, 1.0f);
                 break;
             case JUMP:
-                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/hop.wav"), SoundChannel.AUTO, 1.0f);
+                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/sounds/hop.wav"), SoundChannel.AUTO, 1.0f);
+                break;
+            case NO_AMMO:
+                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/sounds/ammoclick.wav"), SoundChannel.AUTO, 1.0f);
+                break;
+            case CHANGE_WEAPON:
+                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/sounds/swosh.wav"), SoundChannel.AUTO, 1.0f);
                 break;
             case FIRE_WEAPON:
                 Ref.cgame.weapons.fireWeaponEvent(this);
@@ -237,6 +245,15 @@ public class CEntity {
                 break;
             case BULLET_HIT_FLESH:
                 Ref.cgame.weapons.bullet(currentState.pos.base, currentState.otherEntityNum, null, true, currentState.evtParams);
+                break;
+            case GENERAL_SOUND:
+                String soundname = Ref.client.cl.GameState.get(CS.CS_SOUNDS + currentState.evtParams);
+                if(soundname != null) {
+                    SoundHandle sound = Ref.soundMan.AddWavSound(soundname);
+                    if(sound != null) {
+                        Ref.soundMan.startSound(currentState.pos.base, Common.ENTITYNUM_NONE, sound, SoundChannel.AUTO, 1f);
+                    }
+                }
                 break;
             default:
                 Common.LogDebug("Unhandled CGame event: " + event);

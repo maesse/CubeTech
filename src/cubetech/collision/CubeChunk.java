@@ -171,7 +171,7 @@ public class CubeChunk {
     private static byte[] compressionBuffer1 = new byte[1 + 8 + SIZE * SIZE * SIZE];
     private static byte[] compressionBuffer2 = new byte[4 + 1 + 8 + SIZE * SIZE * SIZE];
     public ByteBuffer createByteBuffer(int start) {
-        int size;
+        int headerSize, dataSize;
 
         if(start != -1 && (version - start <= 0 || version - start > 32)) {
             // Derp? fallback to full send
@@ -179,31 +179,45 @@ public class CubeChunk {
         }
         if(start == -1) {
             // 1 control byte (start), 8 bytes for chunk lookup, size^3 bytes for chunk data.
-            size = 1 + 8 + SIZE * SIZE * SIZE;
+            headerSize = 1 + 8 + SIZE * SIZE * SIZE;
+            dataSize = SIZE * SIZE * SIZE;
         } else {
             // 4bytes for each version entry, 2 control bytes (start/end) and 8 bytes for chunk lookup + 4 bytes version
-            size = (version - start) * 4 + 2 + 8 + 4;
+            headerSize = (version - start) * 4 + 2 + 8 + 4;
+            dataSize = (version - start) * 4 + 1 + 4;
         }
 
+        // Spec:
+        // {
+        // 1b byte - control byte. 1: history update, 2: full chunk
+        // 8b long - chunk lookup
+        // For history:
+        // 4b int start version
+        // 1b byte version count
+        // for each version:
+        //  4b int version-entry
+        // For full:
+        // for 32*32*32:
+        //  1b cube
+        // }
+        // gets compressed into:
+        // 1b control
+        // 8b lookup
+        // 4b int compressed size
+        // ?b byte[] compressed data
+
         // Fill byte buffer
-        byte[] data = compressionBuffer1;
-        ByteBuffer buf = ByteBuffer.wrap(data, 0, size);
-        buf.order(ByteOrder.nativeOrder());
-
-        // Write control byte
-        // 2 = full update, 1 = partial update
-        buf.put(start==-1?(byte)2:(byte)1);
-
-        // Write chunk lookup
-        long lookup = CubeMap.positionToLookup(p[0], p[1], p[2]);
-        buf.putLong(lookup);
-
+        byte[] data = null;
         if(start==-1) {
+            data = blockType;
             // write all cubes
-            for (int i= 0; i < SIZE*SIZE*SIZE; i++) {
-                buf.put(blockType[i]);
-            }
+//            for (int i= 0; i < SIZE*SIZE*SIZE; i++) {
+//                buf.put(blockType[i]);
+//            }
         } else {
+            data = compressionBuffer1;
+            ByteBuffer buf = ByteBuffer.wrap(data, 0, headerSize);
+            buf.order(ByteOrder.nativeOrder());
             buf.putInt(start);
             // write data count
             buf.put((byte)(version-start)); // end byte control
@@ -217,23 +231,33 @@ public class CubeChunk {
         // Compress data
         int compressionLevel = 4; // this seems like a good tradeoff
         byte[] dest = compressionBuffer2;
-        int wrote = compressData(data, data.length, dest, compressionLevel, true);
+        
+        int wrote = compressData(data, dataSize, dest, 13, compressionLevel);
 //        Common.LogDebug("Wrote %db cubedata to client (p:%d,%d,%d)", wrote,p[0],p[1],p[2]);
 
         byte[] finaldest = new byte[wrote];
         System.arraycopy(compressionBuffer2, 0, finaldest, 0, wrote);
-        buf = ByteBuffer.wrap(finaldest);
+        ByteBuffer buf = ByteBuffer.wrap(finaldest);
         buf.order(ByteOrder.nativeOrder());
-        // Write lenght
-        buf.position(0);
-        buf.putInt(wrote-4);
+
+        // Write control byte
+        // 2 = full update, 1 = partial update
+        buf.put(start==-1?(byte)2:(byte)1);
+
+        // Write chunk lookup
+        long lookup = CubeMap.positionToLookup(p[0], p[1], p[2]);
+        buf.putLong(lookup);
+
+        // Write compressed data size
+        buf.putInt(wrote-13);
+        
         buf.position(0);
         return buf;
     }
 
     private void testCompression(byte[] data, byte[] dest) {
         for (int i= 0; i < 10; i++) {
-            Common.LogDebug("level %d compression: %db", i, compressData(data, data.length, dest, i, true));
+            Common.LogDebug("level %d compression: %db", i, compressData(data, data.length, dest, 4, i));
         }
     }
 
@@ -245,14 +269,14 @@ public class CubeChunk {
         return len;
     }
 
-    public static int compressData(byte[] src, int srclen, byte[] dst, int level, boolean addHeaderSpace) {
-        Deflater zip = new Deflater(level);
+    private static Deflater zip = new Deflater(4);
+    public static int compressData(byte[] src, int srclen, byte[] dst, int offset, int level) {
+        if(srclen == 0) return offset;
+        zip.reset();
         zip.setInput(src,0,srclen);
         zip.finish();
-        int header = 0;
-        if(addHeaderSpace) header = 4; // 4 bytes
-        int len = zip.deflate(dst, header, dst.length-header);
-        return len + header;
+        int len = zip.deflate(dst, offset, dst.length-offset);
+        return len + offset;
     }
 
 

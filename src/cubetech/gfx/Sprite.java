@@ -28,7 +28,7 @@ public class Sprite {
     // 8byte    Vector2f texcoords
     // 4byte    byte4u   color
     // 8byte    Vector2f padding
-    public static final int STRIDE = (8)*4; // 32 bytes aligned
+    public static final int STRIDE = (4)*4; // 32 bytes aligned
     float[] data = new float[20]; // pos, tex * 4
     boolean sort = false;
     boolean dirty = true;
@@ -230,76 +230,100 @@ public class Sprite {
         invalid = false;
     }
 
-    
+    private static float packCoords(float s, float t) {
+        if(s > 1) s = 1; if(t > 1) t = 1;
+        if(s < 0) s = 1-s;
+        if(t < 0) t = 1-t;
+        
+        int packed = (int)(s * 4095) | (int)(t * 4095) << 12;
+        return (float)packed / (float)(1 << 24);
+    }
     
     public void FillBuffer(ByteBuffer buf) {
-        if(dirty)
-            updateData();
-        if(buf == null)
-            return;
-        int derp = 0;
-        for (int i= 0; i < data.length; i++) {
-            buf.putFloat(data[i]);
-            derp++;
-            if(derp == 3) {
-                // Pop in the color
-                color.writeRGBA(buf);
-                // And some padding
-                
-            }
-            if((i+1)%5 == 0) {
-                buf.putFloat(0f);
-                buf.putFloat(0f);
-                derp = 0;
-            }
+        if(buf == null) return;
+
+        float sin=0,cos=1,sin2=0,cos2=1;
+        if(Angle != 0) {
+            sin2 = (float) Math.sin(Angle* -1f);
+            cos2 = (float) Math.cos(Angle* -1f);
+            sin = (float) Math.sin(Angle );
+            cos = (float) Math.cos(Angle );
         }
+
+        buf.putFloat(Center.x - (Extent.x * cos2 - Extent.y * sin2));
+        buf.putFloat(Center.y + (Extent.y * cos2 + Extent.x * sin2));
+        color.writeRGBA(buf);
+        buf.putFloat(packCoords(TexOffset.x, TexOffset.y + TexSize.y));
+
+        buf.putFloat(Center.x - (Extent.x * cos - Extent.y * sin));
+        buf.putFloat(Center.y - (Extent.y * cos + Extent.x * sin));
+        color.writeRGBA(buf);
+        buf.putFloat(packCoords(TexOffset.x, TexOffset.y));
+
+        buf.putFloat(Center.x + (Extent.x * cos2 - Extent.y*sin2));
+        buf.putFloat(Center.y - (Extent.y * cos2 + Extent.x*sin2));
+        color.writeRGBA(buf);
+        buf.putFloat(packCoords(TexOffset.x + TexSize.x, TexOffset.y));
+
+        buf.putFloat(Center.x + Extent.x*cos - Extent.y*sin);
+        buf.putFloat(Center.y + Extent.y*cos + Extent.x*sin);
+        color.writeRGBA(buf);
+        buf.putFloat(packCoords(TexOffset.x  + TexSize.x, TexOffset.y+TexSize.y));
     }
 
     private void updateData() {
         int index = 0;
-        
-        float sin2 = (float) Math.sin(Angle* -1f);
-        float cos2 = (float) Math.cos(Angle* -1f);
-        float sin = (float) Math.sin(Angle );
-        float cos = (float) Math.cos(Angle );
+        float sin=0,cos=1,sin2=0,cos2=1;
+        if(Angle != 0) {
+            sin2 = (float) Math.sin(Angle* -1f);
+            cos2 = (float) Math.cos(Angle* -1f);
+            sin = (float) Math.sin(Angle );
+            cos = (float) Math.cos(Angle );
+        }
         
         data[index++] = Center.x - (Extent.x * cos2 - Extent.y * sin2);
         data[index++] = Center.y + (Extent.y * cos2 + Extent.x * sin2);
-        data[index++] = depth;
+//        data[index++] = depth;
         data[index++] = TexOffset.x;
         data[index++] = TexOffset.y + TexSize.y;
         // color isn't float, so can't put it here
-
+        index++;
         data[index++] = Center.x - (Extent.x * cos - Extent.y * sin);
         data[index++] = Center.y - (Extent.y * cos + Extent.x * sin);
-        data[index++] = depth;
+//        data[index++] = depth;
         data[index++ ] = TexOffset.x;
         data[index++ ] = TexOffset.y;
-
+index++;
         data[index++] = Center.x + (Extent.x * cos2 - Extent.y*sin2);
         data[index++] = Center.y - (Extent.y * cos2 + Extent.x*sin2);
-        data[index++] = depth;
+//        data[index++] = depth;
         data[index++] = TexOffset.x + TexSize.x;
         data[index++] = TexOffset.y;
-
+index++;
         data[index++] = Center.x + Extent.x*cos - Extent.y*sin;
         data[index++] = Center.y + Extent.y*cos + Extent.x*sin;
-        data[index++] = depth;
+//        data[index++] = depth;
         data[index++] = TexOffset.x + TexSize.x;
         data[index++] = TexOffset.y+TexSize.y;
+        index++;
         dirty = false;
+    }
+
+    public void doSpecial() {
+        if(special == 0) return;
+        if(special == GL11.GL_SCISSOR_TEST) {
+            if(value)
+                GL11.glEnable(special);
+            else
+                GL11.glDisable(special);
+        } else if(special == GL11.GL_SCISSOR_BOX) {
+            GL11.glScissor(a, b, c, d);
+        }
     }
 
     public void DrawFromBuffer() {
         if(special != 0) {
-            if(special == GL11.GL_SCISSOR_TEST) {
-                if(value)
-                    GL11.glEnable(special);
-                else
-                    GL11.glDisable(special);
-            } else if(special == GL11.GL_SCISSOR_BOX) {
-                GL11.glScissor(a, b, c, d);
-            }
+            doSpecial();
             GLRef.checkError();
             return;
         }
@@ -331,7 +355,7 @@ public class Sprite {
         }
         GL11.glEnd();
 
-        GLRef.checkError();
+//        GLRef.checkError();
     }
 
     // Old immediate mode rendering

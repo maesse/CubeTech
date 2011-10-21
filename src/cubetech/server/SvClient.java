@@ -886,21 +886,21 @@ public class SvClient {
                 ByteBuffer buf = pers.dequeueChunkData(leftOver);
                 if(buf == null) return;
                 download = new NetBuffer(buf);
-            }
+//            }
             // Client is requesting the current map
-            else if(downloadName.equalsIgnoreCase("map")) {
+//            else if(downloadName.equalsIgnoreCase("map")) {
 
-                if(Ref.cvars.Find("mapname").sValue.equalsIgnoreCase("custom") && !Ref.game.level.editmode) {
-                    // Server is running custom map, but not editmode, so try to load the cached custom map
-                    try {
-                        download = ResourceManager.OpenFileAsNetBuffer("custom", false).getKey();
-                    } catch (IOException ex) {
-                        Logger.getLogger(SvClient.class.getName()).log(Level.SEVERE, null, ex);
-                        download = Ref.cm.cm.SerializeMap(); // fallback to generation
-                    }
-                }
-                else // in editmode - pack up current map
-                    download = Ref.cm.cm.SerializeMap();
+//                if(Ref.cvars.Find("mapname").sValue.equalsIgnoreCase("custom") && !Ref.game.level.editmode) {
+//                    // Server is running custom map, but not editmode, so try to load the cached custom map
+//                    try {
+//                        download = ResourceManager.OpenFileAsNetBuffer("custom", false).getKey();
+//                    } catch (IOException ex) {
+//                        Logger.getLogger(SvClient.class.getName()).log(Level.SEVERE, null, ex);
+//                        download = Ref.cm.cm.SerializeMap(); // fallback to generation
+//                    }
+//                }
+//                else // in editmode - pack up current map
+//                    download = Ref.cm.cm.SerializeMap();
             } else {
                 // Asking for regular file
                 try {

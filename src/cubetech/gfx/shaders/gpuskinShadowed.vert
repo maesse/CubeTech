@@ -24,6 +24,22 @@ varying vec3 reflectDir;
 varying vec4 vPosition;
 varying float vDepth;
 
+void setLightVars(in vec3 in_normal,in vec3 vertexPos)
+{
+    normal = in_normal;
+
+    lightDir = vec3(gl_LightSource[0].position);
+    diffuse = gl_LightSource[0].diffuse; // gl_FrontMaterial.diffuse
+    ambient = gl_LightModel.ambient;
+
+    // Get halfvector
+#ifdef PHONG
+    halfVector = normalize( vertexPos);
+#else
+    halfVector = normalize( normalize(lightDir)-normalize(vertexPos));
+#endif
+}
+
 void main(void)
 {
    mat3x4 m = bonemats[int(vbones.x)] * vweights.x;
@@ -44,22 +60,9 @@ void main(void)
 
     // Light out
     mat3 madjtrans = mat3(cross(m[1].xyz, m[2].xyz), cross(m[2].xyz, m[0].xyz), cross(m[0].xyz, m[1].xyz));
-    vec3 mnormal = (gl_Normal * madjtrans);
-    normal = normalize( vec3(Modell * vec4(mnormal,0.0)));
-    reflectDir = normal;
-
-    // Get light direction
-    // vec3(gl_LightSource[0].position)
-    lightDir = lightDirection;
-
-    // Get halfvector
-    vec3 vertexPos = vec3(gl_ModelViewMatrix * vec4(gl_Vertex * m, gl_Vertex.w));
-    //halfVector = normalize((gl_ModelViewMatrix * vec4(gl_LightSource[0].halfVector.xyz,0)).xyz);
-    halfVector = normalize(normalize(vertexPos) + lightDirection);
-
-    // compute diffuse term
-    diffuse = gl_LightSource[0].diffuse; // gl_FrontMaterial.diffuse
-    ambient = gl_LightModel.ambient;
+    vec3 mnormal = normalize( vec3(Modell * vec4(gl_Normal * madjtrans, 0)));
+    reflectDir = mnormal;
+    setLightVars(gl_NormalMatrix * mnormal, vec3(gl_ModelViewMatrix * mpos));
 
     // shadow out
     vPosition = mpos;

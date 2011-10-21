@@ -17,10 +17,10 @@ public class Media {
     public CubeMaterial t_blood;
 
     public void Load() {
-        s_footStep = Ref.soundMan.AddWavSound("data/footsteps.wav");
-        s_itemRespawn = Ref.soundMan.AddWavSound("data/weapondrop1.wav");
+        s_footStep = Ref.soundMan.AddWavSound("data/sounds/footsteps.wav");
+        s_itemRespawn = Ref.soundMan.AddWavSound("data/sounds/weapondrop1.wav");
         try {
-            t_blood = CubeMaterial.Load("data/blood_mist.mat", true);
+            t_blood = CubeMaterial.Load("data/textures/blood_mist.mat", true);
         } catch (Exception ex) {
             Logger.getLogger(Media.class.getName()).log(Level.SEVERE, null, ex);
         }

@@ -7,7 +7,7 @@ import cubetech.CGame.Render;
 import cubetech.Game.Game;
 import cubetech.common.Common;
 import cubetech.net.Net;
-import cubetech.spatial.Spatial;
+
 import cubetech.collision.Collision;
 
 import cubetech.client.Client;
@@ -43,7 +43,7 @@ public class Ref {
     public static Collision collision;
 
     public static ISoundManager soundMan;
-    public static Spatial spatial;
+    
     public static Client client;
     public static Server server;
     public static CVars cvars;
@@ -81,7 +81,7 @@ public class Ref {
         Ref.soundMan = new ALSoundManager(); // loads, manages and plays sounds
         if(!noSound)
             Ref.soundMan.initialize(12); // Init 12 channels
-        Ref.spatial = new Spatial(); // spatial query subsystem
+        
 //        Ref.StateMan = new StateManager(); // old game system
         Ref.glRef = new GLRef(); // OpenGL/Window manager
         Ref.client = new Client(); // Client subsystem

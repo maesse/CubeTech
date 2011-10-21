@@ -20,10 +20,27 @@ public class PerlinChunkGenerator implements IChunkGenerator {
         //this.seed = seed;
     }
 
-    private void getNoise(float[] dest, int x, int y, int z, int axissize, float freq, float ampl) {
+    private void getNoise(float[] dest, int x, int y, int z, int axissize, float xyfreq, float zfreq, float ampl) {
+        if(false) {
+            for (int i = 0; i < axissize; i++) {
+                for (int j= 0; j < axissize; j++) {
+                    for (int k= 0; k < axissize; k++) {
+                        dest[i*axissize*axissize + j*axissize + k] =
+                                (float)(SimplexNoise.noise(
+                                (x * axissize + k)*xyfreq,
+                                (y * axissize + j)*xyfreq,
+                                (z * axissize + i)*zfreq) * ampl);
+                    }
+                }
+            }
+            return;
+        }
+        
         NativeNoise.noise(dest,
-                (x * axissize)*freq, (y * axissize)*freq, (z * axissize)*freq,
-                freq, freq, freq, axissize, ampl);
+                (x * axissize)*xyfreq, (y * axissize)*xyfreq, (z * axissize)*zfreq,
+                xyfreq, xyfreq, zfreq, axissize, ampl);
+
+        
     }
 
     private float getNoise(int chunkx, int chunky, int chunkz, int x, int y, int z,
@@ -102,66 +119,39 @@ public class PerlinChunkGenerator implements IChunkGenerator {
     float[] noiseLookup2 = new float[(noiseSize)*(noiseSize)*(noiseSize)];
     public CubeChunk generateChunk(CubeMap map, int x, int y, int z) {
         CubeChunk chunk = new CubeChunk(map.chunks, x, y, z);
+        if(z > 0) return chunk;
+        float maxHeight = 1024;
+        float minHeight = 0;
 
-        float maxHeight = 512;
-        float groundlevel = -1024;
-        float minHeight = CubeChunk.SIZE * CubeChunk.BLOCK_SIZE * CubeMap.MIN_Z;
+        // Get groundlevel noise
+        double[] groundNoise = new double[32*32];
+        for (int i= 0; i < 32*32; i++) {
+            groundNoise[i] = SimplexNoise.noise((x*32+(i % 32))*0.00125f, (y*32+(i / 32))*0.00125f);
+        }
 
-        getNoise(noiseLookup2, x+1024, y+1024, z+1024, noiseSize, 0.1f, 1f);
+        getNoise(noiseLookup2, x+1024, y+1024, z+1024, noiseSize, 0.05f, 0.1f, 1f);
         
-//        for (int i= 0; i < noiseSize; i++) {
-//            for (int j= 0; j < noiseSize; j++) {
-//                for (int k= 0; k < noiseSize; k++) {
-////                    noiseLookup[i*noiseSize*noiseSize + j*noiseSize + k] =
-////                            getNoise(x,y,z,k*cacheLevel,j*cacheLevel,i*cacheLevel, 0.001f, 1f);
-//                    noiseLookup2[i*noiseSize*noiseSize + j*noiseSize + k] =
-//                            getNoise(x,y,z,k*cacheLevel,j*cacheLevel,i*cacheLevel, 0.005f, 0.5f);
-//                }
-//            }
-//        }
-        
+
         for (int i= 0; i < CubeChunk.SIZE; i++) {
             for (int j= 0; j < CubeChunk.SIZE; j++) {
                 for (int k= 0; k < CubeChunk.SIZE; k++) {
-//                    double rnd = getCachedNoise(k,j,i,noiseLookup);//getNoise(x,y,z,k,j,i, 0.001f, 1f);
-//                    double rnd = 0.5f;
-//                    // get height gradient
+                    double height = groundNoise[j*32+k]*maxHeight;
                     float currentHeight = (z * CubeChunk.SIZE + i) * CubeChunk.BLOCK_SIZE;
-//                    float frac = getHeightFrac(minHeight, maxHeight, currentHeight);
-//
-//                    // Multiply noise by gradient
-//                    rnd *= frac*frac;
-//                    rnd += frac*0.02;
 
-                    
-
-
-                    double rnd = getCachedNoiseSmoothed(k,j,i,noiseLookup2);
-                    //double rnd = getNoise(x,y,z,k,j,i, 0.005f, 0.5f);
-                    if(currentHeight > 1024) {
-                        rnd = -1;
+                    double rnd = height > currentHeight?1:0;
+                    if(rnd == 0) {
+                        float hFrac = currentHeight/maxHeight;
+                        float rnd2 = getCachedNoiseSmoothed(k,j,i,noiseLookup2);
+                        rnd += rnd2 * (1f-hFrac);
                     }
-//                    else if(currentHeight > 0) {
-//                        rnd -= currentHeight / 1024f;
-//                    }
-//                    frac = getHeightFrac(-1024, 1024, currentHeight);
-//                    rnd2 *= frac * rnd2;
-//                    rnd += rnd2;
-////                    if(rnd2 > 0.04f) rnd = 1f;
-////                    else if(frac < 1f && frac > 0.5f) rnd = 0f;
-//
-//                    // saturate
-//                    if(rnd > 0.02f) rnd = 1f;
+                    
 
                     boolean empty = rnd < 0.5f;
                     chunk.setCubeType(k,j,i, empty?CubeType.EMPTY:CubeType.GRASS, false);
-
-                    
                 }
             }
         
         }
-//        chunk.notifyChange();
         return chunk;
     }
 

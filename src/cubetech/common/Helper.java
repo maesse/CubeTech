@@ -5,6 +5,7 @@
 
 package cubetech.common;
 
+import cubetech.entities.EntityState;
 import cubetech.gfx.Shader;
 import cubetech.input.Input;
 import cubetech.misc.Ref;
@@ -25,6 +26,51 @@ public class Helper {
     public static void VectorCopy(Vector2f src, Vector2f dst) {
         dst.x = src.x;
         dst.y = src.y;
+    }
+
+    public static Matrix4f axisToMatrix(Vector3f[] axis) { 
+        // Set rotation matrix
+        FloatBuffer viewbuffer = Ref.glRef.matrixBuffer;
+        viewbuffer.position(0);
+        viewbuffer.put(axis[0].x); viewbuffer.put(axis[0].y); viewbuffer.put(axis[0].z);viewbuffer.put(0);
+        viewbuffer.put(axis[1].x); viewbuffer.put(axis[1].y); viewbuffer.put(axis[1].z); viewbuffer.put(0);
+        viewbuffer.put(axis[2].x); viewbuffer.put(axis[2].y); viewbuffer.put(axis[2].z);viewbuffer.put(0);
+        viewbuffer.put(0); viewbuffer.put(0); viewbuffer.put(0); viewbuffer.put(1);
+        viewbuffer.flip();
+        Matrix4f mMatrix = (Matrix4f) new Matrix4f().load(viewbuffer);
+        viewbuffer.clear();
+        return mMatrix;
+    }
+
+    // Pack mins&maxs into an integer. Ignores mins.x/y
+    public static int boundsToSolid(Vector3f mins, Vector3f maxs) {
+        // todo: throw error on faulty bounds
+        int x = Helper.Clamp((int)maxs.x, 1, 255);
+        int y = Helper.Clamp((int)maxs.y, 1, 255);
+        int height = Helper.Clamp((int)(maxs.z - mins.z), 1, 255);
+        int minzLenght = Helper.Clamp((int)(- mins.z), 0, 127);
+
+        int solid = (minzLenght<<24) | (height<<16) | (y<<8) | x;
+        return solid;
+    }
+
+    // unpack mins&maxs from integer
+    public static Vector3f[] solidToBounds(int solid) {
+        if(solid == 0 || solid == EntityState.SOLID_BMODEL) return null;
+        int x = solid & 255;
+        int y = (solid >> 8) & 255;
+        int height = (solid >> 16) & 255;
+        int zminLen = (solid >> 24) & 127;
+
+        if(x == 0 || y == 0 || height == 0) {
+            Common.Log("Invalid packed solid");
+            return null;
+        }
+
+        Vector3f[] result = new Vector3f[2];
+        result[0] = new Vector3f(-x,-y,-zminLen);
+        result[1] = new Vector3f(x,y,height - zminLen);
+        return result;
     }
 
     public static Vector3f VectorToAngles(Vector3f dir, Vector3f dest) {
@@ -132,6 +178,7 @@ public class Helper {
     public static void renderBBoxWireframe(float xmin, float ymin, float zmin, 
             float xmax, float ymax, float zmax,
             Vector4f color) {
+        Ref.glRef.pushShader("World");
         // ready the texture
         Ref.ResMan.getWhiteTexture().Bind();
         if(color != null) {
@@ -189,6 +236,7 @@ public class Helper {
             GL11.glVertex3f(xmin ,ymax,     zmin);
         }
         GL11.glEnd();
+        Ref.glRef.PopShader();
     }
 
     public static void tex(float x, float y) {
@@ -460,6 +508,20 @@ public class Helper {
         dest[0].z = m20;
         dest[1].z = m21;
         dest[2].z = m22;
+
+        return dest;
+    }
+
+    public static Vector3f transform(Vector3f[] srcAxis, Vector3f srcOrigin, Vector3f dest) {
+        if (dest == null) dest = new Vector3f();
+        
+        float x = srcAxis[0].x * dest.x + srcAxis[1].x * dest.y + srcAxis[2].x * dest.z + srcOrigin.x * 1f;
+        float y = srcAxis[0].y * dest.x + srcAxis[1].y * dest.y + srcAxis[2].y * dest.z + srcOrigin.y * 1f;
+        float z = srcAxis[0].z * dest.x + srcAxis[1].z * dest.y + srcAxis[2].z * dest.z + srcOrigin.z * 1f;
+
+        dest.x = x;
+        dest.y = y;
+        dest.z = z;
 
         return dest;
     }

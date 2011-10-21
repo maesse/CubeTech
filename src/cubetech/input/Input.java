@@ -9,10 +9,13 @@ import cubetech.gfx.GLRef;
 import cubetech.misc.Ref;
 import cubetech.net.ConnectState;
 import cubetech.ui.UI.MENU;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import javax.swing.event.EventListenerList;
 import org.lwjgl.LWJGLException;
+import org.lwjgl.input.Controller;
+import org.lwjgl.input.Controllers;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
@@ -41,7 +44,14 @@ public class Input {
     public final static int KEYCATCH_MESSAGE = 8;
 
     ButtonState in_left, in_right, in_forward, in_back, in_up, in_down;
+
     ButtonState[] in_buttons = new ButtonState[30]; // Custom buttons
+    // button0 = mouse1
+    // button1 = mouse2
+    // button2 = crouch
+    // button3 = scoreboard
+    // button4 = use
+    
     public float[] viewangles = new float[3]; // viewangle this frame
     float[] oldangles = new float[3]; // viewangles from last frame
     public Binds binds;
@@ -97,9 +107,6 @@ public class Input {
             Ref.commands.AddCommand("+button" + i, in_buttons[i].KeyDownHook);
             Ref.commands.AddCommand("-button" + i, in_buttons[i].KeyUpHook);
         }
-        // button2 = crouch
-        // button3 = scoreboard
-
         binds.BindKey("W", "+forward");
         binds.BindKey("S", "+back");
         binds.BindKey("A", "+left");
@@ -123,9 +130,11 @@ public class Input {
         binds.BindKey("mouse1", "+button0");
         binds.BindKey("mouse2", "+button1");
         binds.BindKey("LCONTROL", "+button2");
+        binds.BindKey("E", "use");
         binds.BindKey("F11", "screenshot");
         binds.BindKey("g", "dropweapon");
         initialized = true;
+
     }
 
     public void SetKeyCatcher(int catcher) {
@@ -220,11 +229,48 @@ public class Input {
         // Mouse init
         Mouse.create();
 
+        Controllers.create();
+
         playerInput = new PlayerInput();
         mouseDelta = new Vector2f();
         sens = Ref.cvars.Get("sensitivity", "3", EnumSet.of(CVarFlags.ARCHIVE));
         in_mouselook = Ref.cvars.Get("in_mouselook", "1", EnumSet.of(CVarFlags.ARCHIVE));
     }
+
+    class Joystick {
+        Controller ctrl;
+        String name;
+        ArrayList<String> axisNames = new ArrayList<String>();
+        int buttons = 0;
+        Joystick(Controller ctrl) {
+            this.ctrl = ctrl;
+            int nAxis = ctrl.getAxisCount();
+            String axisnames = "";
+            for (int i= 0; i < nAxis; i++) {
+                axisNames.add(ctrl.getAxisName(i));
+                axisnames += axisNames.get(i) + ", ";
+            }
+            buttons = ctrl.getButtonCount();
+            name = ctrl.getName();
+
+            Common.Log("[Input] New joystick '%s' registered. %d buttons. %d axis, %s",
+                    name, buttons, nAxis, axisnames);
+        }
+    }
+
+    Joystick joystick = null;
+
+    private void updateControllers() {
+        if(Controllers.getControllerCount() == 0) return;
+
+        if(joystick == null) {
+            joystick = new Joystick(Controllers.getController(0));
+        }
+
+        
+        
+    }
+
     public void Update() {
         GLRef.checkError();
         Display.processMessages();
@@ -232,6 +278,7 @@ public class Input {
         MouseUpdate();
         GLRef.checkError();
         KeyboardUpdate();
+        updateControllers();
         GLRef.checkError();
         UpdateUserInput();
         GLRef.checkError();

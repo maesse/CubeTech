@@ -49,7 +49,7 @@ public class ClientInfo {
     public static ClientInfo Parse(String s) {
         ClientInfo info = new ClientInfo();
         info.name = Info.ValueForKey(s, "n");
-        info.modelName = "data/" + Info.ValueForKey(s, "model") + ".iqm";
+        info.modelName = "data/characters/" + Info.ValueForKey(s, "model") + ".iqm";
         info.infoValid = true;
         return info;
     }
