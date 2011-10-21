@@ -45,7 +45,7 @@ public class CSpinner extends CContainer {
 //        label.setMargin(2, 2, 2, 2);
         addComponent(label);
 
-        spinImg = new CImage("data/spinner.png");
+        spinImg = new CImage("data/textures/ui/spinner.png");
         spinImg.setTexsize(textureSize);
         spinImg.setTexoffset(normal_offset);
         spinImg.setSize(new Vector2f(32, 32));

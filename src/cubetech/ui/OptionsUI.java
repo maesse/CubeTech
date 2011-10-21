@@ -52,7 +52,7 @@ public class OptionsUI implements IMenu {
         delta.y = (float)Math.cos(time/150f)*scale +  Ref.glRef.GetResolution().y /2f;
 
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(delta, 50f, Ref.ResMan.LoadTexture("data/tool_timer.png"));
+        spr.Set(delta, 50f, Ref.ResMan.LoadTexture("data/textures/tile.png"));
         
         // Main container
         mainCont.Render(new Vector2f());

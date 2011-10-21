@@ -71,7 +71,7 @@ public class CButton extends CContainer {
         img.setSize(imageSize);
         addComponent(img);
         try {
-            normalBackground = CubeMaterial.Load("data/buttons.mat", true);
+            normalBackground = CubeMaterial.Load("data/textures/ui/buttons.mat", true);
         } catch (Exception ex) {
             Logger.getLogger(CButton.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -87,7 +87,7 @@ public class CButton extends CContainer {
         this.eventHook = evt;
         addComponent(img);
         try {
-            normalBackground = CubeMaterial.Load("data/buttons.mat", true);
+            normalBackground = CubeMaterial.Load("data/textures/ui/buttons.mat", true);
         } catch (Exception ex) {
             Logger.getLogger(CButton.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -101,7 +101,7 @@ public class CButton extends CContainer {
         imgTexture = tex;
         addComponent(img);
         try {
-            normalBackground = CubeMaterial.Load("data/buttons.mat", true);
+            normalBackground = CubeMaterial.Load("data/textures/ui/buttons.mat", true);
         } catch (Exception ex) {
             Logger.getLogger(CButton.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -118,7 +118,7 @@ public class CButton extends CContainer {
         addComponent(img);
         eventHook = evt;
         try {
-            normalBackground = CubeMaterial.Load("data/buttons.mat", true);
+            normalBackground = CubeMaterial.Load("data/textures/ui/buttons.mat", true);
         } catch (Exception ex) {
             Logger.getLogger(CButton.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -138,7 +138,7 @@ public class CButton extends CContainer {
 //        label.setMargin(2, 2, 2, 2);
         addComponent(label);
         try {
-            normalBackground = CubeMaterial.Load("data/buttons.mat", true);
+            normalBackground = CubeMaterial.Load("data/textures/ui/buttons.mat", true);
         } catch (Exception ex) {
             Logger.getLogger(CButton.class.getName()).log(Level.SEVERE, null, ex);
         }

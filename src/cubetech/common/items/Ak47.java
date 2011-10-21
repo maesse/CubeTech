@@ -22,11 +22,11 @@ public class Ak47 extends WeaponItem {
     WeaponInfo wi = new WeaponInfo();
 
     public Ak47() {
-        wi.viewModel = Ref.ResMan.loadModel("data/ak47_vmodel.iqm");
-        wi.fireSound = "data/ak47-1.wav";
-        wi.flashTexture = "data/muzzleflashX.png";
-        wi.explodeSound = "data/ric5.wav";
-        wi.worldModel = Ref.ResMan.loadModel("data/ak47.iqm");
+        wi.viewModel = Ref.ResMan.loadModel("data/weapons/ak/ak47_vmodel.iqm");
+        wi.fireSound = "data/weapons/ak/ak47-1.wav";
+        wi.flashTexture = "data/textures/muzzleflashX.png";
+        wi.explodeSound = "data/sounds/ric5.wav";
+        wi.worldModel = Ref.ResMan.loadModel("data/weapons/ak/ak47.iqm");
     }
 
     @Override

@@ -21,7 +21,7 @@ public class CSlider extends CComponent {
 
      public CSlider(Vector2f size, ButtonEvent evt) {
         setSize(new Vector2f(size));
-        texture = Ref.ResMan.LoadTexture("data/healthbar.png");
+        texture = Ref.ResMan.LoadTexture("data/textures/healthbar.png");
         onValueChange = evt;
     }
 

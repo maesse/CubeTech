@@ -2,12 +2,7 @@ package cubetech.gfx;
 
 import cubetech.common.CVars;
 import cubetech.common.Commands;
-import cubetech.gfx.GLRef.BufferTarget;
 import cubetech.misc.Ref;
-import java.awt.Canvas;
-import java.nio.ByteBuffer;
-import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.junit.After;
@@ -16,7 +11,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.*;
-import org.lwjgl.util.vector.Vector2f;
 
 /**
  *

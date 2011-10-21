@@ -66,7 +66,7 @@ public class CCheckbox extends CContainer {
 
     private void init(String buttonText, Align align,float scale) {
         //setMargin(8, 8, 8, 8);
-        checkboxImg = new CImage("data/checkbox.png");
+        checkboxImg = new CImage("data/textures/ui/checkbox.png");
         checkboxImg.setTexsize(new Vector2f(32f/65f, 32f/32f));
         checkboxImg.setTexoffset(unselected_offset);
         checkboxImg.setSize(new Vector2f(26, 26));

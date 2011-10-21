@@ -7,7 +7,6 @@ import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
 import cubetech.input.Input;
 import cubetech.input.MouseEvent;
-import cubetech.misc.Button;
 import cubetech.misc.Ref;
 import cubetech.net.ConnectState;
 import org.lwjgl.util.vector.Vector2f;
@@ -23,8 +22,8 @@ public class MainMenuUI implements IMenu {
     CContainer cont = null;
 
     public MainMenuUI() {
-        CubeTexture buttonBg = Ref.ResMan.LoadTexture("data/menubutton.png");
-        background = Ref.ResMan.LoadTexture("data/rightmenubar.png");
+        CubeTexture buttonBg = Ref.ResMan.LoadTexture("data/textures/ui/menubutton.png");
+        background = Ref.ResMan.LoadTexture("data/textures/ui/rightmenubar.png");
 
         cont = new CContainer(new FlowLayout(false, true, true));
                 cont.addComponent(
@@ -36,8 +35,7 @@ public class MainMenuUI implements IMenu {
         continueButton.setVisible(false);
         cont.addComponent(new CButton("New Game",buttonBg, Align.CENTER, 1.5f, new ButtonEvent() {
             public void buttonPressed(CComponent button, MouseEvent evt) {
-                Ref.commands.ExecuteText(ExecType.NOW, "map data/themap16");
-                Ref.commands.ExecuteText(ExecType.NOW, "start");
+                Ref.commands.ExecuteText(ExecType.NOW, "map");
             }
         }));
         
@@ -67,13 +65,14 @@ public class MainMenuUI implements IMenu {
         if(Ref.cvars.Find("ui_fullscreen").iValue == 0)
             spr.SetColor(255,255,255,127);
         spr = Ref.SpriteMan.GetSprite(Type.HUD);
-        spr.Set(res.x/2f - 200, res.y/2f + 100, 400, 200, Ref.ResMan.LoadTexture("data/logo.png"));
+        spr.Set(res.x/2f - 200, res.y/2f + 100, 400, 200, Ref.ResMan.LoadTexture("data/textures/ui/logo.png"));
 //        if(Ref.cvars.Find("ui_fullscreen").iValue == 0)
 //            spr.SetColor(255,255,255,127);
 
 
         cont.setPosition(new Vector2f(Ref.glRef.GetResolution().x - cont.getSize().x, Ref.glRef.GetResolution().y - cont.getSize().y));
         cont.Render(new Vector2f());
+
     }
 
     public boolean IsFullscreen() {

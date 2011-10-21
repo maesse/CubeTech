@@ -81,8 +81,9 @@ public class ServerListItemUI extends CContainer {
     }
 
     private String cleanMapname(String map) {
-        if(map.startsWith("data/"))
-            return map.replace("data/", "");
+
+        if(map.startsWith("maps/"))
+            return map.replace("maps/", "");
         return map;
     }
 

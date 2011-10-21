@@ -29,8 +29,8 @@ public class CScrollPane extends CContainer {
 
     public CScrollPane(Direction dir) {
         super(new FlowLayout(false, false, true));
-        slider = Ref.ResMan.LoadTexture("data/slider.png");
-        vslider = Ref.ResMan.LoadTexture("data/vslider.png");
+        slider = Ref.ResMan.LoadTexture("data/textures/ui/slider.png");
+        vslider = Ref.ResMan.LoadTexture("data/textures/ui/vslider.png");
         setResizeToChildren(dir);
         vert = true;
         hori = true;

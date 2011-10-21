@@ -70,7 +70,7 @@ public class ServerListUI implements IMenu {
     }
 
     public ServerListUI() {
-        CubeTexture buttonBg = Ref.ResMan.LoadTexture("data/menubutton.png");
+        CubeTexture buttonBg = Ref.ResMan.LoadTexture("data/textures/ui/menubutton.png");
         
         topCont = new CContainer(new FlowLayout(true, true, false));
         topCont.setSize2(new Vector2f(Ref.glRef.GetResolution().x, 0));

@@ -61,11 +61,11 @@ public abstract class WeaponItem implements IItem {
 
     // default pickupsound
     public String getPickupSound() {
-        return "data/smallmedkit1.wav";
+        return "data/sounds/smallmedkit1.wav";
     }
 
     public String getIconName() {
-        return "data/tile.png";
+        return "data/textures/tile.png";
     }
 
     public static WeaponItem get(Weapon w) {

@@ -36,8 +36,8 @@ public class MaterialUI extends javax.swing.JPanel {
     JScrollPane imgScoller;
     private MaterialCanvas canvas = null;
 
-    ImageIcon unlocked = new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/lock_open.png"));
-    ImageIcon locked = new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/lock.png"));
+    ImageIcon unlocked = new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/lock_open.png"));
+    ImageIcon locked = new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/lock.png"));
     
     // View settings
     float zoomAmount = 1f;
@@ -551,7 +551,7 @@ public class MaterialUI extends javax.swing.JPanel {
         jToolBar1.setRollover(true);
 
         jButton1.setBackground(java.awt.SystemColor.controlHighlight);
-        jButton1.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/layer_create.png"))); // NOI18N
+        jButton1.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/layer_create.png"))); // NOI18N
         jButton1.setToolTipText("Create new material (Ctrl+N)");
         jButton1.setBorder(null);
         jButton1.setFocusable(false);
@@ -568,7 +568,7 @@ public class MaterialUI extends javax.swing.JPanel {
         jToolBar1.add(jButton1);
 
         jButton6.setBackground(java.awt.SystemColor.controlHighlight);
-        jButton6.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/layer_open.png"))); // NOI18N
+        jButton6.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/layer_open.png"))); // NOI18N
         jButton6.setToolTipText("Open material... (Ctrl+O)");
         jButton6.setFocusable(false);
         jButton6.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
@@ -582,7 +582,7 @@ public class MaterialUI extends javax.swing.JPanel {
         jToolBar1.add(jButton6);
 
         jButton7.setBackground(java.awt.SystemColor.controlHighlight);
-        jButton7.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/layer_save.png"))); // NOI18N
+        jButton7.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/layer_save.png"))); // NOI18N
         jButton7.setToolTipText("Save material (Ctrl+S)");
         jButton7.setFocusable(false);
         jButton7.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
@@ -595,7 +595,7 @@ public class MaterialUI extends javax.swing.JPanel {
         jToolBar1.add(jButton7);
 
         jButton8.setBackground(java.awt.SystemColor.controlHighlight);
-        jButton8.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/layer_saveas.png"))); // NOI18N
+        jButton8.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/layer_saveas.png"))); // NOI18N
         jButton8.setToolTipText("Save material as...");
         jButton8.setFocusable(false);
         jButton8.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
@@ -631,7 +631,7 @@ public class MaterialUI extends javax.swing.JPanel {
 
         labelZoom.setText("100%");
 
-        jButton2.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/magnifier_zoom_in.png"))); // NOI18N
+        jButton2.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/magnifier_zoom_in.png"))); // NOI18N
         jButton2.setToolTipText("Zoom In");
         jButton2.setBorder(null);
         jButton2.setPreferredSize(new java.awt.Dimension(24, 24));
@@ -641,7 +641,7 @@ public class MaterialUI extends javax.swing.JPanel {
             }
         });
 
-        jButton3.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/magnifier_zoom_out.png"))); // NOI18N
+        jButton3.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/magnifier_zoom_out.png"))); // NOI18N
         jButton3.setToolTipText("Zoom Out");
         jButton3.setBorder(null);
         jButton3.setPreferredSize(new java.awt.Dimension(24, 24));
@@ -743,7 +743,7 @@ public class MaterialUI extends javax.swing.JPanel {
             .addGap(0, 23, Short.MAX_VALUE)
         );
 
-        jButton5.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/layer_rgb.png"))); // NOI18N
+        jButton5.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/layer_rgb.png"))); // NOI18N
         jButton5.setToolTipText("Pick Color");
         jButton5.setCursor(new java.awt.Cursor(java.awt.Cursor.DEFAULT_CURSOR));
         jButton5.addActionListener(new java.awt.event.ActionListener() {
@@ -765,7 +765,7 @@ public class MaterialUI extends javax.swing.JPanel {
 
         jLabel10.setText("Texture Coordinates:");
 
-        jLabel11.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/transform_layer.png"))); // NOI18N
+        jLabel11.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/transform_layer.png"))); // NOI18N
         jLabel11.setText("Offset");
 
         offsetX.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -780,7 +780,7 @@ public class MaterialUI extends javax.swing.JPanel {
             }
         });
 
-        jLabel12.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/layer_to_image_size.png"))); // NOI18N
+        jLabel12.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/layer_to_image_size.png"))); // NOI18N
         jLabel12.setText("Size");
 
         sizeX.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -795,7 +795,7 @@ public class MaterialUI extends javax.swing.JPanel {
             }
         });
 
-        jToggleButton1.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/zoom_layer.png"))); // NOI18N
+        jToggleButton1.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/zoom_layer.png"))); // NOI18N
         jToggleButton1.setText("Zoom to Coords");
         jToggleButton1.setFocusable(false);
         jToggleButton1.addActionListener(new java.awt.event.ActionListener() {
@@ -804,7 +804,7 @@ public class MaterialUI extends javax.swing.JPanel {
             }
         });
 
-        jToggleButton2.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/lock_open.png"))); // NOI18N
+        jToggleButton2.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/lock_open.png"))); // NOI18N
         jToggleButton2.setToolTipText("Lock texture coordinates");
         jToggleButton2.setFocusable(false);
         jToggleButton2.setPreferredSize(new java.awt.Dimension(24, 24));
@@ -922,7 +922,7 @@ public class MaterialUI extends javax.swing.JPanel {
         sizeWarning.setForeground(new java.awt.Color(153, 0, 0));
         sizeWarning.setText("jLabel8");
 
-        jButton4.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/layer_import.png"))); // NOI18N
+        jButton4.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/layer_import.png"))); // NOI18N
         jButton4.setText("Load Texture...");
         jButton4.setToolTipText("Select texture for this material (Ctrl+T)");
         jButton4.addActionListener(new java.awt.event.ActionListener() {
@@ -990,7 +990,7 @@ public class MaterialUI extends javax.swing.JPanel {
 
         jLabel15.setText("Frames:");
 
-        jButton9.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/control_start.png"))); // NOI18N
+        jButton9.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/control_start.png"))); // NOI18N
         jButton9.setEnabled(false);
         jButton9.setPreferredSize(new java.awt.Dimension(24, 24));
         jButton9.addActionListener(new java.awt.event.ActionListener() {
@@ -999,7 +999,7 @@ public class MaterialUI extends javax.swing.JPanel {
             }
         });
 
-        jButton10.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/control_stop.png"))); // NOI18N
+        jButton10.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/control_stop.png"))); // NOI18N
         jButton10.setEnabled(false);
         jButton10.setPreferredSize(new java.awt.Dimension(24, 24));
         jButton10.addActionListener(new java.awt.event.ActionListener() {
@@ -1008,7 +1008,7 @@ public class MaterialUI extends javax.swing.JPanel {
             }
         });
 
-        jButton11.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/control_end.png"))); // NOI18N
+        jButton11.setIcon(new javax.swing.ImageIcon(getClass().getResource("/cubetech/data/debugui/control_end.png"))); // NOI18N
         jButton11.setEnabled(false);
         jButton11.setPreferredSize(new java.awt.Dimension(24, 24));
         jButton11.addActionListener(new java.awt.event.ActionListener() {
