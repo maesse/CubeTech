@@ -1,5 +1,6 @@
 package cubetech.iqm;
 
+import cubetech.gfx.ShaderUBO;
 import java.util.ArrayList;
 import cubetech.common.Common;
 import org.lwjgl.opengl.GL12;
@@ -93,16 +94,8 @@ public class IQMModel {
     // Joints that have attachment
     HashMap<String, BoneAttachment> attachments = new HashMap<String, BoneAttachment>();
     public BoneController[] controllers = null;
-    
 
-//    private class IQMVertex {
-//        public Vector3f position;
-//        public Vector3f normal;
-//        public Vector3f tangent;
-//        public Vector2f texcoord;
-//        public byte[] blendindex = new byte[4];
-//        public byte[] blendweight = new byte[4];
-//    }
+    private static HashMap<Shader, ShaderUBO> uboMap = new HashMap<Shader, ShaderUBO>();
 
     IQMModel() {
         envMap = Ref.ResMan.LoadTexture("data/textures/skybox/ibl_sky", true);
@@ -137,8 +130,6 @@ public class IQMModel {
     private void createDynamicBuffer() {
         if(staticModelVB != null) return;
         
-        //IQMVertex[] verts = new IQMVertex[header.num_vertexes];
-
         stride = 0;
         if(in_position != null) stride += 4*3;
         if(in_normal != null) stride += 4*3;
@@ -168,39 +159,18 @@ public class IQMModel {
         gpushaderShadow = Ref.glRef.getShader("gpuskinShadowed");
         gpushaderLit = Ref.glRef.getShader("gpuskinLit");
         initGPUShader();
-        
     }
 
     private static void initGPUShader() {
-        initUBOForShader(gpushaderShadow);
-        initUBOForShader(gpushaderLit);
-        initUBOForShader(gpushader);
+        if(uboMap.size() > 0) return;
+
+        ShaderUBO ubo = ShaderUBO.initUBOForShader(gpushader);
+        if(ubo != null) uboMap.put(gpushader, ubo);
+        ubo = ShaderUBO.initUBOForShader(gpushaderShadow);
+        if(ubo != null) uboMap.put(gpushaderShadow, ubo);
+        ubo = ShaderUBO.initUBOForShader(gpushaderLit);
+        if(ubo != null) uboMap.put(gpushaderLit, ubo);
     }
-    
-    private static void initUBOForShader(Shader shader) {
-        if(Ref.glRef.getGLCaps().GL_ARB_uniform_buffer_object) {
-            IntBuffer intBuff = BufferUtils.createIntBuffer(1);
-            int blockIndex = ARBUniformBufferObject.glGetUniformBlockIndex(shader.getShaderId(), "animdata");
-            ARBUniformBufferObject.glGetUniformIndices(shader.getShaderId(), new CharSequence[] {"bonemats"}, intBuff);
-            gpu_bonematIndex = intBuff.get(0); intBuff.clear();
-
-            gpu_ubosize = ARBUniformBufferObject.glGetActiveUniformBlock(
-                    shader.getShaderId(),
-                    blockIndex,
-                    ARBUniformBufferObject.GL_UNIFORM_BLOCK_DATA_SIZE);
-            
-            gpu_bonematOffset = ARBUniformBufferObject.glGetActiveUniforms(shader.getShaderId(), gpu_bonematIndex, ARBUniformBufferObject.GL_UNIFORM_OFFSET);
-
-            ARBUniformBufferObject.glUniformBlockBinding(shader.getShaderId(), blockIndex, 0);
-            gpu_ubo = GL15.glGenBuffers();
-        }
-    }
-
-
-    private static int gpu_bonematIndex;
-    private static int gpu_ubosize;
-    private static int gpu_bonematOffset;
-    private static int gpu_ubo;
 
     private void createIndiceBuffer() {
         staticModelIB = new VBO(4*triangles.length*3, VBO.BufferTarget.Index);
@@ -465,25 +435,32 @@ public class IQMModel {
         if(gpu_skin_dirty && shadowCasting || gpu_skin_shadow_dirty && !shadowCasting) {
             int target = ARBUniformBufferObject.GL_UNIFORM_BUFFER;
 
-            int maxJointsPrPass = gpu_ubosize/(4*4*3);
+            ShaderUBO ubo = uboMap.get(shader);
+            if(ubo == null) {
+                Ref.common.Error(Common.ErrorCode.FATAL, "Implement ubo workaround");
+            }
+
+            int maxJointsPrPass = ubo.getSize()/(4*4*3);
             int bufferJoints = header.num_joints;
             if(bufferJoints > maxJointsPrPass) {
                 Common.Log("Too many bones!");
                 bufferJoints = maxJointsPrPass;
             }
-            if(bonebuffer == null) bonebuffer = BufferUtils.createFloatBuffer(bufferJoints * 4 * 3);
+            if(bonebuffer == null || bonebuffer.capacity() < bufferJoints * 4 * 4) {
+                bonebuffer = BufferUtils.createFloatBuffer(bufferJoints * 4 * 4);
+            }
             bonebuffer.clear();
             for (int i= 0; i < bufferJoints; i++) {
                 Matrix3x4.storeMatrix4f(outframe[i], bonebuffer);
             }
             bonebuffer.flip();
 
-            GL15.glBindBuffer(target, gpu_ubo);
-            GL15.glBufferData(target, bufferJoints*4*4*3, GL15.GL_STREAM_DRAW);
-            GL15.glBufferSubData(target, gpu_bonematOffset, bonebuffer);
-            GL15.glBindBuffer(target, 0);
+            ubo.bind();
+            GL15.glBufferData(target, ubo.getSize(), GL15.GL_STREAM_DRAW);
+            GL15.glBufferSubData(target, ubo.getOffset(), bonebuffer);
+            ShaderUBO.unbind();
 
-            ARBUniformBufferObject.glBindBufferBase(target, 0, gpu_ubo);
+            ARBUniformBufferObject.glBindBufferBase(target, 0, ubo.getHandle());
             GLRef.checkError();
             if(gpu_skin_dirty && shadowCasting) gpu_skin_dirty = false;
             else gpu_skin_shadow_dirty = false;
