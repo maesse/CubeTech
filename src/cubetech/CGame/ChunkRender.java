@@ -91,6 +91,7 @@ public class ChunkRender {
         ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_POSITION, 3, GL11.GL_FLOAT, false, 32, 0);
         ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COLOR, 4, GL11.GL_UNSIGNED_BYTE, true, 32, 3*4);
         ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS, 2, GL11.GL_FLOAT, false, 32, 4*4);
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_NORMAL, 2, GL11.GL_FLOAT, false, 32, 6*4);
         GL12.glDrawRangeElements(GL11.GL_TRIANGLES, 0, vbo_nFaces*4 - 1, vbo_nFaces*6, GL11.GL_UNSIGNED_INT, 0);
         //GL11.glDrawArrays(GL11.GL_QUADS, 0, vbo_nFaces*4);
     }
@@ -134,6 +135,7 @@ public class ChunkRender {
         ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_POSITION); // position
         ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COLOR); // color
         ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COORDS); // coords
+        ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_NORMAL); // coords
         
         
     }
@@ -142,6 +144,7 @@ public class ChunkRender {
         GL20.glDisableVertexAttribArray(Shader.INDICE_POSITION);
         GL20.glDisableVertexAttribArray(Shader.INDICE_COLOR);
         GL20.glDisableVertexAttribArray(Shader.INDICE_COORDS);
+        GL20.glDisableVertexAttribArray(Shader.INDICE_NORMAL);
     }
 
     private CubeChunk getChunkInDirection(int[] dir) {

@@ -1,18 +1,18 @@
-#version 130
+#version 120
 #define PACKEDCOORDS
 
-attribute vec2 v_position;
+in vec2 v_position;
 #ifdef PACKEDCOORDS // coords packed into a single integer
-attribute float v_coords;
+in float v_coords;
 #else
-attribute vec2 v_coords;
+in vec2 v_coords;
 #endif
-attribute vec4 v_color;
+in vec4 v_color;
 
 uniform sampler2D tex;
 
-varying vec2 coords;
-varying vec4 color;
+varying out vec2 coords;
+varying out vec4 color;
 
 void main()
 {

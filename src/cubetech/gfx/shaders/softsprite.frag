@@ -1,4 +1,4 @@
-#version 140
+#version 120
 #ifdef GL_ARB_texture_rectangle
 #extension GL_ARB_texture_rectangle : enable
 #else

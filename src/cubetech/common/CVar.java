@@ -51,4 +51,13 @@ public class CVar {
     public boolean isTrue() {
         return iValue != 0;
     }
+
+    /**
+     * Sets the latched string and clears the modified flag
+     */
+    public void applyLatched() {
+        if(latchedString == null) return;
+        set(latchedString);
+        modified = false;
+    }
 }

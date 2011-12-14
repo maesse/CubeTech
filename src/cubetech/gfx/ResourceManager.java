@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import org.lwjgl.opengl.ARBTextureRg;
 import org.lwjgl.opengl.EXTFramebufferSRGB;
 import cubetech.gfx.Resource.ResourceType;
 import cubetech.common.CVar;
@@ -61,9 +62,11 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import javax.swing.ImageIcon;
+import org.lwjgl.opengl.ARBTextureFloat;
 import org.lwjgl.opengl.EXTTextureArray;
 import org.lwjgl.util.ReadableColor;
 
+import org.lwjgl.util.vector.Vector3f;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
 import static org.lwjgl.opengl.GL13.*;
@@ -89,6 +92,8 @@ public final class ResourceManager {
     // Used for quering new opengl textures ids
     private IntBuffer textureIDBuffer = BufferUtils.createIntBuffer(1);
     private CubeTexture whiteTexture = null;
+    private CubeTexture noSpecularTexture = null;
+    private CubeTexture noNormalTexture = null; // 1 pixel (0,0,1)
 
     public ResourceManager() {
         // Setup color models needed for loading textures
@@ -107,6 +112,25 @@ public final class ResourceManager {
                 EnumSet.of(CVarFlags.ARCHIVE));
         tex_srgb = Ref.cvars.Get("tex_srgb", "1", EnumSet.of(CVarFlags.ARCHIVE));
         Ref.commands.AddCommand("tex_reload", cmd_reloadtex);
+    }
+    
+    public void generateTextures() {
+        byte[] data = new byte[] {(byte)127, (byte)127, (byte)255, (byte)255};
+        noNormalTexture = CreateTextureFromData(1, 1, GL_TEXTURE_2D, data);
+        noNormalTexture.textureSlot = 3;
+        noNormalTexture.Bind();
+        data = new byte[] {(byte)0, (byte)0, (byte)0, (byte)255};
+        noSpecularTexture = CreateTextureFromData(1, 1, GL_TEXTURE_2D, data);
+        noSpecularTexture.textureSlot = 4;
+        noSpecularTexture.Bind();
+    }
+    
+    public CubeTexture getNoNormalTexture() {
+        return noNormalTexture;
+    }
+    
+    public CubeTexture getNoSpecularTexture() {
+        return noSpecularTexture;
     }
 
     private ICommand cmd_reloadtex = new ICommand() {
@@ -402,9 +426,10 @@ public final class ResourceManager {
 
     private CubeTexture getTexture(Resource res) throws IOException
     {
-        int dstFormat = isSRGB()?EXTTextureSRGB.GL_SRGB_ALPHA_EXT:GL_RGBA;
+        boolean useSRGB = isSRGB() && !res.Name.contains("normal"); // normals are linear
+        int dstFormat = useSRGB?EXTTextureSRGB.GL_SRGB_ALPHA_EXT:GL_RGBA;
         if(res.target == GL_TEXTURE_CUBE_MAP)  {
-            dstFormat = isSRGB()?EXTTextureSRGB.GL_SRGB_EXT:GL_RGB;
+            dstFormat = useSRGB?EXTTextureSRGB.GL_SRGB_EXT:GL_RGB;
         } // don't need alpha for cubemaps
         int minFilter = res.target == GL_TEXTURE_CUBE_MAP?GL_LINEAR:GL_LINEAR_MIPMAP_LINEAR;
         CubeTexture tex = getTexture(res.Name, res.target, dstFormat, minFilter, GL_LINEAR, (CubeTexture)res.Data);
@@ -596,7 +621,7 @@ public final class ResourceManager {
 
     public static AbstractMap.SimpleEntry<ByteBuffer, Integer> OpenFileAsByteBuffer(String file, boolean direct) throws FileNotFoundException, IOException {
         FileInputStream fis = null;
-        if(Ref.common.isDeveloper()) {
+        if(Ref.common != null && Ref.common.isDeveloper()) {
             try {
                 fis = new FileInputStream(devpath.sValue+file);
             } catch(Exception ex) {
@@ -884,13 +909,17 @@ public final class ResourceManager {
         if(bitdepth == 32) component = GL_DEPTH_COMPONENT32;
         if(target == EXTTextureArray.GL_TEXTURE_2D_ARRAY_EXT) {
             glTexImage3D(target, 0, component, width, height,nLevels, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullBuffer);
+        } else if(target == GL_TEXTURE_CUBE_MAP) {
+            for (int i = 0; i < 6; i++) {
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X+i, 0, ARBTextureFloat.GL_RGB16F_ARB, width, height, 0, GL_RGBA, GL_FLOAT, nullBuffer);
+            }
         } else {
             glTexImage2D(target, 0, component, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullBuffer);
         }
         GLRef.checkError();
         return textureId;
     }
-
+    
     public int CreateEmptyTexture(int width, int height, int target, boolean fill, org.lwjgl.util.Color color) {
         int textureId = createTextureID();
         glBindTexture(target, textureId);
@@ -911,10 +940,38 @@ public final class ResourceManager {
             glTexImage2D(target, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf);
         } else {
             ByteBuffer nullBuffer = null;
-            glTexImage2D(target, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullBuffer);
+            if(target == GL_TEXTURE_CUBE_MAP) {
+                for (int i = 0; i < 6; i++) {
+                    glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X+i, 0, ARBTextureFloat.GL_ALPHA32F_ARB, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullBuffer);
+                }
+            } else {
+                glTexImage2D(target, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullBuffer);
+            }
         }
         
         return textureId;
+    }
+
+    public CubeTexture CreateTextureFromData(int width, int height, int target, byte[] data) {
+        int textureId = createTextureID();
+        glBindTexture(target, textureId);
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        ByteBuffer buf = ByteBuffer.allocateDirect(width*height*4);
+        buf.order(ByteOrder.nativeOrder());
+        for (int i= 0; i < width*height; i++) {
+            buf.put(data[(i*4+0) % data.length]);
+            buf.put(data[(i*4+1) % data.length]);
+            buf.put(data[(i*4+2) % data.length]);
+            buf.put(data[(i*4+3) % data.length]);
+        }
+        buf.flip();
+        glTexImage2D(target, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf);
+        CubeTexture tex = new CubeTexture(target, textureId, "GeneratedTexture");
+        tex.loaded = true;
+        return tex;
     }
 
     

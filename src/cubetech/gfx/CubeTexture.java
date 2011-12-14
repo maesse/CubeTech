@@ -68,10 +68,12 @@ public class CubeTexture {
 
     public void Bind() {
         if(loaded) {
-            glActiveTexture(GL_TEXTURE0+textureSlot);
-            glBindTexture(Target, TextureID);
+             
+                glActiveTexture(GL_TEXTURE0+textureSlot);
+                glBindTexture(Target, TextureID);
             
-//            Ref.glRef.shader.setUniform(Ref.glRef.shader.GetTextureIndex(textureSlot), textureSlot);
+            
+            
             
 //            GLRef.checkError();
             

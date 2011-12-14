@@ -175,6 +175,8 @@ public class SpriteManager {
             return;
         }
 
+        Ref.glRef.PushShader(Ref.glRef.getShader("sprite"));
+
         // Newschool
         initBuffers();
         
@@ -238,17 +240,23 @@ public class SpriteManager {
         
         int stride = Sprite.STRIDE;
 //        GL11.glEnableClientState(GL11.GL_VERTEX_ARRAY);
-        ARBVertexShader.glEnableVertexAttribArrayARB(0); // position
-        ARBVertexShader.glVertexAttribPointerARB(0, 3, GL11.GL_FLOAT, false, stride, 0);
-
+//        ARBVertexShader.glEnableVertexAttribArrayARB(0); // position
+//        ARBVertexShader.glVertexAttribPointerARB(0, 3, GL11.GL_FLOAT, false, stride, 0);
 //
-//        GL11.glEnableClientState(GL11.GL_COLOR_ARRAY);
-        ARBVertexShader.glEnableVertexAttribArrayARB(1); // color
-        ARBVertexShader.glVertexAttribPointerARB(1, 4, GL11.GL_UNSIGNED_BYTE, true, stride, 3*4);
-
-//        GL11.glEnableClientState(GL11.GL_TEXTURE_COORD_ARRAY);
-        ARBVertexShader.glEnableVertexAttribArrayARB(2); // coords
-        ARBVertexShader.glVertexAttribPointerARB(2, 2, GL11.GL_FLOAT, false, stride, 4*4);
+////
+////        GL11.glEnableClientState(GL11.GL_COLOR_ARRAY);
+//        ARBVertexShader.glEnableVertexAttribArrayARB(1); // color
+//        ARBVertexShader.glVertexAttribPointerARB(1, 4, GL11.GL_UNSIGNED_BYTE, true, stride, 3*4);
+//
+////        GL11.glEnableClientState(GL11.GL_TEXTURE_COORD_ARRAY);
+//        ARBVertexShader.glEnableVertexAttribArrayARB(2); // coords
+//        ARBVertexShader.glVertexAttribPointerARB(2, 2, GL11.GL_FLOAT, false, stride, 4*4);
+        ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_POSITION); // position
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_POSITION, 2, GL11.GL_FLOAT, false, Sprite.STRIDE, 0);
+        ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COLOR); // color
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COLOR, 4, GL11.GL_UNSIGNED_BYTE, true, Sprite.STRIDE, 2*4);
+        ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COORDS); // coords
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS, 1, GL11.GL_FLOAT, false, Sprite.STRIDE, 3*4);
         GLRef.checkError();
 
         
@@ -294,6 +302,7 @@ public class SpriteManager {
         vertexBuffer.unbind();
         indexBuffer.unbind();
         GLRef.checkError();
+        Ref.glRef.PopShader();
     }
 
     // use vbo for HUD sprites

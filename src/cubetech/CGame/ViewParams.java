@@ -4,11 +4,13 @@ import cubetech.collision.CubeCollision;
 import cubetech.collision.CubeMap;
 import cubetech.common.CVar;
 import cubetech.common.Helper;
+import cubetech.gfx.Light;
 import cubetech.misc.Plane;
 import cubetech.misc.Ref;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.util.ArrayList;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.GLU;
 import org.lwjgl.util.vector.Matrix;
@@ -27,7 +29,7 @@ public class ViewParams {
     public int ViewportWidth;
     public int ViewportHeight;
     public float FovX;
-    public int FovY;
+    public float FovY;
     public Matrix4f ProjectionMatrix;
     public Matrix4f viewMatrix = new Matrix4f();
     public Vector3f Angles = new Vector3f();
@@ -37,6 +39,8 @@ public class ViewParams {
     public float w, h;
     public float farDepth;
     public float nearDepth;
+    
+    public ArrayList<Light> lights = new ArrayList<Light>();
 
     public Plane[] planes = new Plane[6];
     private float[] view = new float[16];
@@ -64,7 +68,65 @@ public class ViewParams {
         }
     }
 
+    public void setupOthoProjection(float fovx) {
+        Vector2f vidSize = Ref.glRef.GetResolution();
+        float aspect = vidSize.y/vidSize.x;
+        FovX = fovx;
+        FovY = (FovX*aspect);
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        GL11.glLoadIdentity();
+
+        GL11.glOrtho(0, fovx, 0, FovY, 1, -1000);
+        GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projbuffer);
+        if(ProjectionMatrix == null) {
+            ProjectionMatrix = new Matrix4f();
+        }
+        ProjectionMatrix.load(projbuffer);
+        projbuffer.position(0);
+
+        ViewAxis = Helper.AnglesToAxis(Angles, ViewAxis);
+
+        view[0] = ViewAxis[0].x;
+        view[4] = ViewAxis[0].y;
+        view[8] = ViewAxis[0].z;
+        view[12] = -Origin.x * view[0] + -Origin.y * view[4] + -Origin.z * view[8];
+
+        view[1] = ViewAxis[1].x;
+        view[5] = ViewAxis[1].y;
+        view[9] = ViewAxis[1].z;
+        view[13] = -Origin.x * view[1] + -Origin.y * view[5] + -Origin.z * view[9];
+
+        view[2] = ViewAxis[2].x;
+        view[6] = ViewAxis[2].y;
+        view[10] = ViewAxis[2].z;
+        view[14] = -Origin.x * view[2] + -Origin.y * view[6] + -Origin.z * view[10];
+
+        view[3] = view[7] = view[11] = 0;
+        view[15] = 1;
+
+        // convert from our coordinate system (looking down X)
+	// to OpenGL's coordinate system (looking down -Z)
+        viewbuffer.position(0);
+        Helper.toFloatBuffer(view, viewbuffer);
+        // Store for shadows
+
+
+
+//        Helper.multMatrix(view, flipMatrix, viewbuffer);
+        viewbuffer.limit(16);
+        viewbuffer.position(0);
+        viewMatrix.load(viewbuffer);
+        viewbuffer.position(0);
+
+
+        // set it for opengl
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        
+        GL11.glLoadMatrix(viewbuffer);
+    }
+
     public void SetupProjection() {
+        lights.clear();
         // Use fovx and fovy to set up a matrix
         Vector2f vidSize = Ref.glRef.GetResolution();
         float aspect = vidSize.y/vidSize.x;

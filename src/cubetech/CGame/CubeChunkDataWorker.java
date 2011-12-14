@@ -4,11 +4,15 @@ import cubetech.collision.CubeChunk;
 import cubetech.collision.CubeMap;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
+import cubetech.common.Helper;
 import cubetech.gfx.TerrainTextureCache;
 import cubetech.misc.Ref;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
+
 import org.lwjgl.util.Color;
+import org.lwjgl.util.vector.Vector2f;
+import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
 /**
@@ -30,10 +34,40 @@ public class CubeChunkDataWorker extends Thread {
     private int[] chunkDelta = new int[3];
     private int[] org = new int[3];
     
+    Vector2f[] encodedNormals = new Vector2f[6];
     
 
     public CubeChunkDataWorker(CubeChunkDataBuilder builder) {
         this.builder = builder;
+        
+        for (int i = 0; i < encodedNormals.length; i++) {
+            encodedNormals[i] = new Vector2f();
+            int axis = i / 2;
+            boolean neg = i % 2 == 1;
+            Vector3f normal = new Vector3f();
+            Helper.VectorSet(normal, axis, 1f);
+            if(neg) normal.scale(-1f);
+            encodeNormalSphereMap(normal, encodedNormals[i]);
+            
+        }
+        
+    }
+    
+    // Using SphereMap Transform
+    private void encodeNormalSphereMap(Vector3f normal, Vector2f dest) {
+        float d = (float)Math.sqrt(normal.z * 8f + 8f);
+        dest.set(normal.x/d + 0.5f, normal.y/d + 0.5f);
+    }
+    
+    // Optimized for viewspace
+    private void encodeNormal(Vector3f normal, Vector2f dest) {
+        dest.x = normal.x;
+        dest.y = normal.y;
+        Helper.Normalize(dest);
+        dest.scale((float)Math.sqrt(-normal.z*0.5f + 0.5f));
+        dest.scale(0.5f);
+        dest.x += 0.5f;
+        dest.y += 0.5f;
     }
 
     public void initWorker(CubeChunk chunk) {
@@ -123,6 +157,11 @@ public class CubeChunkDataWorker extends Thread {
         buf.put((byte)0);
         buf.put((byte)0);
     }
+    
+    private void writeNormal(int index, ByteBuffer buf) {
+        buf.putFloat(encodedNormals[index].x);
+        buf.putFloat(encodedNormals[index].y);
+    }
 
     private static void writeColorAndAO(Color color, boolean ao1, boolean ao2, boolean ao3, ByteBuffer dest) {
         int ao = 255;
@@ -191,7 +230,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx).putFloat(ly).putFloat(lz+BLOCK_SIZE);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.y);
-                        padd(buffer);
+                        writeNormal(4, buffer);
 
                         ao1 = derp(pos, ao(1,0,1));
                         ao2 = derp(pos, ao(0,-1,1));
@@ -199,7 +238,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly).putFloat(             lz+ BLOCK_SIZE);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
-                        padd(buffer);
+                        writeNormal(4, buffer);
 
                         ao1 = derp(pos, ao(1,0,1));
                         ao2 = derp(pos, ao(0,1,1));
@@ -207,7 +246,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly + BLOCK_SIZE).putFloat(lz+ BLOCK_SIZE);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.w);
-                        padd(buffer);
+                        writeNormal(4, buffer);
 
                         ao1 = derp(pos, ao(-1,0,1));
                         ao2 = derp(pos, ao(0,1,1));
@@ -215,7 +254,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx).putFloat(             ly + BLOCK_SIZE).putFloat(lz+ BLOCK_SIZE);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
-                        padd(buffer);
+                        writeNormal(4, buffer);
 
                         tempSidesRendered++;
                     }
@@ -231,7 +270,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx).putFloat(             ly).putFloat(                 lz );
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.y);
-                        padd(buffer);
+                        writeNormal(5, buffer);
 
                         ao1 = derp(pos, ao(-1,0,-1));
                         ao2 = derp(pos, ao(0,1,-1));
@@ -239,7 +278,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx).putFloat(             ly + BLOCK_SIZE).putFloat(    lz);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
-                        padd(buffer);
+                        writeNormal(5, buffer);
 
 
                         ao1 = derp(pos, ao(1,0,-1));
@@ -248,7 +287,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly + BLOCK_SIZE).putFloat(    lz );
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.w);
-                        padd(buffer);
+                        writeNormal(5, buffer);
 
                         ao1 = derp(pos, ao(1,0,-1));
                         ao2 = derp(pos, ao(0,-1,-1));
@@ -256,7 +295,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly).putFloat(                 lz);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
-                        padd(buffer);
+                        writeNormal(5, buffer);
                         tempSidesRendered++;
                     }
 
@@ -271,7 +310,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx).putFloat(             ly+ BLOCK_SIZE).putFloat(     lz );
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.y);
-                        padd(buffer);
+                        writeNormal(2, buffer);
 
                         ao1 = derp(pos, ao(-1,1,0));
                         ao2 = derp(pos, ao(0,1,1));
@@ -279,7 +318,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx).putFloat(             ly + BLOCK_SIZE).putFloat(    lz+ BLOCK_SIZE);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
-                        padd(buffer);
+                        writeNormal(2, buffer);
 
                         ao1 = derp(pos, ao(1,1,0));
                         ao2 = derp(pos, ao(0,1,1));
@@ -287,7 +326,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly + BLOCK_SIZE).putFloat(    lz + BLOCK_SIZE);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.w);
-                        padd(buffer);
+                        writeNormal(2, buffer);
 
                         ao1 = derp(pos, ao(1,1,0));
                         ao2 = derp(pos, ao(0,1,-1));
@@ -295,7 +334,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly+ BLOCK_SIZE).putFloat(     lz);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
-                        padd(buffer);
+                        writeNormal(2, buffer);
                         tempSidesRendered++;
                     }
 
@@ -310,7 +349,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx).putFloat(             ly).putFloat(     lz );
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.y);
-                        padd(buffer);
+                        writeNormal(3, buffer);
 
 
                         ao1 = derp(pos, ao(1,-1,0));
@@ -319,7 +358,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly).putFloat(     lz);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
-                        padd(buffer);
+                        writeNormal(3, buffer);
 
                         ao1 = derp(pos, ao(1,-1,0));
                         ao2 = derp(pos, ao(0,-1,1));
@@ -327,7 +366,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx + BLOCK_SIZE).putFloat(ly ).putFloat(    lz + BLOCK_SIZE);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.w);
-                        padd(buffer);
+                        writeNormal(3, buffer);
 
                         ao1 = derp(pos, ao(-1,-1,0));
                         ao2 = derp(pos, ao(0,-1,1));
@@ -335,7 +374,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx).putFloat(             ly).putFloat(    lz+ BLOCK_SIZE);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
-                        padd(buffer);
+                        writeNormal(3, buffer);
                         tempSidesRendered++;
                     }
 
@@ -349,7 +388,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx+ BLOCK_SIZE).putFloat( ly).putFloat(                  lz );
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.y);
-                        padd(buffer);
+                        writeNormal(0, buffer);
 
                         ao1 = derp(pos, ao(1,1,0));
                         ao2 = derp(pos, ao(1,0,-1));
@@ -357,7 +396,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx+ BLOCK_SIZE ).putFloat(ly+ BLOCK_SIZE).putFloat(     lz);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
-                        padd(buffer);
+                        writeNormal(0, buffer);
 
                         ao1 = derp(pos, ao(1,1,0));
                         ao2 = derp(pos, ao(1,0,1));
@@ -365,7 +404,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx+ BLOCK_SIZE ).putFloat(ly+ BLOCK_SIZE ).putFloat(    lz + BLOCK_SIZE);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.w);
-                        padd(buffer);
+                        writeNormal(0, buffer);
 
                         ao1 = derp(pos, ao(1,-1,0));
                         ao2 = derp(pos, ao(1,0,1));
@@ -373,7 +412,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx+ BLOCK_SIZE).putFloat( ly).putFloat(                 lz+ BLOCK_SIZE);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
-                        padd(buffer);
+                        writeNormal(0, buffer);
                         tempSidesRendered++;
                     }
 
@@ -387,7 +426,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx).putFloat( ly).putFloat(                  lz );
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.y);
-                        padd(buffer);
+                        writeNormal(1, buffer);
 
                         ao1 = derp(pos, ao(-1,-1,0));
                         ao2 = derp(pos, ao(-1,0,1));
@@ -395,7 +434,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx).putFloat( ly).putFloat(                 lz+ BLOCK_SIZE);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.x).putFloat(tx.w);
-                        padd(buffer);
+                        writeNormal(1, buffer);
 
                         ao1 = derp(pos, ao(-1,1,0));
                         ao2 = derp(pos, ao(-1,0,1));
@@ -403,7 +442,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx ).putFloat(ly+ BLOCK_SIZE ).putFloat(    lz + BLOCK_SIZE);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.w);
-                        padd(buffer);
+                        writeNormal(1, buffer);
 
                         ao1 = derp(pos, ao(-1,1,0));
                         ao2 = derp(pos, ao(-1,0,-1));
@@ -411,7 +450,7 @@ public class CubeChunkDataWorker extends Thread {
                         buffer.putFloat(lx ).putFloat(ly+ BLOCK_SIZE).putFloat(     lz);
                         writeColorAndAO(color, ao1, ao2, ao3, buffer);
                         buffer.putFloat(tx.z).putFloat(tx.y);
-                        padd(buffer);
+                        writeNormal(1, buffer);
                         tempSidesRendered++;
                     }
                 }

@@ -12,9 +12,11 @@ import cubetech.common.*;
 import cubetech.common.Common.ErrorCode;
 import cubetech.entities.EntityState;
 import cubetech.gfx.CubeMaterial;
+import cubetech.gfx.CubeTexture;
 import cubetech.gfx.GLRef;
 import cubetech.gfx.GLState;
 import cubetech.gfx.ResourceManager;
+import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
 import cubetech.input.Input;
@@ -1205,35 +1207,37 @@ public class Client {
             nFrames = 0;
             lastFpsUpdateTime = realtime;
         }
-
-        if(Ref.cgame != null && Ref.cgame.cg.refdef != null) {
-            if(Ref.cgame.shadowMan.isEnabled()) {
-                Ref.cgame.shadowMan.renderShadowCascades(Ref.cgame.cg.refdef, new IThinkMethod() {
-                    public void think(Gentity ent) {
-                        Ref.render.renderAll(Ref.cgame.cg.refdef, true);
-                    }
-                });
-            }
-        }
+        
         
         // Render normal sprites
         Ref.SpriteMan.DrawNormal();
-
+        
         ViewParams view = null;
         if(Ref.cgame != null && Ref.cgame.cg != null) view = Ref.cgame.cg.refdef;
-        
-        Ref.render.renderAll(view, false);
-        Ref.render.reset();
-       
-        // Set HUD render projection
-        GL11.glMatrixMode(GL11.GL_PROJECTION);
-        GL11.glLoadIdentity();
-        GL11.glOrtho(0, (int)Ref.glRef.GetResolution().x, 0, (int)Ref.glRef.GetResolution().y, 1,-1000);
+        if(Ref.glRef.shadowMan.isEnabled() && !Ref.glRef.deferred.isEnabled() && 
+                view != null && view.lights.size() > 0) {
+            Ref.glRef.shadowMan.renderShadowsForLight(view.lights.get(0), Ref.cgame.cg.refdef, new IThinkMethod() {
+                public void think(Gentity ent) {
+                    Ref.render.renderAll(Ref.cgame.cg.refdef, true);
+                }
+            });
+        }
 
-        GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glMatrixMode(GL11.GL_MODELVIEW);
-        GL11.glLoadIdentity();
         
+        Ref.glRef.deferred.startDeferred();
+        Ref.render.renderAll(view, false);
+        Ref.glRef.deferred.stopDeferred();
+        Ref.glRef.deferred.finalizeShading();
+        Ref.render.reset();
+        if(!Ref.glRef.deferred.isEnabled()) {
+            GL11.glMatrixMode(GL11.GL_PROJECTION);
+            GL11.glLoadIdentity();
+            GL11.glOrtho(0, (int)Ref.glRef.GetResolution().x, 0, (int)Ref.glRef.GetResolution().y, 1,-1000);
+
+            GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glLoadIdentity();
+        }
         // Queue HUD renders
         Ref.Console.Render();
         if(cl_showfps.iValue == 1)
@@ -1241,10 +1245,6 @@ public class Client {
         Ref.SpriteMan.DrawHUD();
         Ref.textMan.Render(); // Draw remaining text - shouldn't be any
 
-
-        if(Ref.glRef.srgbBuffer != null && Ref.ResMan.isSRGB()) {
-            Ref.glRef.srgbBuffer.BlitFBO();
-        }
 
         if(cl.screenshot || (demo.isPlaying() && Ref.cvars.Find("cl_demorecord").isTrue())) {
             takeScreenshot();
@@ -1286,6 +1286,17 @@ public class Client {
             writeVideoFrame(encData);
         } else {
             // Encode as png
+            // Change format from bgr to rgb
+            screenshotBuffer.position(0);
+            for (int i = 0; i < width*height; i++) {
+                byte b = screenshotBuffer.get();
+                byte g = screenshotBuffer.get();
+                byte r = screenshotBuffer.get();
+                screenshotBuffer.position(i*3);
+                screenshotBuffer.put(r);
+                screenshotBuffer.put(g);
+                screenshotBuffer.put(b);
+            }
             PngEncoder enc = new PngEncoder(screenshotBuffer, false,PngEncoder.FILTER_NONE, 3, width, height);
             encData = enc.pngEncode();
             writeScreenshot(encData);

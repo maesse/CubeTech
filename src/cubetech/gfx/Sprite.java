@@ -159,7 +159,7 @@ public class Sprite {
     // Size = Real size (eg. not half-size)
     public void Set(float x, float y, float w, float h, CubeTexture tex) {
         Center.x = x + w/2f;
-        Center.y = x + h/2f;
+        Center.y = y + h/2f;
         Extent.x = w / 2f;
         Extent.y = h / 2f;
         this.Texture = tex;

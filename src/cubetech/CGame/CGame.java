@@ -64,7 +64,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
     SkyBox skyBox = new SkyBox("data/textures/skybox/sky");
     private CVar cg_skybox;
-    public ShadowManager shadowMan = new ShadowManager();
+    
     public CGPhysics physics = new CGPhysics();
     
     /**
@@ -159,6 +159,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             cgr.DrawInformation();
             return;
         }
+        
+        SecTag s = Profiler.EnterSection(Sec.CG_RENDER);
 
         Ref.client.setUserCommand(cg.weaponSelect, cg.zoomSensitivity);
 
@@ -183,17 +185,34 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
         
 
-        SecTag s = Profiler.EnterSection(Sec.PHYSICS);
+        SecTag s2 = Profiler.EnterSection(Sec.PHYSICS);
         physics.stepPhysics();
-        s.ExitSection();
+        s2.ExitSection();
         
-        s = Profiler.EnterSection(Sec.RENDER);
+        
         cgr.renderViewModel(cg.predictedPlayerState);
         marks.addMarks();
 
         physics.renderBodies();
-
+        Light.skylight.setDirection(new Vector3f(1,0,-1));
+        Light.skylight.setDiffuse(new Vector3f(1.0f, 1.0f, 1.0f));
+        Light.skylight.setSpecular(new Vector3f(1.0f,1.0f,1.0f));
+        Light.skylight.enableShadowCasting(false);
+        //cg.refdef.lights.add(Light.skylight);
         
+        Vector3f handlight = new Vector3f(cg.predictedPlayerState.origin);
+//        handlight.z += 60f;
+//        handlight.x += 40f;
+        handlight.set(-100, 500, 90);
+        Light playerLight = Light.Point(handlight);
+        playerLight.setDiffuse(new Vector3f(1, 1f, 1));
+        playerLight.setSpecular(new Vector3f(1,1,1));
+        playerLight.enableShadowCasting(true);
+        cg.refdef.lights.add(playerLight);
+//        playerLight = Light.Directional(new Vector3f(1.0f, 0.5f, -1f));
+//        playerLight.setDiffuse(new Vector3f(0, 0f, 1));
+//        playerLight.setSpecular(new Vector3f(0,0,1));
+//        cg.refdef.lights.add(playerLight);
 
         if(map != null) {
 //            if(cg_skybox.isTrue()) skyBox.Render(cg.refdef);

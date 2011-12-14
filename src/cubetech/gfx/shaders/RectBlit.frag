@@ -1,4 +1,4 @@
-#version 140
+#version 120
 #ifdef GL_ARB_texture_rectangle
 #extension GL_ARB_texture_rectangle : enable
 #else
@@ -6,7 +6,7 @@
 #endif
 uniform sampler2DRect tex;
 
-varying vec2 coords;
+in vec2 coords;
 void main()
 {
     gl_FragColor = texture2DRect(tex, coords);

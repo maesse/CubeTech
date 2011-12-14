@@ -888,7 +888,7 @@ public class Server implements ITrace {
         }
 
         // create the bounding box of the entire move
-        float padding = 1f;
+        float padding = 3f;
         for (int i= 0; i < 3; i++) {
             if(Helper.VectorGet(end, i) > Helper.VectorGet(start, i)) {
                 Helper.VectorSet(boxmins, i, Helper.VectorGet(start, i) + Helper.VectorGet(mins, i) - padding);
@@ -900,7 +900,27 @@ public class Server implements ITrace {
         }
 
         if(isRay) end = delta;
+        
+        
         ClipMoveToEntities(worldResult, start, end, mins, maxs, boxmins, boxmaxs, tracemask, passEntityNum);
+        
+        // For debugging:
+//        boolean dangahzone = false;
+//        if((start.x >= 30.0625f && end.x < 30.0625f) ||
+//                (start.y >= 60.0625f && end.y < 60.0625f)) {
+//            dangahzone = true;
+//        }
+//        if(dangahzone && worldResult.frac > 0f) {
+//            Vector3f d = Vector3f.sub(end, start, null);
+//            d.scale(worldResult.frac);
+//            Vector3f.add(start, d, d);
+//            if(d.x < 30.0625f || d.y < 60.0625f) {
+//                // derp
+//                int derp = 2;
+//                ClipMoveToEntities(worldResult, start, end, mins, maxs, boxmins, boxmaxs, tracemask, passEntityNum);
+//            }
+//        }
+        
         return worldResult;
     }
 
@@ -940,9 +960,10 @@ public class Server implements ITrace {
 
         for (Integer entIndex : entityList.List) {
             // Starting solid, no need to check any further
-            if(clip.startsolid) {
-                return;
-            }
+            // BUG: Can't trust startsolid
+//            if(clip.startsolid) {
+//                return;
+//            }
 
             SharedEntity touch = sv.gentities[entIndex];
             // see if we should ignore this entity
@@ -978,6 +999,7 @@ public class Server implements ITrace {
             } else {
                 // AABB-AABB test
                 ClipHandleForEntity(touch);
+                
                 res = Ref.collision.TransformedBoxTrace(start, end, mins, maxs, tracemask);
                 
                 if(res.frac  < clip.frac) {
@@ -990,8 +1012,8 @@ public class Server implements ITrace {
                 }
             }
 
-            if(res != null && res.frac <= 0) {
-                res.frac = 0;
+            if(clip != null && clip.frac <= 0) {
+                clip.frac = 0;
                 break;
             }
         }

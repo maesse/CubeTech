@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Quaternion;
 import org.lwjgl.util.vector.Vector3f;
+import org.lwjgl.util.vector.Vector4f;
 
 /**
  *
@@ -18,6 +19,7 @@ public class IQMJoint {
     Matrix4f baseframe;
     Matrix4f invbaseframe;
     Matrix3x4 mm;
+    Vector4f jointDelta;
     // translate is translation <Tx, Ty, Tz>, and rotate is quaternion rotation <Qx, Qy, Qz, Qw> where Qw = -sqrt(max(1 - Qx*Qx - Qy*qy - Qz*qz, 0))
     // rotation is in relative/parent local space
     // scale is pre-scaling <Sx, Sy, Sz>
@@ -77,6 +79,9 @@ public class IQMJoint {
                 Matrix4f.mul(model.baseframe[j.parent], model.baseframe[i], model.baseframe[i]);
                 Matrix4f.mul(model.invbaseframe[i], model.invbaseframe[j.parent], model.invbaseframe[i]);
             }
+            
+            j.jointDelta = new Vector4f(0, 0, 0, 1);
+            Matrix4f.transform(m, j.jointDelta, j.jointDelta);
         }
     }
 }

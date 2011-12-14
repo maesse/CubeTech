@@ -43,7 +43,7 @@ public class IQMLoaderTest {
     @Test
     public void testLoadModel() throws Exception {
         System.out.println("LoadModel");
-        String file = "C:\\Users\\mads\\Desktop\\iqm\\mrfixit.iqm";
+        String file = "C:\\Users\\mads\\Desktop\\untitled.iqm";
         IQMModel model = IQMLoader.LoadModel(file);
         assert(model != null);
     }
