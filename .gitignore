@@ -13,3 +13,6 @@ demos/
 *.out
 Thumbs.db
 custom
+screenshots/*
+src/cubetech/testgame/*
+src/cubetech/data/*

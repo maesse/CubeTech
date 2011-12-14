@@ -45,6 +45,7 @@ public class Shader {
     private String shaderName = "NONE";
 
     private int[] textureUniforms = new int[8];
+    HashMap<String, Integer> textureMap = new HashMap<String, Integer>(); // name -> textureUniforms index
     HashMap<String, Integer> attributes = new HashMap<String, Integer>();
     HashMap<String, Integer> uniformMap = new HashMap<String, Integer>();
     private boolean validated = false;
@@ -176,6 +177,10 @@ public class Shader {
         ARBShaderObjects.glUseProgramObjectARB(shaderId);
         setTextureUniforms();
         GLRef.checkError();
+    }
+
+    public String getName() {
+        return shaderName;
     }
 
     public static void Release() {
@@ -350,6 +355,7 @@ public class Shader {
 
     public void mapTextureUniform(String name, int textureIndex) {
         textureUniforms[textureIndex] = ARBShaderObjects.glGetUniformLocationARB(shaderId, name);
+        textureMap.put(name, textureUniforms[textureIndex]);
         GLRef.checkError();
     }
 
@@ -423,6 +429,26 @@ public class Shader {
      public void setUniform(String name, Vector4f value) {
         int index = getUniformIndex(name);
         ARBShaderObjects.glUniform4fARB(index, value.x, value.y, value.z, value.w);
+        GLRef.checkError();
+    }
+     
+     public void setUniform(String name, Vector3f[] values) {
+        int index = getUniformIndex(name);
+
+        // We've got an index, yay
+        FloatBuffer buf = Ref.glRef.matrixBuffer;
+        if(values.length > 4) {
+            buf = BufferUtils.createFloatBuffer(3*values.length);
+        }
+        buf.clear();
+         for (int i= 0; i < values.length; i++) {
+             buf.put(values[i].x);
+             buf.put(values[i].y);
+             buf.put(values[i].z);
+         }
+        buf.flip();
+
+        ARBShaderObjects.glUniform3ARB(index, buf);
         GLRef.checkError();
     }
 

@@ -15,6 +15,8 @@ public class IQMMesh {
     String name;
     String material; // set to a name of a non-unique material or texture
     CubeTexture tex = null;
+    CubeTexture normalmap = null;
+    CubeTexture specularmap = null;
     int first_vertex, num_vertexes;
     int first_triangle, num_triangles;
 
@@ -59,17 +61,46 @@ public class IQMMesh {
         }
     }
 
-    void bindTexture() {
+    void bindTextures() {
         if(tex == null) {
-            String path1 = modelPath + material;
-            String path = path1;
-            if(!material.contains(".")) path1 = modelPath + material + ".png";
-            if(!ResourceManager.FileExists(path1)) {
-                path = modelPath + material + ".tga";
+            String path = modelPath + material;
+            if(!material.contains(".")) {
+                path = modelPath + material + ".png";
+                if(!ResourceManager.FileExists(path)) {
+                    path = modelPath + material + ".tga";
+                }
             }
             tex = Ref.ResMan.LoadTexture(path);
         }
+        if(normalmap == null && tex != null) {
+            int lastdot = tex.name.lastIndexOf(".");
+            String cleanname = tex.name.substring(0, lastdot);
+            cleanname += "_normal" + tex.name.substring(lastdot);
+            if(ResourceManager.FileExists(cleanname)) {
+                normalmap = Ref.ResMan.LoadTexture(cleanname);
+                normalmap.textureSlot = 3;
+            } else {
+                Ref.ResMan.getNoNormalTexture().Bind();
+            }
+        } 
+        if(specularmap == null && tex != null) {
+            int lastdot = tex.name.lastIndexOf(".");
+            String cleanname = tex.name.substring(0, lastdot);
+            cleanname += "_specular" + tex.name.substring(lastdot);
+            if(ResourceManager.FileExists(cleanname)) {
+                specularmap = Ref.ResMan.LoadTexture(cleanname);
+                specularmap.textureSlot = 4;
+            } else {
+                Ref.ResMan.getNoSpecularTexture().Bind();
+            }
+        }
         
         if(tex != null) tex.Bind();
+        if(normalmap != null) normalmap.Bind();
+        if(specularmap != null) specularmap.Bind();
+    }
+
+    void unbindTextures() {
+
     }
 }

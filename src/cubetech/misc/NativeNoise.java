@@ -12,17 +12,24 @@ public class NativeNoise {
                                  float sx, float sy, float sz,
                                  int xcount, int ycount, int zcount);
     private static boolean initialized = false;
+    private static boolean failed = false;
     static ByteBuffer buffer = null;
 
     private static void init() {
-        if(!initialized) {
-            System.load("C:\\MinGW\\msys\\1.0\\home\\mads\\snoise.dll");
-            initialized = true;
+        if(!initialized && !failed) {
+            try {
+                System.load("C:\\MinGW\\msys\\1.0\\home\\mads\\snoise.dll");
+                initialized = true;
+            } catch (java.lang.UnsatisfiedLinkError ex) {
+                failed = true;
+                System.out.println(ex);
+            }
         }
     }
 
     public static void noise(float[] dst, float x, float y, float z, float xscale, float yscale, float zscale, int axissize, float ampl) {
         init();
+        if(failed) return;
         if(dst == null || dst.length < axissize*axissize*axissize) {
             throw new IllegalArgumentException("dst array too small");
         }

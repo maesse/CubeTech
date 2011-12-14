@@ -5,8 +5,8 @@ uniform sampler2DArrayShadow shadows;
 uniform vec4 cascadeDistances;
 uniform mat4 shadowMatrix[4];
 uniform vec4 pcfOffsets[4];
-uniform float shadow_bias = 0.002;
-uniform float shadow_factor = 0.75;
+uniform float shadow_bias;
+uniform float shadow_factor;
 varying vec4 vPosition;
 varying float vDepth;
 

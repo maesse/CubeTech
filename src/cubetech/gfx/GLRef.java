@@ -32,6 +32,7 @@ import cubetech.misc.Ref;
 import java.awt.Canvas;
 import java.net.MalformedURLException;
 import org.lwjgl.opengl.ARBVertexArrayObject;
+import org.lwjgl.opengl.ContextAttribs;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.DisplayMode;
 import org.lwjgl.opengl.EXTTextureFilterAnisotropic;
@@ -86,8 +87,9 @@ public class GLRef {
     
 
     public boolean fboSupported = false;
-    public FrameBuffer srgbBuffer = null;
 
+    public DeferredShading deferred = null;
+    public ShadowManager shadowMan;
     
 
     public GLRef() {
@@ -122,7 +124,7 @@ public class GLRef {
         }
 
         // Create the display
-        Display.create(new PixelFormat(0, 0, 0, 0));
+        Display.create(new PixelFormat(0, 0, 0, 0), new ContextAttribs(3, 2).withProfileCompatibility(true));//, new ContextAttribs(3, 0));
         checkError();
 
         // Set vsync
@@ -218,75 +220,91 @@ public class GLRef {
 //            Ref.ResMan.srgbSupported  = false;
 //        }
         
+        Ref.ResMan.generateTextures();
+        
         Ref.render = new Render();
 
         // Init systems waiting for opengl
         if(Ref.textMan != null) Ref.textMan.Init();
         if(isApplet()) setAppletSize();
             
+        deferred = new DeferredShading();
+        shadowMan = new ShadowManager();
 
         // There may be an error sitting in OpenGL.
         // If it isn't cleared, it may trigger an exception later on.
         checkError();
     }
 
-    private Vector3f lightDir = new Vector3f(-0.8f, 0.8f, 1f);
-    public void setLIght() {
-        lightDir.normalise();
-        floatBuff16.position(0);
-        floatBuff16.put(lightDir.x).put(lightDir.y).put(lightDir.z).put(0f);
-        floatBuff16.flip();
-        glLight(GL_LIGHT0, GL_POSITION, floatBuff16);
-        floatBuff16.position(0);
-        floatBuff16.put(1f).put(1f).put(1f).put(1f);
-        floatBuff16.flip();
-        glLight(GL_LIGHT0, GL_DIFFUSE, floatBuff16);
-        floatBuff16.position(0);
-        floatBuff16.put(0.2f).put(0.2f).put(0.2f).put(1f);
-        floatBuff16.flip();
-        glLightModel(GL_LIGHT_MODEL_AMBIENT, floatBuff16);
-        //glLight(GL_LIGHT0, GL_AMBIENT, floatBuff16);
-        glMaterialf(GL_FRONT, GL_SHININESS, 8.0f);
-    }
-    
-    public Vector3f getLightAngle() 
-    {
-        return lightDir;
-    }
-
-    // Returns a view matrix for the global directional light
-    private Vector3f[] lightAxisVectors = null;
-    public Matrix4f getLightViewMatrix() {
-        lightDir.set(-1,0,0.3f);
-        lightDir.x = (float)Math.sin(Ref.cgame.cg.time/10000f);
-        lightDir.y = (float)Math.cos(Ref.cgame.cg.time/10000f);
-        lightDir.x = -0.25f;
-        lightDir.y = -1.0f;
-        
-        Vector3f dir = lightDir;
-        dir.normalise();
-        Vector3f angle = new Vector3f(0f, (float)(180f/Math.PI *  Math.atan2(dir.y, dir.x)), lightDir.z*90f);
-
-        lightAxisVectors = Helper.AnglesToAxis(angle, lightAxisVectors);
-       
-        float temp = lightDir.x;
-        lightDir.x = lightDir.y;
-        lightDir.y = -temp;
-
-        for (int i= 0; i < 3; i++) {
-            lightAxisVectors[i].normalise();
-        }
-        float[] data = Helper.fillMatrixBuffer(lightAxisVectors, null);
-
-        // this should be ok
-        floatBuff16.clear();
-        Helper.toFloatBuffer(data, floatBuff16);
-//        Helper.multMatrix(data, ViewParams.flipMatrix, floatBuff16);
-        //floatBuff16.position(0);
-        Matrix4f m = (Matrix4f) new Matrix4f().load(floatBuff16);
-        
-        return m;
-    }
+//    private Vector3f lightDir = new Vector3f(-0.8f, 0.8f, 1f);
+//    public void setLIght() {
+//        lightDir.normalise();
+//        floatBuff16.position(0);
+//        floatBuff16.put(lightDir.x).put(lightDir.y).put(lightDir.z).put(0f);
+//        floatBuff16.flip();
+//        glLight(GL_LIGHT0, GL_POSITION, floatBuff16);
+//        floatBuff16.position(0);
+//        floatBuff16.put(1f).put(1f).put(1f).put(1f);
+//        floatBuff16.flip();
+//        glLight(GL_LIGHT0, GL_DIFFUSE, floatBuff16);
+//        floatBuff16.position(0);
+//        floatBuff16.put(0.2f).put(0.2f).put(0.2f).put(1f);
+//        floatBuff16.flip();
+//        glLightModel(GL_LIGHT_MODEL_AMBIENT, floatBuff16);
+//        //glLight(GL_LIGHT0, GL_AMBIENT, floatBuff16);
+//        glMaterialf(GL_FRONT, GL_SHININESS, 8.0f);
+//    }
+//    
+//    public Vector3f getLightAngle() 
+//    {
+//        return lightDir;
+//    }
+//
+//    // Returns a view matrix for the global directional light
+//    private Vector3f[] lightAxisVectors = null;
+//    public Matrix4f getLightViewMatrix() {
+//        if(lightAxisVectors == null) {
+//            lightAxisVectors = new Vector3f[3];
+//            for (int i = 0; i < 3; i++) {
+//                lightAxisVectors[i] = new Vector3f();
+//            }
+//        }
+//        lightDir.set(-0.25f,-1.0f,0.3f);
+//        
+//        lightDir.set(1, 0, -2);
+//        lightDir.scale(-1f);
+//        lightDir.normalise();
+//        if(true) {
+//            // Create light matrix
+//            lightAxisVectors[0].set(lightDir);
+//            lightAxisVectors[0].scale(-1f);
+//            lightAxisVectors[0].normalise();
+//            lightAxisVectors[0].set(-0.5f, 0f, 0.5f);
+//            Helper.perpendicularVector(lightAxisVectors[0], lightAxisVectors[1]);
+//            Vector3f.cross(lightAxisVectors[0], lightAxisVectors[1], lightAxisVectors[2]);
+//            
+//        } else {
+//            Vector3f angle = new Vector3f(0f, (float)(180f/Math.PI *  Math.atan2(lightDir.y, lightDir.x)), lightDir.z*90f);
+//
+//            lightAxisVectors = Helper.AnglesToAxis(angle, lightAxisVectors);
+//
+//            float temp = lightDir.x;
+//            lightDir.x = lightDir.y;
+//            lightDir.y = -temp;
+//        }
+//
+//        for (int i= 0; i < 3; i++) {
+//            lightAxisVectors[i].normalise();
+//        }
+//        float[] data = Helper.fillMatrixBuffer(lightAxisVectors, null);
+//
+//        // this should be ok
+//        floatBuff16.clear();
+//        Helper.toFloatBuffer(data, floatBuff16);
+//        Matrix4f m = (Matrix4f) new Matrix4f().load(floatBuff16);
+//        m.transpose();
+//        return m;
+//    }
 
     
 
@@ -547,7 +565,6 @@ public class GLRef {
             }
             currentMode = newmode;
             resolution = new Vector2f(currentMode.getWidth(), currentMode.getHeight());
-            if(srgbBuffer != null) srgbBuffer.resize(currentMode.getWidth(), currentMode.getHeight());
             r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
         } catch(NumberFormatException e) { // Can be NumberFormatException and IndexOutOfBounds
             Common.Log("Invalid displaymode: " + mode);
@@ -577,8 +594,6 @@ public class GLRef {
     public void Destroy() {
         if(!initialized) return;
         initialized = false;
-
-        if(srgbBuffer != null) srgbBuffer.destroy();
         
         if(Display.isCreated())
             Display.destroy();
@@ -684,6 +699,15 @@ public class GLRef {
             builder.setAttribute("v_color", Shader.INDICE_COLOR);
             builder.mapTextureUniform("tex", 0);
             builder.createShader();
+            
+            // World shader
+            builder = new ShaderBuilder("WorldDeferred");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.setAttribute("v_color", Shader.INDICE_COLOR);
+            builder.setAttribute("v_normal", Shader.INDICE_NORMAL);
+            builder.mapTextureUniform("tex", 0);
+            builder.createShader();
 
             // iqm object shader for cpu skinned
             builder = new ShaderBuilder("litobjectpixel");
@@ -707,15 +731,27 @@ public class GLRef {
 
             // iqm gpu skinning for dynamic objects
             builder = new ShaderBuilder("gpuskin");
-            builder.setAttribute("vweights", Shader.INDICE_NORMAL);
+            builder.setAttribute("vweights", Shader.INDICE_COORDS2);
             builder.setAttribute("vbones", Shader.INDICE_COLOR);
             builder.setAttribute("vtangent", Shader.INDICE_COORDS);
-            builder.mapTextureUniform("tex", 0);
+            //builder.mapTextureUniform("tex", 0);
             builder.createShader();
 
             // cube world recieving shadow
             builder = new ShaderBuilder("gpuskinShadowed");
-            builder.setAttribute("vweights", Shader.INDICE_NORMAL);
+            builder.setAttribute("vweights", Shader.INDICE_COORDS2);
+            builder.setAttribute("vbones", Shader.INDICE_COLOR);
+            builder.setAttribute("vtangent", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("tex", 0);
+            builder.mapTextureUniform("normalmap", 3);
+            builder.mapTextureUniform("specularmap", 4);
+            builder.mapTextureUniform("shadows", 1);
+            builder.mapTextureUniform("envmap", 2);
+            builder.createShader();
+            
+            // cube world recieving shadow
+            builder = new ShaderBuilder("gpuskinShadowedDeferred");
+            builder.setAttribute("vweights", Shader.INDICE_COORDS2);
             builder.setAttribute("vbones", Shader.INDICE_COLOR);
             builder.setAttribute("vtangent", Shader.INDICE_COORDS);
             builder.mapTextureUniform("tex", 0);
@@ -725,10 +761,21 @@ public class GLRef {
 
             // cube world recieving shadow
             builder = new ShaderBuilder("gpuskinLit");
-            builder.setAttribute("vweights", Shader.INDICE_NORMAL);
+            builder.setAttribute("vweights", Shader.INDICE_COORDS2);
             builder.setAttribute("vbones", Shader.INDICE_COLOR);
             builder.setAttribute("vtangent", Shader.INDICE_COORDS);
             builder.mapTextureUniform("tex", 0);
+            builder.mapTextureUniform("envmap", 2);
+            builder.createShader();
+            
+            // cube world recieving shadow
+            builder = new ShaderBuilder("gpuskinLitDeferred");
+            builder.setAttribute("vweights", Shader.INDICE_COORDS2);
+            builder.setAttribute("vbones", Shader.INDICE_COLOR);
+            builder.setAttribute("vtangent", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("tex", 0);
+            builder.mapTextureUniform("normalmap", 3);
+            builder.mapTextureUniform("specularmap", 4);
             builder.mapTextureUniform("envmap", 2);
             builder.createShader();
 
@@ -759,6 +806,87 @@ public class GLRef {
             builder.setAttribute("v_position", Shader.INDICE_POSITION);
             builder.setAttribute("v_coords", Shader.INDICE_COORDS);
             builder.mapTextureUniform("tex", 0);
+            builder.createShader();
+            
+            builder = new ShaderBuilder("Blit");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("tex", 0);
+            builder.createShader();
+            
+            builder = new ShaderBuilder("DeferredShading");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_view", Shader.INDICE_NORMAL);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("tex0", 0);
+            builder.mapTextureUniform("tex1", 1);
+            builder.mapTextureUniform("tex2", 2);
+            builder.mapTextureUniform("ssao", 3);
+            builder.createShader();
+            
+            builder = new ShaderBuilder("DeferredLightPass");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_view", Shader.INDICE_NORMAL);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("tex0", 0);
+            builder.mapTextureUniform("tex1", 1);
+            builder.mapTextureUniform("tex2", 2);
+            builder.createShader();
+            
+            builder = new ShaderBuilder("DeferredDirectionalLight");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_view", Shader.INDICE_NORMAL);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("tex0", 0);
+            builder.mapTextureUniform("tex1", 1);
+            builder.mapTextureUniform("tex2", 2);
+            builder.createShader();
+            
+            builder = new ShaderBuilder("DeferredPointLight");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_view", Shader.INDICE_NORMAL);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("tex0", 0);
+            builder.mapTextureUniform("tex1", 1);
+            builder.mapTextureUniform("tex2", 2);
+            builder.createShader();
+            
+            builder = new ShaderBuilder("DeferredPointLightShadowed");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_view", Shader.INDICE_NORMAL);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("tex0", 0);
+            builder.mapTextureUniform("tex1", 1);
+            builder.mapTextureUniform("tex2", 2);
+            builder.mapTextureUniform("shadows", 3);
+            builder.createShader();
+            
+            builder = new ShaderBuilder("DeferredDirectionalLightShadowed");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_view", Shader.INDICE_NORMAL);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("tex0", 0);
+            builder.mapTextureUniform("tex1", 1);
+            builder.mapTextureUniform("tex2", 2);
+            builder.mapTextureUniform("shadows", 3);
+            builder.createShader();
+            
+            builder = new ShaderBuilder("DeferredAmbientCube");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_view", Shader.INDICE_NORMAL);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("tex0", 0);
+            builder.mapTextureUniform("tex1", 1);
+            builder.mapTextureUniform("tex2", 2);
+            builder.mapTextureUniform("envmap", 3);
+            builder.createShader();
+            
+            builder = new ShaderBuilder("DeferredAO");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_view", Shader.INDICE_NORMAL);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("noise", 3);
+            builder.mapTextureUniform("tex2", 2);
             builder.createShader();
 
             // soft sprites shader

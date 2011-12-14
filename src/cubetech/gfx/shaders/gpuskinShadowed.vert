@@ -1,13 +1,8 @@
-#version 120
-#ifdef GL_ARB_uniform_buffer_object
-  #extension GL_ARB_uniform_buffer_object : enable
-  layout(std140) uniform animdata
-  {
-     uniform mat3x4 bonemats[80];
-  };
-#else
-  uniform mat3x4 bonemats[80];
-#endif
+#version 140
+layout(std140) uniform animdata
+{
+   uniform vec4 bonemats[100*3];
+};
 uniform mat4 Modell;
 uniform vec3 lightDirection;
 
@@ -16,55 +11,70 @@ attribute vec4 vbones;
 attribute vec4 vtangent;
 
 // Light out
-varying vec4 diffuse, ambient;
+varying vec4 diffuse;
 varying vec3 normal, lightDir, halfVector;
 varying vec3 reflectDir;
+varying vec3 bonedebug;
 
 // Shadow out
 varying vec4 vPosition;
 varying float vDepth;
 
-void setLightVars(in vec3 in_normal,in vec3 vertexPos)
-{
-    normal = in_normal;
-
-    lightDir = vec3(gl_LightSource[0].position);
-    diffuse = gl_LightSource[0].diffuse; // gl_FrontMaterial.diffuse
-    ambient = gl_LightModel.ambient;
-
-    // Get halfvector
-#ifdef PHONG
-    halfVector = normalize( vertexPos);
-#else
-    halfVector = normalize( normalize(lightDir)-normalize(vertexPos));
-#endif
-}
-
+varying vec3 lightVec, halfVec, eyeVec;
+varying mat3 invTan;
 void main(void)
 {
-   mat3x4 m = bonemats[int(vbones.x)] * vweights.x;
-   m += bonemats[int(vbones.y)] * vweights.y;
-   m += bonemats[int(vbones.z)] * vweights.z;
-   m += bonemats[int(vbones.w)] * vweights.w;
+   ivec4 offsets = ivec4(vbones)*3;
+   mat3x4 m = mat3x4(bonemats[offsets.x],bonemats[offsets.x+1],bonemats[offsets.x+2]) * vweights.x;
+   m += mat3x4(bonemats[offsets.y],bonemats[offsets.y+1],bonemats[offsets.y+2]) * vweights.y;
+   m += mat3x4(bonemats[offsets.z],bonemats[offsets.z+1],bonemats[offsets.z+2]) * vweights.z;
+   m += mat3x4(bonemats[offsets.w],bonemats[offsets.w+1],bonemats[offsets.w+2]) * vweights.w;
    vec4 mpos = Modell * vec4(gl_Vertex * m, gl_Vertex.w);
-   vec4 fpos = gl_ModelViewProjectionMatrix * mpos;
-   gl_Position = fpos;
-   gl_TexCoord[0] = gl_MultiTexCoord0;
    
-   //vec3 mtangent = vtangent.xyz * madjtrans; // tangent not used, just here as an example
-   //vec3 mbitangent = cross(mnormal, mtangent) * vtangent.w; // bitangent not used, just here as an example
-   //gl_FrontColor = gl_Color
-//* (clamp(dot(normalize(gl_NormalMatrix * mnormal), gl_LightSource[0].position.xyz), 0.0, 1.0)
-//* gl_LightSource[0].diffuse + gl_LightSource[0].ambient);
-    gl_FrontColor = vec4(1,1,1,1);
+   gl_Position = gl_ModelViewProjectionMatrix * mpos;
+   gl_TexCoord[0] = gl_MultiTexCoord0;
 
     // Light out
     mat3 madjtrans = mat3(cross(m[1].xyz, m[2].xyz), cross(m[2].xyz, m[0].xyz), cross(m[0].xyz, m[1].xyz));
+
     vec3 mnormal = normalize( vec3(Modell * vec4(gl_Normal * madjtrans, 0)));
+    vec3 mtangent = normalize(vec3(Modell * vec4(vtangent.xyz * madjtrans, 0)));
     reflectDir = mnormal;
-    setLightVars(gl_NormalMatrix * mnormal, vec3(gl_ModelViewMatrix * mpos));
+
+    normal = gl_NormalMatrix * mnormal;
+    vec3 tangent = gl_NormalMatrix * (mtangent); // tangent not used, just here as an example
+    vec3 bitangent = cross(normal, tangent) * vtangent.w; // bitangent not used, just here as an example
+
+    lightDir = vec3( (gl_ModelViewMatrix) * vec4(-lightDirection, 0.0));
+    //lightDir = vec3(0,0,1);
+    diffuse = gl_LightSource[0].diffuse; // gl_FrontMaterial.diffuse
+    
+    invTan = transpose(mat3(tangent, bitangent, normal));
+    vec3 v;
+    
+    v.x = dot(lightDir, tangent);
+    v.y = dot(lightDir, bitangent);
+    v.z = dot(lightDir, normal);
+    lightVec = normalize(v);
+    
+    vec3 vertexposition = vec3(gl_ModelViewMatrix * mpos);
+    v.x = dot(vertexposition, tangent);
+    v.y = dot(vertexposition, bitangent);
+    v.z = dot(vertexposition, normal);
+    eyeVec = normalize(v);
+    
+
+    // Get halfvector
+
+    //halfVector = normalize( normalize(vertexposition)+normalize(lightDir));
+    //v.x = dot(halfVector, tangent);
+    //v.y = dot(halfVector, bitangent);
+    //v.z = dot(halfVector, normal);
+    
+    halfVec = normalize(normalize(-eyeVec)+lightVec );
 
     // shadow out
     vPosition = mpos;
-    vDepth = fpos.z;
+    vDepth = gl_Position.z;
+    gl_FrontColor = vec4(1,1,1,1);
 }

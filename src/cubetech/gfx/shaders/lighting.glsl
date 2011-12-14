@@ -19,7 +19,7 @@ vec4 getLighting(in vec4 texcol)
     // Blinn-Phong
     if(NdotL > 0.0) {
         vec3 halfV = normalize(halfVector);
-        float NdotHV = max(dot(n, halfV), 0);
+        float NdotHV = max(dot(n, halfV), 0.0);
         lightColor += pow(NdotHV, gl_FrontMaterial.shininess) * texcol.a * 5.0;
     }
 #endif

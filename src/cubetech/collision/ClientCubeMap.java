@@ -14,6 +14,7 @@ import cubetech.common.Common.ErrorCode;
 import cubetech.common.ICommand;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.GLRef;
+import cubetech.gfx.Light;
 import cubetech.gfx.Shader;
 import cubetech.gfx.VBO;
 import cubetech.misc.MutableInteger;
@@ -130,7 +131,7 @@ public class ClientCubeMap {
 
         Ref.render.addRefEntity(ent);
 
-        if(!Ref.cgame.shadowMan.isRendering()) {
+        if(!Ref.glRef.shadowMan.isRendering()) {
             builder.markLockedChunks(chunks); // push vertex data off to the chunks
             wipeOldChunkVBO(5000); // remove vbo's that hasn't been rendering for 5secs
         }
@@ -145,29 +146,45 @@ public class ClientCubeMap {
         if(!r_world.isTrue()) return;
 
         // Set shader (+ uniforms)
-        boolean shadowPass = Ref.cgame.shadowMan.isRendering();
-        boolean renderingShadows = !shadowPass && Ref.cgame.shadowMan.isEnabled();
+        boolean shadowPass = Ref.glRef.shadowMan.isRendering();
+        boolean renderingShadows = !shadowPass && Ref.glRef.shadowMan.isEnabled();
         CubeTexture depth = null;
-        if(shadowPass || !Ref.cgame.shadowMan.isEnabled()) {
-            shader = Ref.glRef.getShader("WorldFog");
+        if(shadowPass) GL11.glCullFace(GL11.GL_FRONT);
+        if(Ref.glRef.deferred.isRendering()) {
+            shader = Ref.glRef.getShader("WorldDeferred");
             Ref.glRef.PushShader(shader);
-            shader.setUniform("fog_factor", 1f/(view.farDepth/2f));
-            shader.setUniform("fog_color", (Vector4f)new Vector4f(95,87,67,255).scale(1/255f)); // 145, 140, 129
+            shader.setUniform("far", view.farDepth);
+            shader.setUniform("near", view.nearDepth);
         } else {
-            if(shadowShader == null) {
-                shadowShader = Ref.glRef.getShader("WorldFogShadow");
+            if(shadowPass || !Ref.glRef.shadowMan.isEnabled()) {
+                if(!Ref.glRef.shadowMan.isEnabled()) {
+                    shader = Ref.glRef.getShader("WorldFog");
+                    Ref.glRef.PushShader(shader);
+                    shader.setUniform("fog_factor", 1f/(view.farDepth/2f));
+                    shader.setUniform("fog_color", (Vector4f)new Vector4f(95,87,67,255).scale(1/255f)); // 145, 140, 129
+                } else {
+                    shader = Ref.glRef.getShader("World");
+                    Ref.glRef.PushShader(shader);
+                }
+            } else {
+                if(shadowShader == null) {
+                    shadowShader = Ref.glRef.getShader("WorldFogShadow");
+                }
+                Ref.glRef.PushShader(shadowShader);
+                // TODO: unhack static shadow index
+                Light light = view.lights.get(0);
+                depth = light.getShadowResult().getDepthTexture();
+                depth.textureSlot = 1;
+                depth.Bind();
+                
+                shadowShader.setUniform("shadowMatrix", light.getShadowResult().getShadowViewProjections(4, view.lights.get(0)));
+                shadowShader.setUniform("cascadeDistances", light.getShadowResult().getCascadeDepths());
+                shadowShader.setUniform("fog_factor", 1f/(view.farDepth));
+                shadowShader.setUniform("fog_color", (Vector4f)new Vector4f(95,87,67,255).scale(1/255f)); // 145, 140, 129
+                shadowShader.setUniform("shadow_bias", Ref.cvars.Find("shadow_bias").fValue);
+                shadowShader.setUniform("shadow_factor", Ref.cvars.Find("shadow_factor").fValue);
+                shadowShader.setUniform("pcfOffsets", light.getShadowResult().getPCFoffsets());
             }
-            Ref.glRef.PushShader(shadowShader);
-            depth = Ref.cgame.shadowMan.getDepthTexture();
-            depth.textureSlot = 1;
-            depth.Bind();
-            shadowShader.setUniform("shadowMatrix", Ref.cgame.shadowMan.getShadowViewProjections(4));
-            shadowShader.setUniform("cascadeDistances", Ref.cgame.shadowMan.getCascadeDepths());
-            shadowShader.setUniform("fog_factor", 1f/(view.farDepth));
-            shadowShader.setUniform("fog_color", (Vector4f)new Vector4f(95,87,67,255).scale(1/255f)); // 145, 140, 129
-            shadowShader.setUniform("shadow_bias", Ref.cvars.Find("shadow_bias").fValue);
-            shadowShader.setUniform("shadow_factor", Ref.cvars.Find("shadow_factor").fValue);
-            shadowShader.setUniform("pcfOffsets", Ref.cgame.shadowMan.getPCFoffsets());
         }
         GLRef.checkError();
 
@@ -181,6 +198,7 @@ public class ClientCubeMap {
             // Mark visible chunks before doing frustum culling,
             // as to keep chunks loaded while you have your back to them
             for (int i= 0; i < renderlist.length; i++) {
+                if(renderlist[i] == null) continue;
                 if(renderlist[i].render.getRenderFaces() == 0) continue;
                 markChunk(renderlist[i]);
             }
@@ -191,8 +209,10 @@ public class ClientCubeMap {
 
         // Actually render
         renderChunkList(renderlist);
+        
+        if(shadowPass) GL11.glCullFace(GL11.GL_BACK);
 
-        if(renderingShadows) {
+        if(renderingShadows && depth != null) {
             depth.Unbind();
         }
         // Reset shader
@@ -212,6 +232,7 @@ public class ClientCubeMap {
         float radius = (float) Math.sqrt((0.5f * 32 * 32) * (0.5f * 32 * 32)) + 512f;
         for (int i= 0; i < renderlist.length; i++) {
             CubeChunk chunk = renderlist[i];
+            if(chunk == null) continue;
             center.set(chunk.absmin[0] + 32 * 32 * 0.5f,
                     chunk.absmin[1] + 32 * 32 * 0.5f,
                     chunk.absmin[2] + 32 * 32 * 0.5f);

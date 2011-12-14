@@ -1,5 +1,8 @@
 package cubetech.iqm;
 
+import cubetech.gfx.Light;
+import cubetech.CGame.ViewParams;
+import cubetech.gfx.ShaderUBO;
 import java.util.ArrayList;
 import cubetech.common.Common;
 import org.lwjgl.opengl.GL12;
@@ -19,6 +22,7 @@ import cubetech.gfx.Shader;
 import cubetech.gfx.CubeTexture;
 import org.lwjgl.util.vector.Matrix3f;
 import cubetech.common.Helper;
+import cubetech.gfx.ResourceManager;
 import cubetech.misc.Ref;
 import java.nio.IntBuffer;
 import org.lwjgl.opengl.ARBUniformBufferObject;
@@ -36,6 +40,8 @@ public class IQMModel {
     private static Shader gpushader;
     private static Shader gpushaderShadow;
     private static Shader gpushaderLit;
+    private static Shader gpushaderShadowDeferred;
+    private static Shader gpushaderLitDeferred;
     
     IQMHeader header;
     String comment;
@@ -90,23 +96,18 @@ public class IQMModel {
 
     Vector3f[] jointPose;
 
+    ShapeKeyCollection shapeKeys = null;
+    // only for cpu
+    boolean[] boneUsage = null;
+
     // Joints that have attachment
     HashMap<String, BoneAttachment> attachments = new HashMap<String, BoneAttachment>();
     public BoneController[] controllers = null;
-    
 
-//    private class IQMVertex {
-//        public Vector3f position;
-//        public Vector3f normal;
-//        public Vector3f tangent;
-//        public Vector2f texcoord;
-//        public byte[] blendindex = new byte[4];
-//        public byte[] blendweight = new byte[4];
-//    }
+    private static HashMap<Shader, ShaderUBO> uboMap = new HashMap<Shader, ShaderUBO>();
 
     IQMModel() {
-        envMap = Ref.ResMan.LoadTexture("data/textures/skybox/ibl_sky", true);
-        envMap.textureSlot = 1;
+        
         modelMatrix.setIdentity();
     }
 
@@ -133,12 +134,13 @@ public class IQMModel {
         return anims == null || joints == null;
     }
 
+    public void loadShapeFile(String path) {
+        
+    }
 
     private void createDynamicBuffer() {
         if(staticModelVB != null) return;
         
-        //IQMVertex[] verts = new IQMVertex[header.num_vertexes];
-
         stride = 0;
         if(in_position != null) stride += 4*3;
         if(in_normal != null) stride += 4*3;
@@ -166,41 +168,28 @@ public class IQMModel {
 
         gpushader = Ref.glRef.getShader("gpuskin");
         gpushaderShadow = Ref.glRef.getShader("gpuskinShadowed");
+        gpushaderShadowDeferred = Ref.glRef.getShader("gpuskinShadowedDeferred");
         gpushaderLit = Ref.glRef.getShader("gpuskinLit");
+        gpushaderLitDeferred = Ref.glRef.getShader("gpuskinLitDeferred");
         initGPUShader();
-        
     }
 
     private static void initGPUShader() {
-        initUBOForShader(gpushaderShadow);
-        initUBOForShader(gpushaderLit);
-        initUBOForShader(gpushader);
+        if(uboMap.size() > 0) return;
+
+        ShaderUBO ubo = ShaderUBO.initUBOForShader(gpushader, "animdata");
+        ubo.registerUniform("bonemats");
+        if(ubo != null) uboMap.put(gpushader, ubo);
+        ubo = ShaderUBO.initUBOForShader(gpushaderShadow, "animdata");
+        ubo.registerUniform("bonemats");
+        if(ubo != null) uboMap.put(gpushaderShadow, ubo);
+        ubo = ShaderUBO.initUBOForShader(gpushaderLitDeferred, "animdata");
+        ubo.registerUniform("bonemats");
+        if(ubo != null) uboMap.put(gpushaderLitDeferred, ubo);
+        ubo = ShaderUBO.initUBOForShader(gpushaderLit, "animdata");
+        ubo.registerUniform("bonemats");
+        if(ubo != null) uboMap.put(gpushaderLit, ubo);
     }
-    
-    private static void initUBOForShader(Shader shader) {
-        if(Ref.glRef.getGLCaps().GL_ARB_uniform_buffer_object) {
-            IntBuffer intBuff = BufferUtils.createIntBuffer(1);
-            int blockIndex = ARBUniformBufferObject.glGetUniformBlockIndex(shader.getShaderId(), "animdata");
-            ARBUniformBufferObject.glGetUniformIndices(shader.getShaderId(), new CharSequence[] {"bonemats"}, intBuff);
-            gpu_bonematIndex = intBuff.get(0); intBuff.clear();
-
-            gpu_ubosize = ARBUniformBufferObject.glGetActiveUniformBlock(
-                    shader.getShaderId(),
-                    blockIndex,
-                    ARBUniformBufferObject.GL_UNIFORM_BLOCK_DATA_SIZE);
-            
-            gpu_bonematOffset = ARBUniformBufferObject.glGetActiveUniforms(shader.getShaderId(), gpu_bonematIndex, ARBUniformBufferObject.GL_UNIFORM_OFFSET);
-
-            ARBUniformBufferObject.glUniformBlockBinding(shader.getShaderId(), blockIndex, 0);
-            gpu_ubo = GL15.glGenBuffers();
-        }
-    }
-
-
-    private static int gpu_bonematIndex;
-    private static int gpu_ubosize;
-    private static int gpu_bonematOffset;
-    private static int gpu_ubo;
 
     private void createIndiceBuffer() {
         staticModelIB = new VBO(4*triangles.length*3, VBO.BufferTarget.Index);
@@ -242,10 +231,9 @@ public class IQMModel {
     private int _lastframe;
     private float _backlerp;
     
-    private void gpuAnimate(int frame, int lastframe, float backlerp) {
-        createDynamicBuffer();
-        gpu_skin_dirty = true; // need to update bonemats
-        gpu_skin_shadow_dirty = true;
+    
+    
+    private void blendAnimation(int frame, int lastframe, float backlerp) {
         // Avoid animating the same frame over again
         if(frame == _frame && lastframe == _lastframe && backlerp == _backlerp) return;
         _frame = frame;
@@ -259,18 +247,8 @@ public class IQMModel {
         frame1 %= header.num_frames;
         frame2 %= header.num_frames;
 
-        int blendStart = anims[Animations.WALK.ordinal()].first_frame;
-        int blendMax = anims[Animations.WALK.ordinal()].num_frames;
-
-        int blendframe = ((Ref.cgame.cg.time >> 4) % blendMax) + blendStart;
-
         int mat1 = frame1 * header.num_joints;
         int mat2 = frame2 * header.num_joints;
-        int mat3 = blendframe * header.num_joints;
-
-        float blendweight = (float) Math.abs(Math.sin(Ref.cgame.cg.time/100f));
-        blendweight = 1f;
-        //blendweight = 1f;
         // Interpolate matrixes between the two closest frames and concatenate with parent matrix if necessary.
         // Concatenate the result with the inverse of the base pose.
         // You would normally do animation blending and inter-frame blending here in a 3D engine.
@@ -279,24 +257,21 @@ public class IQMModel {
             Matrix4f m1 = frames[mat1+i];
             Matrix4f m2 = frames[mat2+i];
 
-            Matrix4f m3 = frames[mat3+i];
             if(outframe[i] == null) {
                 outframe[i] = new Matrix4f();
             }
             Matrix4f dest = outframe[i];
 
-            Helper.scale((1-frameOffset) * blendweight, m1, dest);
-            Helper.scale((frameOffset) * blendweight, m2, temp);
+            Helper.scale((1-frameOffset), m1, dest);
+            Helper.scale((frameOffset), m2, temp);
             Matrix4f.add(dest, temp, dest);
-            //Matrix4f.mul(m3, dest, dest);
-            //Helper.scale(1f-blendweight, m3, temp);
-            //Matrix4f.add(dest, temp, dest);
             dest.m33 = 1;
+            
             if(controllers != null) {
                 for (BoneController bCtrl : controllers) {
                     if(bCtrl.boneName.equals(joints[i].name)) {
                         Vector3f[] faxis = Helper.AnglesToAxis(bCtrl.boneAngles);
-                        Matrix4f rot = Helper.axisToMatrix(faxis);
+                        Matrix4f rot = Helper.axisToMatrix(faxis, null);
                         Matrix4f.mul(rot, dest, dest);
                         break;
                     }
@@ -321,43 +296,21 @@ public class IQMModel {
             return;
         }
 
-        if(gpuskinning) {
-            gpuAnimate(frame, oldframe, backlerp);
+        blendAnimation(frame, oldframe, backlerp);
+        
+        if(gpuskinning && shapeKeys == null) {
+            createDynamicBuffer();
             return;
         }
 
-        // Avoid animating the same frame over again
-        if(frame == _frame && oldframe == _lastframe && backlerp == _backlerp) return;
-        _frame = frame;
-        _lastframe = oldframe;
-        _backlerp = backlerp;
-
-        int frame1 = oldframe;
-        int frame2 = frame;
-        float frameOffset = 1f-backlerp;
-
-        int mat1 = frame1 * header.num_joints;
-        int mat2 = frame2 * header.num_joints;
-
-        // Interpolate matrixes between the two closest frames and concatenate with parent matrix if necessary.
-        // Concatenate the result with the inverse of the base pose.
-        // You would normally do animation blending and inter-frame blending here in a 3D engine.
-        Matrix4f temp = new Matrix4f();
-        for (int i= 0; i < header.num_joints; i++) {
-            Matrix4f m1 = frames[mat1+i];
-            Matrix4f m2 = frames[mat2+i];
-            if(outframe[i] == null) {
-                outframe[i] = new Matrix4f();
+        if(shapeKeys != null) {
+            for (int i= 0; i < in_position.length; i++) {
+                if(out_position[i] == null) out_position[i] = new Vector3f();
+                out_position[i].set(in_position[i]);
             }
-            Matrix4f dest = outframe[i];
-
-            Helper.scale(1-frameOffset, m1, dest);
-            Helper.scale(frameOffset, m2, temp);
-            Matrix4f.add(dest, temp, dest);
-            dest.m33 = 1;
-            if(joints[i].parent >= 0) {
-                Matrix4f.mul(outframe[joints[i].parent], dest, dest);
-            }
+            shapeKeys.setShapeKey("Key 1", (float) Math.abs(Math.sin(Ref.client.realtime/576f)));
+            shapeKeys.setShapeKey("Key 2", (float) Math.abs(Math.sin(Ref.client.realtime/1000f)));
+            shapeKeys.applyShapes(out_position);
         }
 
         // The actual vertex generation based on the matrixes follows...
@@ -365,6 +318,12 @@ public class IQMModel {
         int iWeight = 0;
         Matrix3f matnorm = new Matrix3f();
         Matrix4f dest = new Matrix4f();
+        Matrix4f temp = new Matrix4f();
+        boolean buildBoneUsage = false;
+        if(boneUsage == null || true) {
+            buildBoneUsage = true;
+            boneUsage = new boolean[header.num_joints];
+        }
         for (int i= 0; i < header.num_vertexes; i++) {
             // Blend matrixes for this vertex according to its blend weights.
             // the first index/weight is always present, and the weights are
@@ -375,9 +334,10 @@ public class IQMModel {
             // sorted order from highest weight to lowest weight. Weights with
             // 0 values, which are always at the end, are unused.
             float f = (in_blendweight[iWeight]&0xff)/255.0f;
-            
+            if(buildBoneUsage) boneUsage[in_blendindex[iIndex]&0xff] = true;
             Helper.scale(f, outframe[in_blendindex[iIndex]&0xff], dest);
             for (int j= 1; j < 4 && (in_blendweight[iWeight+j]&0xff) != 0; j++) {
+                if(buildBoneUsage) boneUsage[in_blendindex[iIndex+j]&0xff] = true;
                 f = (in_blendweight[iWeight+j])/255.0f;
                 Helper.scale(f, outframe[in_blendindex[iIndex+j]&0xff], temp);
                 Matrix4f.add(dest, temp, dest);
@@ -388,7 +348,11 @@ public class IQMModel {
             // Position uses the full 3x4 transformation matrix.
             // Normals and tangents only use the 3x3 rotation part
             // of the transformation matrix.
-            out_position[i] = Helper.transform(dest, in_position[i], out_position[i]);
+            if(shapeKeys != null) {
+                out_position[i] = Helper.transform(dest, out_position[i], out_position[i]);
+            } else {
+                out_position[i] = Helper.transform(dest, in_position[i], out_position[i]);
+            }
 
             matnorm = Helper.toNormalMatrix(dest, matnorm);
             out_normal[i] = Helper.transform(matnorm, in_normal[i], out_normal[i]);
@@ -399,6 +363,13 @@ public class IQMModel {
             iIndex += 4;
             iWeight += 4;
         }
+        
+        int unused = 0;
+        for (int i = 0; i < boneUsage.length; i++) {
+            if(!boneUsage[i]) unused++;
+        }
+        
+            int test = 2;
 
     }
 
@@ -418,7 +389,7 @@ public class IQMModel {
         }
     }
 
-    private void renderStatic(Vector3f position, Vector3f[] axis, Vector4f color, boolean shadowPass) {
+    private void renderStatic(Vector3f position, Vector3f[] axis, Vector4f color, boolean shadowPass, ViewParams view) {
         Shader shader = null;
         if(shadowPass) {
             shader = Ref.glRef.getShader("unlitObject");
@@ -429,7 +400,7 @@ public class IQMModel {
         Ref.glRef.PushShader(shader);
 
         if(!shadowPass) {
-            preShadowRecieve(shader);
+            preShadowRecieve(shader, view);
         }
 
         getModelMatrix(axis, position);
@@ -446,61 +417,70 @@ public class IQMModel {
         Ref.glRef.PopShader();
     }
 
-    private FloatBuffer bonebuffer = null;
-    private void renderGPU(Vector3f position, Vector3f[] axis, Vector4f color, boolean shadowCasting) {
-
+    private void renderGPU(Vector3f position, Vector3f[] axis, Vector4f color, boolean shadowCasting, ViewParams view) {
         Shader shader;
-        if(Ref.cgame.shadowMan.isEnabled()) {
+        if(Ref.cgame != null && Ref.glRef.shadowMan.isEnabled()) {
             if(shadowCasting) {
                 shader = gpushader;
             } else {
-                shader = gpushaderShadow;
+                
+                shader = Ref.glRef.deferred.isRendering()? gpushaderLitDeferred : gpushaderShadow;
             }
         } else {
-            shader = gpushaderLit;
+            shader = Ref.glRef.deferred.isRendering()? gpushaderLitDeferred : gpushaderLit;
         }
+        
         Ref.glRef.PushShader(shader);
+        if(Ref.glRef.deferred.isRendering()) {
+            shader.setUniform("far", Ref.cvars.Find("cg_depthfar").fValue); 
+            shader.setUniform("near", Ref.cvars.Find("cg_depthnear").fValue); 
+        }
 
         // Update ubo if necesary
-        if(gpu_skin_dirty && shadowCasting || gpu_skin_shadow_dirty && !shadowCasting) {
-            int target = ARBUniformBufferObject.GL_UNIFORM_BUFFER;
-
-            int maxJointsPrPass = gpu_ubosize/(4*4*3);
-            int bufferJoints = header.num_joints;
-            if(bufferJoints > maxJointsPrPass) {
-                Common.Log("Too many bones!");
-                bufferJoints = maxJointsPrPass;
+        //if(gpu_skin_dirty && shadowCasting || gpu_skin_shadow_dirty && !shadowCasting) {
+            ShaderUBO ubo = uboMap.get(shader);
+            if(ubo == null) {
+                Ref.common.Error(Common.ErrorCode.FATAL, "Implement ubo workaround");
             }
-            if(bonebuffer == null) bonebuffer = BufferUtils.createFloatBuffer(bufferJoints * 4 * 3);
-            bonebuffer.clear();
+
+            int jointCapacity = ubo.getSize()/(4*4*3);
+            int bufferJoints = header.num_joints;
+            if(bufferJoints > jointCapacity) {
+                Common.Log("Too many bones!");
+                bufferJoints = jointCapacity;
+            }
+            
+            ByteBuffer bonebuffer = ubo.getBuffer(true);
             for (int i= 0; i < bufferJoints; i++) {
                 Matrix3x4.storeMatrix4f(outframe[i], bonebuffer);
+                //Matrix3x4.storeMatrix4f((Matrix4f)new Matrix4f().setIdentity(), bonebuffer);
             }
-            bonebuffer.flip();
-
-            GL15.glBindBuffer(target, gpu_ubo);
-            GL15.glBufferData(target, bufferJoints*4*4*3, GL15.GL_STREAM_DRAW);
-            GL15.glBufferSubData(target, gpu_bonematOffset, bonebuffer);
-            GL15.glBindBuffer(target, 0);
-
-            ARBUniformBufferObject.glBindBufferBase(target, 0, gpu_ubo);
+            ubo.submitBuffer(0, true);
+            
+            ARBUniformBufferObject.glUniformBlockBinding(shader.getShaderId(), 0, 0);
+            ARBUniformBufferObject.glBindBufferBase(ARBUniformBufferObject.GL_UNIFORM_BUFFER, 0, ubo.getHandle());
+            
             GLRef.checkError();
             if(gpu_skin_dirty && shadowCasting) gpu_skin_dirty = false;
             else gpu_skin_shadow_dirty = false;
+        //}
+
+        if(envMap == null) {
+            envMap = Ref.ResMan.LoadTexture("data/textures/skybox/ibl_sky", true);
+            envMap.textureSlot = 1;
         }
 
-        if(shader == gpushaderLit) {
+        if(Ref.cgame == null || !Ref.glRef.shadowMan.isEnabled()) {
             // Bind environmentmap
             envMap.textureSlot = 2;
             envMap.Bind();
             // Set light
 
-            Ref.glRef.setLIght();
-            shader.setUniform("lightDirection", Ref.glRef.getLightAngle());
+            //Ref.glRef.setLIght();
+            shader.setUniform("lightDirection", view.lights.get(0).getDirection());
         } else if(!shadowCasting) {
             // bind depth texture and setup shadow uniforms
-            preShadowRecieve(shader);
-            
+            preShadowRecieve(shader, view);
         }
 
         // Set model matrix
@@ -508,82 +488,43 @@ public class IQMModel {
 
         shader.setUniform("Modell", modelMatrix);
 
-//        Matrix4f viewmatrix = Ref.cgame.cg.refdef.viewMatrix;
-//        Matrix4f.mul(viewmatrix, modelMatrix,  modelMatrix);
-//        FloatBuffer viewbuffer = Ref.cgame.cg.refdef.viewbuffer;
-//        viewbuffer.clear();
-//        modelMatrix.store(viewbuffer); viewbuffer.flip();
-//        glMatrixMode(GL11.GL_MODELVIEW);
-//        GL11.glPushMatrix();
-//        GL11.glLoadMatrix(viewbuffer);
-
         // render
         glDisable(GL_BLEND);
         if(color != null) Helper.col(color);
         renderFromVBO(shadowCasting);
         glEnable(GL_BLEND);
-        // finish
-//new org.lwjgl.util.glu.Sphere().draw(100, 30, 30);
-        
-//        GL11.glPopMatrix();
         Ref.glRef.PopShader();
-
-       // for (BoneAttachment boneAttachment : attachments.values()) {
-            
-
-//            if(true) {
-//                Ref.glRef.pushShader("World");
-//                glDisable(GL_DEPTH_TEST);
-//                Ref.ResMan.getWhiteTexture().Bind();
-//
-//                float lineSize = 20;
-//                glBegin(GL_LINES);
-//                for (int i= 0; i < 3; i++) {
-//                    Vector3f[] renderaxis = test;
-//                    if(i == 0) Helper.col(1, 0, 0);
-//                    if(i == 1) Helper.col(0, 1, 0);
-//                    if(i == 2) Helper.col(0, 0, 1);
-//                    glVertex3f(derpp.x, derpp.y, derpp.z);
-//                    glVertex3f(derpp.x + renderaxis[i].x * lineSize,
-//                            derpp.y + renderaxis[i].y * lineSize,
-//                            derpp.z + renderaxis[i].z * lineSize);
-//                }
-//
-//                glEnd();
-//
-//                glEnable(GL_DEPTH_TEST);
-//                Ref.glRef.PopShader();
-//            }
-        //}
     }
 
-    private void preShadowRecieve(Shader shader) {
+    private void preShadowRecieve(Shader shader, ViewParams view) {
+        if(Ref.glRef.deferred.isRendering()) return; // only for forward rendering
         // Bind environmentmap
+        if(envMap == null) envMap = Ref.ResMan.LoadTexture("data/textures/skybox/ibl_sky", true);
         envMap.textureSlot = 2;
         envMap.Bind();
-        // Set light
-        Ref.glRef.setLIght();
-        CubeTexture depth = Ref.cgame.shadowMan.getDepthTexture();
+        
+        Light light = view.lights.get(0);
+        CubeTexture depth = light.getShadowResult().getDepthTexture();
         depth.textureSlot = 1;
         depth.Bind();
 
-        Matrix4f[] shadowmat = Ref.cgame.shadowMan.getShadowViewProjections(4);
-        Vector4f shadowDepths = Ref.cgame.shadowMan.getCascadeDepths();
+        Matrix4f[] shadowmat = light.getShadowResult().getShadowViewProjections(4, view.lights.get(0));
+        Vector4f shadowDepths = view.lights.get(0).getShadowResult().getCascadeDepths();
         shader.setUniform("shadowMatrix", shadowmat);
         shader.setUniform("cascadeDistances", shadowDepths);
         shader.setUniform("shadow_bias", Ref.cvars.Find("shadow_bias").fValue);
         shader.setUniform("shadow_factor", Ref.cvars.Find("shadow_factor").fValue);
-        shader.setUniform("pcfOffsets", Ref.cgame.shadowMan.getPCFoffsets());
-        shader.setUniform("lightDirection", Ref.glRef.getLightAngle());
+        shader.setUniform("pcfOffsets", light.getShadowResult().getPCFoffsets());
+        shader.setUniform("lightDirection", view.lights.get(0).getDirection());
         GLRef.checkError();
     }
 
-    public void render(Vector3f position, Vector3f[] axis, Vector4f color, boolean shadowPass) {
+    public void render(Vector3f position, Vector3f[] axis, Vector4f color, boolean shadowPass, ViewParams view) {
         if(isStatic()) {
-            renderStatic(position, axis, color, shadowPass);
+            renderStatic(position, axis, color, shadowPass, view);
             return;
-        } else if(gpuskinning) {
-            renderGPU(position, axis, color, shadowPass);
+        } else if(gpuskinning && shapeKeys == null) {
+            renderGPU(position, axis, color, shadowPass, view);
             return;
         }
 
@@ -596,8 +537,8 @@ public class IQMModel {
         
         Ref.glRef.PushShader(shader);
 
-        if(!shadowPass) {
-            preShadowRecieve(shader);
+        if(!shadowPass && Ref.cgame != null) {
+            preShadowRecieve(shader, view);
         }
 
         shader.setUniform("Modell", getModelMatrix(axis, position));
@@ -629,8 +570,10 @@ public class IQMModel {
         for (IQMMesh mesh : meshes) {
             if(mesh.name.startsWith("@")) continue; // dont draw control-meshes
             if(!shadowPass) {
-                mesh.bindTexture();
+                mesh.bindTextures();
                 glCullFace(GL_FRONT);
+            } else {
+                glCullFace(GL_BACK);
             }
             staticModelIB.bind();
             staticModelVB.bind();
@@ -645,7 +588,12 @@ public class IQMModel {
             else postVBOGpu();
             staticModelIB.unbind();
             staticModelVB.unbind();
-            if(!shadowPass) glCullFace(GL_BACK);
+            if(!shadowPass) {
+                mesh.unbindTextures();
+                glCullFace(GL_BACK);
+            } else {
+                glCullFace(GL_FRONT);
+            }
         }
     }
 
@@ -660,8 +608,8 @@ public class IQMModel {
         glEnableClientState(GL_NORMAL_ARRAY);
         offset += 4*3;
 
-//        ARBVertexShader.glVertexAttribPointerARB(7, 4, GL11.GL_FLOAT, false, stride, offset);
-//        ARBVertexShader.glEnableVertexAttribArrayARB(7); // tan
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS, 4, GL11.GL_FLOAT, false, stride, offset);
+        ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COORDS); // tan
         offset += 4*4;
         
         if(in_texcoord != null) {
@@ -670,30 +618,30 @@ public class IQMModel {
             offset += 4*2;
         }
         if(in_blendindex != null) {
-            ARBVertexShader.glVertexAttribPointerARB(6, 4, GL11.GL_UNSIGNED_BYTE, false, stride, offset);
-            ARBVertexShader.glEnableVertexAttribArrayARB(6); // position
+            ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COLOR, 4, GL11.GL_UNSIGNED_BYTE, false, stride, offset);
+            ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COLOR); // position
 
             offset += 4;
         }
         if(in_blendweight != null) {
-            ARBVertexShader.glVertexAttribPointerARB(1, 4, GL11.GL_UNSIGNED_BYTE, true, stride, offset);
-            ARBVertexShader.glEnableVertexAttribArrayARB(1); // position
+            ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS2, 4, GL11.GL_UNSIGNED_BYTE, true, stride, offset);
+            ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COORDS2); // position
             offset += 4;
         }
     }
 
     private void postVBOGpu() {
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glEnableClientState(GL_NORMAL_ARRAY);
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_NORMAL_ARRAY);
         ARBVertexShader.glDisableVertexAttribArrayARB(1); // position
         if(in_texcoord != null) {
             glDisableClientState(GL_TEXTURE_COORD_ARRAY);
         }
         if(in_blendindex != null) {
-            ARBVertexShader.glDisableVertexAttribArrayARB(7); // position
+            ARBVertexShader.glDisableVertexAttribArrayARB(Shader.INDICE_COLOR); // position
         }
         if(in_blendweight != null) {
-            ARBVertexShader.glDisableVertexAttribArrayARB(6); // position
+            ARBVertexShader.glDisableVertexAttribArrayARB(Shader.INDICE_COORDS2); // position
         }
     }
 
@@ -718,7 +666,7 @@ public class IQMModel {
             IQMMesh mesh = meshes[i];
             if(mesh.name.startsWith("@")) continue; // dont draw control-meshes
             if(!shadowPass) {
-                mesh.bindTexture();
+                mesh.bindTextures();
                 glCullFace(GL_FRONT);
             }
 
@@ -742,9 +690,13 @@ public class IQMModel {
                     } else {
                         normal = out_normal[indice];
                         pos = out_position[indice];
+                        if(pos == null) {
+                            pos = in_position[indice];
+                        }
                     }
 
-                    glNormal3f(normal.x, normal.y, normal.z);
+                    if(normal != null) glNormal3f(normal.x, normal.y, normal.z);
+                    
                     glVertex3f(pos.x, pos.y, pos.z);
                 }
             }
@@ -764,30 +716,95 @@ public class IQMModel {
             Helper.renderBBoxWireframe(min.x, min.y, min.z, max.x, max.y, max.z,null);
             glPopMatrix();
         }
+        
+        if( true && attachments != null) {
+            Ref.glRef.pushShader("World");
+            glDepthFunc(GL_ALWAYS);
+            for (BoneAttachment attach : attachments.values()) {
+                Vector4f attachPos = new Vector4f(attach.lastposition);
+                Matrix4f.transform(modelMatrix, attachPos, attachPos);
+                
+                float lineSize = 5f;
+                glBegin(GL_LINES);
+                for (int j= 0; j < 3; j++) {
+                    if(j == 0) Helper.col(10, 0, 0);
+                    if(j == 1) Helper.col(0, 10, 0);
+                    if(j == 2) Helper.col(0, 0, 10);
+
+                    glVertex3f(attachPos.x- attach.axis[j].x * lineSize,
+                            attachPos.y- attach.axis[j].y * lineSize,
+                            attachPos.z- attach.axis[j].z * lineSize);
+                    glVertex3f( attachPos.x+attach.axis[j].x * lineSize,
+                           attachPos.y+ attach.axis[j].y * lineSize,
+                             attachPos.z+attach.axis[j].z * lineSize);
+                }
+                glEnd();
+                
+            }
+            glDepthFunc(GL_LEQUAL);
+            Ref.glRef.PopShader();
+        }
 
         if(true) {
-            glDisable(GL_DEPTH_TEST);
+            Ref.glRef.pushShader("World");
+            glLineWidth(2.0f);
+            glDepthFunc(GL_ALWAYS);
             glBegin(GL_LINES);
             Vector4f v = new Vector4f();
             for (int i= 0; i < joints.length; i++) {
-                int parent = joints[i].parent;
-                int j1 = i*2+1;
-                int j2 = parent*2+1;
-                if(parent < 0) {
-                    continue;
+                IQMJoint joint = joints[i];
+                IQMJoint parent = joint.parent >= 0 ? joints[joint.parent] : null;
+                if(!boneUsage[i]) continue;
+                
+                Helper.col(0, 0, 4);
+                v.set(0,0,0,1);
+                Matrix4f.transform(joint.baseframe, v, v);
+                Matrix4f.transform(outframe[i], v, v);
+                Matrix4f.transform(modelMatrix, v, v);
+                
+                Vector3f[] boneaxis = new Vector3f[3];
+                for (int j = 0; j < 3; j++) {
+                    boneaxis[j] = new Vector3f();
                 }
-                Helper.col(0, 0, 1);
-                v.set(jointPose[j1].x,jointPose[j1].y,jointPose[j1].z,1);
-                Matrix4f.transform(modelMatrix, v, v);
+                Matrix4f boneMatrix = Matrix4f.transpose(outframe[i], null);
+                Helper.matrixToAxis(Matrix4f.mul(boneMatrix, Matrix4f.invert(modelMatrix, null), null), boneaxis);
+                
+                if(parent != null) {
+                    float lineSize = 3f;
+                    for (int j= 0; j < 3; j++) {
+                        if(j == 0) Helper.col(10, 0, 0);
+                        if(j == 1) Helper.col(0, 10, 0);
+                        if(j == 2) Helper.col(0, 0, 10);
+                        boneaxis[j].normalise();
+                        
+                        glVertex3f(v.x - boneaxis[j].x * lineSize,
+                                v.y - boneaxis[j].y * lineSize,
+                                v.z - boneaxis[j].z * lineSize);
+                        glVertex3f(v.x + boneaxis[j].x * lineSize,
+                                v.y + boneaxis[j].y * lineSize,
+                                v.z + boneaxis[j].z * lineSize);
+                    }
+                }
+                
                 glVertex3f(v.x, v.y, v.z);
-                Helper.col(1, 0, 0);
-                v.set(jointPose[j2].x,jointPose[j2].y,jointPose[j2].z,1);
-                Matrix4f.transform(modelMatrix, v, v);
-                glVertex3f(v.x, v.y, v.z);
+                
+                if(parent != null) {
+                    Helper.col(4, 0, 0);
+                    v.set(0,0,0,1);
+                    Matrix4f.transform(parent.baseframe, v, v);
+                    Matrix4f.transform(outframe[joint.parent], v, v);
+                    Matrix4f.transform(modelMatrix, v, v);
+                    glVertex3f(v.x, v.y, v.z);
+                } else {
+                    Helper.col(0, 4, 0);
+                    glVertex3f(position.x, position.y, position.z);
+                }
+                
             }
 
             glEnd();
-            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LEQUAL);
+            Ref.glRef.PopShader();
         }
 
         // Draw normals
@@ -823,8 +840,12 @@ public class IQMModel {
 //        glPopMatrix();
 
         // Draw axis vectors
-        if(false) {
-            glDisable(GL_DEPTH_TEST);
+        if(true) {
+            Ref.glRef.pushShader("World");
+            //glDepthMask(false);
+            glDepthFunc(GL_ALWAYS);
+            
+            glLineWidth(2.0f);
             Ref.ResMan.getWhiteTexture().Bind();
 
             float lineSize = 20;
@@ -840,8 +861,10 @@ public class IQMModel {
             }
 
             glEnd();
-
-            glEnable(GL_DEPTH_TEST);
+            //glDepthMask(true);
+            glDepthFunc(GL_LEQUAL);
+            
+            Ref.glRef.PopShader();
         }
     }
 

@@ -28,7 +28,8 @@ public class Helper {
         dst.y = src.y;
     }
 
-    public static Matrix4f axisToMatrix(Vector3f[] axis) { 
+    public static Matrix4f axisToMatrix(Vector3f[] axis, Matrix4f dest) { 
+        if(dest == null) dest = new Matrix4f();
         // Set rotation matrix
         FloatBuffer viewbuffer = Ref.glRef.matrixBuffer;
         viewbuffer.position(0);
@@ -37,7 +38,7 @@ public class Helper {
         viewbuffer.put(axis[2].x); viewbuffer.put(axis[2].y); viewbuffer.put(axis[2].z);viewbuffer.put(0);
         viewbuffer.put(0); viewbuffer.put(0); viewbuffer.put(0); viewbuffer.put(1);
         viewbuffer.flip();
-        Matrix4f mMatrix = (Matrix4f) new Matrix4f().load(viewbuffer);
+        Matrix4f mMatrix = (Matrix4f) dest.load(viewbuffer);
         viewbuffer.clear();
         return mMatrix;
     }
@@ -71,6 +72,33 @@ public class Helper {
         result[0] = new Vector3f(-x,-y,-zminLen);
         result[1] = new Vector3f(x,y,height - zminLen);
         return result;
+    }
+    
+    public static Vector3f[] DirectionToAxis(Vector3f dir, Vector3f updir, Vector3f[] axis) {
+        if(axis == null){
+            axis = new Vector3f[3];
+            axis[0] = new Vector3f();
+            axis[1] = new Vector3f();
+            axis[2] = new Vector3f();
+        }
+        
+        // Forward
+        Vector3f forward = new Vector3f(dir);
+        forward.normalise();
+        
+        // Side
+        Vector3f updirnormal = new Vector3f(updir);
+        updirnormal.normalise();
+        Vector3f side = Vector3f.cross(forward, updirnormal, null);
+        side.normalise();
+        // Up
+        Vector3f up = Vector3f.cross(side, forward, null);
+        
+        axis[1].set(side);
+        axis[0].set(up);
+        axis[2].set(forward);
+        axis[2].scale(-1f);
+        return axis;
     }
 
     public static Vector3f VectorToAngles(Vector3f dir, Vector3f dest) {
@@ -838,7 +866,7 @@ public class Helper {
         for (int i= 0; i < input.length; i++) {
             dest.put(input[i]);
         }
-        dest.position(0);
+        dest.flip();
     }
 
     public static void VectorFloor(Vector3f input) {

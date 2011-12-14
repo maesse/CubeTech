@@ -4,7 +4,7 @@
   #extension GL_ARB_uniform_buffer_object : enable
   layout(std140) uniform animdata
   {
-     uniform mat3x4 bonemats[27];
+     uniform mat3x4 bonemats[100];
   };
 #else
   uniform mat3x4 bonemats[80];

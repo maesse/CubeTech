@@ -13,6 +13,9 @@ import cubetech.gfx.GLState;
 import cubetech.gfx.Shader;
 import cubetech.gfx.ShadowManager;
 import cubetech.iqm.BoneController;
+import cubetech.misc.Profiler;
+import cubetech.misc.Profiler.Sec;
+import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -36,19 +39,21 @@ public class Render {
     Shader softSprite = null;
     CVar r_gpuskin = Ref.cvars.Get("r_gpuskin", "1", EnumSet.of(CVarFlags.NONE));
     public CVar r_nocull = Ref.cvars.Get("r_nocull", "0", EnumSet.of(CVarFlags.TEMP));
-    ViewParams view = null;
+    public ViewParams view = null;
 
     public Render() {
         for (int i= 0; i < MAX_RENDER_ENTITIES; i++) {
             entities[i] = new RenderEntity(REType.NONE);
         }
-        if(Ref.glRef.srgbBuffer != null && softSprite == null) {
-            softSprite = Ref.glRef.getShader("softsprite");
-        }
+//        if(Ref.glRef.srgbBuffer != null && softSprite == null) {
+//            softSprite = Ref.glRef.getShader("softsprite");
+//        }
     }
 
     public void renderAll(ViewParams view, boolean shadowPass) {
         this.view = view;
+        SecTag t = Profiler.EnterSection(Sec.RENDER);
+        SecTag sub;
         GLRef.checkError();
         for (RenderEntity re : renderList) {
             if(shadowPass) {
@@ -59,22 +64,32 @@ public class Render {
             
             switch(re.Type) {
                 case WORLD:
+                    sub = Profiler.EnterSection(Sec.RENDER_WORLD);
                     renderWorld(re);
+                    sub.ExitSection();
                     break;
                 case MODEL:
+                    sub = Profiler.EnterSection(Sec.RENDER_IQM);
                     renderModel(re);
+                    sub.ExitSection();
                     break;
                 case SPRITE:
+                    sub = Profiler.EnterSection(Sec.RENDER_SPRITE);
                     renderSprite(re);
+                    sub.ExitSection();
                     break;
                 case BBOX:
                     renderBBox(re);
                     break;
                 case BEAM:
+                    sub = Profiler.EnterSection(Sec.RENDER_SPRITE);
                     renderBeam(re);
+                    sub.ExitSection();
                     break;
                 case POLY:
+                    sub = Profiler.EnterSection(Sec.RENDER_SPRITE);
                     renderPoly(re);
+                    sub.ExitSection();
                     break;
                 default:
                     Ref.common.Error(ErrorCode.FATAL, "Render.renderAll(): unknown type " + re.Type);
@@ -82,7 +97,9 @@ public class Render {
             }
             
         }
+        t.ExitSection();
         GLRef.checkError();
+        this.view = null;
     }
 
     private void renderWorld(RenderEntity ent) {
@@ -146,21 +163,21 @@ public class Render {
 
     private void doBeam(Vector3f start, Vector3f end, Vector3f up, float len, float spanWidth, Vector4f color) {
         // soft particles disabled when no fbo or r_softparticles isn't true
-        boolean useSoftSprites = Ref.glRef.srgbBuffer != null && Ref.glRef.r_softparticles.isTrue();
+        boolean useSoftSprites = false;//Ref.glRef.srgbBuffer != null && Ref.glRef.r_softparticles.isTrue();
         CubeTexture tex = null; // depth
 
-        if(useSoftSprites) {
-            // use soft particle shader
-            Ref.glRef.PushShader(softSprite);
-            softSprite.setUniform("res", Ref.glRef.GetResolution());
-
-            // Bind depth from FBO
-            int depth = Ref.glRef.srgbBuffer.getDepthTextureId();
-            tex = new CubeTexture(Ref.glRef.srgbBuffer.getTarget(), depth, null);
-            tex.textureSlot = 1;
-            tex.loaded = true;
-            tex.Bind();
-        }
+//        if(useSoftSprites) {
+//            // use soft particle shader
+//            Ref.glRef.PushShader(softSprite);
+//            softSprite.setUniform("res", Ref.glRef.GetResolution());
+//
+//            // Bind depth from FBO
+//            int depth = Ref.glRef.srgbBuffer.getDepthTextureId();
+//            tex = new CubeTexture(Ref.glRef.srgbBuffer.getTarget(), depth, null);
+//            tex.textureSlot = 1;
+//            tex.loaded = true;
+//            tex.Bind();
+//        }
 
         GL11.glDisable(GL11.GL_CULL_FACE);
 
@@ -204,6 +221,7 @@ public class Render {
     private void renderModel(RenderEntity ent) {
         if(ent.model == null) return;
         if(r_gpuskin.isTrue()) ent.flags |= RenderEntity.FLAG_GPUSKINNED;
+        else ent.flags &= ~RenderEntity.FLAG_GPUSKINNED;
 
         //float frame = ent.oldframe * ent.backlerp + ent.frame * (1f-ent.backlerp);
         ent.model.gpuskinning = (ent.flags & RenderEntity.FLAG_GPUSKINNED) != 0;
@@ -214,7 +232,8 @@ public class Render {
         //Vector3f org = new Vector3f(ent.origin);
 
         //int count = 10;
-        ent.model.render(ent.origin, ent.axis, ent.color, Ref.cgame.shadowMan.isRendering());
+        boolean shadowpass = Ref.cgame != null && Ref.glRef.shadowMan.isRendering();
+        ent.model.render(ent.origin, ent.axis, ent.color, shadowpass, view);
 //        for (int i = 0; i < count; i++) {
 //            for (int j = 0; j < count; j++) {
 //                org.x = ent.origin.x + (i-4) * 64;
@@ -287,20 +306,20 @@ public class Render {
 
     private void AddQuadStampExt(Vector3f origin, Vector3f left, Vector3f up, Vector4f color, float s1, float t1, float s2, float t2) {
         // soft particles disabled when no fbo or r_softparticles isn't true
-        boolean useSoftSprites = Ref.glRef.srgbBuffer != null && Ref.glRef.r_softparticles.isTrue();
+        boolean useSoftSprites = false;//Ref.glRef.srgbBuffer != null && Ref.glRef.r_softparticles.isTrue();
         CubeTexture tex = null; // depth
         
         if(useSoftSprites) {
             // use soft particle shader
-            Ref.glRef.PushShader(softSprite);
-            softSprite.setUniform("res", Ref.glRef.GetResolution());
-
-            // Bind depth from FBO
-            
-            tex = Ref.glRef.srgbBuffer.getAsTexture();
-            tex.textureSlot = 1;
-            tex.loaded = true;
-            tex.Bind();
+//            Ref.glRef.PushShader(softSprite);
+//            softSprite.setUniform("res", Ref.glRef.GetResolution());
+//
+//            // Bind depth from FBO
+//            
+//            tex = Ref.glRef.srgbBuffer.getAsTexture();
+//            tex.textureSlot = 1;
+//            tex.loaded = true;
+//            tex.Bind();
         } else {
             Ref.glRef.PushShader(Ref.glRef.getShader("WorldFog"));
         }

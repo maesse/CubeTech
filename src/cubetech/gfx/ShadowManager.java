@@ -11,10 +11,12 @@ import cubetech.misc.Profiler;
 import cubetech.misc.Profiler.Sec;
 import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import org.lwjgl.opengl.EXTFramebufferObject;
 import org.lwjgl.opengl.EXTTextureArray;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 import org.lwjgl.util.glu.GLU;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector;
@@ -27,132 +29,268 @@ import org.lwjgl.util.vector.Vector4f;
  */
 public class ShadowManager {
     private static final float cascadePartitionsMax = 100;
+    
     // Settings
     private float[] cascadePartitionCoverage = new float[] {7,20,75,100,100,100,100,100};
-
-    private int nLevels = 1;
-    private int shadow_resolution = 1024;
     private boolean fitToCascades = true; // tighten bounding boxes around cascades
     private boolean moveLightTexelSize = true; // decreases shadow jitter
+    private int[] quality_levels = new int[] {1,2,3}; // only for directional
+    private int[] quality_resolution = new int[] {512,1024,2048};
 
-    private CVar shadow_levels = null;
-    private CVar shadow_res = null;
-    private CVar shadow_enable;
-    private CVar shadow_factor;
-    private CVar shadow_filter;
-    private CVar shadow_kernel;
+    //public CVar shadow_levels;
+    //public CVar shadow_res;
+    public CVar shadow_enable;
+    public CVar shadow_factor;
+    public CVar shadow_filter;
+    public CVar shadow_kernel;
     
     // Temp vectors
     private Vector4f[] tempFrustumPoints = new Vector4f[8];
-    public Matrix4f[] shadowProjections = new Matrix4f[8];
     public Vector3f lightCameraOthoMin = new Vector3f();
     public Vector3f lightCameraOthoMax = new Vector3f();
-    public float minz, maxz;
     public Vector3f[] shadowFrustum = new Vector3f[8];
+    private Matrix4f scaleBias; // [-1:1] to [0:1]
     // state
     private boolean rendering = false;
 
     // Shadow textures
-    FrameBuffer depthBuffer;
-    float[] cascadeEyespaceDepths = new float[8];
+    private class CachedDepthBuffer {
+        FrameBuffer buffer;
+        int target;
+        int layers; // for texture arrays
+        int resolution; // shadow textures are res^2
+        int lastframe; // last frame used
+        
+        CachedDepthBuffer(FrameBuffer buffer, int target) {
+            this.buffer = buffer;
+            this.target = target;
+        }
+        
+        void setDepthFiltering(boolean point) {
+            if(buffer == null || buffer.getDepthTextureId() < 0) {
+                return;
+            }
+            GL11.glBindTexture(buffer.getTextureTarget(), buffer.getDepthTextureId());
+            GL11.glTexParameteri(buffer.getTextureTarget(), GL11.GL_TEXTURE_MAG_FILTER, 
+                    point?GL11.GL_NEAREST:GL11.GL_LINEAR);
+            GL11.glBindTexture(buffer.getTextureTarget(), 0);
+        }
+        
+        boolean isFree() {
+            return lastframe < Ref.client.framecount;
+        }
+
+        private void setDepthFiltering() {
+            boolean point = true;
+            String val = shadow_filter.sValue.toLowerCase();
+            if(val.equals("linear")) {
+                point = false;
+            }
+            setDepthFiltering(point);
+        }
+    }
+    
+    private ArrayList<CachedDepthBuffer> bufferCache = new ArrayList<CachedDepthBuffer>();
+    
+    
+    private ViewParams currentView = null;
+    private Light currentLight = null;
+    private ShadowResult currentResult = null;
+    
+    private FrameBuffer allocateDepthBuffer(int nLayers, int resolution, int target) {
+        // Try to find a cached depth buffer first
+        for (CachedDepthBuffer cachedDepthBuffer : bufferCache) {
+            if(!cachedDepthBuffer.isFree()) continue;
+            if(cachedDepthBuffer.layers == nLayers &&
+               cachedDepthBuffer.resolution == resolution &&
+               cachedDepthBuffer.target == target) {
+                // Mark for use
+                cachedDepthBuffer.lastframe = Ref.client.framecount;
+                return cachedDepthBuffer.buffer;
+            }
+        }
+        // Create a new depth buffer
+        boolean cubemapHack = target == GL13.GL_TEXTURE_CUBE_MAP;
+        FrameBuffer depthBuffer;
+        if(cubemapHack) depthBuffer = new FrameBuffer(true, false, resolution, resolution, target, nLayers, 24);
+        else depthBuffer = new FrameBuffer(false, true, resolution, resolution, target, nLayers, 24);
+        
+        
+        // Add to cache
+        CachedDepthBuffer cache = new CachedDepthBuffer(depthBuffer, target);
+        cache.lastframe = Ref.client.framecount;
+        cache.layers = nLayers;
+        cache.resolution = resolution;
+        cache.setDepthFiltering();
+        bufferCache.add(cache);
+        return depthBuffer;
+    }
 
     public ShadowManager() {
+        // Create temp variables
+        scaleBias = new Matrix4f();
+        scaleBias.setIdentity();
+        scaleBias.m00 = 0.5f; scaleBias.m11 = 0.5f; scaleBias.m22 = 0.5f;
+        scaleBias.m30 = 0.5f;
+        scaleBias.m31 = 0.5f;
+        scaleBias.m32 = 0.5f;
+            
         for (int i= 0; i < tempFrustumPoints.length; i++) {
             tempFrustumPoints[i] = new Vector4f(0,0,0,1);
         }
         for (int i= 0; i < shadowFrustum.length; i++) {
             shadowFrustum[i] = new Vector3f();
         }
-        for (int i = 0; i < shadowProjections.length; i++) {
-            shadowProjections[i] = new Matrix4f();
-        }
+        
+        // Set up cvars and commands
         Ref.cvars.Get("shadow_view", "0", EnumSet.of(CVarFlags.NONE));
-
-        shadow_resolution = Helper.get2Fold(shadow_resolution);
-
         Ref.cvars.Get("shadow_bias", "0.002", EnumSet.of(CVarFlags.NONE));
-        shadow_res = Ref.cvars.Get("shadow_resolution", ""+shadow_resolution, EnumSet.of(CVarFlags.NONE));
-        shadow_res.modified = false;
-        shadow_levels = Ref.cvars.Get("shadow_levels", ""+nLevels, EnumSet.of(CVarFlags.NONE));
+        //shadow_res = Ref.cvars.Get("shadow_resolution", "1024", EnumSet.of(CVarFlags.LATCH));
+        //shadow_res.modified = false;
+        //shadow_levels = Ref.cvars.Get("shadow_levels", "3", EnumSet.of(CVarFlags.LATCH));
+        
 
         Ref.commands.AddCommand("shadow_setlevel", shadow_setlevel);
 
         shadow_enable = Ref.cvars.Get("shadow_enable", "1", EnumSet.of(CVarFlags.NONE));
         shadow_enable.modified = false;
-        shadow_factor = Ref.cvars.Get("shadow_factor", "0.5", EnumSet.of(CVarFlags.NONE));
-        shadow_filter = Ref.cvars.Get("shadow_filter", "point", EnumSet.of(CVarFlags.ARCHIVE));
+        shadow_factor = Ref.cvars.Get("shadow_factor", "1.0", EnumSet.of(CVarFlags.NONE));
+        shadow_filter = Ref.cvars.Get("shadow_filter", "linear", EnumSet.of(CVarFlags.ARCHIVE));
         shadow_kernel = Ref.cvars.Get("shadow_kernel", "0.5", EnumSet.of(CVarFlags.NONE));
-
-        createDepthBuffer();
     }
-
-    private void createDepthBuffer() {
-        depthBuffer = new FrameBuffer(shadow_resolution, nLevels, 24);
-        boolean point = true;
-        String val = shadow_filter.sValue.toLowerCase();
-        if(val.equals("linear")) {
-            point = false;
+    
+    public void renderShadowsForLight(Light light, ViewParams view, IThinkMethod renderCallback) {
+        if(renderCallback == null) return;
+        SecTag s = Profiler.EnterSection(Sec.SHADOWS);
+        switch(light.getType()) {
+            case DIRECTIONAL:
+                renderShadowCascades(view, renderCallback, light);
+                break;
+            case POINT:
+                renderOmni(light, view, renderCallback);
+                break;
         }
-        setDepthFiltering(point);
+        
+        s.ExitSection();
+        
     }
-
-    public boolean isEnabled() {
-        return shadow_enable.isTrue();
-    }
-
-    ICommand shadow_setlevel = new ICommand() {
-        public void RunCommand(String[] args) {
-            if(args.length != 3) {
-                Common.Log("shadow_setlevel usage: <level> <0-100 percent depth>");
-                return;
-            }
-
-            int lvl, value;
-            try {
-                lvl = Integer.parseInt(args[1]);
-                value = Integer.parseInt(args[2]);
-            } catch(NumberFormatException ex) {
-                Common.Log("shadow_setlevel usage: <level> <0-100 percent depth>");
-                return;
-            }
-
-            cascadePartitionCoverage[lvl] = value;
-            for (int i = lvl; i < cascadePartitionCoverage.length; i++) {
-                if(cascadePartitionCoverage[i] < value) {
-                    cascadePartitionCoverage[i] = value;
-                }
-            }
+    
+    private void renderOmni(Light light, ViewParams view, IThinkMethod renderCallback) {
+        initFrame(view, light);
+        initOmni();
+        for (int i = 0; i < 6; i++) {
+            startOmniFrame(i);
+            renderCallback.think(null);
         }
-    };
+        
+        finishShadowFrame();
+        clearFrame();
+        
+    }
+    
+    private void initOmni() {
+        currentResult.depthBuffer = allocateDepthBuffer(1, 
+                                                        quality_resolution[currentLight.getShadowQuality()],
+                                                        GL13.GL_TEXTURE_CUBE_MAP);
+        
+    }
+    
+    private void applyCubeFaceMatrix(int face, Vector3f position) {
+      switch(face)
+      {
+        case 0: GL11.glRotatef(-90.0f, 0.0f, 1.0f, 0.0f);
+                GL11.glRotatef(180.0f, 0.0f, 0.0f, 1.0f); break;
+        case 1: GL11.glRotatef( 90.0f, 0.0f, 1.0f, 0.0f);
+                GL11.glRotatef(180.0f, 0.0f, 0.0f, 1.0f); break;
+        case 2: GL11.glRotatef(-90.0f, 1.0f, 0.0f, 0.0f); break;
+        case 3: GL11.glRotatef( 90.0f, 1.0f, 0.0f, 0.0f); break;
+        case 4: GL11.glRotatef(180.0f, 1.0f, 0.0f, 0.0f); break;
+        case 5: GL11.glRotatef(180.0f, 0.0f, 0.0f, 1.0f); break;
+      }
 
-    public Vector4f getCascadeDepths() {
-        //Vector4f[] out = new Vector4f[2];
-        return new Vector4f(cascadeEyespaceDepths[0],
-                cascadeEyespaceDepths[1],
-                cascadeEyespaceDepths[2],
-                cascadeEyespaceDepths[3]);
-//        out[1] = new Vector4f(cascadeEyespaceDepths[4],
-//                cascadeEyespaceDepths[5],
-//                cascadeEyespaceDepths[6],
-//                cascadeEyespaceDepths[7]);
-        //return out;
+      GL11.glTranslatef(-position.x, -position.y, -position.z);
+    }
+    
+    private void startOmniFrame(int face) {
+        int targetface = GL13.GL_TEXTURE_CUBE_MAP_POSITIVE_X+face;
+        currentResult.depthBuffer.Bind();
+        // Binds the depth framebuffer
+        EXTFramebufferObject.glFramebufferTexture2DEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT, EXTFramebufferObject.GL_COLOR_ATTACHMENT0_EXT,
+                targetface, currentResult.depthBuffer.getTextureId(), 0);
+        GLRef.checkError();
+
+        // Clear depth of render target
+        GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT | GL11.GL_COLOR_BUFFER_BIT);
+        
+
+        // push original viewport on first cascade
+        if(face == 0) {
+            GL11.glPushAttrib(GL11.GL_VIEWPORT_BIT);
+        }
+        // Setup viewport to fit target resolution
+        int shadow_resolution = quality_resolution[currentLight.getShadowQuality()];
+        GL11.glViewport(0, 0, shadow_resolution, shadow_resolution);
+        GLRef.checkError();
+
+        // Set projection
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        if(face == 0) GL11.glPushMatrix(); // push on first level
+        //currentResult.applyShadowProjection(level);
+        GL11.glLoadIdentity();
+        GLU.gluPerspective(90f, 1f, 0.1f, 5000f);
+        GLRef.checkError();
+
+        // Set view
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        if(face == 0) GL11.glPushMatrix();
+        GL11.glLoadIdentity();
+        applyCubeFaceMatrix(face, currentLight.getPosition());
+
+        // Enable front-face culling
+        GL11.glCullFace(GL11.GL_FRONT);
+//        GL11.glFrontFace(GL11.GL_CW);
+        GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+        GL11.glPolygonOffset(1f, 0);
+        rendering = true;
     }
 
-    public CubeTexture getDepthTexture() {
-        FrameBuffer depthFrameBuffer = depthBuffer;
-        CubeTexture tex = new CubeTexture(depthFrameBuffer.getTextureTarget(), 
-                                            depthFrameBuffer.getTextureId(),
-                                            "depth");
-        tex.loaded = true;
-        return tex;
+    private void renderShadowCascades(ViewParams refdef, IThinkMethod render, Light light) {
+        if(render == null) return;
+        
+        
+        int nLevels = quality_levels[light.getShadowQuality()];
+        initFrame(refdef, light);
+        initDirectional();
+        for (int i= 0; i < nLevels; i++) {
+            startShadowFrame(i);
+            render.think(null);
+        }
+        
+        finishShadowFrame();
+
+        CVar shadow_view = Ref.cvars.Find("shadow_view");
+        if(shadow_view != null && shadow_view.isTrue()) {
+            int level = shadow_view.iValue;
+            light.getShadowResult().applyShadowProjection(level);
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            Matrix4f viewM = Matrix4f.load(currentLight.getLightMatrix(), null);
+            viewM.store(Ref.glRef.matrixBuffer);
+            Ref.glRef.matrixBuffer.position(0);
+            GL11.glLoadMatrix(Ref.glRef.matrixBuffer);
+            Ref.glRef.matrixBuffer.clear();
+        }
+
+        clearFrame();
+        
     }
 
     private void startShadowFrame(int level) {
-        depthBuffer.Bind();
+        
+        currentResult.depthBuffer.Bind();
         // Binds the depth framebuffer
         EXTTextureArray.glFramebufferTextureLayerEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT,
                 EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT,
-                depthBuffer.getTextureId(), 0, level);
+                currentResult.depthBuffer.getTextureId(), 0, level);
         
         GLRef.checkError();
 
@@ -163,19 +301,20 @@ public class ShadowManager {
         if(level == 0) {
             GL11.glPushAttrib(GL11.GL_VIEWPORT_BIT);
         }
+        int shadow_resolution = quality_resolution[currentLight.getShadowQuality()];
         GL11.glViewport(0, 0, shadow_resolution, shadow_resolution);
         GLRef.checkError();
 
         // Set projection
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         if(level == 0) GL11.glPushMatrix(); // push on first level
-        applyShadowProjection(level);
+        currentResult.applyShadowProjection(level);
         GLRef.checkError();
 
         // Set view
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         if(level == 0) GL11.glPushMatrix();
-        Matrix4f viewM = Matrix4f.load(Ref.glRef.getLightViewMatrix(), null);
+        Matrix4f viewM = Matrix4f.load(currentLight.getLightMatrix(), null);
         viewM.store(Ref.glRef.matrixBuffer);
         Ref.glRef.matrixBuffer.position(0);
         GL11.glLoadMatrix(Ref.glRef.matrixBuffer);
@@ -190,99 +329,6 @@ public class ShadowManager {
         rendering = true;
     }
 
-    public Vector4f[] getPCFoffsets() {
-        return pcfOffsets;
-    }
-
-    private void setPcfOffsets() {
-        float dist = shadow_kernel.fValue/shadow_resolution;
-
-        pcfOffsets[0].x = -dist*3f;
-        pcfOffsets[0].y = -dist*3f;
-
-        pcfOffsets[1].x = dist;
-        pcfOffsets[1].y = -dist*3f;
-
-        pcfOffsets[2].x = -dist*3f;
-        pcfOffsets[2].y = dist;
-
-        pcfOffsets[3].x = dist;
-        pcfOffsets[3].y = dist;
-
-    }
-
-    private Vector4f[] pcfOffsets = new Vector4f[] {
-        new Vector4f(),
-        new Vector4f(),
-        new Vector4f(),
-        new Vector4f()
-    };
-
-    public Vector4f[] getCascadeColors() {
-        return cascadeColors;
-    }
-
-    private static final Vector4f[] cascadeColors = new Vector4f[] {
-        new Vector4f(1.5f,0,0,1),
-        new Vector4f(0,1.5f,0,1),
-        new Vector4f(0,0,1.5f,1),
-        new Vector4f(1.5f,1.5f,0,1),
-        new Vector4f(1.5f,0,1.5f,1),
-        new Vector4f(0,1.5f,1.5f,1),
-        new Vector4f(1.0f,0,0,1),
-        new Vector4f(0,1,0,1)
-    };
-
-    public void renderShadowCascades(ViewParams refdef, IThinkMethod render) {
-        if(render == null) return;
-        SecTag s = Profiler.EnterSection(Sec.SHADOWS);
-        initFrame(refdef);
-        for (int i= 0; i < nLevels; i++) {
-            startShadowFrame(i);
-            render.think(null);
-        }
-        
-        finishShadowFrame();
-
-        CVar shadow_view = Ref.cvars.Find("shadow_view");
-        if(shadow_view != null && shadow_view.isTrue()) {
-            int level = shadow_view.iValue;
-            applyShadowProjection(level);
-            GL11.glMatrixMode(GL11.GL_MODELVIEW);
-            Matrix4f viewM = Matrix4f.load(Ref.glRef.getLightViewMatrix(), null);
-            viewM.store(Ref.glRef.matrixBuffer);
-            Ref.glRef.matrixBuffer.position(0);
-            GL11.glLoadMatrix(Ref.glRef.matrixBuffer);
-            Ref.glRef.matrixBuffer.clear();
-        }
-
-        s.ExitSection();
-    }
-
-    public Matrix4f[] getShadowViewProjections(int max) {
-        Matrix4f[] out = new Matrix4f[max];
-        if(nLevels < max) max = nLevels;
-        for (int i= 0; i < max; i++) {
-            out[i] = getShadowViewProjection(i);
-        }
-        return out;
-    }
-
-    public Matrix4f getShadowViewProjection(int cascadeIndex) {
-        Matrix4f scaleBias = new Matrix4f();
-        scaleBias.setIdentity();
-        scaleBias.m00 = 0.5f; scaleBias.m11 = 0.5f; scaleBias.m22 = 0.5f;
-        scaleBias.m30 = 0.5f;
-        scaleBias.m31 = 0.5f;
-        scaleBias.m32 = 0.5f;
-        Matrix4f m = shadowProjections[cascadeIndex];
-        Matrix4f viewM = Matrix4f.load(Ref.glRef.getLightViewMatrix(), null);
-
-        Matrix4f.mul(scaleBias, m, scaleBias);
-        Matrix4f.mul(scaleBias, viewM, scaleBias);
-        return scaleBias;
-    }
-
     private void finishShadowFrame() {
         // Revert to original matrices
         
@@ -293,81 +339,29 @@ public class ShadowManager {
         GL11.glPopAttrib();
 
         // unbind last level
-        depthBuffer.Unbind();
+        currentResult.depthBuffer.Unbind();
         rendering = false;
         GL11.glCullFace(GL11.GL_BACK);
         GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
-        
-        if(Ref.glRef.srgbBuffer != null && Ref.ResMan.isSRGB()) Ref.glRef.srgbBuffer.Bind();
     }
-
-    private void setDepthFiltering(boolean point) {
-        if(depthBuffer == null || depthBuffer.getDepthTextureId() < 0) {
-            return;
-        }
-        GL11.glBindTexture(depthBuffer.getTextureTarget(), depthBuffer.getDepthTextureId());
-        GL11.glTexParameteri(depthBuffer.getTextureTarget(), GL11.GL_TEXTURE_MAG_FILTER, 
-                point?GL11.GL_NEAREST:GL11.GL_LINEAR);
-        GL11.glBindTexture(depthBuffer.getTextureTarget(), 0);
-    }
-
-    private void initFrame(ViewParams refdef) {
-        if(shadow_levels.modified) {
-            nLevels = shadow_levels.iValue;
-            if(nLevels <= 0 || nLevels > 8) nLevels = 1;
-            Ref.cvars.Set2("shadow_levels", ""+nLevels, true);
-            shadow_levels.modified = false;
-
-            if(!shadow_res.modified) { // don't destory twice in one frame
-                depthBuffer.destroy();
-                createDepthBuffer();
-            }
-        }
-
-        if(shadow_res.modified) {
-            shadow_resolution = Helper.get2Fold(shadow_res.iValue);
-            Ref.cvars.Set2("shadow_resolution", ""+shadow_resolution, true);
-            shadow_res.modified = false;
-
-            // Resize FBO
-            depthBuffer.destroy();
-            createDepthBuffer();
-//            for (int i= 0; i < nLevels; i++) {
-//                depthBuffer.resize(shadow_resolution, shadow_resolution);
-//            }
-        }
-
-        if(shadow_filter.modified) {
-            // parse it
-            String str = shadow_filter.sValue.toLowerCase().trim();
-            if(str.equals("point")) {
-                setDepthFiltering(true);
-            } else if(str.equals("linear")) {
-                setDepthFiltering(false);
-            } else {
-                Common.Log("Unknown shadow_filter value. Use point or linear");
-                shadow_filter.set("point");
-            }
-
-            shadow_filter.modified = false;
-        }
-
-        setPcfOffsets();
-
+    
+    private void initDirectional() {
+        currentResult.depthBuffer = allocateDepthBuffer(quality_levels[currentLight.getShadowQuality()], 
+                                                        quality_resolution[currentLight.getShadowQuality()],
+                                                        EXTTextureArray.GL_TEXTURE_2D_ARRAY_EXT);
         
-        float near = Ref.cvars.Find("cg_depthnear").iValue;
-        float far = Ref.cvars.Find("cg_depthfar").iValue;
+        float near = currentView.nearDepth;
+        float far = currentView.farDepth;
         float cameraNearFarRange = far - near;
 
-        Matrix4f viewCameraProjection = refdef.ProjectionMatrix;
-        Matrix4f viewCameraView = refdef.viewMatrix;
+        // Get matrixes from the view
+        Matrix4f viewCameraProjection = currentView.ProjectionMatrix;
+        Matrix4f viewCameraView = currentView.viewMatrix;
         Matrix4f inverseViewCamera = Matrix4f.invert(viewCameraView, null);
-//        Matrix4f.mul(inverseViewCamera, ViewParams.flipMatrix2, inverseViewCamera);
-        Matrix4f lightView = Ref.glRef.getLightViewMatrix();
-        for (int i= 0; i < 8; i++) {
-            cascadeEyespaceDepths[i] = 10000000;
-        }
-
+        
+        // Get lights view matrix
+        Matrix4f lightView = currentLight.getLightMatrix();
+        int nLevels = quality_levels[currentLight.getShadowQuality()];
         // We loop over the cascades to calculate the orthographic projection for each cascade.
         for (int cascadeIndex= 0; cascadeIndex < nLevels; cascadeIndex++) {
             float frustumIntervalBegin = 0f;
@@ -452,8 +446,8 @@ public class ShadowManager {
             float cascadeBound = diagonal.length();
             diagonal.set(cascadeBound,cascadeBound,cascadeBound); // emulating XMVector3Length
 
-            minz = lightCameraOthoMin.z;
-            maxz = lightCameraOthoMax.z;
+//            minz = lightCameraOthoMin.z;
+//            maxz = lightCameraOthoMax.z;
 
 //             if(minz > maxz) {
 //                 maxz = minz;
@@ -479,6 +473,7 @@ public class ShadowManager {
 
             // The world units per texel are used to snap the shadow the orthographic projection
             // to texel sized increments.  This keeps the edges of the shadows from shimmering.
+            float shadow_resolution = quality_resolution[currentLight.getShadowQuality()];
             Vector3f worldUnitsPerTexel = new Vector3f(cascadeBound / shadow_resolution,cascadeBound / shadow_resolution,cascadeBound / shadow_resolution);
 
             float lightCameraOrthographicMinZ = lightCameraOthoMin.z;
@@ -522,9 +517,9 @@ public class ShadowManager {
                 farPlane = nearPlane+(lightCameraOthoMax.z-lightCameraOthoMin.z);
                 nearPlane -= 1500;
             }
-
-            minz = nearPlane;
-            maxz = farPlane;
+//
+//            minz = nearPlane;
+//            maxz = farPlane;
 
             // Craete the orthographic projection for this cascade.
 //            Matrix4f shadowProj = Helper.createOthoMatrix(lightCameraOthoMin.x, lightCameraOthoMax.x,
@@ -533,11 +528,107 @@ public class ShadowManager {
             Matrix4f shadowProj = Helper.createOthoMatrix(lightCameraOthoMin.x, lightCameraOthoMax.x,
                     lightCameraOthoMin.y, lightCameraOthoMax.y,
                     nearPlane, farPlane);
-            shadowProjections[cascadeIndex] = shadowProj;
-
-            cascadeEyespaceDepths[cascadeIndex] = frustumIntervalEnd;
+            currentResult.shadowProjections[cascadeIndex] = shadowProj;
+            currentResult.cascadeEyespaceDepths[cascadeIndex] = frustumIntervalEnd;
+            Matrix4f viewProjection = currentResult.shadowViewProjections[cascadeIndex];
+            Matrix4f.mul(scaleBias, shadowProj, viewProjection);
+            Matrix4f.mul(viewProjection, lightView, viewProjection);
         }
     }
+    
+    private void clearFrame() {
+        currentView = null;
+        currentLight = null;
+        currentResult = null;
+    }
+
+    private void initFrame(ViewParams refdef, Light light) {
+        updateCVars();
+        currentView = refdef;
+        currentLight = light;
+        currentResult = new ShadowResult();
+        currentLight.setShadowResult(currentResult);
+    }
+    
+    
+    
+    private void updateCVars() {
+//        if(shadow_levels.modified) {
+//            int oldLevels = shadow_levels.iValue;
+//            shadow_levels.applyLatched();
+//            int nLevels = shadow_levels.iValue;
+//            if(nLevels < 0 || nLevels > 4) {
+//                Ref.cvars.Set2("shadow_levels", ""+oldLevels, true);
+//                shadow_levels.modified = false;
+//            } else if(!shadow_res.modified) {
+//                depthBuffer.destroy();
+//                createDepthBuffer();
+//            }
+//            
+//        }
+//
+//        if(shadow_res.modified) {
+//            shadow_resolution = Helper.get2Fold(shadow_res.iValue);
+//            Ref.cvars.Set2("shadow_resolution", ""+shadow_resolution, true);
+//            shadow_res.modified = false;
+//
+//            // Resize FBO
+//            depthBuffer.destroy();
+//            createDepthBuffer();
+//            // Update PCF kernel
+//            setPcfOffsets();
+//        }
+//
+//        if(shadow_filter.modified) {
+//            // parse it
+//            String str = shadow_filter.sValue.toLowerCase().trim();
+//            if(str.equals("point")) {
+//                setDepthFiltering(true);
+//            } else if(str.equals("linear")) {
+//                setDepthFiltering(false);
+//            } else {
+//                Common.Log("Unknown shadow_filter value. Use point or linear");
+//                shadow_filter.set("point");
+//            }
+//
+//            shadow_filter.modified = false;
+//        }
+//        
+//        if(shadow_kernel.modified) {
+//            // Update PCF kernel
+//            shadow_kernel.modified = false;
+//            setPcfOffsets();
+//        }
+    }
+    
+    public boolean isEnabled() {
+        return shadow_enable.isTrue();
+    }
+
+    ICommand shadow_setlevel = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(args.length != 3) {
+                Common.Log("shadow_setlevel usage: <level> <0-100 percent depth>");
+                return;
+            }
+
+            int lvl, value;
+            try {
+                lvl = Integer.parseInt(args[1]);
+                value = Integer.parseInt(args[2]);
+            } catch(NumberFormatException ex) {
+                Common.Log("shadow_setlevel usage: <level> <0-100 percent depth>");
+                return;
+            }
+
+            cascadePartitionCoverage[lvl] = value;
+            for (int i = lvl; i < cascadePartitionCoverage.length; i++) {
+                if(cascadePartitionCoverage[i] < value) {
+                    cascadePartitionCoverage[i] = value;
+                }
+            }
+        }
+    };
 
     private static void createFrustumPointsFromCascadeInterval(float begin, float end, Matrix4f projection, Vector4f[] data) {
         Frustum f = computeFrustumFromProjection(projection);
@@ -612,21 +703,7 @@ public class ShadowManager {
         return f;
     }
 
-    public void applyShadowProjection(int index) {
-        if(shadowProjections[index] == null) return;
-        GL11.glMatrixMode(GL11.GL_PROJECTION);
-        Matrix4f m = shadowProjections[index];
-//        Matrix4f.mul(m, ViewParams.flipMatrix2, m);
-        Ref.glRef.matrixBuffer.clear();
-//        m = Helper.createOthoMatrix(, 1,10000);
-        
-        m.store(Ref.glRef.matrixBuffer);
-        Ref.glRef.matrixBuffer.position(0);
-        GL11.glLoadMatrix(Ref.glRef.matrixBuffer);
-        
-//        GLU.gluOrtho2D(-4000,300, -18000, -13000f);
-        
-    }
+    
 
     public void drawFrustum() {
         drawFrustum(tempFrustumPoints);
@@ -705,6 +782,23 @@ public class ShadowManager {
     }
 
     
+
+    
+
+    public Vector4f[] getCascadeColors() {
+        return cascadeColors;
+    }
+
+    private static final Vector4f[] cascadeColors = new Vector4f[] {
+        new Vector4f(1.5f,0,0,1),
+        new Vector4f(0,1.5f,0,1),
+        new Vector4f(0,0,1.5f,1),
+        new Vector4f(1.5f,1.5f,0,1),
+        new Vector4f(1.5f,0,1.5f,1),
+        new Vector4f(0,1.5f,1.5f,1),
+        new Vector4f(1.0f,0,0,1),
+        new Vector4f(0,1,0,1)
+    };
 
     public static class Frustum {
         public Vector3f Origin;

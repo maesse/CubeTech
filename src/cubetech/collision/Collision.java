@@ -234,7 +234,7 @@ public class Collision {
             res.entitynum = Common.ENTITYNUM_WORLD;
             res.hitmask = Content.SOLID;
             res.hitAxis.set(satState.hitaxis);
-            res.startsolid = satState.startsolid;
+            res.startsolid = false;
         } else if(satState.startsolid && satState.hitaxis == null) {
             res.frac = 0f;
             res.startsolid = satState.startsolid;
@@ -259,7 +259,7 @@ public class Collision {
 
         CollisionResult res = GetNext();
         res.reset(start, dir, extent);
-        assert(boxTrace);
+        
         TestAABBBox(start,dir, extent , res);
         return res;
     }

@@ -5,21 +5,26 @@ uniform sampler2DArrayShadow shadows;
 uniform vec4 cascadeDistances;
 uniform mat4 shadowMatrix[4];
 uniform vec4 pcfOffsets[4];
-uniform float shadow_bias = 0.002;
-uniform float shadow_factor = 0.75;
+uniform float shadow_bias;
+uniform float shadow_factor;
 
 uniform samplerCube envmap;
 uniform sampler2D tex;
+uniform sampler2D normalmap;
+uniform sampler2D specularmap;
 
 #pragma include "lighting.glsl"
 
 // Shadow in
 varying vec4 vPosition;
 varying float vDepth;
+varying vec3 bonedebug;
 
 // Light in
 
 varying vec3 reflectDir;
+varying vec3 lightVec, halfVec, eyeVec;
+varying mat3 invTan;
 
 float getShadowFraction()
 {
@@ -50,14 +55,32 @@ float getShadowFraction()
 void main()
 {
     // Start with ambient
-    vec4 ambientcolor = ambient * textureCube(envmap, reflectDir);
+    vec4 ambientcolor = gl_LightModel.ambient * textureCube(envmap, reflectDir);
     vec4 texcol = texture2D(tex, gl_TexCoord[0].xy);
+    vec3 mnormal = normalize(2.0 * texture2D(normalmap, gl_TexCoord[0].st).rgb - 1.0);
+    vec4 speccolor = texture2D(specularmap, gl_TexCoord[0].st);
+    vec3 n = mnormal; // normalize the interpolated normal
 
-    // get light
-    vec4 lightColor = getLighting(texcol);
-    // multiply by shadow
-    lightColor.rgb *= getShadowFraction();
+    //speccolor = vec4(1,1,1,1);
+    n = vec3(0,0,1);
+    
+    float NdotL = (max(dot(n, lightVec), 0.0));
+    vec4 diff = texcol * NdotL;
 
-    gl_FragColor.rgb = texcol.rgb * (ambientcolor.rgb + lightColor.rgb) * gl_Color.rgb;
+    //diff = vec4(NdotL);
+    //diff.w = 1.0;
+
+    vec4 spec = vec4(0,0,0,1);
+    // Blinn-Phong
+    if(NdotL > 0.0) {
+        vec3 halfV = normalize(halfVec);
+        float NdotHV = max(dot(n, halfV), 0.0);
+        spec = pow(NdotHV, 32.0) * speccolor * 2.0;
+    }
+
+    gl_FragColor.rgb = ambientcolor.rgb * texcol.rgb + (diff.rgb + spec.rgb) * getShadowFraction();
+    //gl_FragColor.rgb *= 0.0001;
+    //gl_FragColor.rgb += (invTan * n);
+    //gl_FragColor.rgb += vec3(spec.rgb);
     gl_FragColor.a = 1.0;
 }

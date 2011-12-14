@@ -5,6 +5,7 @@
 
 package cubetech.gfx;
 
+import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Quaternion;
@@ -36,19 +37,19 @@ public class Matrix3x4 {
         return src;
     }
 
-    public static void storeMatrix4f(Matrix4f src, FloatBuffer buf) {
-        buf.put(src.m00);
-        buf.put(src.m10);
-        buf.put(src.m20);
-        buf.put(src.m30);
-        buf.put(src.m01);
-        buf.put(src.m11);
-        buf.put(src.m21);
-        buf.put(src.m31);
-        buf.put(src.m02);
-        buf.put(src.m12);
-        buf.put(src.m22);
-        buf.put(src.m32);
+    public static void storeMatrix4f(Matrix4f src, ByteBuffer buf) {
+        buf.putFloat(src.m00);
+        buf.putFloat(src.m10);
+        buf.putFloat(src.m20);
+        buf.putFloat(src.m30);
+        buf.putFloat(src.m01);
+        buf.putFloat(src.m11);
+        buf.putFloat(src.m21);
+        buf.putFloat(src.m31);
+        buf.putFloat(src.m02);
+        buf.putFloat(src.m12);
+        buf.putFloat(src.m22);
+        buf.putFloat(src.m32);
 
 //        buf.put(src.m00);
 //        buf.put(src.m01);

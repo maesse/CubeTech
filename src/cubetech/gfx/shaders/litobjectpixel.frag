@@ -5,8 +5,8 @@ uniform sampler2DArrayShadow shadows;
 uniform vec4 cascadeDistances;
 uniform mat4 shadowMatrix[4];
 uniform vec4 pcfOffsets[4];
-uniform float shadow_bias = 0.002;
-uniform float shadow_factor = 1.0;
+uniform float shadow_bias;
+uniform float shadow_factor;
 
 uniform samplerCube envmap;
 uniform sampler2D tex;
@@ -32,7 +32,7 @@ float getShadowFraction()
     shadowCoords.z = fIndex;
 
     // Sample four times
-    float lightDist = 0;
+    float lightDist = 0.0;
     if(SHADOW_SAMPLES == 1) {
         lightDist = shadow2DArray(shadows, shadowCoords).r;
     } else {

@@ -8,6 +8,8 @@ import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
@@ -106,6 +108,15 @@ public class IQMLoader {
                  Vector4f v = new Vector4f(0,0,0,1);
                  Matrix4f.transform(j.baseframe, v, v);
                  model.jointPose[i*2+1] = new Vector3f(v);
+            }
+        }
+
+        String keyShapeFile = file.replace(".iqm", ".shapekeys");
+        if(ResourceManager.FileExists(keyShapeFile)) {
+            try {
+                ShapeKeyLoader.loadSkapeKey(keyShapeFile, true).attachToModel(model);
+            } catch (Exception ex) {
+                Logger.getLogger(IQMLoader.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
         

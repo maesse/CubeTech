@@ -78,10 +78,15 @@ public class CGameRender {
 
     private void general(CEntity cent) {
         EntityState es = cent.currentState;
-        if(es.modelindex == 0) return;
+        if(es.modelindex <= 0)  {
+            return;
+        }
 
         RenderEntity ref = Ref.render.createEntity(REType.MODEL);
         String modelname = Ref.client.cl.GameState.get(CS.CS_MODELS+es.modelindex-1);
+        if(modelname == null) {
+            Ref.common.Error(Common.ErrorCode.DROP, "Model not found: " + (es.modelindex-1));
+        }
         IQMModel model = Ref.ResMan.loadModel(modelname);
         ref.model = model;
         es.pos.Evaluate(game.cg.time, ref.origin);
@@ -315,7 +320,7 @@ public class CGameRender {
         ent.origin.set(cent.lerpOrigin);
         ent.origin.z += Game.PlayerMins.z;
 
-        Vector3f angles = new Vector3f();
+        Vector3f angles = new Vector3f(1,0,0);
 
         angles.set(cent.lerpAngles);
         if(angles.x > 1) angles.x = 1;
@@ -352,7 +357,7 @@ public class CGameRender {
 
         WeaponItem w = Ref.common.items.getWeapon(cent.currentState.weapon);
         IQMModel weaponModel = w.getWeaponInfo().worldModel;
-        if(weaponModel == null) return;
+        if(weaponModel == null || ent.model == null) return;
 
         ent.model.animate(ent.frame, ent.oldframe, ent.backlerp);
         BoneAttachment bone = ent.model.getAttachment("weapon");
@@ -373,9 +378,10 @@ public class CGameRender {
         went.origin.set(boneOrigin);
 
         Vector3f[] test = new Vector3f[3];
-        test[1] = new Vector3f(0,3,0);
-        test[2] = new Vector3f(0,0,3);
-        test[0] = new Vector3f(3,0,0);
+        test[2] = new Vector3f(3,0,0);
+        test[0] = new Vector3f(0,-3,0);
+        test[1] = new Vector3f(0,0,-3);
+        
 
         Helper.mul(test, bone.axis, test);
         Helper.mul(test, ent.axis, test);
@@ -462,8 +468,13 @@ public class CGameRender {
         }
         
         // Handle changes from server
-        if(game.cg.showScores)
+        if(game.cg.showScores) {
             DrawScoreboard();
+        }
+        if(Ref.common.developer.isTrue()) {
+            Profiler.setForceGLFinish(false);
+            if(game.cg.showScores) drawprofiler();
+        }
 
         if(Ref.common.cl_paused.iValue == 1) {
             Vector2f pos = new Vector2f(Ref.glRef.GetResolution());
@@ -517,10 +528,35 @@ public class CGameRender {
             Score score = scores[i];
             DrawClientScore(yOffset + lineHeight * i, score);
         }
-        if(Ref.common.developer.isTrue()) drawprofiler();
+        
+    }
+    
+    private int drawProfilerRecursive(Profiler.StackEntry entry, int indent, int startline) {
+        int line = startline;
+        // Draw this
+        Vector2f position = new Vector2f(indent * 20f,  (line+1) * Ref.textMan.GetCharHeight() * 0.75f);
+        Ref.textMan.AddText(position, entry.toString(), Align.LEFT, Type.HUD, 0.75f);
+        line++;
+        
+        // Draw children
+        if(entry.subTags != null) {
+            for (Profiler.StackEntry e : entry.subTags) {
+                line = drawProfilerRecursive(e, indent+1, line);
+            }
+        }
+        return line;
+    }
+    
+    private void drawStackProfiler() {
+        ArrayList<Profiler.StackEntry> entries = Profiler.getStackFrames();
+        int line = 6;
+        for (Profiler.StackEntry entry : entries) {
+            line = drawProfilerRecursive(entry, 8, line);
+        }
     }
 
     private void drawprofiler() {
+        
         float[] times = Profiler.getTimes();
         float[] percentage = new float[times.length];
 
@@ -579,6 +615,8 @@ public class CGameRender {
                 y += textSize.y + 1;
             }
         }
+        
+        drawStackProfiler();
     }
 
     private void DrawClientScore(float yOffset, Score score) {
@@ -777,7 +815,10 @@ public class CGameRender {
     private static final int[] moveOffsets = new int[] {0,22,45,-22,0,22,-45,-22};
     private void playerAngles(CEntity cent, RenderEntity rent) {
         Vector3f headAngle = new Vector3f(cent.lerpAngles);
-
+        CVar noangles = Ref.cvars.Find("cg_noangles");
+        if(noangles != null && noangles.isTrue()) {
+            headAngle.set(1,0,0);
+        }
         headAngle.y = Helper.AngleMod(headAngle.y);
 
         int dir = (int)cent.currentState.Angles2.y;

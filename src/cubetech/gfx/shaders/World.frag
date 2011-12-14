@@ -2,9 +2,10 @@
 uniform sampler2D tex;
 
 varying vec2 coords;
-varying vec4 color;
+varying float viewDepth;
 void main()
 {
-    gl_FragColor = texture2D(tex, coords) * color;
-    //gl_FragColor.rgb = vec3(coords.y, 0.0, 0.0);
+    //gl_FragColor = texture2D(tex, coords) * color;
+    gl_FragColor = vec4(viewDepth);
+    //gl_FragColor = vec4(127.0);
 }
