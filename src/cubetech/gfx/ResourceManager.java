@@ -44,6 +44,7 @@ import java.awt.color.ColorSpace;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Image;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBuffer;
 import java.awt.image.DataBufferByte;
@@ -87,6 +88,7 @@ public final class ResourceManager {
     int nUnloadedTextures = 0; // numbers of textures that needs to be loaded
     static CVar devpath;
     static CVar tex_srgb;
+    static CVar tex_verbose;
     public boolean srgbSupported = true;
 
     // Used for quering new opengl textures ids
@@ -111,6 +113,7 @@ public final class ResourceManager {
                 "C:\\Users\\mads\\Documents\\NetBeansProjects\\CubeTech\\src\\cubetech\\",
                 EnumSet.of(CVarFlags.ARCHIVE));
         tex_srgb = Ref.cvars.Get("tex_srgb", "1", EnumSet.of(CVarFlags.ARCHIVE));
+        tex_verbose = Ref.cvars.Get("tex_verbose", "0", null);
         Ref.commands.AddCommand("tex_reload", cmd_reloadtex);
     }
     
@@ -233,6 +236,7 @@ public final class ResourceManager {
     }
 
     public IQMModel loadModel(String modelName) {
+        if(modelName == null) return null;
         String filename = Helper.stripPath(modelName).toLowerCase();
         if(filename == null || filename.isEmpty()) return null; // no go
         if(Ressources.containsKey(filename)) return (IQMModel)Ressources.get(filename).Data; // cached
@@ -358,18 +362,33 @@ public final class ResourceManager {
         return img;
     }
 
-    private BufferedImage loadImage(String path) throws IOException {
+    private BufferedImage loadImage(String path, float rotationAngle) throws IOException {
         if(!FileExists(path)) throw new IOException("Cannot find: " + path);
+        String filepath = path.replace("/", "\\");
+        filepath = filepath.replace("cubetech\\", "");
         
-        URL url = getClassLoader().getResource((path.startsWith("cubetech")?"":"cubetech/")+path);
-
         Image img = null;
-        if(url != null)
-            img = new ImageIcon(url).getImage();
+        boolean asFile = true;
+        if(FileExists(devpath.sValue + filepath) && Ref.common.isDeveloper()) {
+            try {
+                ByteBuffer buffer = OpenFileAsByteBuffer(devpath.sValue + filepath, false).getKey();
+                byte[] data = buffer.array();
+                img = new ImageIcon(data).getImage();
+                if(img != null) path = devpath.sValue + filepath;
+            } catch (Exception ex) {}
+        }
+        
+        if(img == null)
+        {
+            asFile = false;
+            URL url = getClassLoader().getResource((path.startsWith("cubetech")?"":"cubetech/")+path);
+            if(url != null) img = new ImageIcon(url).getImage();
+        }
+
         if(img == null) {
+            asFile = false;
             try {
                 img = new ImageIcon(path).getImage();
-
             } catch (Exception ex) {
                 throw new IOException("Cannot find: " + path);
             }
@@ -378,10 +397,21 @@ public final class ResourceManager {
 
         // FIX: Don't load RGB as ARGB
         try {
-            BufferedImage bufferedImage = new BufferedImage(img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
-            Graphics g = bufferedImage.getGraphics();
-            g.drawImage(img, 0, 0, null);
+            int w = img.getWidth(null), h = img.getHeight(null);
+            BufferedImage bufferedImage = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = (Graphics2D)bufferedImage.getGraphics();
+            if(rotationAngle != 0) {
+                AffineTransform transform  = new AffineTransform();
+                //transform.setToTranslation(w, 0);
+                transform.rotate(Math.toRadians(rotationAngle), w/2f, h/2f);
+                g.drawImage(img, transform, null);
+            } else {
+                g.drawImage(img, 0, 0, null);
+            }
+            
+            
             g.dispose();
+            if(tex_verbose.iValue > 1) Common.LogDebug("Loaded texture " + path + (asFile?" (file)":" (jar)"));
             return bufferedImage;
         } catch(IllegalArgumentException ex) {
             throw new IOException("Failed to load texture.", ex);
@@ -398,25 +428,6 @@ public final class ResourceManager {
     private CubeTexture getUnloadedTexture(Resource res) {
         CubeTexture tex = new CubeTexture(res.target, -1, res.Name);
         res.Data = tex;
-        return tex;
-    }
-
-        /**
-     * Load a texture
-     *
-     * @param resourceName The location of the resource to load
-     * @return The loaded texture
-     * @throws IOException Indicates a failure to access the resource
-     */
-    private CubeTexture getTexture(String resourceName) throws IOException {
-
-        CubeTexture tex = getTexture(resourceName,
-                         GL_TEXTURE_2D, // target
-//                         GL_RGBA,     // dst pixel format
-                         isSRGB()?EXTTextureSRGB.GL_SRGB_ALPHA_EXT:GL_RGBA,
-                         GL_LINEAR, // min filter (unused)
-                         GL_LINEAR, null);
-
         return tex;
     }
 
@@ -456,9 +467,15 @@ public final class ResourceManager {
 
         int textureID = -1;
         try {
+            if(target == GL_TEXTURE_CUBE_MAP && texture != null && texture.loaded) {
+                texture.loaded = false;
+                glDeleteTextures(texture.GetID());
+                if(tex_verbose.iValue > 3) Common.LogDebug("Deleted texture (id: %d)", texture.GetID());
+            }
             if(texture == null || !texture.loaded) {
                 // create the texture ID for this texture
                 textureID = createTextureID();
+                if(tex_verbose.iValue > 3) Common.LogDebug("Created texture (id: %d)", textureID);
 
                 // Create the CubeTexture
                 if(texture == null)
@@ -489,7 +506,7 @@ public final class ResourceManager {
                 texture.setWrap(GL_CLAMP_TO_EDGE);
                 glTexParameteri(target, GL_TEXTURE_MIN_FILTER, minFilter);
                 // convert that image into a byte buffer of texture data
-                ByteBuffer buf = convertImageData(loadImage(resourceName+"_ft.png"),texture, false);
+                ByteBuffer buf = convertImageData(loadImage(resourceName+"_ft.png", -90f),texture, false);
                 glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X,0,dstPixelFormat,
                               texture.Width,
                               texture.Height,
@@ -499,27 +516,27 @@ public final class ResourceManager {
                               texture.Width,
                               texture.Height,
                               0,GL_RGBA,GL_UNSIGNED_BYTE,
-                               convertImageData(loadImage(resourceName+"_bk.png"),texture, false) );
+                               convertImageData(loadImage(resourceName+"_bk.png", 90f),texture, false) );
                 glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_Y,0,dstPixelFormat,
                               texture.Width,
                               texture.Height,
                               0,GL_RGBA,GL_UNSIGNED_BYTE,
-                               convertImageData(loadImage(resourceName+"_lf.png"),texture, false) );
+                               convertImageData(loadImage(resourceName+"_lf.png", 180f),texture, false) );
                 glTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,0,dstPixelFormat,
                               texture.Width,
                               texture.Height,
                               0,GL_RGBA,GL_UNSIGNED_BYTE,
-                               convertImageData(loadImage(resourceName+"_rt.png"),texture, false) );
+                               convertImageData(loadImage(resourceName+"_rt.png", 0f),texture, false) );
                 glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_Z,0,dstPixelFormat,
                               texture.Width,
                               texture.Height,
                               0,GL_RGBA,GL_UNSIGNED_BYTE,
-                               convertImageData(loadImage(resourceName+"_up.png"),texture, false) );
+                               convertImageData(loadImage(resourceName+"_up.png", -90f),texture, false) );
                 glTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,0,dstPixelFormat,
                               texture.Width,
                               texture.Height,
                               0,GL_RGBA,GL_UNSIGNED_BYTE,
-                               convertImageData(loadImage(resourceName+"_dn.png"),texture, false) );
+                               convertImageData(loadImage(resourceName+"_dn.png", -90f),texture, false) );
             } else {
                 // load image data
                 BufferedImage bufferedImage = null;
@@ -528,7 +545,7 @@ public final class ResourceManager {
                     bufferedImage = TargaReader.getImage(resourceName);
                     flipY = false;
                 } else {
-                    bufferedImage = loadImage(resourceName);
+                    bufferedImage = loadImage(resourceName, 0f);
                 }
                 texture.Width = bufferedImage.getWidth();
                 texture.Height = bufferedImage.getHeight();
@@ -911,7 +928,7 @@ public final class ResourceManager {
             glTexImage3D(target, 0, component, width, height,nLevels, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullBuffer);
         } else if(target == GL_TEXTURE_CUBE_MAP) {
             for (int i = 0; i < 6; i++) {
-                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X+i, 0, ARBTextureFloat.GL_RGB16F_ARB, width, height, 0, GL_RGBA, GL_FLOAT, nullBuffer);
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X+i, 0, component, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullBuffer);
             }
         } else {
             glTexImage2D(target, 0, component, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullBuffer);

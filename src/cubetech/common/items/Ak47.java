@@ -33,6 +33,8 @@ public class Ak47 extends WeaponItem {
     public Weapon getWeapon() {
         return Weapon.AK47;
     }
+    
+    
 
     @Override
     public int getAmmoQuantity() {

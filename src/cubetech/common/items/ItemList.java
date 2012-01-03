@@ -107,6 +107,7 @@ public class ItemList {
         Gentity dropped = Ref.game.Spawn();
         dropped.s.eType = EntityType.ITEM;
         dropped.s.modelindex = items2.indexOf(item);
+        
         dropped.classname = item.getClassName();
         dropped.item = item;
         dropped.r.mins.set(-32,-32,-32);
@@ -115,7 +116,9 @@ public class ItemList {
         dropped.touch = TouchItem;
         dropped.SetOrigin(origin);
         dropped.count = ammo;
-        dropped.s.pos.type = Trajectory.GRAVITY;
+        dropped.physicsObject = true;
+        
+        dropped.s.pos.type = Trajectory.LINEAR;
         dropped.s.pos.time = Ref.game.level.time;
         dropped.s.pos.delta.set(velocity);
         dropped.think = Gentity.freeEntity;
@@ -123,6 +126,7 @@ public class ItemList {
         //dropped.s.eFlags |= EntityFlags.BOUNCE_HALF;
         dropped.flags = Gentity.FLAG_DROPPED_ITEM;
         dropped.Link();
+        
         return dropped;
     }
 

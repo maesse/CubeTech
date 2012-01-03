@@ -112,7 +112,7 @@ public class ShadowManager {
         // Create a new depth buffer
         boolean cubemapHack = target == GL13.GL_TEXTURE_CUBE_MAP;
         FrameBuffer depthBuffer;
-        if(cubemapHack) depthBuffer = new FrameBuffer(true, false, resolution, resolution, target, nLayers, 24);
+        if(cubemapHack) depthBuffer = new FrameBuffer(true, true, resolution, resolution, target, nLayers, 24);
         else depthBuffer = new FrameBuffer(false, true, resolution, resolution, target, nLayers, 24);
         
         
@@ -144,7 +144,7 @@ public class ShadowManager {
         
         // Set up cvars and commands
         Ref.cvars.Get("shadow_view", "0", EnumSet.of(CVarFlags.NONE));
-        Ref.cvars.Get("shadow_bias", "0.002", EnumSet.of(CVarFlags.NONE));
+        Ref.cvars.Get("shadow_bias", "0.001", EnumSet.of(CVarFlags.NONE));
         //shadow_res = Ref.cvars.Get("shadow_resolution", "1024", EnumSet.of(CVarFlags.LATCH));
         //shadow_res.modified = false;
         //shadow_levels = Ref.cvars.Get("shadow_levels", "3", EnumSet.of(CVarFlags.LATCH));
@@ -178,11 +178,16 @@ public class ShadowManager {
     private void renderOmni(Light light, ViewParams view, IThinkMethod renderCallback) {
         initFrame(view, light);
         initOmni();
+        // Save original matrices
+        Matrix4f modelview = view.viewMatrix;
+        Matrix4f projection = view.ProjectionMatrix;
         for (int i = 0; i < 6; i++) {
             startOmniFrame(i);
             renderCallback.think(null);
         }
-        
+        // Restore matrices
+        view.viewMatrix = modelview;
+        view.ProjectionMatrix = projection;
         finishShadowFrame();
         clearFrame();
         
@@ -192,7 +197,6 @@ public class ShadowManager {
         currentResult.depthBuffer = allocateDepthBuffer(1, 
                                                         quality_resolution[currentLight.getShadowQuality()],
                                                         GL13.GL_TEXTURE_CUBE_MAP);
-        
     }
     
     private void applyCubeFaceMatrix(int face, Vector3f position) {
@@ -215,6 +219,8 @@ public class ShadowManager {
         int targetface = GL13.GL_TEXTURE_CUBE_MAP_POSITIVE_X+face;
         currentResult.depthBuffer.Bind();
         // Binds the depth framebuffer
+        EXTFramebufferObject.glFramebufferTexture2DEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT, EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT,
+                targetface, currentResult.depthBuffer.getDepthTextureId(), 0);
         EXTFramebufferObject.glFramebufferTexture2DEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT, EXTFramebufferObject.GL_COLOR_ATTACHMENT0_EXT,
                 targetface, currentResult.depthBuffer.getTextureId(), 0);
         GLRef.checkError();
@@ -231,6 +237,8 @@ public class ShadowManager {
         int shadow_resolution = quality_resolution[currentLight.getShadowQuality()];
         GL11.glViewport(0, 0, shadow_resolution, shadow_resolution);
         GLRef.checkError();
+        
+        
 
         // Set projection
         GL11.glMatrixMode(GL11.GL_PROJECTION);
@@ -239,13 +247,14 @@ public class ShadowManager {
         GL11.glLoadIdentity();
         GLU.gluPerspective(90f, 1f, 0.1f, 5000f);
         GLRef.checkError();
+        currentView.ProjectionMatrix = Ref.glRef.getGLProjection(null);
 
         // Set view
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         if(face == 0) GL11.glPushMatrix();
         GL11.glLoadIdentity();
         applyCubeFaceMatrix(face, currentLight.getPosition());
-
+        currentView.viewMatrix = Ref.glRef.getGLView(null);
         // Enable front-face culling
         GL11.glCullFace(GL11.GL_FRONT);
 //        GL11.glFrontFace(GL11.GL_CW);
@@ -261,11 +270,16 @@ public class ShadowManager {
         int nLevels = quality_levels[light.getShadowQuality()];
         initFrame(refdef, light);
         initDirectional();
+        // Save original matrices
+        Matrix4f modelview = currentView.viewMatrix;
+        Matrix4f projection = currentView.ProjectionMatrix;
         for (int i= 0; i < nLevels; i++) {
             startShadowFrame(i);
             render.think(null);
         }
-        
+        // Restore matrices
+        currentView.viewMatrix = modelview;
+        currentView.ProjectionMatrix = projection;
         finishShadowFrame();
 
         CVar shadow_view = Ref.cvars.Find("shadow_view");
@@ -310,7 +324,7 @@ public class ShadowManager {
         if(level == 0) GL11.glPushMatrix(); // push on first level
         currentResult.applyShadowProjection(level);
         GLRef.checkError();
-
+        currentView.ProjectionMatrix = Ref.glRef.getGLProjection(null);
         // Set view
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         if(level == 0) GL11.glPushMatrix();
@@ -320,7 +334,7 @@ public class ShadowManager {
         GL11.glLoadMatrix(Ref.glRef.matrixBuffer);
         Ref.glRef.matrixBuffer.clear();
         GLRef.checkError();
-
+        currentView.viewMatrix = Ref.glRef.getGLView(null);
         // Enable front-face culling
         GL11.glCullFace(GL11.GL_FRONT);
 //        GL11.glFrontFace(GL11.GL_CW);

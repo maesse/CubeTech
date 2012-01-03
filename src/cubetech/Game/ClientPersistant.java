@@ -60,7 +60,7 @@ public class ClientPersistant {
         while((src = queuedChunkData.peek()) != null &&
                 (first || src.limit() <= freeBytes)) {
             if(first) {
-                if(src.limit() > 1400) dest = NetBuffer.GetNetBuffer(false, true).GetBuffer();
+                if(src.limit() > 1400 || freeBytes > 1400) dest = NetBuffer.GetNetBuffer(false, true).GetBuffer();
                 else dest = NetBuffer.GetNetBuffer(false, false).GetBuffer();
             }
 

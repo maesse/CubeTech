@@ -881,7 +881,8 @@ public class SvClient {
                 int maxPacketSize = NetChan.FRAGMENT_SIZE-30;
 
                 int leftOver = maxPacketSize - msg.GetBuffer().position();
-                if(leftOver > 1400) leftOver = 1400;
+                //if(leftOver > 1400) leftOver = 1400;
+                leftOver *= 2f; // assume 50% compression ratio
 
                 ByteBuffer buf = pers.dequeueChunkData(leftOver);
                 if(buf == null) return;

@@ -3,6 +3,7 @@ package cubetech.collision;
 import cern.colt.function.LongObjectProcedure;
 import cern.colt.map.OpenLongObjectHashMap;
 import cubetech.CGame.ChunkRender;
+import cubetech.Game.PhysicsSystem;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.misc.Ref;
@@ -23,7 +24,8 @@ import org.lwjgl.util.vector.Vector3f;
 public class CubeMap {
     public static final int MIN_Z = -2; // how many chunks to allow to grow downward
     public static final int MAX_Z = 6;
-    public static final int DEFAULT_GROW_DIST = 12;
+    public static final int DEFAULT_GROW_DISTXY = 20;
+    public static final int DEFAULT_GROW_DISTZ = 4;
 
     // Chunks
     public OpenLongObjectHashMap chunks = new OpenLongObjectHashMap();
@@ -37,6 +39,8 @@ public class CubeMap {
     // temp
     private static Vector3f tempStart = new Vector3f();
     private static Vector3f tempEnd = new Vector3f();
+    
+    public PhysicsSystem physics;
 
     private static byte[] uncompressBuffer = new byte[CubeChunk.CHUNK_SIZE + 1 + 8]; // max possible size
     static int nChunkUpdates = 0;
@@ -205,25 +209,28 @@ public class CubeMap {
         popChunkQueue(); // Generate one chunk pr. frame when multiple chunks are queued
     }
 
-    public long[] getVisibleChunks(Vector3f position, int dist, long[] lookups) {
+    public long[] getVisibleChunks(Vector3f position, int distxy, int distz, long[] lookups) {
         int axisSize = CubeChunk.SIZE * CubeChunk.BLOCK_SIZE;
         int x = (int)Math.floor(position.x / axisSize);
         int y = (int)Math.floor(position.y / axisSize);
         int z = (int)Math.floor(position.z / axisSize);
 
-        if(dist < 2)
-            dist = 2;
-        int halfDist = dist/2;
+        if(distxy < 2)
+            distxy = 2;
+        int halfDistXY = distxy/2;
+        if(distz < 2)
+            distz = 2;
+        int halfDistZ = distz/2;
 
-        if(lookups == null || lookups.length < dist*dist*dist) {
-            lookups = new long[dist*dist*dist];
+        if(lookups == null || lookups.length < distxy*distxy*distz) {
+            lookups = new long[distxy*distxy*distz];
         }
         int i=0;
 
-        for (int pz= z; pz < z+dist; pz++) {
-            for (int py= y; py < y+dist; py++) {
-                for (int px= x; px < x + dist; px++) {
-                    long lookup = positionToLookup(px-halfDist, py-halfDist, pz-halfDist);
+        for (int pz= z; pz < z+distz; pz++) {
+            for (int py= y; py < y+distxy; py++) {
+                for (int px= x; px < x + distxy; px++) {
+                    long lookup = positionToLookup(px-halfDistXY, py-halfDistXY, pz-halfDistZ);
                     lookups[i++] = lookup;
                 }
             }
@@ -232,31 +239,35 @@ public class CubeMap {
         return lookups;
     }
 
-    public void growFromPosition(Vector3f position, int dist) {
+    public void growFromPosition(Vector3f position, int xyRadius, int zRadius) {
         int axisSize = CubeChunk.SIZE * CubeChunk.BLOCK_SIZE;
         int x = (int)Math.floor(position.x / axisSize);
         int y = (int)Math.floor(position.y / axisSize);
         int z = (int)Math.floor(position.z / axisSize);
 
-        if(dist < 2)
-            dist = 2;
-        int halfDist = dist/2;
+        if(xyRadius < 2)
+            xyRadius = 2;
+        int halfDistXY = xyRadius/2;
+        if(zRadius < 2)
+            zRadius = 2;
+        int halfDistZ = zRadius/2;
+        
 
-        for (int pz= z; pz < z+dist; pz++) {
-            for (int py= y; py < y+dist; py++) {
-                for (int px= x; px < x + dist; px++) {
+        for (int pz= z; pz < z+zRadius; pz++) {
+            for (int py= y; py < y+xyRadius; py++) {
+                for (int px= x; px < x + xyRadius; px++) {
                     // Limit Z-axis growth
-                    if(pz-halfDist < MIN_Z)
+                    if(pz-halfDistZ < MIN_Z)
                         continue;
-                    if(pz-halfDist > MAX_Z)
+                    if(pz-halfDistZ > MAX_Z)
                         continue;
                     
-                    long lookup = positionToLookup(px-halfDist, py-halfDist, pz-halfDist);
+                    long lookup = positionToLookup(px-halfDistXY, py-halfDistXY, pz-halfDistZ);
                     if(chunks.containsKey(lookup))
                         continue; // chunk exists..
 
                     // Generate chunk here
-                    generateChunk(px-halfDist, py-halfDist, pz-halfDist, true);
+                    generateChunk(px-halfDistXY, py-halfDistXY, pz-halfDistZ, true);
                 }
             }
         }
@@ -267,11 +278,12 @@ public class CubeMap {
         int[] chunkQueue = null;
         int nChunksLoaded = 0;
         boolean chunkLoaded = false;
-        while((chunkQueue = chunkGenQueue.peek()) != null && nChunksLoaded < 1) {
+        while((chunkQueue = chunkGenQueue.peek()) != null && nChunksLoaded < Ref.server.sv_chunklimit.iValue) {
             chunkGenQueue.poll();
             if(chunks.containsKey(positionToLookup(chunkQueue[0], chunkQueue[1], chunkQueue[2])))
                 continue;
             CubeChunk chunk = generateChunk(chunkQueue[0], chunkQueue[1], chunkQueue[2], false);
+            
             nChunksLoaded++;
         }
     }
@@ -411,6 +423,9 @@ public class CubeMap {
         long index = positionToLookup(x, y, z);
 
         boolean success = chunks.put(index, chunk);
+        if(physics != null) {
+            physics.addChunk(chunk);
+        }
 
         long end = System.nanoTime();
 

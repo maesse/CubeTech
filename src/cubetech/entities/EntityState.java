@@ -7,6 +7,7 @@ import cubetech.common.PlayerState;
 import cubetech.common.Trajectory;
 import cubetech.common.items.Weapon;
 import cubetech.net.NetBuffer;
+import org.lwjgl.util.vector.Quaternion;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 
@@ -23,11 +24,13 @@ public class EntityState {
     public static final int SOLID_BMODEL = Integer.MAX_VALUE;
     public int ClientNum = -1; // entity id
 
+    
+    
     public int eType = EntityType.GENERAL; // entityType_t
     public int eFlags = EntityFlags.NONE;
 
-    public Trajectory apos = new Trajectory(); // for calculating position
-    public Trajectory pos = new Trajectory(); // for calculating angles
+    public Trajectory apos = new Trajectory(); // for calculating angles
+    public Trajectory pos = new Trajectory(); // for calculating position
     public int solid; // packed half-size (y<<8) | x
 
     // events.. 
@@ -38,6 +41,7 @@ public class EntityState {
     public int modelindex = -1;
 
     public Weapon weapon;
+    
     
     // not used atm
 //    public int[] powerups = new int[PlayerState.NUM_POWERUPS];
@@ -182,6 +186,7 @@ public class EntityState {
         st.apos = new Trajectory();
         st.apos.base.set(apos.base);
         st.apos.delta.set(apos.delta);
+        st.apos.quater.set(apos.quater);
         st.apos.type = apos.type;
         st.apos.time = apos.time;
         st.apos.duration = apos.duration;

@@ -44,12 +44,15 @@ public class SEntity {
     SoundHandle loopSfx;
     boolean startLoopingSound;
     private int handle;
+    float pitch = 1.0f;
+    float volume = 1f;
 
     private SEntity(int handle) {
         this.handle = handle;
+    
     }
-
-    void loop(Priority priority, SoundHandle sfx, Vector3f origin, Vector3f velocity) {
+    
+    void loop(Priority priority, SoundHandle sfx, Vector3f origin, Vector3f velocity, float volume, float pitch) {
         ALSource curSource;
         int src;
         // Do we need to allocate a new source for this entity
@@ -74,6 +77,9 @@ public class SEntity {
 
         loopPriority = priority;
         loopSfx = sfx;
+        
+        this.pitch = pitch;
+        this.volume = volume;
 
         // If this is not set then the looping sound is stopped.
         loopAddedThisFrame = true;

@@ -13,5 +13,6 @@ public  class Content {
     public static final int CORPSE = 16;
     public static final int MASK_PLAYERSOLID = SOLID | BODY | PLAYERCLIP;
     public static final int MASK_SHOT = SOLID | BODY | PLAYERCLIP;
+    public static final int PHYSICS = 32;
     
 }

@@ -47,8 +47,8 @@ public class IQMLoader {
         Vector3f max = new Vector3f(-Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE);
         for (IQMMesh iQMMesh : model.meshes) {
             if(!iQMMesh.name.equals("@bbox")) continue;
-            min.set(-1,-1,-1);
-            max.set(1,1,1);
+            min.set(100000,100000,100000);
+            max.set(-100000,-100000,-100000);
             // We've got a bbox
             // Add all vertices to bounds
             for (int j= 0; j < iQMMesh.num_triangles; j++) {

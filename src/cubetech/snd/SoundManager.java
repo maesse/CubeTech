@@ -358,5 +358,9 @@ public class SoundManager implements ISoundManager {
         store.setMusicVolume(EffectVolume * 0.5f);
     }
 
+    public void addLoopingSound(int entityNum, Vector3f origin, Vector3f velocity, SoundHandle sfx, float volume, float pitch) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
   
 }

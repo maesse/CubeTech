@@ -61,6 +61,7 @@ public class ChunkRender {
 
     public ChunkRender(CubeChunk chunk) {
         this.chunk = chunk;
+        Ref.cgame.physics.addChunk(chunk);
     }
 
     public void destroy() {

@@ -1,67 +1,51 @@
-#version 120
-//#define PHONG
-#ifdef GL_ARB_uniform_buffer_object
-  #extension GL_ARB_uniform_buffer_object : enable
-  layout(std140) uniform animdata
-  {
-     uniform mat3x4 bonemats[100];
-  };
-#else
-  uniform mat3x4 bonemats[80];
-#endif
+#version 150
+layout(std140) uniform animdata
+{
+   uniform vec4 bonemats[130*3];
+};
+uniform mat4 ModelView;
+uniform mat4 ModelViewProjection;
 uniform mat4 Modell;
 uniform vec3 lightDirection;
 
-attribute vec4 vweights;
-attribute vec4 vbones;
-attribute vec4 vtangent;
+
+in vec4 vposition;
+in vec2 vcoords;
+in vec3 vnormal;
+in vec4 vweights;
+in vec4 vbones;
+in vec4 vtangent;
 
 // Light out
-varying vec4 diffuse, ambient;
-varying vec3 normal, lightDir, halfVector;
-varying vec3 reflectDir;
+out vec4 diffuse, ambient;
+out vec3 normal, lightDir, halfVector;
+out vec3 reflectDir;
+out vec2 coords;
 
-void setLightVars(in vec3 in_normal,in vec3 vertexPos)
-{
-    normal = in_normal;
-
-    lightDir = vec3(gl_LightSource[0].position);
-    diffuse = gl_LightSource[0].diffuse; // gl_FrontMaterial.diffuse
-    ambient = gl_LightModel.ambient;
-
-    // Get halfvector
-#ifdef PHONG
-    halfVector = normalize( vertexPos);
-#else
-    halfVector = normalize( normalize(lightDir)-normalize(vertexPos));
-#endif
-}
 
 void main(void)
 {
-   mat3x4 m = bonemats[int(vbones.x)] * vweights.x;
-   m += bonemats[int(vbones.y)] * vweights.y;
-   m += bonemats[int(vbones.z)] * vweights.z;
-   m += bonemats[int(vbones.w)] * vweights.w;
-   vec4 mpos = Modell * vec4(gl_Vertex * m, gl_Vertex.w);
-   vec4 fpos = gl_ModelViewProjectionMatrix * mpos;
-   gl_Position = fpos;
-   gl_TexCoord[0] = gl_MultiTexCoord0;
-   
-   //vec3 mtangent = vtangent.xyz * madjtrans; // tangent not used, just here as an example
-   //vec3 mbitangent = cross(mnormal, mtangent) * vtangent.w; // bitangent not used, just here as an example
-   //gl_FrontColor = gl_Color
-//* (clamp(dot(normalize(gl_NormalMatrix * mnormal), gl_LightSource[0].position.xyz), 0.0, 1.0)
-//* gl_LightSource[0].diffuse + gl_LightSource[0].ambient);
-    gl_FrontColor = vec4(1,1,1,1);
+   ivec4 offsets = ivec4(vbones)*3;
+   mat3x4 m = mat3x4(bonemats[offsets.x],bonemats[offsets.x+1],bonemats[offsets.x+2]) * vweights.x;
+   m += mat3x4(bonemats[offsets.y],bonemats[offsets.y+1],bonemats[offsets.y+2]) * vweights.y;
+   m += mat3x4(bonemats[offsets.z],bonemats[offsets.z+1],bonemats[offsets.z+2]) * vweights.z;
+   m += mat3x4(bonemats[offsets.w],bonemats[offsets.w+1],bonemats[offsets.w+2]) * vweights.w;
+   vec4 mpos = Modell * vec4(vposition * m, vposition.w);
 
+   gl_Position = ModelViewProjection * mpos;
+   coords = vcoords;
+   
     // Light out
     mat3 madjtrans = mat3(cross(m[1].xyz, m[2].xyz), cross(m[2].xyz, m[0].xyz), cross(m[0].xyz, m[1].xyz));
-    vec3 mnormal = vec3(Modell * vec4(gl_Normal * madjtrans,0.0));//(gl_Normal );
+    vec3 mnormal = vec3(Modell * vec4(vnormal * madjtrans,0.0));
     reflectDir = mnormal;
 
-    vec3 vertexPos = vec3(gl_ModelViewMatrix * mpos);
-    vec3 lightnormal = normalize( gl_NormalMatrix * mnormal);
-    setLightVars(lightnormal, vertexPos);
+    vec3 vertexPos = vec3(ModelView * mpos);
+    mat3 normalmatrix = transpose(inverse(mat3(ModelView)));
+    vec3 lightnormal = normalize( normalmatrix * mnormal);
+    lightDir = lightDirection;
+    diffuse = vec4(1,1,1,1);
+    ambient = vec4(0,0,0,0);
+    halfVector = normalize( normalize(lightDir)-normalize(vertexPos));
 }
 

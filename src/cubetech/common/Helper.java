@@ -14,6 +14,7 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.util.vector.Matrix3f;
 import org.lwjgl.util.vector.Matrix4f;
+import org.lwjgl.util.vector.ReadableVector4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
@@ -26,6 +27,87 @@ public class Helper {
     public static void VectorCopy(Vector2f src, Vector2f dst) {
         dst.x = src.x;
         dst.y = src.y;
+    }
+    
+    public static Vector3f[] createBoxVerts(float size, Vector3f offset) {
+        Vector3f[] quadData = new Vector3f[4*6];
+        // X+
+        int CUBE_SIZE = (int) size;
+        
+        Vector3f localScaling = new Vector3f(1, 1, 1);
+        if(offset == null) offset = new Vector3f();
+        Vector3f v1 = new Vector3f(), v2 = new Vector3f(), v3 = new Vector3f(), v4 = new Vector3f();
+        v1.set(offset.x + CUBE_SIZE * localScaling.x, offset.y, offset.z);
+        v2.set(offset.x + CUBE_SIZE * localScaling.x, offset.y + CUBE_SIZE * localScaling.y, offset.z);
+        v3.set(offset.x + CUBE_SIZE * localScaling.x, offset.y + CUBE_SIZE * localScaling.y, offset.z + CUBE_SIZE  * localScaling.z);
+        v4.set(offset.x + CUBE_SIZE * localScaling.x, offset.y, offset.z + CUBE_SIZE * localScaling.z);
+        int axisIndex = 0;
+        quadData[axisIndex * 4 + 0] = v1;
+        quadData[axisIndex * 4 + 1] = v2;
+        quadData[axisIndex * 4 + 2] = v3;
+        quadData[axisIndex * 4 + 3] = v4;
+
+        // X-
+        v1 = new Vector3f(); v2 = new Vector3f(); v3 = new Vector3f(); v4 = new Vector3f();
+        v1.set(offset.x, offset.y, offset.z);
+        v2.set(offset.x, offset.y + CUBE_SIZE * localScaling.y, offset.z);
+        v3.set(offset.x, offset.y + CUBE_SIZE * localScaling.y, offset.z + CUBE_SIZE * localScaling.z);
+        v4.set(offset.x, offset.y, offset.z + CUBE_SIZE * localScaling.z);
+        axisIndex++;
+        quadData[axisIndex * 4 + 0] = v1;
+        quadData[axisIndex * 4 + 1] = v4;
+        quadData[axisIndex * 4 + 2] = v3;
+        quadData[axisIndex * 4 + 3] = v2;
+
+        // Y+
+        v1 = new Vector3f(); v2 = new Vector3f(); v3 = new Vector3f(); v4 = new Vector3f();
+        v1.set(offset.x, offset.y + CUBE_SIZE * localScaling.y, offset.z);
+        v2.set(offset.x + CUBE_SIZE * localScaling.x, offset.y + CUBE_SIZE * localScaling.y, offset.z);
+        v3.set(offset.x + CUBE_SIZE * localScaling.x, offset.y + CUBE_SIZE * localScaling.y, offset.z + CUBE_SIZE * localScaling.z);
+        v4.set(offset.x, offset.y + CUBE_SIZE * localScaling.y, offset.z + CUBE_SIZE * localScaling.z);
+        axisIndex++;
+        quadData[axisIndex * 4 + 0] = v1;
+        quadData[axisIndex * 4 + 1] = v4;
+        quadData[axisIndex * 4 + 2] = v3;
+        quadData[axisIndex * 4 + 3] = v2;
+
+        // Y-
+        v1 = new Vector3f(); v2 = new Vector3f(); v3 = new Vector3f(); v4 = new Vector3f();
+        v1.set(offset.x, offset.y, offset.z);
+        v2.set(offset.x + CUBE_SIZE * localScaling.x, offset.y, offset.z);
+        v3.set(offset.x + CUBE_SIZE * localScaling.x, offset.y, offset.z + CUBE_SIZE * localScaling.z);
+        v4.set(offset.x, offset.y, offset.z + CUBE_SIZE * localScaling.z);
+        axisIndex++;
+        quadData[axisIndex * 4 + 0] = v1;
+        quadData[axisIndex * 4 + 1] = v2;
+        quadData[axisIndex * 4 + 2] = v3;
+        quadData[axisIndex * 4 + 3] = v4;
+
+        // Z+
+        v1 = new Vector3f(); v2 = new Vector3f(); v3 = new Vector3f(); v4 = new Vector3f();
+        v1.set(offset.x, offset.y, offset.z + CUBE_SIZE * localScaling.z);
+        v2.set(offset.x + CUBE_SIZE * localScaling.x, offset.y, offset.z + CUBE_SIZE * localScaling.z);
+        v3.set(offset.x + CUBE_SIZE * localScaling.x, offset.y + CUBE_SIZE * localScaling.y, offset.z + CUBE_SIZE * localScaling.z);
+        v4.set(offset.x, offset.y + CUBE_SIZE * localScaling.y, offset.z + CUBE_SIZE * localScaling.z);
+        axisIndex++;
+        quadData[axisIndex * 4 + 0] = v1;
+        quadData[axisIndex * 4 + 1] = v2;
+        quadData[axisIndex * 4 + 2] = v3;
+        quadData[axisIndex * 4 + 3] = v4;
+
+        // Z-
+        v1 = new Vector3f(); v2 = new Vector3f(); v3 = new Vector3f(); v4 = new Vector3f();
+        v1.set(offset.x, offset.y, offset.z);
+        v2.set(offset.x + CUBE_SIZE * localScaling.x, offset.y, offset.z);
+        v3.set(offset.x + CUBE_SIZE * localScaling.x, offset.y + CUBE_SIZE * localScaling.y, offset.z);
+        v4.set(offset.x, offset.y + CUBE_SIZE * localScaling.y, offset.z);
+        axisIndex++;
+        quadData[axisIndex * 4 + 0] = v1;
+        quadData[axisIndex * 4 + 1] = v4;
+        quadData[axisIndex * 4 + 2] = v3;
+        quadData[axisIndex * 4 + 3] = v2;
+        
+        return quadData;
     }
 
     public static Matrix4f axisToMatrix(Vector3f[] axis, Matrix4f dest) { 
@@ -200,6 +282,21 @@ public class Helper {
     public static float SimpleSpline(float val) {
         float valSq = val * val;
         return 3 * valSq - 2 * valSq * val;
+    }
+    
+    public static Matrix4f getModelMatrix(Vector3f[] axis, Vector3f position, Matrix4f dest) {
+        // Set rotation matrix
+        if(dest == null) dest = new Matrix4f();
+        FloatBuffer viewbuffer = Ref.glRef.matrixBuffer;
+        viewbuffer.position(0);
+        viewbuffer.put(axis[0].x); viewbuffer.put(axis[0].y); viewbuffer.put(axis[0].z);viewbuffer.put(0);
+        viewbuffer.put(axis[1].x); viewbuffer.put(axis[1].y); viewbuffer.put(axis[1].z); viewbuffer.put(0);
+        viewbuffer.put(axis[2].x); viewbuffer.put(axis[2].y); viewbuffer.put(axis[2].z);viewbuffer.put(0);
+        viewbuffer.put(position.x); viewbuffer.put(position.y); viewbuffer.put(position.z); viewbuffer.put(1);
+        viewbuffer.flip();
+        Matrix4f mMatrix = (Matrix4f) dest.load(viewbuffer);
+        viewbuffer.clear();
+        return mMatrix;
     }
 
     //
@@ -390,6 +487,38 @@ public class Helper {
     public static Vector3f[] AnglesToAxis(Vector3f angles) {
         return AnglesToAxis(angles, null);
     }
+    public static final float RAD2DEG = (float) (180f/Math.PI);
+    public static Vector3f AxisToAngles(javax.vecmath.Matrix3f axisin, Vector3f angles) {
+        Vector3f[] axis = new Vector3f[3];
+        for (int i = 0; i < 3; i++) {
+            axis[i] = new Vector3f();
+        }
+        Helper.matrixToAxis(axisin, axis);
+        if(angles == null) angles = new Vector3f();
+        Vector3f right = new Vector3f(axis[1]);
+        right.scale(-1f);
+        
+
+        if ( axis[0].z > 0.999f ) // 0,2
+        {
+            angles.x = -90.0f;
+            angles.y = (float) (RAD2DEG * (Math.atan2 (-right.x, right.y)));
+            angles.z = 0.0f;
+        }
+        else if ( axis[0].z < -0.999f )
+        {
+            angles.x = 90.0f;
+            angles.y = (float) (RAD2DEG * (Math.atan2 (-right.x, right.y)));
+            angles.z = 0.0f;
+        }
+        else
+        {
+            angles.x = RAD2DEG * ((float)Math.asin(-axis[0].z));
+            angles.y = (float) (RAD2DEG * (Math.atan2 (axis[0].y, axis[0].x)));
+            angles.z = (float) (RAD2DEG * (Math.atan2 (-right.z, axis[2].z)));
+        }
+        return angles;
+    }
 
     public static void AngleVectors(Vector3f angles, Vector3f forward, Vector3f right, Vector3f up) {
         double angle = VectorGet(angles, Input.ANGLE_YAW) * (Math.PI*2f / 360);
@@ -505,7 +634,9 @@ public class Helper {
     }
 
     public static Vector3f[] mul(Vector3f[] left, Vector3f[] right, Vector3f[] dest) {
-        assert(dest != null);
+        if(dest == null) {
+            dest = new Vector3f[] {new Vector3f(), new Vector3f(), new Vector3f()};
+        }
 
         float m00 =
                 left[0].x * right[0].x + left[0].y * right[1].x + left[0].z * right[2].x;
@@ -555,6 +686,38 @@ public class Helper {
     }
 
     public static void matrixToAxis(Matrix4f m, Vector3f[] dest) {
+//        m.invert();
+        assert(dest != null && dest.length >= 3);
+        dest[0].x = m.m00;
+        dest[0].y = m.m10;
+        dest[0].z = m.m20;
+
+        dest[1].x = m.m01;
+        dest[1].y = m.m11;
+        dest[1].z = m.m21;
+
+        dest[2].x = m.m02;
+        dest[2].y = m.m12;
+        dest[2].z = m.m22;
+    }
+    
+    public static void matrixToAxis(Matrix3f m, Vector3f[] dest) {
+//        m.invert();
+        assert(dest != null && dest.length >= 3);
+        dest[0].x = m.m00;
+        dest[0].y = m.m10;
+        dest[0].z = m.m20;
+
+        dest[1].x = m.m01;
+        dest[1].y = m.m11;
+        dest[1].z = m.m21;
+
+        dest[2].x = m.m02;
+        dest[2].y = m.m12;
+        dest[2].z = m.m22;
+    }
+    
+    public static void matrixToAxis(javax.vecmath.Matrix3f m, Vector3f[] dest) {
 //        m.invert();
         assert(dest != null && dest.length >= 3);
         dest[0].x = m.m00;
@@ -737,6 +900,10 @@ public class Helper {
 
     public static boolean Equals(Vector3f a, Vector3f b) {
         return a.x == b.x && a.y == b.y && a.z == b.z;
+    }
+    
+    public static boolean Equals(ReadableVector4f a, ReadableVector4f b) {
+        return a.getX() == b.getX() && a.getY() == b.getY() && a.getZ() == b.getZ() && a.getW() == b.getW();
     }
 
     public static boolean Equals(Vector3f a, Vector3f b, float epsilon) {

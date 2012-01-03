@@ -36,6 +36,9 @@ public class Shader {
     public static final int INDICE_COLOR = 6;
     public static final int INDICE_COORDS = 7;
     public static final int INDICE_COORDS2 = 8;
+    public static final int INDICE_WEIGHT = 9;
+    public static final int INDICE_BONEINDEX = 10;
+    public static final int INDICE_TANGENT = 11;
     
     // Shader handles
     private int shaderId = -1; // given to us by openGL

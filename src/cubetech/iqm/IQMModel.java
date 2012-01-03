@@ -40,7 +40,6 @@ public class IQMModel {
     private static Shader gpushader;
     private static Shader gpushaderShadow;
     private static Shader gpushaderLit;
-    private static Shader gpushaderShadowDeferred;
     private static Shader gpushaderLitDeferred;
     
     IQMHeader header;
@@ -168,7 +167,6 @@ public class IQMModel {
 
         gpushader = Ref.glRef.getShader("gpuskin");
         gpushaderShadow = Ref.glRef.getShader("gpuskinShadowed");
-        gpushaderShadowDeferred = Ref.glRef.getShader("gpuskinShadowedDeferred");
         gpushaderLit = Ref.glRef.getShader("gpuskinLit");
         gpushaderLitDeferred = Ref.glRef.getShader("gpuskinLitDeferred");
         initGPUShader();
@@ -212,16 +210,20 @@ public class IQMModel {
         createIndiceBuffer();
 
         // Create vertex buffer
-        int vertexStride = 32 * in_position.length;
+        int vertexStride = 64 * in_position.length;
         staticModelVB = new VBO(vertexStride, VBO.BufferTarget.Vertex);
         ByteBuffer vertexBuffer = staticModelVB.map();
         for (int i= 0; i < in_position.length; i++) {
+            vertexBuffer.position(i * 64);
             Vector3f p = in_position[i];
             Vector3f n = in_normal[i];
             Vector2f t = in_texcoord[i];
+            Vector4f tan = in_tangent[i];
             vertexBuffer.putFloat(p.x).putFloat(p.y).putFloat(p.z);
             vertexBuffer.putFloat(n.x).putFloat(n.y).putFloat(n.z);
             vertexBuffer.putFloat(t.x).putFloat(1f-t.y);
+            vertexBuffer.putFloat(tan.x).putFloat(tan.y).putFloat(tan.z).putFloat(tan.w);
+            
         }
         staticModelVB.unmap();
     }
@@ -391,10 +393,16 @@ public class IQMModel {
 
     private void renderStatic(Vector3f position, Vector3f[] axis, Vector4f color, boolean shadowPass, ViewParams view) {
         Shader shader = null;
+        boolean deferred = Ref.glRef.deferred.isRendering();
         if(shadowPass) {
             shader = Ref.glRef.getShader("unlitObject");
         } else {
-            shader = Ref.glRef.getShader("litobjectpixel_1");
+            if(deferred) {
+                shader = Ref.glRef.getShader("modelDeferred");
+            } else {
+                shader = Ref.glRef.getShader("litobjectpixel_1");
+            }
+            
         }
 
         Ref.glRef.PushShader(shader);
@@ -403,8 +411,12 @@ public class IQMModel {
             preShadowRecieve(shader, view);
         }
 
-        getModelMatrix(axis, position);
+        Helper.getModelMatrix(axis, position, modelMatrix);
         shader.setUniform("Modell", modelMatrix);
+        Matrix4f.mul(view.viewMatrix, modelMatrix, modelMatrix);
+        shader.setUniform("ModelView", modelMatrix);
+        shader.setUniform("Projection", view.ProjectionMatrix);
+        shader.setUniform("far", view.farDepth);
 
         if(color != null) Helper.col(color);
         glDisable(GL_BLEND);
@@ -484,9 +496,10 @@ public class IQMModel {
         }
 
         // Set model matrix
-        getModelMatrix(axis, position);
-
-        shader.setUniform("Modell", modelMatrix);
+        Helper.getModelMatrix(axis, position, modelMatrix);
+        Matrix4f.mul(view.viewMatrix, modelMatrix, modelMatrix);
+        shader.setUniform("ModelView", modelMatrix);
+        shader.setUniform("Projection", view.ProjectionMatrix);
 
         // render
         glDisable(GL_BLEND);
@@ -541,7 +554,7 @@ public class IQMModel {
             preShadowRecieve(shader, view);
         }
 
-        shader.setUniform("Modell", getModelMatrix(axis, position));
+        shader.setUniform("Modell", Helper.getModelMatrix(axis, position, modelMatrix));
 
         if(color != null) Helper.col(color);
 
@@ -552,27 +565,20 @@ public class IQMModel {
         debugdraw(position, axis);
     }
 
-    private Matrix4f getModelMatrix(Vector3f[] axis, Vector3f position) {
-        // Set rotation matrix
-        FloatBuffer viewbuffer = Ref.glRef.matrixBuffer;
-        viewbuffer.position(0);
-        viewbuffer.put(axis[0].x); viewbuffer.put(axis[0].y); viewbuffer.put(axis[0].z);viewbuffer.put(0);
-        viewbuffer.put(axis[1].x); viewbuffer.put(axis[1].y); viewbuffer.put(axis[1].z); viewbuffer.put(0);
-        viewbuffer.put(axis[2].x); viewbuffer.put(axis[2].y); viewbuffer.put(axis[2].z);viewbuffer.put(0);
-        viewbuffer.put(position.x); viewbuffer.put(position.y); viewbuffer.put(position.z); viewbuffer.put(1);
-        viewbuffer.flip();
-        Matrix4f mMatrix = (Matrix4f) modelMatrix.load(viewbuffer);
-        viewbuffer.clear();
-        return mMatrix;
-    }
+    
 
     private void renderFromVBO(boolean shadowPass) {
         for (IQMMesh mesh : meshes) {
-            if(mesh.name.startsWith("@")) continue; // dont draw control-meshes
+            boolean collisionMesh = mesh.name.equalsIgnoreCase("@convexcollision");
+            if(collisionMesh) {
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            } else if(mesh.name.startsWith("@")) continue; // dont draw control-meshes
+            
             if(!shadowPass) {
                 mesh.bindTextures();
                 glCullFace(GL_FRONT);
             } else {
+                glDisable(GL_BLEND);
                 glCullFace(GL_BACK);
             }
             staticModelIB.bind();
@@ -594,71 +600,83 @@ public class IQMModel {
             } else {
                 glCullFace(GL_FRONT);
             }
+            if(collisionMesh) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         }
     }
 
     private void preVBOGpu() {
         int offset = 0;
-        
-        glVertexPointer(3, GL_FLOAT, stride, offset);
-        glEnableClientState(GL_VERTEX_ARRAY);
+     
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_POSITION, 3, GL11.GL_FLOAT, false, stride, offset);
+        ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_POSITION);
         offset += 4*3;
 
-        glNormalPointer(GL_FLOAT, stride, offset);
-        glEnableClientState(GL_NORMAL_ARRAY);
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_NORMAL, 3, GL11.GL_FLOAT, false, stride, offset);
+        ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_NORMAL);
         offset += 4*3;
 
-        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS, 4, GL11.GL_FLOAT, false, stride, offset);
-        ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COORDS); // tan
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_TANGENT, 4, GL11.GL_FLOAT, false, stride, offset);
+        ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_TANGENT); // tan
         offset += 4*4;
         
         if(in_texcoord != null) {
-            glTexCoordPointer(2, GL_FLOAT, stride, offset);
-            glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+            ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS, 2, GL11.GL_FLOAT, false, stride, offset);
+            ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COORDS); // position
             offset += 4*2;
         }
         if(in_blendindex != null) {
-            ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COLOR, 4, GL11.GL_UNSIGNED_BYTE, false, stride, offset);
-            ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COLOR); // position
+            ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_BONEINDEX, 4, GL11.GL_UNSIGNED_BYTE, false, stride, offset);
+            ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_BONEINDEX); // position
 
             offset += 4;
         }
         if(in_blendweight != null) {
-            ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS2, 4, GL11.GL_UNSIGNED_BYTE, true, stride, offset);
-            ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COORDS2); // position
+            ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_WEIGHT, 4, GL11.GL_UNSIGNED_BYTE, true, stride, offset);
+            ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_WEIGHT); // position
             offset += 4;
         }
+        
     }
 
     private void postVBOGpu() {
-        glDisableClientState(GL_VERTEX_ARRAY);
-        glDisableClientState(GL_NORMAL_ARRAY);
-        ARBVertexShader.glDisableVertexAttribArrayARB(1); // position
+        ARBVertexShader.glDisableVertexAttribArrayARB(Shader.INDICE_POSITION); // position
+        ARBVertexShader.glDisableVertexAttribArrayARB(Shader.INDICE_NORMAL); // position
+        ARBVertexShader.glDisableVertexAttribArrayARB(Shader.INDICE_TANGENT); // position
         if(in_texcoord != null) {
-            glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+            ARBVertexShader.glDisableVertexAttribArrayARB(Shader.INDICE_COORDS); // position
         }
         if(in_blendindex != null) {
-            ARBVertexShader.glDisableVertexAttribArrayARB(Shader.INDICE_COLOR); // position
+            ARBVertexShader.glDisableVertexAttribArrayARB(Shader.INDICE_BONEINDEX); // position
         }
         if(in_blendweight != null) {
-            ARBVertexShader.glDisableVertexAttribArrayARB(Shader.INDICE_COORDS2); // position
+            ARBVertexShader.glDisableVertexAttribArrayARB(Shader.INDICE_WEIGHT); // position
         }
     }
 
     private static void preVboStatic() {
-        int stride = 32;
+        int stride = 64;
+        int offset = 0;
         ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_POSITION); // position
-        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_POSITION, 3, GL11.GL_FLOAT, false, stride, 0);
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_POSITION, 3, GL11.GL_FLOAT, false, stride, offset);
+        offset += 4*3;
+        
         ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_NORMAL); // color
-        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_NORMAL, 3, GL11.GL_FLOAT, true, stride, 3*4);
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_NORMAL, 3, GL11.GL_FLOAT, true, stride, offset);
+        offset += 4*3;
+        
         ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_COORDS); // coords
-        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS, 2, GL11.GL_FLOAT, false, stride, 6*4);
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS, 2, GL11.GL_FLOAT, false, stride, offset);
+        offset += 4*2;
+        
+        ARBVertexShader.glEnableVertexAttribArrayARB(Shader.INDICE_TANGENT); // coords
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_TANGENT, 4, GL11.GL_FLOAT, false, stride, offset);
     }
 
     private static void postVboStatic() {
         GL20.glDisableVertexAttribArray(Shader.INDICE_POSITION);
         GL20.glDisableVertexAttribArray(Shader.INDICE_NORMAL);
         GL20.glDisableVertexAttribArray(Shader.INDICE_COORDS);
+        GL20.glDisableVertexAttribArray(Shader.INDICE_TANGENT);
     }
 
     private void renderOldSchool(boolean shadowPass) {
@@ -875,5 +893,13 @@ public class IQMModel {
     public Vector3f getMaxs() {
         return max;
     }
+    
+    public IQMMesh getMesh(String name) {
+        for (IQMMesh iQMMesh : meshes) {
+            if(iQMMesh.name.equalsIgnoreCase(name)) return iQMMesh;
+        }
+        return null;
+    }
    
 }
+

@@ -78,7 +78,11 @@ public class ALSoundManager implements ISoundManager {
     }
 
     public void addLoopingSound(int entityNum, Vector3f origin, Vector3f velocity, SoundHandle sfx) {
-        SEntity.get(entityNum).loop(ALSource.Priority.ENTITY, sfx, origin, velocity);
+        addLoopingSound(entityNum, origin, velocity, sfx, 1f, 1f);
+    }
+    
+    public void addLoopingSound(int entityNum, Vector3f origin, Vector3f velocity, SoundHandle sfx, float volume, float pitch) {
+        SEntity.get(entityNum).loop(ALSource.Priority.ENTITY, sfx, origin, velocity, volume, pitch);
     }
 
     public void clearLoopingSounds(boolean killall) {
@@ -180,5 +184,7 @@ public class ALSoundManager implements ISoundManager {
     public SoundHandle AddWavSound(String path) {
         return ALBuffer.AddWavSound(path);
     }
+
+    
 
 }

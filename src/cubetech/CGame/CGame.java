@@ -3,6 +3,7 @@ package cubetech.CGame;
 import cubetech.Game.Gentity;
 import cubetech.collision.*;
 import cubetech.common.*;
+import cubetech.common.items.IItem;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
 import cubetech.gfx.*;
@@ -15,6 +16,7 @@ import cubetech.misc.Ref;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import org.lwjgl.util.vector.Matrix3f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 
@@ -36,8 +38,6 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_depthnear = Ref.cvars.Get("cg_depthnear", "1", EnumSet.of(CVarFlags.CHEAT));
     CVar cg_depthfar = Ref.cvars.Get("cg_depthfar", "8000", EnumSet.of(CVarFlags.CHEAT));
     CVar cg_viewmode = Ref.cvars.Get("cg_viewmode", "1", EnumSet.of(CVarFlags.NONE));
-//    CVar cg_drawentities = Ref.cvars.Get("cg_drawentities", "0", EnumSet.of(CVarFlags.ROM));
-//    CVar cg_drawbin = Ref.cvars.Get("cg_drawbin", "0", EnumSet.of(CVarFlags.NONE));
     CVar cg_swingspeed = Ref.cvars.Get("cg_swingspeed", "0.8", EnumSet.of(CVarFlags.CHEAT));
     CVar cg_freecam = Ref.cvars.Get("cg_freecam", "0", EnumSet.of(CVarFlags.CHEAT));
 
@@ -53,11 +53,9 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     ChatLine[] chatLines = new ChatLine[8];
     int chatIndex = 0;
     public CEntity[] cg_entities;
-    public int cg_numSolidEntities;
-    public int cg_numTriggerEntities;
+    
     public ArrayList<CEntity> cg_solidEntities = new ArrayList<CEntity>(256);
-//    public CEntity[] cg_solidEntities = new CEntity[256];
-    public CEntity[] cg_triggerEntities = new CEntity[256];
+    public ArrayList<CEntity> cg_triggerEntities = new ArrayList<CEntity>(256);
     private HashMap<String, ICommand> commands = new HashMap<String, ICommand>();
     public float speed;
     public Marks marks;
@@ -197,8 +195,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Light.skylight.setDirection(new Vector3f(1,0,-1));
         Light.skylight.setDiffuse(new Vector3f(1.0f, 1.0f, 1.0f));
         Light.skylight.setSpecular(new Vector3f(1.0f,1.0f,1.0f));
-        Light.skylight.enableShadowCasting(false);
-        //cg.refdef.lights.add(Light.skylight);
+        Light.skylight.enableShadowCasting(true);
+        cg.refdef.lights.add(Light.skylight);
         
         Vector3f handlight = new Vector3f(cg.predictedPlayerState.origin);
 //        handlight.z += 60f;
@@ -208,14 +206,20 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         playerLight.setDiffuse(new Vector3f(1, 1f, 1));
         playerLight.setSpecular(new Vector3f(1,1,1));
         playerLight.enableShadowCasting(true);
-        cg.refdef.lights.add(playerLight);
+        //cg.refdef.lights.add(playerLight);
 //        playerLight = Light.Directional(new Vector3f(1.0f, 0.5f, -1f));
 //        playerLight.setDiffuse(new Vector3f(0, 0f, 1));
 //        playerLight.setSpecular(new Vector3f(0,0,1));
-//        cg.refdef.lights.add(playerLight);
+        //cg.refdef.lights.add(playerLight);
 
         if(map != null) {
-//            if(cg_skybox.isTrue()) skyBox.Render(cg.refdef);
+            if(cg_skybox.isTrue()) {
+                RenderEntity ent = Ref.render.createEntity(REType.SKYBOX);
+                ent.flags = RenderEntity.FLAG_NOSHADOW | RenderEntity.FLAG_NOLIGHT;
+                ent.controllers = skyBox;
+                Ref.render.addRefEntity(ent);
+            }
+            
             map.Render(cg.refdef);
         }
         
@@ -223,9 +227,36 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         LocalEntities.addLocalEntities();
 
         if(cg_drawSolid.isTrue()) {
+            
             for (CEntity cEntity : cg_solidEntities) {
                 // Try to extract the bounds
-                Vector3f[] bounds = Helper.solidToBounds(cEntity.nextState.solid);
+                Vector3f[] bounds = Helper.solidToBounds(cEntity.currentState.solid);
+                Vector3f[] axis = null;
+                
+                if(cEntity.nextState.solid == EntityState.SOLID_BMODEL
+                        && cEntity.currentState.modelindex != 0) {
+                    IQMModel model = Ref.ResMan.loadModel(
+                            Ref.client.cl.GameState.get(
+                            CS.CS_MODELS-1+cEntity.currentState.modelindex));
+                    
+                    if(model != null) {
+                        bounds = new Vector3f[2];
+                        bounds[0] = model.getMins();
+                        bounds[1] = model.getMaxs();
+                    }
+                }
+                if(cEntity.currentState.apos.type == Trajectory.QUATERNION) {
+                    axis = cEntity.lerpAnglesQ.quatToMatrix(axis);
+                }
+
+                if(bounds != null) {
+                    drawEntityBBox(bounds, cEntity.lerpOrigin, axis);
+                }
+            }
+            for (CEntity cEntity : cg_triggerEntities) {
+                // Try to extract the bounds
+                Vector3f[] bounds = Helper.solidToBounds(cEntity.currentState.solid);
+                Vector3f[] axis = null;
 
                 if(cEntity.nextState.solid == EntityState.SOLID_BMODEL
                         && cEntity.currentState.modelindex != 0) {
@@ -235,13 +266,16 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                             CS.CS_MODELS-1+cEntity.currentState.modelindex));
                     bounds[0] = model.getMins();
                     bounds[1] = model.getMaxs();
+                } else if(cEntity.currentState.eType == EntityType.ITEM) {
+                    bounds = new Vector3f[] {new Vector3f(), new Vector3f()};
+                    IItem item = Ref.common.items.getItem(cEntity.currentState.modelindex);
+                    
+                    item.getBounds(bounds[0], bounds[1]);
+                    axis = cEntity.lerpAnglesQ.quatToMatrix(axis);
                 }
 
                 if(bounds != null) {
-                    RenderEntity ent = Ref.render.createEntity(REType.BBOX);
-                    Vector3f.add(cEntity.lerpOrigin, bounds[0], ent.origin);
-                    Vector3f.sub(bounds[1], bounds[0], ent.oldOrigin);
-                    Ref.render.addRefEntity(ent);
+                    drawEntityBBox(bounds, cEntity.lerpOrigin, axis);
                 }
             }
         }
@@ -249,6 +283,27 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         // UI
         cgr.Draw2D();
         s.ExitSection();
+    }
+    
+    private void drawEntityBBox(Vector3f[] bounds, Vector3f origin, Vector3f[] axis) {
+        RenderEntity ent = Ref.render.createEntity(REType.BBOX);
+        ent.flags = RenderEntity.FLAG_NOLIGHT;
+        ent.origin.set(origin);
+        //Vector3f.add(origin, bounds[0], ent.origin);
+        ent.oldOrigin.set(bounds[0]);
+        ent.oldOrigin2.set(bounds[1]);
+//        Vector3f.sub(bounds[1], bounds[0], ent.oldOrigin);
+////        axis = null;
+//        ent.oldOrigin.scale(0.5f);
+//        Vector3f offset = Vector3f.sub(origin, origin, origin)
+        if(axis != null) {
+            ent.flags |= RenderEntity.FLAG_SPRITE_AXIS;
+            for (int i = 0; i < 3; i++) {
+                ent.axis[i].set(axis[i]);
+            }
+        }
+
+        Ref.render.addRefEntity(ent);
     }
 
     private float WheelAccelerate(float velocity, float dir, float wishspeed, float accel) {
@@ -534,7 +589,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     */
     void BuildSolidList() {
         cg_solidEntities.clear();
-        cg_numTriggerEntities = 0;
+        cg_triggerEntities.clear();
 
         Snapshot snap = cg.snap;
         if(cg.nextSnap != null && !cg.nextFrameTeleport && !cg.thisFrameTeleport) {
@@ -546,7 +601,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             EntityState ent = cent.currentState;
 
             if(ent.eType == EntityType.ITEM || ent.eType == EntityType.TRIGGER) {
-                cg_triggerEntities[cg_numTriggerEntities++] = cent;
+                cg_triggerEntities.add(cent);
                 continue;
             }
 

@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import cubetech.CGame.Render;
 import cubetech.misc.Profiler.SecTag;
 import cubetech.Game.Gentity;
 import cubetech.common.IThinkMethod;
@@ -34,8 +35,8 @@ public class DeferredShading {
     SSAO ssao;
     ShaderUBO lightBuffer;
     Vector3f[] lights = null;
-    CVar r_deferred = Ref.cvars.Get("r_deferred", "0", null);
-    CVar r_ambient = Ref.cvars.Get("r_ambient", "0.2", null); // ambient = r_ambient * ambientcube
+    CVar r_deferred = Ref.cvars.Get("r_deferred", "1", null);
+    CVar r_ambient = Ref.cvars.Get("r_ambient", "1.0", null); // ambient = r_ambient * ambientcube
     CVar r_scissor = Ref.cvars.Get("r_scissor", "1", null);
     CVar r_showscissor = Ref.cvars.Get("r_showscissor", "0", null);
     CubeTexture envmap = null;
@@ -70,15 +71,36 @@ public class DeferredShading {
         return isRendering;
     }
     
+    public void onResolutionChange() {
+        Vector2f resolution = Ref.glRef.GetResolution();
+        if(resolution.x == mrt.width && resolution.y == mrt.height) return;
+        
+        if(mrt != null) {
+            mrt.dispose();
+        }
+        mrt = new MultiRenderBuffer((int)resolution.x, (int)resolution.y, 
+                new Format[] {Format.RGBA, Format.RGBA32F, Format.RGBA16F, Format.DEPTH24});
+    }
+    
     public void startDeferred() {
         if(!r_deferred.isTrue()) return;
         isRendering = true;
-        mrt.start();
+        mrt.start(false);
     }
     
     public void stopDeferred() {
         if(!isRendering) return;
         isRendering = false;
+        mrt.stop();
+    }
+    
+    public void startPostDeferred() {
+        if(!r_deferred.isTrue()) return;
+        mrt.start(true);
+    }
+    
+    public void stopPostDeferred() {
+        if(!r_deferred.isTrue()) return;
         mrt.stop();
     }
     
@@ -162,7 +184,7 @@ public class DeferredShading {
         if(shadowsEnabled) {
             IThinkMethod renderFunction = new IThinkMethod() {
                 public void think(Gentity ent) {
-                    Ref.render.renderAll(Ref.cgame.cg.refdef, true);
+                    Ref.render.renderAll(Ref.cgame.cg.refdef, Render.RF_SHADOWPASS);
                 }
             };
             for (Light light : view.lights) {
@@ -262,16 +284,15 @@ public class DeferredShading {
                 
                 t = Profiler.EnterSection(Sec.POINT_LIGHT);
                 if(light.isCastingShadows() && shadowsEnabled) {
-                    ShadowResult shadows = light.getShadowResult();
-                    shader = Ref.glRef.getShader("DeferredPointLightShadowed");
-                    Ref.glRef.PushShader(shader);
                     if(setScissor(view, light)) {
                         // cull
                         // fix: don't scissor when light has specular
-                        Ref.glRef.PopShader();
                         t.ExitSection();
                         continue;
                     }
+                    ShadowResult shadows = light.getShadowResult();
+                    shader = Ref.glRef.getShader("DeferredPointLightShadowed");
+                    Ref.glRef.PushShader(shader);
                     Vector3f position = light.getPosition();
                     Vector4f shaderPosition = new Vector4f(position.x,
                                                            position.y,
@@ -296,15 +317,14 @@ public class DeferredShading {
                     Ref.glRef.PopShader();
                     depth.Unbind();
                 } else {
-                    shader = Ref.glRef.getShader("DeferredPointLight");
-                    Ref.glRef.PushShader(shader);
                     if(setScissor(view, light)) {
                         // cull
                         // fix: don't scissor when light has specular
-                        Ref.glRef.PopShader();
                         t.ExitSection();
                         continue;
                     }
+                    shader = Ref.glRef.getShader("DeferredPointLight");
+                    Ref.glRef.PushShader(shader);
                     // Transform light origin to view space
                     Vector3f position = light.getPosition();
                     Vector4f shaderPosition = new Vector4f(position.x,
@@ -321,7 +341,14 @@ public class DeferredShading {
                 t.ExitSection();
             }
         }
-        GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);      
+        GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);   
+        
+        shader = Ref.glRef.getShader("DeferredFog");
+        Ref.glRef.PushShader(shader);
+        shader.setUniform("viewmatrix", Matrix4f.invert(view.viewMatrix, null));
+        fullscreenPass(shader, false, false, true);
+        Ref.glRef.PopShader();
+        
         ssao.run(this);
         
 
@@ -404,7 +431,7 @@ public class DeferredShading {
         ARBUniformBufferObject.glBindBufferBase(target, 0, lightBuffer.getHandle());
     }
     
-    private void setTextures(Shader shader, boolean tex0, boolean tex1, boolean tex2) {
+    public void setTextures(Shader shader, boolean tex0, boolean tex1, boolean tex2) {
         for (int i = 0; i < 3; i++) {
             if(i == 0 && !tex0 || i == 1 && !tex1 || i == 2 && !tex2) continue;
             Integer mapid = shader.textureMap.get("tex" + i);
@@ -423,7 +450,7 @@ public class DeferredShading {
         }
     }
     
-    private void unsetTextures(boolean tex0, boolean tex1, boolean tex2) {
+    public void unsetTextures(boolean tex0, boolean tex1, boolean tex2) {
         if(tex0) mrt.asTexture(0).Unbind();
         if(tex1) mrt.asTexture(1).Unbind();
         if(tex2) mrt.asTexture(2).Unbind();

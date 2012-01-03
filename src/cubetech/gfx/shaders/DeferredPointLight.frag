@@ -1,4 +1,4 @@
-#version 150
+#version 130
 uniform sampler2D tex0; // color & specular power
 uniform sampler2D tex1; // unused
 uniform sampler2D tex2; // normal & depth
@@ -7,9 +7,9 @@ uniform vec4 lightPosition;
 uniform vec4 attenuation;
 
 
-in noperspective vec2 texcoords;
+in vec2 texcoords;
 in float depthin;
-in noperspective vec3 viewpos;
+in vec3 viewpos;
 in vec3 viewlight;
 in vec3 view;
 

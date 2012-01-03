@@ -36,6 +36,17 @@ public class CubeChunkDataBuilder {
     final List<WorkerJob> workList = Collections.synchronizedList(new ArrayList<WorkerJob>());
     final List<WorkerJob> finishedList = Collections.synchronizedList(new ArrayList<WorkerJob>());
 
+    public String[] getInfo() {
+        String[] info = new String[NUM_BUILDBUFFERS+1];
+        info[0] = "Worker: " + (worker.working?"ACTIVE":"IDLE");
+        for (int i = 0; i < NUM_BUILDBUFFERS; i++) {
+            info[i+1] = "Buffer " + i + ": " + (bufferBusy[i] ? "BUSY ":" ") + (bufferLocked[i] ? "LOCKED ":" ")
+                    + "Rel: " + (bufferRelations[i] == NO_CHUNK?"IDLE":bufferRelations[i]);
+        }
+        
+        
+        return info;
+    }
     
     public class WorkerJob {
         public CubeChunk chunk;

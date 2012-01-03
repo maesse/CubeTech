@@ -12,16 +12,19 @@ import cubetech.gfx.GLRef;
 import cubetech.gfx.GLState;
 import cubetech.gfx.Shader;
 import cubetech.gfx.ShadowManager;
+import cubetech.gfx.SkyBox;
 import cubetech.iqm.BoneController;
 import cubetech.misc.Profiler;
 import cubetech.misc.Profiler.Sec;
 import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedList;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
+import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
@@ -31,6 +34,8 @@ import org.lwjgl.util.vector.Vector4f;
  * @author mads
  */
 public class Render {
+    public static final int RF_SHADOWPASS = 1;
+    public static final int RF_POSTDEFERRED = 2;
     private static final int MAX_RENDER_ENTITIES = 1000;
     private RenderEntity[] entities = new RenderEntity[MAX_RENDER_ENTITIES];
     private int next = 0;
@@ -50,23 +55,35 @@ public class Render {
 //        }
     }
 
-    public void renderAll(ViewParams view, boolean shadowPass) {
+    public void renderAll(ViewParams view, int renderFlags) {
         this.view = view;
         SecTag t = Profiler.EnterSection(Sec.RENDER);
         SecTag sub;
         GLRef.checkError();
+        
+        boolean shadowPass = (renderFlags & RF_SHADOWPASS) != 0;
+        boolean postDeferred = (renderFlags & RF_POSTDEFERRED) != 0;
+        
         for (RenderEntity re : renderList) {
             if(shadowPass) {
                 // Skip render entities that doesn't cast shadows
-                if((re.flags & RenderEntity.FLAG_NOSHADOW) == RenderEntity.FLAG_NOSHADOW) continue;
+                if(re.hasFlag(RenderEntity.FLAG_NOSHADOW)) continue;
                 if(re.Type == REType.SPRITE) continue; // sprites are rendered without depth writing
             }
+            
+            if(postDeferred != re.hasFlag(RenderEntity.FLAG_NOLIGHT)) continue;
             
             switch(re.Type) {
                 case WORLD:
                     sub = Profiler.EnterSection(Sec.RENDER_WORLD);
                     renderWorld(re);
                     sub.ExitSection();
+                    break;
+                case SKYBOX:
+                    if(re.controllers != null && re.controllers instanceof SkyBox) {
+                        SkyBox sky = (SkyBox) re.controllers;
+                        sky.Render(view);
+                    }
                     break;
                 case MODEL:
                     sub = Profiler.EnterSection(Sec.RENDER_IQM);
@@ -88,7 +105,7 @@ public class Render {
                     break;
                 case POLY:
                     sub = Profiler.EnterSection(Sec.RENDER_SPRITE);
-                    renderPoly(re);
+                    renderPoly(re, shadowPass);
                     sub.ExitSection();
                     break;
                 default:
@@ -97,6 +114,7 @@ public class Render {
             }
             
         }
+        
         t.ExitSection();
         GLRef.checkError();
         this.view = null;
@@ -107,31 +125,78 @@ public class Render {
         ClientCubeMap.renderChunkList(chunkList, view);
     }
 
-    public void renderPoly(RenderEntity ent) {
-        Ref.glRef.PushShader(Ref.glRef.getShader("WorldFog"));
-//        GL11.glDisable(GL11.GL_CULL_FACE);
-        Helper.col(ent.color);
-        GL11.glEnable(GL11.GL_BLEND);
-        GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+    public void renderPoly(RenderEntity ent, boolean shadowpass) {
+        Shader shader = null;
+        boolean deferredPoly = false;
+        if(shadowpass) {
+            shader = Ref.glRef.getShader("unlitObject");
+        } else {
+            if(Ref.glRef.deferred.isRendering() && !ent.hasFlag(RenderEntity.FLAG_NOLIGHT)) {
+                shader = Ref.glRef.getShader("PolyDeferred");
+                deferredPoly = true;
+            }
+            else shader = Ref.glRef.getShader("WorldFog");
+        }
+        
+        Ref.glRef.PushShader(shader);
+        if(shadowpass) {
+            GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+            GL11.glPolygonOffset(1f, 1);
+            shader.setUniform("far", view.farDepth);
+            Matrix4f modelMatrix = Helper.getModelMatrix(ent.axis, ent.origin, null);
+            shader.setUniform("Modell", modelMatrix);
+            GL11.glCullFace(GL11.GL_FRONT);
+        } 
+        else if(!deferredPoly) {
+            Helper.col(ent.color);
+            GL11.glEnable(GL11.GL_BLEND);
+            GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glDepthMask(false);
+            GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+            GL11.glPolygonOffset(-1f, 0);
+            GL11.glCullFace(GL11.GL_BACK);
+            
+        } else {
+            Matrix4f viewMatrix = view.viewMatrix;
+            if(ent.hasFlag(RenderEntity.FLAG_SPRITE_AXIS)) {
+                Matrix4f modelMatrix = Helper.getModelMatrix(ent.axis, ent.origin, null);
+                viewMatrix = Matrix4f.mul(viewMatrix, modelMatrix, modelMatrix);
+            }
+            shader.setUniform("ModelView", viewMatrix);
+            shader.setUniform("Projection", view.ProjectionMatrix);
+            shader.setUniform("far", view.farDepth); 
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glDepthMask(true);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glCullFace(GL11.GL_BACK);
+        }
+        
         ent.mat.getTexture().Bind();
-
-        GL11.glDepthMask(false);
-        GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
-        GL11.glPolygonOffset(-1f, 0);
+        Ref.ResMan.getNoNormalTexture().Bind();
+        Ref.ResMan.getNoSpecularTexture().Bind();
         
         GL11.glBegin(GL11.GL_QUADS);
         {
             for (int i= 0; i < ent.frame; i++) {
                 GL20.glVertexAttrib2f(Shader.INDICE_COORDS, ent.verts[i].s, ent.verts[i].t);
-                Vector3f v = ent.verts[i].xyz;
+                Vector3f v = ent.verts[i].normal;
+                if(v != null) {
+                    GL20.glVertexAttrib3f(Shader.INDICE_NORMAL, v.x, v.y, v.z);
+                }
+                v = ent.verts[i].xyz;
                 GL20.glVertexAttrib3f(Shader.INDICE_POSITION, v.x, v.y, v.z);
             }
         }
         GL11.glEnd();
 
-        GL11.glDepthMask(true);
-        GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
-        GL11.glPolygonOffset(0, 0);
+        if(!deferredPoly) {
+            GL11.glDepthMask(true);
+            GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
+            GL11.glPolygonOffset(0, 0);
+        }
+        if(shadowpass) {
+            GL11.glCullFace(GL11.GL_BACK);
+        }
         Ref.glRef.PopShader();
     }
 
@@ -248,16 +313,32 @@ public class Render {
 
     private void renderBBox(RenderEntity ent) {
         Vector3f position = ent.origin;
-        Vector3f size = ent.oldOrigin;
+        Vector3f mins = ent.oldOrigin;
+        Vector3f maxs = ent.oldOrigin2;
         GL11.glDisable(GL11.GL_DEPTH_TEST);
-            GL11.glLineWidth(1f);
-            GL11.glDisable(GL11.GL_CULL_FACE);
-        Helper.renderBBoxWireframe(position.x, position.y, position.z,
-                position.x+size.x, position.y+size.y, position.z+size.z, ent.outcolor);
+        GL11.glLineWidth(1f);
+        GL11.glDisable(GL11.GL_CULL_FACE);
+        if(ent.hasFlag(RenderEntity.FLAG_SPRITE_AXIS)) {
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glPushMatrix();
+            
+            Matrix4f model = Helper.getModelMatrix(ent.axis, position, null);
+            Matrix4f viewmatrix = view.viewMatrix;
+            Matrix4f.mul(viewmatrix, model, model);
+            Ref.glRef.glLoadMatrix(model);
+            Helper.renderBBoxWireframe(mins.x, mins.y, mins.z,
+                maxs.x, maxs.y, maxs.z, ent.outcolor);
+            GL11.glPopMatrix();
+        } else {
+            Helper.renderBBoxWireframe(-mins.x+position.x, -mins.y+position.y, -mins.z+position.z,
+                mins.x+position.x, mins.y+position.y, mins.z+position.z, ent.outcolor);
+        }
         
-            //cube.chunk.render.renderSingleWireframe(cube.x, cube.y, cube.z, CubeType.DIRT);
-            GL11.glEnable(GL11.GL_DEPTH_TEST);
-            GL11.glEnable(GL11.GL_CULL_FACE);
+        if(ent.hasFlag(RenderEntity.FLAG_SPRITE_AXIS)) {
+            
+        }
+        GL11.glEnable(GL11.GL_DEPTH_TEST);
+        GL11.glEnable(GL11.GL_CULL_FACE);
     }
 
     private Vector3f left = new Vector3f(), up = new Vector3f();

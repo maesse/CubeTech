@@ -8,6 +8,7 @@ package cubetech.CGame;
 import com.bulletphysics.linearmath.MotionState;
 import com.bulletphysics.linearmath.Transform;
 import cubetech.common.Common.ErrorCode;
+import cubetech.common.Helper;
 import cubetech.misc.Ref;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -128,6 +129,7 @@ public class LocalEntities {
         RenderEntity ent = le.rEntity;
         ent.origin.set(t.origin.x, t.origin.y, t.origin.z);
         ent.origin.scale(CGPhysics.INV_SCALE_FACTOR);
+        Helper.matrixToAxis(t.basis, ent.axis);
         ent.color.set(1,1,1,1);
 
         int activationState = le.phys_body.getActivationState();

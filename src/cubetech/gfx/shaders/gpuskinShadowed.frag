@@ -16,15 +16,15 @@ uniform sampler2D specularmap;
 #pragma include "lighting.glsl"
 
 // Shadow in
-varying vec4 vPosition;
-varying float vDepth;
-varying vec3 bonedebug;
+in vec4 vPosition;
+in float vDepth;
+in vec3 bonedebug;
 
 // Light in
-
-varying vec3 reflectDir;
-varying vec3 lightVec, halfVec, eyeVec;
-varying mat3 invTan;
+in vec2 coords;
+in vec3 reflectDir;
+in vec3 lightVec, halfVec, eyeVec;
+in mat3 invTan;
 
 float getShadowFraction()
 {
@@ -56,9 +56,9 @@ void main()
 {
     // Start with ambient
     vec4 ambientcolor = gl_LightModel.ambient * textureCube(envmap, reflectDir);
-    vec4 texcol = texture2D(tex, gl_TexCoord[0].xy);
-    vec3 mnormal = normalize(2.0 * texture2D(normalmap, gl_TexCoord[0].st).rgb - 1.0);
-    vec4 speccolor = texture2D(specularmap, gl_TexCoord[0].st);
+    vec4 texcol = texture2D(tex, coords);
+    vec3 mnormal = normalize(2.0 * texture2D(normalmap, coords.st).rgb - 1.0);
+    vec4 speccolor = texture2D(specularmap, coords.st);
     vec3 n = mnormal; // normalize the interpolated normal
 
     //speccolor = vec4(1,1,1,1);

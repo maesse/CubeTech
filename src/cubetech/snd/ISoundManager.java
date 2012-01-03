@@ -10,6 +10,7 @@ public interface ISoundManager {
     public void SetEntityPosition(int entityNum, Vector3f position, Vector3f velocity);
     public void Respatialize(int entity_num, Vector3f origin, Vector3f velocity, Vector3f[] axis);
     public void addLoopingSound(int entityNum, Vector3f origin, Vector3f velocity, SoundHandle sfx);
+    public void addLoopingSound(int entityNum, Vector3f origin, Vector3f velocity, SoundHandle sfx, float volume, float pitch);
     public void clearLoopingSounds(boolean killall);
     public void stopLoopingSound(int entityNum);
     public void startSound(Vector3f origin, int entityNum, SoundHandle buffer, SoundChannel chan, float volume);

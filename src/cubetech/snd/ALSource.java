@@ -66,10 +66,12 @@ public class ALSource {
             System.arraycopy(sourceList, 0, fittedArray, 0, srcCount);
             sourceList = fittedArray;
         }
+        sourcesInitialized = true;
         Common.Log("[Sound] Allocated " + srcCount + " sources.");
     }
 
     static int alloc(Priority prio, int entnum, SoundChannel chan) {
+        if(!sourcesInitialized) return -1;
         int empty = -1;
         for (int i= 0; i < sourceList.length; i++) {
             ALSource curSource = sourceList[i];
@@ -97,12 +99,14 @@ public class ALSource {
     }
 
     static void play(int srcHandle) {
+        if(!sourcesInitialized) return;
         int src = sourceList[srcHandle].source;
         alSourcePlay(src);
         sourceList[srcHandle].isPlaying = true;
     }
 
     static ALSource get(int srcHandle) {
+        if(!sourcesInitialized) return null;
         if(srcHandle < 0 || srcHandle >= sourceList.length) {
             Ref.common.Error(Common.ErrorCode.DROP, "ALSource.get(): Invalid source index " + srcHandle);
         }
@@ -110,6 +114,7 @@ public class ALSource {
     }
 
     static void update() {
+        if(!sourcesInitialized) return;
         for (int i= 0; i < sourceList.length; i++) {
             ALSource src = sourceList[i];
 
@@ -122,10 +127,13 @@ public class ALSource {
                 alSourcef(src.source, AL_ROLLOFF_FACTOR, ALSoundManager.s_alRolloff.fValue);
             if(ALSoundManager.s_alMinDistance.modified)
                 alSourcef(src.source, AL_REFERENCE_DISTANCE, ALSoundManager.s_alMinDistance.fValue);
+            
+            
 
             if(src.isLooping) {
                 SEntity sent = SEntity.get(src.entity);
-
+                alSourcef(src.source, AL_PITCH, sent.pitch);
+                src.curGain = ALSoundManager.s_alGain.fValue * ALSoundManager.volume.fValue * sent.volume;
                 // If a looping effect hasn't been touched this frame, pause or kill it
                 if(sent.loopAddedThisFrame) {
                     // The sound has changed without an intervening removal
@@ -188,6 +196,7 @@ public class ALSource {
                                     float secofs = master.lastTimePos + (Ref.common.Milliseconds() - master.lastSampleTime) / 1000f;
                                     secofs = secofs % ((float)sfx.totalsize / sfx.samplerate);
                                     alSourcef(src.source, AL_SEC_OFFSET, secofs);
+                                    
                                 }
 
                                 // I be the master now
@@ -332,6 +341,7 @@ public class ALSource {
     }
 
     void newLoopMaster(boolean isKilled) {
+        if(!sourcesInitialized) return;
         ALBuffer curSfx = ALBuffer.sfxList2.get(sfx);
 
         if(isPlaying) curSfx.loopActiveCnt--;

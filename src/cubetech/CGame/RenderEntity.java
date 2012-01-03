@@ -25,6 +25,7 @@ public class RenderEntity {
     public static final int FLAG_SPRITE_AXIS = 1; // use axis[0] and axis[1] as up & right vectors
     public static final int FLAG_NOSHADOW = 2;
     public static final int FLAG_GPUSKINNED = 4;
+    public static final int FLAG_NOLIGHT = 8; // Gets rendered after deferred pass
 
     public IQMModel model = null;
     public REType Type = REType.SPRITE;
@@ -43,6 +44,7 @@ public class RenderEntity {
 
     // previous data for frame interpolation
     public Vector3f oldOrigin = new Vector3f();
+    public Vector3f oldOrigin2 = new Vector3f();
     public int oldframe;
     public float backlerp;
 
@@ -64,6 +66,10 @@ public class RenderEntity {
         return ent;
     }
 
+    
+    public boolean hasFlag(int flag) {
+        return (flags & flag) != 0;
+    }
     
     public RenderEntity(REType rEType) {
         Type = rEType;

@@ -3,6 +3,7 @@ package cubetech.CGame;
 import cubetech.common.CS;
 import cubetech.common.Common;
 import cubetech.common.Helper;
+import cubetech.common.Quaternion;
 import cubetech.common.Trajectory;
 import cubetech.common.items.IItem;
 import cubetech.common.items.Weapon;
@@ -43,6 +44,7 @@ public class CEntity {
     // exact interpolated position of entity on this frame
     public Vector3f lerpOrigin = new Vector3f();
     public Vector3f lerpAngles = new Vector3f();
+    public Quaternion lerpAnglesQ = new Quaternion();
     public int trailTime;
     int muzzleFlashTime;
 
@@ -176,13 +178,20 @@ public class CEntity {
         lerpOrigin.y = current.y + diff;
         diff = f * (next.z - current.z);
         lerpOrigin.z = current.z + diff;
+        
+        if(currentState.apos.type == Trajectory.QUATERNION) {
+            Quaternion.slerp(currentState.apos.quater, nextState.apos.quater, f, lerpAnglesQ);
+            
+        } else {
+            currentState.apos.Evaluate(Ref.cgame.cg.snap.serverTime, current);
+            nextState.apos.Evaluate(Ref.cgame.cg.nextSnap.serverTime, next);
 
-        currentState.apos.Evaluate(Ref.cgame.cg.snap.serverTime, current);
-        nextState.apos.Evaluate(Ref.cgame.cg.nextSnap.serverTime, next);
-
-        lerpAngles.x = current.x + f * (next.x - current.x);
-        lerpAngles.y = current.y + f * (next.y - current.y);
-        lerpAngles.z = current.z + f * (next.z - current.z);
+            lerpAngles.x = current.x + f * (next.x - current.x);
+            lerpAngles.y = current.y + f * (next.y - current.y);
+            lerpAngles.z = current.z + f * (next.z - current.z);
+        }
+        
+        
     }
 
     public void Event() {

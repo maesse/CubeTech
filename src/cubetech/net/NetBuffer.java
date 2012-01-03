@@ -3,14 +3,17 @@ package cubetech.net;
 import cubetech.collision.CubeChunk;
 import cubetech.common.Common;
 import cubetech.common.Helper;
+import cubetech.common.Quaternion;
 import cubetech.common.items.Weapon;
 import cubetech.misc.Ref;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.lwjgl.util.vector.ReadableVector4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
+import org.lwjgl.util.vector.Vector4f;
 
 /**
  *
@@ -173,6 +176,19 @@ public class NetBuffer {
             Write(newval.z);
         }
     }
+    
+    public void WriteDelta(ReadableVector4f old, ReadableVector4f newval) {
+        if(old != null && Helper.Equals(old, newval))
+            Write(false);
+        else
+        {
+            Write(true);
+            Write(newval.getX());
+            Write(newval.getY());
+            Write(newval.getZ());
+            Write(newval.getW());
+        }
+    }
 
     public int ReadDeltaInt(int old) {
         int newval = old;
@@ -205,6 +221,22 @@ public class NetBuffer {
             newval.x = old.x;
             newval.y = old.y;
             newval.z = old.z;
+        }
+        return newval;
+    }
+    
+    public Quaternion ReadDeltaVector(Quaternion old) {
+        Quaternion newval = new Quaternion();
+        if(ReadBool()) {
+            newval.x = ReadFloat();
+            newval.y = ReadFloat();
+            newval.z = ReadFloat();
+            newval.w = ReadFloat();
+        } else if(old != null) {
+            newval.x = old.getX();
+            newval.y = old.getY();
+            newval.z = old.getZ();
+            newval.w = old.getW();
         }
         return newval;
     }

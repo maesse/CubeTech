@@ -67,7 +67,7 @@ public class TextManager {
     
     
     public class TextQueue {
-        public Vector2f Position;
+        public Vector2f Position = new Vector2f();
         public String Text;
         public Align Align;
         public Color color;
@@ -77,11 +77,11 @@ public class TextManager {
         public int layer;
 
         public TextQueue(Vector2f pos, String text, Align align, Color color, Vector2f maxSize, Type type, float scale, int layer) {
-            Position = pos;
+            Position.set(pos);
             Text = text;
             Align = align;
             this.color = color;
-            MaxSize = maxSize;
+            if(maxSize != null) MaxSize = new Vector2f(maxSize);
             this.type = type;
             this.scale = scale;
             this.layer = layer;

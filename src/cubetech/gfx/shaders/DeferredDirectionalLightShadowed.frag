@@ -1,4 +1,4 @@
-#version 150
+#version 130
 #extension GL_EXT_texture_array : enable
 #define SHADOW_SAMPLES 4
 uniform sampler2D tex0; // color & specular power
@@ -20,9 +20,9 @@ uniform vec3 lightDiffuse;
 uniform vec3 lightSpecular;
 
 
-in noperspective vec2 texcoords;
+in vec2 texcoords;
 in float depthin;
-in noperspective vec3 viewpos;
+in vec3 viewpos;
 in vec3 viewlight;
 in vec3 view;
 
@@ -75,10 +75,14 @@ void main()
 
     float shadow = getShadowFraction((projectionMatrix * vec4(position, 1.0)).z, invModelView * vec4(position.xyz, 1.0));
     
+    
     gl_FragColor.rgb = color * (shadow * shadow_factor + (1.0 - shadow_factor));
     //gl_FragColor.rgb *= 0.0001;
     //gl_FragColor.rgb = abs(crypos - vtex1.rgb) * 0.001;
+    // Depth debug:
     //gl_FragColor.rgb = vec3(depth);
+    // Normal debug:
+    //gl_FragColor.rgb = (normal);
     gl_FragColor.a = 1.0;
     //gl_FragColor.r = length(position.z - viewlight.z) / 1000.0;
 }

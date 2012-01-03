@@ -24,6 +24,20 @@ public class MultiRenderBuffer {
     IntBuffer intBuffer = null;
     CubeTexture[] asTexture = null;
 
+    void dispose() {
+        for (int i = 0; i < rbHandles.length; i++) {
+            glDeleteRenderbuffersEXT(rbHandles[i]);
+        }
+        glDeleteFramebuffersEXT(fbHandle);
+        for (int i = 0; i < texHandles.length; i++) {
+            glDeleteTextures(texHandles[i]);
+        }
+        fbHandle = 0;
+        rbHandles = null;
+        texHandles = null;
+        asTexture = null;
+    }
+
     
     
     public enum Format {
@@ -103,30 +117,35 @@ public class MultiRenderBuffer {
         glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
     }
     
-    public void start() {
+    public void start(boolean depthOnly) {
         // Bind our FBO and set the viewport to the proper size
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbHandle);
 	glPushAttrib(GL_VIEWPORT_BIT);
 	glViewport(0,0,width, height);
 
 	// Clear the render targets
-	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-	glClearColor( 0.0f, 0.0f, 0.0f, .5f );
+        if(!depthOnly) {
+            glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+            glClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+        }
 
 	//glActiveTextureARB(GL_TEXTURE0_ARB);
 	glEnable(GL_TEXTURE_2D);
 
 	// Specify what to render an start acquiring
-        int nColor = 0;
-        intBuffer.clear();
-        for (int i = 0; i < formats.length; i++) {
-            if(formats[i] == Format.DEPTH24) continue;
-            intBuffer.put(GL_COLOR_ATTACHMENT0_EXT+nColor);
-            nColor++;
+        if(depthOnly) {
+            //glReadBuffer(GL_BACK);
+        } else {
+            int nColor = 0;
+            intBuffer.clear();
+            for (int i = 0; i < formats.length; i++) {
+                if(formats[i] == Format.DEPTH24) continue;
+                intBuffer.put(GL_COLOR_ATTACHMENT0_EXT+nColor);
+                nColor++;
+            }
+            intBuffer.flip();
+            glDrawBuffers(intBuffer);
         }
-        intBuffer.flip();
-        
-	glDrawBuffers(intBuffer);
         GLRef.checkError();
     }
     

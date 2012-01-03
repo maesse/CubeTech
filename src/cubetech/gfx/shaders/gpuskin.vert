@@ -1,16 +1,17 @@
-#version 130
-#extension GL_ARB_uniform_buffer_object : enable
-
+#version 140
 layout(std140) uniform animdata
 {
-   uniform vec4 bonemats[100*3];
+   uniform vec4 bonemats[130*3];
 };
-uniform mat4 Modell;
-attribute vec4 vweights;
-attribute vec4 vbones;
-attribute vec4 vtangent;
+uniform mat4 ModelView;
+uniform mat4 Projection;
+in vec4 vposition;
+in vec2 vcoords;
+in vec4 vweights;
+in vec4 vbones;
+in vec4 vtangent;
 
-varying float viewDepth;
+out float viewDepth;
 void main(void)
 {
    ivec4 offsets = ivec4(vbones)*3;
@@ -18,10 +19,8 @@ void main(void)
    m += mat3x4(bonemats[offsets.y],bonemats[offsets.y+1],bonemats[offsets.y+2]) * vweights.y;
    m += mat3x4(bonemats[offsets.z],bonemats[offsets.z+1],bonemats[offsets.z+2]) * vweights.z;
    m += mat3x4(bonemats[offsets.w],bonemats[offsets.w+1],bonemats[offsets.w+2]) * vweights.w;
-   vec4 mpos = Modell * vec4(gl_Vertex * m, gl_Vertex.w);
+   vec4 mpos = ModelView * vec4(vposition * m, vposition.w);
 
-   gl_Position = gl_ModelViewProjectionMatrix * mpos;
-   viewDepth = length((gl_ModelViewMatrix * mpos).xyz);
-   gl_TexCoord[0] = gl_MultiTexCoord0;
-   gl_FrontColor = vec4(1,1,1,1);
+   gl_Position = Projection * mpos;
+   viewDepth = length(mpos.xyz);
 }

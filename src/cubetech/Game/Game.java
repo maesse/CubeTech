@@ -116,6 +116,13 @@ public class Game {
         // initialize all clients for this game
         level.maxclients = g_maxclients.iValue;
         
+        level.physics = new PhysicsSystem();
+        Ref.cm.cubemap.physics = level.physics;
+        for (Object object : Ref.cm.cubemap.chunks.values().elements()) {
+            CubeChunk chunk = (CubeChunk)object;
+            level.physics.addChunk(chunk);
+        }
+        
         // initialize all entities for this game
         g_entities = new Gentity[Common.MAX_GENTITIES];
         g_clients = new GameClient[level.maxclients];
@@ -167,6 +174,8 @@ public class Game {
         level.previousTime = level.time;
         level.time = time;
         int msec = level.time - level.previousTime;
+        
+        level.physics.stepPhysics(time);
 
         //int start = Ref.common.Milliseconds();
         for (int i= 0; i < level.num_entities; i++) {

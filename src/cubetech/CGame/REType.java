@@ -14,4 +14,4 @@ public enum REType {
     SPRITE,
     BBOX, // origin = origin, oldorigin = size
     BEAM,
-    NONE, POLY, WORLD}
+    NONE, POLY, WORLD, SKYBOX}

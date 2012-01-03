@@ -1,7 +1,10 @@
 package cubetech.collision;
 
 import cern.colt.map.OpenLongObjectHashMap;
+import com.bulletphysics.collision.shapes.ChunkShape;
+import com.bulletphysics.dynamics.RigidBody;
 import cubetech.CGame.ChunkRender;
+import cubetech.Game.PhysicsSystem;
 import cubetech.common.Common;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -36,8 +39,8 @@ public class CubeChunk {
 
     public int version = 0;
     int[] versionData = new int[32]; // remember the last 32 changes
-
-
+    public RigidBody physicsShape = null;
+    public PhysicsSystem physicsSystem = null;
 
     public int[] p = new int[3]; // Position/Origin. Grows in the positive direction.
     public CubeChunk(OpenLongObjectHashMap chunks, int x, int y, int z) {
@@ -58,7 +61,13 @@ public class CubeChunk {
         if(render != null) {
             render.destroy();
             render = null;
+            
         }
+        if(physicsShape != null && physicsSystem != null) {
+            physicsSystem.deleteBody(physicsShape);
+            physicsShape = null;
+        }
+        
         blockType = null;
         chunks = null;
     }

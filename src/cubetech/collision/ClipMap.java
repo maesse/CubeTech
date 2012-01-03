@@ -1,5 +1,6 @@
 package cubetech.collision;
 
+import cubetech.Game.PhysicsSystem;
 import cubetech.gfx.ResourceManager;
 import java.io.FileNotFoundException;
 import java.io.IOException;

@@ -302,6 +302,9 @@ public class CGameState {
         Helper.VectorMA(prev.ps.origin, f, delta, out.origin);
         if(!grabAngles) {
             out.viewangles = Helper.LerpAngles(prev.ps.viewangles, next.ps.viewangles, null, f);
+        } else {
+             PlayerInput cmd = Ref.client.GetUserCommand(Ref.client.cl.cmdNumber);
+             out.UpdateViewAngle(cmd);
         }
         Vector3f.sub(next.ps.velocity, prev.ps.velocity, delta);
         Helper.VectorMA(prev.ps.velocity, f, delta, out.velocity);
@@ -323,8 +326,9 @@ public class CGameState {
         }
 
         // non-predicting local movement will grab the latest angles
-        if(Ref.cgame.cg_nopredict.iValue == 1) {
-            // TODO: InterpolatePlayerState(true);
+        if(Ref.cgame.cg_nopredict.iValue == 1 || predictedPlayerState.vehicle > 0) {
+            InterpolatePlayerState(true);
+            predictedError.set(0, 0, 0);
             return;
         }
 
@@ -624,7 +628,7 @@ public class CGameState {
 
             // if we are not doing client side movement prediction for any
             // reason, then the client events and view changes will be issued now
-            if(Ref.cgame.cg_nopredict.iValue == 1 || playingdemo) {
+            if(Ref.cgame.cg_nopredict.iValue == 1 || playingdemo || ps.vehicle > 0) {
                 TransitionPlayerState(ps, ops);
             }
         }

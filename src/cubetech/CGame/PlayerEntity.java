@@ -13,4 +13,7 @@ public class PlayerEntity {
     public LerpFrame torso = new LerpFrame();
     public LerpFrame legs = new LerpFrame();
     
+    // Physics simulated bones
+    
+    
 }

@@ -60,7 +60,7 @@ public class GameClient extends Gentity {
     void updatePlayerCubes() {
         if(r.svFlags.contains(SvFlags.BOT)) return;
         // Get a list of chunks surrounding the player
-        lookupCache = Ref.cm.cubemap.getVisibleChunks(ps.origin, CubeMap.DEFAULT_GROW_DIST, lookupCache);
+        lookupCache = Ref.cm.cubemap.getVisibleChunks(ps.origin, CubeMap.DEFAULT_GROW_DISTXY, CubeMap.DEFAULT_GROW_DISTZ, lookupCache);
         int nFullUpdates = 0;
         
         for (int i= 0; i < lookupCache.length; i++) {
@@ -241,7 +241,7 @@ public class GameClient extends Gentity {
                 Ref.common.items.TouchItem.touch(ent, thisIsSilly);
                 if(ent.inuse) ent.Free();
             } else if(name.equalsIgnoreCase("car")) {
-                Gentity ent = Ref.game.Spawn(Vehicle.class);
+                Vehicle ent = (Vehicle) Ref.game.Spawn(Vehicle.class);
                 
                 // Get an x/y direciton vector
                 Vector3f forward = getForwardVector();
@@ -252,6 +252,7 @@ public class GameClient extends Gentity {
                 Helper.VectorMA(r.currentOrigin, 200, forward, ent.r.currentOrigin);
                 ent.s.pos.type = Trajectory.STATIONARY;
                 ent.s.pos.base.set(ent.r.currentOrigin);
+                ent.initVehicle();
                 ent.Link();
             }
         }
@@ -461,6 +462,7 @@ public class GameClient extends Gentity {
 
         ClientEndFrame();
         ps.ToEntityState(s, false);
+        Ref.game.level.physics.PlayerSpawn(ps);
         //System.out.println(""+s.ClientNum);
     }
 
@@ -559,6 +561,8 @@ public class GameClient extends Gentity {
             }
             return;
         }
+        
+        Ref.game.level.physics.PlayerUpdatePosition(ps);
 
         ClientTimerActions(msec);
 
@@ -587,7 +591,7 @@ public class GameClient extends Gentity {
 
     // Trace out a line in the look direction and try to grab a useable entity
     private Gentity findUseEntity() {
-        int mask = Content.SOLID;
+        int mask = Content.SOLID |Content.TRIGGER | Content.PHYSICS;
 
         Vector3f eye = new Vector3f(ps.origin);
         eye.z += ps.viewheight;
@@ -678,6 +682,7 @@ public class GameClient extends Gentity {
             
 
             Ref.server.LinkEntity(self.shEnt);
+            Ref.game.level.physics.PlayerDie(ps);
         }
 
 
@@ -721,7 +726,7 @@ public class GameClient extends Gentity {
         while(timeResidual >= 1000) {
             timeResidual -= 1000;
 
-            Ref.cm.cubemap.growFromPosition(ps.origin, CubeMap.DEFAULT_GROW_DIST);
+            Ref.cm.cubemap.growFromPosition(ps.origin, CubeMap.DEFAULT_GROW_DISTXY, CubeMap.DEFAULT_GROW_DISTZ);
 
             if(getHealth() > getMaxHealth())
                 ps.stats.Health--;
@@ -792,6 +797,7 @@ public class GameClient extends Gentity {
         Ref.server.SetConfigString(CS.CS_PLAYERS+s.ClientNum, null);
 
         Ref.game.CalculateRanks();
+        Ref.game.level.physics.PlayerLeave(ps);
     }
 
     private Vector3f selectSpawnPoint() {
@@ -840,6 +846,7 @@ public class GameClient extends Gentity {
         if(vehicle == null) return;
 
         // Remove self from vehicle
+        ps.vehicle = 0;
         vehicle.setPassenger(null);
         ps.origin.set(vehicle.r.currentOrigin);
         ps.origin.z += 200;
@@ -848,7 +855,9 @@ public class GameClient extends Gentity {
         
         ps.eFlags &= ~EntityFlags.NODRAW;
         ps.moveType = MoveType.NORMAL;
-
+        if(ps.stats.Health > 0) {
+            Ref.game.level.physics.PlayerSpawn(ps);
+        }
         
     }
 
@@ -858,6 +867,8 @@ public class GameClient extends Gentity {
         ps.eFlags |= EntityFlags.NODRAW;
         ps.velocity.set(0, 0, 0);
         ps.moveType = MoveType.NOCLIP;
+        ps.vehicle = vehicle.s.ClientNum;
+        Ref.game.level.physics.PlayerDie(ps);
 
         ps.ducking = false;
         ps.ducked = false;

@@ -5,9 +5,11 @@ import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.linearmath.MotionState;
 import com.bulletphysics.linearmath.Transform;
+import cubetech.collision.CubeChunk;
 import cubetech.common.Helper;
 import cubetech.common.Trajectory;
 import cubetech.gfx.CubeMaterial;
+import cubetech.gfx.PolyVert;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
@@ -82,17 +84,51 @@ public class LocalEntity {
         phys_motionState = null;
         phys_body = null;
     }
+    
+    private static PolyVert[] boxPolys;
 
     public static LocalEntity physicsBox(Vector3f origin, int starttime, int duration, CubeMaterial mat, CollisionShape boxShape) {
         LocalEntity le = LocalEntities.allocate();
         le.Type = LocalEntity.TYPE_PHYSICSOBJECT;
         le.startTime = starttime;
         le.endTime = starttime + duration;
-        le.rEntity = new RenderEntity(REType.SPRITE);
-        le.rEntity.radius = 10;
+        le.rEntity = new RenderEntity(REType.POLY);
+        le.rEntity.flags = RenderEntity.FLAG_SPRITE_AXIS;
         le.rEntity.mat = mat;
         le.rEntity.outcolor.set(255,255,255,255);
-
+        //if(boxPolys == null) {
+            float halfSize = CubeChunk.BLOCK_SIZE/2f * CGPhysics.INV_SCALE_FACTOR;
+            //Vector3f[] boxverts = Helper.createBoxVerts(CubeChunk.BLOCK_SIZE * CGPhysics.INV_SCALE_FACTOR, new Vector3f(halfSize, halfSize, halfSize));
+            Vector3f[] boxverts = Helper.createBoxVerts(CubeChunk.BLOCK_SIZE , (Vector3f)new Vector3f(halfSize, halfSize, halfSize).scale(-CGPhysics.SCALE_FACTOR));
+            boxPolys = new PolyVert[boxverts.length];
+            for (int i = 0; i < boxPolys.length; i++) {
+                boxPolys[i] = new PolyVert();
+                boxPolys[i].xyz = boxverts[i];
+                boxPolys[i].normal = new Vector3f();
+                Helper.VectorSet(boxPolys[i].normal, (i/4)/2, (((i/4)&1) == 1)?-1f:1f);
+                boolean flips = ((i/4)&1) == 1;
+                switch(i%4) {
+                    case 0:
+                        if(flips) boxPolys[i].t = 1;
+                        break;
+                    case 1:
+                        if(flips) boxPolys[i].t = 1;
+                        boxPolys[i].s = 1;
+                        break;
+                    case 2:
+                        boxPolys[i].s = 1;
+                        
+                        if(flips) boxPolys[i].t = 0;
+                        else boxPolys[i].t = 1;
+                        break;
+                    case 3:
+                        if(flips) boxPolys[i].t = 0;
+                        else boxPolys[i].t = 1;
+                        break;
+                }
+            }
+        //}
+        
         le.pos.base.set(origin);
 
         Transform t = new Transform();
@@ -100,6 +136,11 @@ public class LocalEntity {
         t.origin.set(origin.x, origin.y, origin.z);
         t.origin.scale(CGPhysics.SCALE_FACTOR);
         le.phys_motionState = new DefaultMotionState(t);
+        
+        le.rEntity.origin.set(t.origin.x, t.origin.y, t.origin.z);
+        Helper.matrixToAxis(t.basis, le.rEntity.axis);
+        le.rEntity.verts = boxPolys;
+        le.rEntity.frame = boxPolys.length;
 
         le.phys_body = Ref.cgame.physics.localCreateRigidBody(10f, le.phys_motionState, boxShape);
         le.phys_body.setCcdMotionThreshold(2f);

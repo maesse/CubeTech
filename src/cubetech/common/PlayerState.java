@@ -75,6 +75,7 @@ public class PlayerState {
 
     // from game -> server, tells server what map data to send
     public ClientPersistant pers = null;
+    public int vehicle; // current vehicle entity if any (0 if none)
 
     // Adds in the viewoffset from standing/ducking
     public Vector3f getViewOrigin() {
@@ -90,6 +91,7 @@ public class PlayerState {
     // Wipe values
     public void Clear() {
         groundEntity = Common.ENTITYNUM_NONE;
+        vehicle = 0;
         fallVelocity = 0;
         clientNum = 0;
         commandTime = 0;
@@ -182,6 +184,7 @@ public class PlayerState {
         ps.externalEventParam = externalEventParam;
         ps.externalEventTime = externalEventTime;
         ps.origin = new Vector3f();
+        ps.vehicle = vehicle;
         if(origin != null) {
             ps.origin.set(origin);
         }
@@ -243,10 +246,9 @@ public class PlayerState {
         s.apos.type = Trajectory.INTERPOLATE;
         s.apos.base.set(viewangles);
         s.eFlags = eFlags;
-        if(stats.Health <= 0)
-            s.eFlags |= EntityFlags.DEAD;
-        else
-            s.eFlags &= ~EntityFlags.DEAD;
+        if(stats.Health <= 0) s.eFlags |= EntityFlags.DEAD;
+        else s.eFlags &= ~EntityFlags.DEAD;
+            
         if(externalEvent != 0) {
             s.evt = externalEvent;
             s.evtParams = externalEventParam;
@@ -298,6 +300,7 @@ public class PlayerState {
         msg.WriteDelta(ps.delta_angles[1], delta_angles[1]);
         msg.WriteDelta(ps.delta_angles[2], delta_angles[2]);
         msg.WriteDelta(ps.eFlags, eFlags);
+        msg.WriteDelta(ps.vehicle, vehicle);
         msg.WriteDelta(ps.entityEventSequence, entityEventSequence);
         msg.WriteDelta(ps.eventParams[0], eventParams[0]);
         msg.WriteDelta(ps.eventParams[1],  eventParams[1]);
@@ -350,6 +353,7 @@ public class PlayerState {
         delta_angles[1] = msg.ReadDeltaInt(ps.delta_angles[1]);
         delta_angles[2] = msg.ReadDeltaInt(ps.delta_angles[2]);
         eFlags = msg.ReadDeltaInt(ps.eFlags);
+        vehicle = msg.ReadDeltaInt(ps.vehicle);
         entityEventSequence = msg.ReadDeltaInt(ps.entityEventSequence);
         eventParams[0] = msg.ReadDeltaInt(ps.eventParams[0]);
         eventParams[1] = msg.ReadDeltaInt(ps.eventParams[1]);

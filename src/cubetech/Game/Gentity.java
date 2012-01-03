@@ -5,13 +5,21 @@
 
 package cubetech.Game;
 
+import com.bulletphysics.collision.shapes.BoxShape;
+import com.bulletphysics.dynamics.RigidBody;
+import com.bulletphysics.linearmath.Transform;
 import cubetech.collision.CollisionResult;
 import cubetech.common.items.IItem;
 import cubetech.common.*;
+import cubetech.common.items.ItemType;
+import cubetech.common.items.WeaponInfo;
+import cubetech.common.items.WeaponItem;
 import cubetech.entities.EntityShared;
 import cubetech.entities.EntityState;
+import cubetech.entities.EntityType;
 import cubetech.entities.Mover;
 import cubetech.entities.SharedEntity;
+import cubetech.iqm.IQMModel;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
@@ -47,7 +55,9 @@ public class Gentity {
     public int ClipMask; // brushes with this content value will be collided against
                         // when moving.  items and corpses do not collide against
                         // players, for instance
-
+    
+    
+    
     public int nextthink;
     
     public IThinkMethod think;
@@ -107,6 +117,7 @@ public class Gentity {
         reached = null;
         blocked = null;
         touch = null;
+        
         use = null;
         pain = null;
         die = null;
@@ -170,6 +181,25 @@ public class Gentity {
     public void Unlink() {
         Ref.server.UnlinkEntity(shEnt);
     }
+    
+    protected IQMModel getModel() {
+        IQMModel model = null;
+        if(r.bmodel) {
+            model = Ref.server.getModel(s.modelindex);
+        } else if(s.eType == EntityType.ITEM) {
+            IItem item = Ref.common.items.getItem(s.modelindex);
+            if(item.getType() == ItemType.WEAPON) {
+                WeaponItem weaponItem = (WeaponItem)item;
+                WeaponInfo wi = weaponItem.getWeaponInfo();
+                if(wi != null && wi.worldModel != null) {
+                    model = wi.worldModel;
+                }
+            } else {
+                Common.Log("initPhysicsBody: non-weapon item Fixme");
+            }
+        }
+        return model;
+    }
 
     /**
      * @return true if this entity is an GameClient
@@ -227,37 +257,39 @@ public class Gentity {
             Ref.common.Error(Common.ErrorCode.DROP, "NULL ent.think");
         think.think(this);
     }
+    
+    
 
     // This entity is an item, run it for this frame
     public void runItem() {
-        // TODO: FIX
-        if(s.pos.type == Trajectory.STATIONARY)
+//        // TODO: FIX
+//        if(s.pos.type == Trajectory.STATIONARY)
+//        {
+//            runThink();
+//            return;
+//        }
+        
         {
-            runThink();
-            return;
+            // get current position
+            Vector3f origin = s.pos.Evaluate(Ref.game.level.time);
+
+            // trace a line from the previous position to the current position
+            int mask = ClipMask;
+            if(mask == 0)
+                mask = Content.MASK_PLAYERSOLID & ~Content.BODY;
+            CollisionResult res = Ref.server.Trace(r.currentOrigin, origin, r.mins, r.maxs, mask, r.ownernum);
+            res.getPOI(r.currentOrigin);
+            if(res.startsolid) {
+                res.frac = 0;
+            }
+            if(res.frac == 1) return;
+            Gitems.bounceItem(this, res);
         }
-
-        // get current position
-        Vector3f origin = s.pos.Evaluate(Ref.game.level.time);
-
-        // trace a line from the previous position to the current position
-        int mask = ClipMask;
-        if(mask == 0)
-            mask = Content.MASK_PLAYERSOLID & ~Content.BODY;
-        CollisionResult res = Ref.server.Trace(r.currentOrigin, origin, r.mins, r.maxs, mask, r.ownernum);
-        res.getPOI(r.currentOrigin);
-        if(res.startsolid) {
-            res.frac = 0;
-        }
-
+        
         Link();
 
         // check think function
         runThink();
-
-        if(res.frac == 1) return;
-
-        Gitems.bounceItem(this, res);
     }
 
 //    /**

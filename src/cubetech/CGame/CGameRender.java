@@ -1,5 +1,6 @@
 package cubetech.CGame;
 
+import com.bulletphysics.BulletStats;
 import cubetech.common.Score;
 import cubetech.Game.Game;
 import cubetech.Game.Gentity;
@@ -27,10 +28,12 @@ import cubetech.iqm.IQMAnim;
 import cubetech.iqm.IQMModel;
 import cubetech.misc.Profiler;
 import cubetech.misc.Ref;
+import cubetech.snd.SoundHandle;
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.Locale;
 import org.lwjgl.util.Color;
+import org.lwjgl.util.vector.Matrix3f;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
@@ -89,8 +92,8 @@ public class CGameRender {
         }
         IQMModel model = Ref.ResMan.loadModel(modelname);
         ref.model = model;
-        es.pos.Evaluate(game.cg.time, ref.origin);
-        ref.axis = Helper.AnglesToAxis(es.Angles);
+        ref.origin.set(cent.lerpOrigin);
+        cent.lerpAnglesQ.quatToMatrix(ref.axis);
         Ref.render.addRefEntity(ref);
     }
 
@@ -142,6 +145,7 @@ public class CGameRender {
                 RenderEntity ent = Ref.render.createEntity(REType.MODEL);
                 ent.model = wModel;
                 ent.origin.set(cent.lerpOrigin);
+                cent.lerpAnglesQ.quatToMatrix(ent.axis);
                 Ref.render.addRefEntity(ent);
                 return;
             }
@@ -312,9 +316,12 @@ public class CGameRender {
     private void Player(CEntity cent) {
         ClientInfo ci = game.cgs.clientinfo[cent.currentState.ClientNum];
         if(!ci.infoValid) return;
+        if((cent.currentState.eFlags & EntityFlags.NODRAW) != 0) return;
         RenderEntity ent = Ref.render.createEntity(REType.MODEL);
 
         ent.model = Ref.ResMan.loadModel(ci.modelName);
+        
+        
 
         // set origin & angles
         ent.origin.set(cent.lerpOrigin);
@@ -486,15 +493,34 @@ public class CGameRender {
             Gentity ent = Ref.game.Find(null, GentityFilter.CLASSNAME, "vehicle");
             if(ent != null) {
                 Vehicle v = (Vehicle)ent;
-                VehicleState state = v.getState();
+                ArrayList<String> vehicleInfo = v.getInfoStrings();
                 float x = Ref.glRef.GetResolution().x * 0.8f;
-                Ref.textMan.AddText(new Vector2f(x, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*1),
-                        "RPM: " + state.rpm, Align.LEFT, Type.HUD);
-                Ref.textMan.AddText(new Vector2f(x, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*2),
-                        "Torque: " + state.torque, Align.LEFT, Type.HUD);
-                VehicleControls ctrl = v.getControls();
-                Ref.textMan.AddText(new Vector2f(x, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*3),
-                        (ctrl.brake>0?" ^2BRK":"") + (ctrl.throttle>0?" ^3THR":""), Align.LEFT, Type.HUD);
+                Vector2f pos = new Vector2f(x, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*1);
+                for (int i = 0; i < vehicleInfo.size(); i++) {
+                    pos.y = Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*(1+i);
+                    Ref.textMan.AddText(pos, vehicleInfo.get(i), Align.LEFT, Type.HUD);
+                }
+                
+                int lowStart = 1000;
+                int lowEnd = 3000;
+                int highStart = 2500;
+                int highEnd = 7000;
+                float rpm = v.getState().rpm;
+                float rpmLow = ((rpm-lowStart) / (lowEnd-lowStart)) + 0.8f;
+                
+                float volumeLow = 1f;
+                volumeLow = 1f - (0.9f * (Helper.Clamp(rpm - lowEnd, 0, 3000) / 3000f));
+                
+                float rpmHigh = ((rpm-highStart) / (highEnd-highStart)) + 0.8f;
+                float volumeHigh = 0.1f;
+                if(rpm < highStart) volumeHigh = 0.1f;
+                volumeHigh = 0.1f + (0.9f * (Helper.Clamp(rpm - highStart, 0, 2000) / 2000f));
+                
+                SoundHandle low = Ref.soundMan.AddWavSound("data/sounds/idle_engine.wav");
+                SoundHandle high = Ref.soundMan.AddWavSound("data/sounds/highrev_engine.wav");
+
+                Ref.soundMan.addLoopingSound(ent.s.ClientNum+2, ent.r.currentOrigin, ent.s.pos.delta, low, volumeLow, rpmLow);
+                Ref.soundMan.addLoopingSound(ent.s.ClientNum+1, ent.r.currentOrigin, ent.s.pos.delta, high, volumeHigh, rpmHigh);
             }
         }
     }
@@ -531,7 +557,7 @@ public class CGameRender {
         
     }
     
-    private int drawProfilerRecursive(Profiler.StackEntry entry, int indent, int startline) {
+    private int drawProfilerRecursive(Profiler.StackEntry entry, int indent, int startline, int maxlevels) {
         int line = startline;
         // Draw this
         Vector2f position = new Vector2f(indent * 20f,  (line+1) * Ref.textMan.GetCharHeight() * 0.75f);
@@ -539,9 +565,9 @@ public class CGameRender {
         line++;
         
         // Draw children
-        if(entry.subTags != null) {
+        if(entry.subTags != null && indent < maxlevels) {
             for (Profiler.StackEntry e : entry.subTags) {
-                line = drawProfilerRecursive(e, indent+1, line);
+                line = drawProfilerRecursive(e, indent+1, line, maxlevels);
             }
         }
         return line;
@@ -550,8 +576,9 @@ public class CGameRender {
     private void drawStackProfiler() {
         ArrayList<Profiler.StackEntry> entries = Profiler.getStackFrames();
         int line = 6;
+        int maxlevels = 10;
         for (Profiler.StackEntry entry : entries) {
-            line = drawProfilerRecursive(entry, 8, line);
+            line = drawProfilerRecursive(entry, 8, line, maxlevels);
         }
     }
 
@@ -617,6 +644,19 @@ public class CGameRender {
         }
         
         drawStackProfiler();
+        
+        if(Ref.game != null && Ref.game.level.physics != null && Ref.game.level.physics.world != null) {
+            Ref.textMan.AddText(new Vector2f(900, 500), "gNumDeepPen: " + BulletStats.gNumDeepPenetrationChecks, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(900, 500-Ref.textMan.GetCharHeight()), "gNumGjkChecks: " + BulletStats.gNumGjkChecks, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(900, 500-Ref.textMan.GetCharHeight()*2f), "gNumSplitImpulseRec: " + BulletStats.gNumSplitImpulseRecoveries, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(900, 500-Ref.textMan.GetCharHeight()*3f), "objects: " + Ref.game.level.physics.world.getNumCollisionObjects(), Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(900, 500-Ref.textMan.GetCharHeight()*4f), "pairs: " + Ref.game.level.physics.world.getBroadphase().getOverlappingPairCache().getNumOverlappingPairs(), Align.LEFT, Type.HUD);
+        }
+        
+        int offset = 0;
+        for (String s : Ref.cgame.map.builder.getInfo()) {
+            Ref.textMan.AddText(new Vector2f(600, 150+Ref.textMan.GetCharHeight()*(offset++)), s, Align.LEFT, Type.HUD);
+        }
     }
 
     private void DrawClientScore(float yOffset, Score score) {
@@ -860,7 +900,7 @@ public class CGameRender {
         }
         swingAngles(dest, 15, 30, 0.1f, cent.pe.torso, false);
 //        torsoAngle.x = cent.pe.torso.pitchAngle;
-        BoneController legController1 = new BoneController("Bone.007", new Vector3f(-torsoAngle.x, legsAngle.y-torsoAngle.y, 0));
+        BoneController legController1 = new BoneController("Cabeza", new Vector3f(-torsoAngle.x, headAngle.y-torsoAngle.y, 0));
         BoneController legController2 = new BoneController("Hips", new Vector3f(-torsoAngle.x, legsAngle.y-torsoAngle.y, 0));
         BoneController legController3 = new BoneController("Head", new Vector3f(-torsoAngle.x, headAngle.y-torsoAngle.y, 0));
         rent.controllers = new BoneController[] {legController1,legController2,legController3};

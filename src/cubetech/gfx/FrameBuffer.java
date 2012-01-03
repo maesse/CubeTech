@@ -278,9 +278,11 @@ public class FrameBuffer {
                 glBindTexture(Target, 0);
                 GLRef.checkError();
                 // Attach it
+                int bindTarget = Target;
+                if(Target == GL_TEXTURE_CUBE_MAP) bindTarget = GL_TEXTURE_CUBE_MAP_POSITIVE_X;
                 EXTFramebufferObject.glFramebufferTexture2DEXT( EXTFramebufferObject.GL_FRAMEBUFFER_EXT, // target
                         EXTFramebufferObject.GL_DEPTH_ATTACHMENT_EXT, // attachment
-                        Target, // textarget
+                        bindTarget, // textarget
                         depthId, // texture
                         0); // level
         } else if(useDepth) {

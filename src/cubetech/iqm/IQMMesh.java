@@ -5,6 +5,7 @@ import cubetech.gfx.ResourceManager;
 import cubetech.misc.Ref;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import org.lwjgl.util.vector.Vector3f;
 
 /**
  *
@@ -21,7 +22,19 @@ public class IQMMesh {
     int first_triangle, num_triangles;
 
     private String modelPath = "";
+    private IQMModel model;
 
+    // This will return a list of triangles that make up this mesh.
+    public Vector3f[] getVertices() {
+        Vector3f[] data = new Vector3f[num_triangles*3];
+        for (int i = 0; i < num_triangles; i++) {
+            IQMTriangle tri = model.triangles[first_triangle+i];
+            data[i*3+0] = model.in_position[tri.vertex[0]];
+            data[i*3+1] = model.in_position[tri.vertex[1]];
+            data[i*3+2] = model.in_position[tri.vertex[2]];
+        }
+        return data;
+    }
 
     static void loadMesh(IQMModel model, ByteBuffer buffer) {
         if(model.header.num_meshes == 0 || model.header.ofs_meshes == 0)
@@ -30,9 +43,11 @@ public class IQMMesh {
 
 
         buffer.position(model.header.ofs_meshes);
+        
         model.meshes = new IQMMesh[model.header.num_meshes];
         for (int i= 0; i < model.header.num_meshes; i++) {
             IQMMesh m = new IQMMesh();
+            m.model = model;
             m.modelPath = model.header.pathName;
             int name = buffer.getInt();
             if(name >= 0) {

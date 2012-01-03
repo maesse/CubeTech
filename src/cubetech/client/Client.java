@@ -2,6 +2,7 @@ package cubetech.client;
 
 import cubetech.common.items.Weapon;
 import cubetech.CGame.CGame;
+import cubetech.CGame.Render;
 import cubetech.CGame.Snapshot;
 import cubetech.CGame.ViewParams;
 import cubetech.Game.Gentity;
@@ -1218,18 +1219,40 @@ public class Client {
                 view != null && view.lights.size() > 0) {
             Ref.glRef.shadowMan.renderShadowsForLight(view.lights.get(0), Ref.cgame.cg.refdef, new IThinkMethod() {
                 public void think(Gentity ent) {
-                    Ref.render.renderAll(Ref.cgame.cg.refdef, true);
+                    Ref.render.renderAll(Ref.cgame.cg.refdef, Render.RF_SHADOWPASS);
                 }
             });
         }
 
         
         Ref.glRef.deferred.startDeferred();
-        Ref.render.renderAll(view, false);
+        Ref.render.renderAll(view, 0);
         Ref.glRef.deferred.stopDeferred();
         Ref.glRef.deferred.finalizeShading();
+        if(view != null) {
+            GL11.glMatrixMode(GL11.GL_PROJECTION);
+            Ref.glRef.matrixBuffer.clear();
+            view.ProjectionMatrix.store(Ref.glRef.matrixBuffer);
+            Ref.glRef.matrixBuffer.flip();
+            GL11.glLoadMatrix(Ref.glRef.matrixBuffer);
+            Ref.glRef.matrixBuffer.clear();
+
+
+            //GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            view.viewMatrix.store(Ref.glRef.matrixBuffer);
+            Ref.glRef.matrixBuffer.flip();
+            GL11.glLoadMatrix(Ref.glRef.matrixBuffer);
+            Ref.glRef.matrixBuffer.clear();
+
+            //Ref.glRef.deferred.startPostDeferred();
+            
+            Ref.render.renderAll(view, Render.RF_POSTDEFERRED);
+            //Ref.glRef.deferred.stopPostDeferred();
+        }
+        
         Ref.render.reset();
-        if(!Ref.glRef.deferred.isEnabled()) {
+        
             GL11.glMatrixMode(GL11.GL_PROJECTION);
             GL11.glLoadIdentity();
             GL11.glOrtho(0, (int)Ref.glRef.GetResolution().x, 0, (int)Ref.glRef.GetResolution().y, 1,-1000);
@@ -1237,7 +1260,7 @@ public class Client {
             GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
             GL11.glLoadIdentity();
-        }
+        
         // Queue HUD renders
         Ref.Console.Render();
         if(cl_showfps.iValue == 1)

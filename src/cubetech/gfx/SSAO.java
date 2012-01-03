@@ -29,7 +29,7 @@ public class SSAO {
     
     // shader uniforms
     private CVar ssao_kernelRadius = Ref.cvars.Get("ssao_kernelRadius", "24", null);
-    public CVar ssao_enable = Ref.cvars.Get("ssao_enable", "1", null);
+    public CVar ssao_enable = Ref.cvars.Get("ssao_enable", "0", null);
     public CVar ssao_display = Ref.cvars.Get("ssao_display", "0", null); // render on top of everything
     private CVar ssao_renderscale = Ref.cvars.Get("ssao_renderscale", "1.0", null);
     

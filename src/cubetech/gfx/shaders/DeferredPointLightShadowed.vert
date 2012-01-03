@@ -1,4 +1,4 @@
-#version 150
+#version 130
 attribute vec3 v_position;
 attribute vec3 v_view;
 
@@ -7,8 +7,8 @@ uniform float far;
 uniform vec4 lightPosition;
 uniform mat4 invProjectionMatrix;
 
-out noperspective vec3 viewpos;
-out noperspective vec2 texcoords;
+out vec3 viewpos;
+out vec2 texcoords;
 out float depthin;
 out vec3 viewlight; 
 out vec3 view;

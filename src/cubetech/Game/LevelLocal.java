@@ -21,6 +21,8 @@ public class LevelLocal {
     public int startTime;
     public boolean restarted;
     public boolean editmode = false;
+    
+    public PhysicsSystem physics;
 
     public int numConnectedClients; // not hooked up
 }

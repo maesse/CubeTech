@@ -10,11 +10,6 @@
 <project name="CubeTech" default="default" basedir=".">
     <description>Builds, tests, and runs the project CubeTech.</description>
     <import file="nbproject/build-impl.xml"/>
-
-    <import file="nbproject/profiler-build-impl.xml"/>
-
-
-
     <!--
 
     There exist several targets which are by default empty and which can be 
@@ -76,27 +71,5 @@
     nbproject/build-impl.xml file. 
 
     -->
-<condition property="isWindows">
-	<os family="windows" />
-</condition>
-<condition property="isUnix">
-	<os family="unix" />
-</condition>
-
-<target name="doWindows" if="isWindows">
-<exec dir="." executable="cmd">
-                <arg line="/c postbuild.bat"/>
-            </exec>
-
-</target>
-<target name="doUnix" if="isUnix">
-<exec dir="." executable="sh">
-		<arg line="postbuild.sh"/>
-            </exec>
-
-</target>
-
-<target name="-post-jar" depends="doWindows,doUnix">
-        </target>
 
 </project>

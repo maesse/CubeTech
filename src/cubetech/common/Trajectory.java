@@ -2,8 +2,10 @@ package cubetech.common;
 
 import cubetech.misc.Ref;
 import cubetech.net.NetBuffer;
+import org.lwjgl.util.vector.Matrix3f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
+import org.lwjgl.util.vector.Vector4f;
 
 /**
  * Stores a position + the velocity at that time + the time this position
@@ -18,10 +20,12 @@ public class Trajectory {
     public static final int LINEAR_STOP = 3;
     public static final int SINE = 4;
     public static final int GRAVITY = 5;
+    public static final int QUATERNION = 6;
 
     public int type; // Should be one of the flags defined
     public int time;
     public int duration;
+    public Quaternion quater = new Quaternion();
     public Vector3f base = new Vector3f();
     public Vector3f delta  = new Vector3f();
     
@@ -31,9 +35,23 @@ public class Trajectory {
         Evaluate(time, result);
         return result;
     }
+    
+    public void EvaluateQ(int attime, Vector4f dest) {
+        if(type == QUATERNION) {
+            dest.set(quater);
+        } else {
+            Common.LogDebug("Trajectory.EvaluateQ: Not a quaternion");
+            Vector3f tmp = new Vector3f();
+            Evaluate(attime, tmp);
+            dest.set(tmp.x, tmp.y, tmp.z, 0);
+        }
+    }
 
     public void Evaluate(int attime, Vector3f dest) {
         switch(type) {
+            case QUATERNION:
+                quater.toAngleNormalized(dest);
+                break;
             case STATIONARY:
             case INTERPOLATE:
                 dest.x = base.x;
@@ -82,24 +100,34 @@ public class Trajectory {
     public boolean IsEqual(Trajectory pos) {
         if(type == pos.type && time == pos.time
                 && duration == pos.duration && Helper.Equals(base, pos.base)
-                && Helper.Equals(delta, pos.delta))
+                && Helper.Equals(delta, pos.delta)
+                && Helper.Equals(quater, pos.quater))
             return true;
         return false;
     }
 
     public void ReadDelta(NetBuffer buf, Trajectory from) {
-        base = buf.ReadDeltaVector(from.base);
-        delta = buf.ReadDeltaVector(from.delta);
         type = buf.ReadByte();
+        if(type == QUATERNION) {
+            quater = buf.ReadDeltaVector(from.quater);
+        } else {
+            base = buf.ReadDeltaVector(from.base);
+        }
+        delta = buf.ReadDeltaVector(from.delta);
         time = buf.ReadDeltaInt(from.time);
         duration = buf.ReadDeltaInt(from.duration);
     }
 
     // b is the old
     public void WriteDelta(NetBuffer buf, Trajectory b) {
-        buf.WriteDelta(b.base, base);
-        buf.WriteDelta(b.delta, delta);
         buf.Write((byte)type);
+        if(type == QUATERNION) {
+            buf.WriteDelta(b.quater, quater);
+        } else {
+            buf.WriteDelta(b.base, base);
+        }
+        
+        buf.WriteDelta(b.delta, delta);
         buf.WriteDelta(b.time, time);
         buf.WriteDelta(b.duration, duration);
     }

@@ -30,6 +30,7 @@ import cubetech.entities.SharedEntity;
 import cubetech.entities.SvEntity;
 import cubetech.gfx.ResourceManager;
 import cubetech.input.PlayerInput;
+import cubetech.iqm.IQMModel;
 import cubetech.misc.MasterServer;
 import cubetech.misc.Ref;
 import cubetech.net.Net;
@@ -54,6 +55,7 @@ import org.lwjgl.util.vector.Quaternion;
 
 
 import org.lwjgl.util.vector.Vector3f;
+import sun.security.krb5.Config;
 
 /**
  *
@@ -87,6 +89,7 @@ public class Server implements ITrace {
     CVar sv_serverid;
 //    CVar sv_mapChecksum;
     CVar sv_lan;
+    public CVar sv_chunklimit;
 
     public HashMap<String, ICommand> ucmds = new HashMap<String, ICommand>();
 
@@ -219,6 +222,7 @@ public class Server implements ITrace {
         sv_hostname = Ref.cvars.Get("sv_hostname", "CubeTech Server", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.ARCHIVE));
         sv_mapname = Ref.cvars.Get("mapname", "nomap", EnumSet.of(CVarFlags.SERVER_INFO));
         sv_lan = Ref.cvars.Get("sv_lan", "1", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.ARCHIVE));
+        sv_chunklimit = Ref.cvars.Get("sv_chunklimit", "5", null);
         Ref.cvars.Get("nextmap", "", EnumSet.of(CVarFlags.TEMP));
         sv_maxclients = Ref.cvars.Get("sv_maxclients", "32", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.LATCH));
         sv_zombietime = Ref.cvars.Get("sv_zombietime", "2", EnumSet.of(CVarFlags.TEMP));
@@ -375,6 +379,17 @@ public class Server implements ITrace {
 
         SetConfigString(CS.CS_SOUNDS+i, soundname);
         return i;
+    }
+    
+    public IQMModel getModel(int modelindex) {
+        if(modelindex <= 0 || modelindex > 255) {
+            Ref.common.Error(Common.ErrorCode.DROP, "Invalid modelindex " + modelindex);
+        }
+        String model = sv.configstrings.get(CS.CS_MODELS+modelindex-1);
+        if(model != null) {
+            return Ref.ResMan.loadModel(model);
+        }
+        return null;
     }
 
     public int registerModel(String modelname) {
@@ -1327,6 +1342,8 @@ public class Server implements ITrace {
     public SvClient getClient(int clientIndex) {
         return clients[clientIndex];
     }
+
+    
 
     
 

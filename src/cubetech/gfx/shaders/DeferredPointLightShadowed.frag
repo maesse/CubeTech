@@ -1,4 +1,4 @@
-#version 150
+#version 130
 uniform sampler2D tex0; // color & specular power
 uniform sampler2D tex1; // unused
 uniform sampler2D tex2; // normal & depth
@@ -13,9 +13,9 @@ uniform vec4 lightPosition;
 uniform vec4 attenuation;
 
 
-in noperspective vec2 texcoords;
+in vec2 texcoords;
 in float depthin;
-in noperspective vec3 viewpos;
+in vec3 viewpos;
 in vec3 viewlight;
 in vec3 view;
 
@@ -69,7 +69,7 @@ void main()
     //gl_FragColor.rgb = vec3(shadowdepth - 200) / 100.0;
     //gl_FragColor.rgb = abs(worldSpacePosition - worldSpaceLight) / 100.0;
 
-    //gl_FragColor.rgb += vec3(shadowdepth) / 10.0;
+    //gl_FragColor.rgb += vec3(shadowdepth) / 100.0;
     gl_FragColor.a = 1.0;
     //gl_FragColor.r = length(position.z - viewlight.z) / 1000.0;
 }

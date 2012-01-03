@@ -36,9 +36,15 @@ public abstract class WeaponItem implements IItem {
     }
 
     public void getBounds(Vector3f mins, Vector3f maxs) {
-        float size = 8;
-        mins.set(-size,-size,-size);
-        maxs.set(size,size,size);
+        WeaponInfo wi = getWeaponInfo();
+        if(wi != null && wi.worldModel != null) {
+            mins.set(wi.worldModel.getMins());
+            maxs.set(wi.worldModel.getMaxs());
+        } else {
+            float size = 8;
+            mins.set(-size,-size,-size);
+            maxs.set(size,size,size);
+        }
     }
 
     public int itemPicked(Gentity self, Gentity ent) {
