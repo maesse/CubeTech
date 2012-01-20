@@ -21,6 +21,7 @@ import cubetech.common.IUseMethod;
 import cubetech.common.MoveQuery;
 import cubetech.common.Quaternion;
 import cubetech.common.Trajectory;
+import cubetech.input.PlayerInput;
 import cubetech.iqm.IQMModel;
 import cubetech.misc.Ref;
 import java.util.ArrayList;
@@ -264,15 +265,17 @@ public class Vehicle extends GPhysicsEntity implements IUseMethod, IThinkMethod 
 
     // process player input
     public void processMove(MoveQuery move) {
-        controls.throttle = move.cmd.Forward?1:0;
-        controls.brake = move.cmd.Back?1:0;
+        float forward = PlayerInput.byteAsFloat(move.cmd.forward);
+        float side = PlayerInput.byteAsFloat(move.cmd.side);
+        controls.throttle = forward > 0?forward:0;
+        controls.brake = forward < 0?-forward:0;
         
-        float steerInput = (move.cmd.Left?1:0) + (move.cmd.Right?-1:0);
+        float steerInput = side;
         
         float steerDelta = steerInput - controls.steering;
         
         // Modify steering delta
-        boolean noInput = (move.cmd.Left == false && move.cmd.Right == false);
+        boolean noInput = (move.cmd.side == 0 && move.cmd.forward == 0);
         boolean sameDirection = (controls.steering > 0 == steerInput > 0); // changing steering direction?
         float absSteering = Math.abs(controls.steering);
         float springDampenStartFrac = 0.1f;

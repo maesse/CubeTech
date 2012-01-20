@@ -134,8 +134,8 @@ public class UI implements KeyEventListener, MouseEventListener {
     
 
     // Handle key input
-    public void KeyPressed(KeyEvent evt) {
-
+    public boolean KeyPressed(KeyEvent evt) {
+        return false;
     }
 
     public void GotMouseEvent(MouseEvent evt) {
@@ -262,13 +262,13 @@ public class UI implements KeyEventListener, MouseEventListener {
         if(info != null && info.length() > 0)
             Ref.textMan.AddText(new Vector2f(0.5f * res.x, 30), String.format("Loading %s", Info.ValueForKey(info, "mapname")), Align.CENTER, Type.HUD);
 
-        Ref.textMan.AddText(new Vector2f(0.5f * res.x, 10), String.format("Connecting to %s", Ref.client.servername), Align.CENTER, Type.HUD);
+        Ref.textMan.AddText(new Vector2f(0.5f * res.x, 10), String.format("Connecting to %s", Ref.client.clc.servername), Align.CENTER, Type.HUD);
 
-        if(Ref.client.state.ordinal() < ConnectState.CONNECTED.ordinal() && Ref.client.clc.servermessage != null)
+        if(Ref.client.clc.state.ordinal() < ConnectState.CONNECTED.ordinal() && Ref.client.clc.servermessage != null)
             Ref.textMan.AddText(new Vector2f(0.5f * res.x, res.y - res.y *0.2f), String.format("%s", Ref.client.clc.servermessage), Align.CENTER, Type.HUD);
 
         String s = "";
-        switch(Ref.client.state) {
+        switch(Ref.client.clc.state) {
             case CONNECTING:
                 s = String.format("Awaiting challenge...%d", Ref.client.clc.ConnectPacketCount);
                 break;

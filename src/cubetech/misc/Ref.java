@@ -75,7 +75,6 @@ public class Ref {
         Ref.textMan = new TextManager(); // manages text-rendering
         Ref.Input = new Input(); // input subsystem
         
-        Ref.Input.initialize();
         Ref.net = new Net(); // init network, creates sockets for client and server
         Ref.collision = new Collision();
         Ref.soundMan = new ALSoundManager(); // loads, manages and plays sounds

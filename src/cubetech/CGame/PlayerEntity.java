@@ -1,9 +1,8 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.CGame;
+
+import cubetech.iqm.IQMModel;
+import cubetech.iqm.RigidBoneMesh;
+import java.util.ArrayList;
 
 /**
  *
@@ -14,6 +13,6 @@ public class PlayerEntity {
     public LerpFrame legs = new LerpFrame();
     
     // Physics simulated bones
-    
-    
+    public ArrayList<RigidBoneMesh> boneMeshes;
+    public IQMModel boneMeshModel;
 }

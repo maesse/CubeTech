@@ -30,11 +30,11 @@ public class PlayerStats {
     public Weapon getWeaponNearest(Weapon w, boolean forwards) {
         int start = w.ordinal();
         if(!forwards) {
-            for (int i = start; i > 0; --i) {
+            for (int i = start-1; i > 0; i--) {
                 if(hasWeapon(Weapon.values()[i])) return Weapon.values()[i];
             }
         }
-        if(forwards) {
+        else if(forwards) {
             for (int i= start+1; i < Weapon.values().length; i++) {
                 if(hasWeapon(Weapon.values()[i])) return Weapon.values()[i];
             }

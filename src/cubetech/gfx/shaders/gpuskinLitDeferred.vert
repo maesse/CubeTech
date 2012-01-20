@@ -39,7 +39,7 @@ void main(void)
 
     vec3 mnormal = normalize( vec3( vec4(vnormal * madjtrans, 0)));
     vec3 mtangent = normalize(vec3( vec4(vtangent.xyz * madjtrans, 0)));
-    mat3 normalmatrix = transpose(inverse(mat3(ModelView)));
+    mat3 normalmatrix = mat3(ModelView);//transpose(inverse(mat3(ModelView)));
     normal = normalmatrix * mnormal;
     vec3 tangent = normalmatrix * (mtangent); // tangent not used, just here as an example
     vec3 bitangent = cross(normal, tangent) * vtangent.w; // bitangent not used, just here as an example

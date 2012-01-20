@@ -111,13 +111,15 @@ public class CGameState {
             }
 
             testModelName = args[1];
-            testModelEntity.model = Ref.ResMan.loadModel(testModelName);
+            
 
             if(args.length == 3) {
                 testModelEntity.backlerp = Float.parseFloat(args[2]);
                 testModelEntity.frame = 1;
                 testModelEntity.oldframe = 0;
             }
+            
+            testModelEntity.model = Ref.ResMan.loadModel(testModelName).buildFrame(0, 0, 0, null);
 
             if(testModelEntity.model == null) {
                 Ref.cgame.Print("Can't register model");
@@ -175,17 +177,27 @@ public class CGameState {
         public void RunCommand(String[] args) {
             if(Ref.cgame == null || Ref.cgame.cg == null) return;
             CGameState cg = Ref.cgame.cg;
-            if(cg.snap == null) return;
+            if(cg.snap == null || args.length < 2) return;
+            
+            Weapon current = cg.weaponSelect;
+            Weapon newweap = null;
+            if("next".equals(args[1])) {
+                newweap = cg.snap.ps.stats.getWeaponNearest(current, true);
+            } else if("prev".equals(args[1])) {
+                newweap = cg.snap.ps.stats.getWeaponNearest(current, false);
+            } else {
+                try {
+                    int num = Integer.parseInt(args[1]);
+                    if(num <= 0 || num >= Weapon.values().length) return;
+                    newweap = Weapon.values()[num];
+                } catch(NumberFormatException ex) {
+                    return;
+                }
+            }
+            
+            if(newweap == null || newweap == Weapon.NONE || !cg.snap.ps.stats.hasWeapon(newweap)) return;
 
-            int num = Integer.parseInt(args[1]);
-            if(num <= 0 || num >= Weapon.values().length) return;
-
-//            cg.weaponSelectTime = cg.time;
-
-            Weapon w = Weapon.values()[num];
-            if(!cg.snap.ps.stats.hasWeapon(w)) return;
-
-            cg.weaponSelect = w;
+            cg.weaponSelect = newweap;
         }
     };
 
@@ -473,7 +485,7 @@ public class CGameState {
 
             // try to read the snapshot from the client system
             cgs.processedSnapshotNum++;
-            boolean r = Ref.client.GetSnapshot(cgs.processedSnapshotNum, dest);
+            boolean r = Ref.client.cl.GetSnapshot(cgs.processedSnapshotNum, dest);
 
             // FIXME: why would trap_GetSnapshot return a snapshot with the same server time
             if(snap != null && r && dest.serverTime == snap.serverTime) {

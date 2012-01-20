@@ -36,12 +36,12 @@ public class Message implements KeyEventListener {
         return currentField;
     }
 
-    public void KeyPressed(KeyEvent evt) {
+    public boolean KeyPressed(KeyEvent evt) {
         // There should always be a field when we get key events
         if(currentField == null)
         {
             Ref.Input.SetKeyCatcher(Ref.Input.GetKeyCatcher() & ~Input.KEYCATCH_MESSAGE);
-            return;
+            return false;
         }
         
         Key key = (Key)evt.getSource();
@@ -52,27 +52,28 @@ public class Message implements KeyEventListener {
             if(currentField == currentField)
                 chatField.Clear();
             currentField = null;
-            return;
+            return false;
         }
 
         // if enter key pressed, clear keycatcher, and if currentfield
         // is chat, then also send a chatmessage
         if(key.key == Keyboard.KEY_RETURN) {
             if(currentField == chatField) {
-                if(chatField.buffer.length() > 0 && Ref.client.state == ConnectState.ACTIVE) {
+                if(chatField.buffer.length() > 0 && Ref.client.clc.state == ConnectState.ACTIVE) {
                     String cmd = String.format("say \"%s\"", chatField.buffer.toString());
-                    Ref.client.AddReliableCommand(cmd, false);
+                    Ref.client.clc.AddReliableCommand(cmd, false);
                 }
                 chatField.Clear();
             }
             
             Ref.Input.SetKeyCatcher(Ref.Input.GetKeyCatcher() & ~Input.KEYCATCH_MESSAGE);
             currentField = null;
-            return;
+            return false;
         }
 
         // Other keys are handled by the field
         currentField.KeyPressed(evt);
+        return false;
     }
 
     private class Cmd_Message implements ICommand {

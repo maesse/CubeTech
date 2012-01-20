@@ -175,7 +175,7 @@ public class Game {
         level.time = time;
         int msec = level.time - level.previousTime;
         
-        level.physics.stepPhysics(time);
+//        level.physics.stepPhysics(time);
 
         //int start = Ref.common.Milliseconds();
         for (int i= 0; i < level.num_entities; i++) {

@@ -155,6 +155,10 @@ public final class Net {
     public void ConnectClient(InetSocketAddress addr) throws SocketException {
         cliSocket.connect(addr);
     }
+    
+    public void disconnectClient() {
+        cliSocket.disconnect();
+    }
 
     // Keep the water flowin', baby
     public void PumpNet() {
@@ -302,4 +306,6 @@ public final class Net {
         InetSocketAddress addr = new InetSocketAddress(server, port);
         return addr;
     }
+
+    
 }

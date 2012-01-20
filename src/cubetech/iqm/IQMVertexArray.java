@@ -70,7 +70,6 @@ public class IQMVertexArray {
                 case TYPE_POSITION:
                     if(v.format != FORMAT_FLOAT || v.size != 3) throw new IllegalArgumentException("Invalid Vertex format");
                     model.in_position = new Vector3f[model.header.num_vertexes];
-                    model.out_position = new Vector3f[model.header.num_vertexes];
                     for (int j= 0; j < model.in_position.length; j++) {
                         model.in_position[j] = new Vector3f(buffer.getFloat(), buffer.getFloat(), buffer.getFloat());
                     }
@@ -78,7 +77,6 @@ public class IQMVertexArray {
                 case TYPE_NORMAL:
                     if(v.format != FORMAT_FLOAT || v.size != 3) throw new IllegalArgumentException("Invalid Vertex format");
                     model.in_normal = new Vector3f[model.header.num_vertexes];
-                    model.out_normal = new Vector3f[model.header.num_vertexes];
                     for (int j= 0; j < model.in_position.length; j++) {
                         model.in_normal[j] = new Vector3f(buffer.getFloat(), buffer.getFloat(), buffer.getFloat());
                     }
@@ -93,8 +91,6 @@ public class IQMVertexArray {
                 case TYPE_TANGENT:
                     if(v.format != FORMAT_FLOAT || v.size != 4) throw new IllegalArgumentException("Invalid Vertex format");
                     model.in_tangent = new Vector4f[model.header.num_vertexes];
-                    model.out_tangent = new Vector3f[model.header.num_vertexes];
-                    model.out_bitangent = new Vector3f[model.header.num_vertexes];
                     for (int j= 0; j < model.in_position.length; j++) {
                         model.in_tangent[j] = new Vector4f(buffer.getFloat(), buffer.getFloat(), buffer.getFloat(), buffer.getFloat());
                     }

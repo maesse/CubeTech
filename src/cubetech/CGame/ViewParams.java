@@ -5,12 +5,14 @@ import cubetech.collision.CubeMap;
 import cubetech.common.CVar;
 import cubetech.common.Helper;
 import cubetech.gfx.Light;
+import cubetech.gfx.RenderList;
 import cubetech.misc.Plane;
 import cubetech.misc.Ref;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
+import javax.vecmath.Matrix3f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.GLU;
 import org.lwjgl.util.vector.Matrix;
@@ -42,7 +44,7 @@ public class ViewParams {
     
     public ArrayList<Light> lights = new ArrayList<Light>();
 
-    public Plane[] planes = new Plane[6];
+    public Plane[] planes = new Plane[4];
     private float[] view = new float[16];
 
     public FloatBuffer viewbuffer = ByteBuffer.allocateDirect(16*4).order(ByteOrder.nativeOrder()).asFloatBuffer();
@@ -55,22 +57,39 @@ public class ViewParams {
 	0, 1, 0, 0,
 	0, 0, 0, 1};
     public static final Matrix4f flipMatrix2 = new Matrix4f();
-
+    
+    public RenderList renderList = null;
     public ViewParams() {
         Helper.toFloatBuffer(flipMatrix, viewbuffer);
         flipMatrix2.load(viewbuffer);
         viewbuffer.clear();
-        for (int i= 0; i < 3; i++) {
-            ViewAxis[i] = new Vector3f();
-        }
+        ViewAxis[0] = new Vector3f(1,0,0);
+        ViewAxis[1] = new Vector3f(0,1,0);
+        ViewAxis[2] = new Vector3f(0,0,1);
+        
         for (int i= 0; i < planes.length; i++) {
             planes[i] = new Plane(0, 0, 0, 0);
         }
     }
+    
+    public static ViewParams createFullscreenOrtho() {
+        ViewParams view = new ViewParams();
+        view.CalcVRect(SliceType.NONE, 0,100);
+        view.setupOthoProjection(Ref.glRef.GetResolution().x);
+        
+//        GL11.glMatrixMode(GL11.GL_PROJECTION);
+//        GL11.glLoadIdentity();
+//        GL11.glOrtho(0, (int)Ref.glRef.GetResolution().x, 0, (int)Ref.glRef.GetResolution().y, 1,-1000);
+//
+//        GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glLoadMatrix(view.viewbuffer);
+        
+        return view;
+    }
 
     public void setupOthoProjection(float fovx) {
-        Vector2f vidSize = Ref.glRef.GetResolution();
-        float aspect = vidSize.y/vidSize.x;
+        float aspect = (float)ViewportHeight/ViewportWidth;
         FovX = fovx;
         FovY = (FovX*aspect);
         GL11.glMatrixMode(GL11.GL_PROJECTION);
@@ -124,12 +143,14 @@ public class ViewParams {
         
         GL11.glLoadMatrix(viewbuffer);
     }
+    
+    
 
     public void SetupProjection() {
         lights.clear();
         // Use fovx and fovy to set up a matrix
-        Vector2f vidSize = Ref.glRef.GetResolution();
-        float aspect = vidSize.y/vidSize.x;
+        
+        float aspect = (float)ViewportHeight/ViewportWidth;
         FovX = Ref.cgame.cg_fov.iValue;
         FovY = (int)(FovX*aspect);
 
@@ -143,9 +164,11 @@ public class ViewParams {
         if(Ref.cgame.cg.playingdemo && Ref.cgame.cg_freecam.isTrue()) {
             fov = Ref.cgame.cg.demofov;
         }
-        setup3DProjection(fov * aspect, aspect, 64, near, far);
+        
 
         ViewAxis = Helper.AnglesToAxis(Angles, ViewAxis);
+        
+        setup3DProjection(fov * aspect, aspect, 64, near, far);
         
         view[0] = ViewAxis[0].x;
         view[4] = ViewAxis[0].y;
@@ -184,6 +207,21 @@ public class ViewParams {
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         
         GL11.glLoadMatrix(viewbuffer);
+    }
+    
+    public void apply() {
+        // set it for opengl
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glLoadMatrix(viewbuffer);
+        
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        projbuffer.clear();
+        ProjectionMatrix.store(projbuffer);
+        projbuffer.flip();
+        GL11.glLoadMatrix(projbuffer);
+        projbuffer.position(0);
+        
+        GL11.glViewport(ViewportX, ViewportY, ViewportWidth, ViewportHeight);
     }
 
     private void setup3DProjection(float fov, float aspect, float zproj, float znear, float zfar) {
@@ -273,9 +311,19 @@ public class ViewParams {
 
         }
     }
+    
+    public enum SliceType {
+        NONE,
+        VERTICAL,
+        HORIZONAL,
+        BOTH
+    }
 
-    public void CalcVRect() {
-        int size = Ref.cgame.cg_viewsize.iValue;
+    // slices= 0: fullscreen, 1: split left and right, 2: split into 4
+    // sliceIndex: 0-3. 0=topleft, 1=topright, etc.. 
+    // viewsize: 0-100%
+    public void CalcVRect(SliceType sliceType, int sliceIndex, int viewSize) {
+        int size = viewSize;
         if(size < 30) {
             size = 30;
             Ref.cvars.Set2("cg_viewsize", "30", true);
@@ -289,6 +337,34 @@ public class ViewParams {
         ViewportHeight = (int) (vidSize.y * size / 100);
         ViewportX = (int) ((vidSize.x - ViewportWidth) / 2);
         ViewportY = (int) ((vidSize.y - ViewportHeight) / 2);
+        
+        switch(sliceType) {
+            case VERTICAL:
+                ViewportWidth /= 2;
+                if(sliceIndex == 1) ViewportX += ViewportWidth;
+                break;
+            case HORIZONAL:
+                ViewportHeight /= 2;
+                if(sliceIndex == 0) ViewportY += ViewportHeight;
+                break;
+            case BOTH:
+                ViewportWidth /= 2;
+                ViewportHeight /= 2;
+                switch(sliceIndex) {
+                    case 0:
+                        ViewportY += ViewportHeight;
+                        break;
+                    case 1:
+                        ViewportY += ViewportHeight;
+                        ViewportX += ViewportWidth;
+                        break;
+                    case 3:
+                        ViewportX += ViewportWidth;
+                        break;
+                }
+                break;
+        }
+        
 
         GL11.glViewport(ViewportX, ViewportY, ViewportWidth, ViewportHeight);
     }
@@ -311,6 +387,7 @@ public class ViewParams {
         Helper.AngleVectors(Angles, t_forward, t_right, t_up);
         t_forward.set(forward);
         t_forward.scale(-1f);
+        
 
         CubeCollision col = CubeMap.TraceRay(view, t_forward, 8, Ref.cgame.map.chunks);
         t_forward.normalise();

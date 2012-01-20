@@ -167,17 +167,17 @@ public class ServerListUI implements IMenu {
             case FAVORITES:
                 break;
             case LAN:
-                if(lastServerCount < Ref.client.cl_nLocalServers) {
+                if(lastServerCount < Ref.client.getBrowser().cl_nLocalServers) {
                     // Fill in new servers
-                    AddServerInfo(Ref.client.cl_localServers, lastServerCount, Ref.client.cl_nLocalServers-lastServerCount);
-                    lastServerCount = Ref.client.cl_nLocalServers;
+                    AddServerInfo(Ref.client.getBrowser().cl_localServers, lastServerCount, Ref.client.getBrowser().cl_nLocalServers-lastServerCount);
+                    lastServerCount = Ref.client.getBrowser().cl_nLocalServers;
                 }
                 break;
             case INTERNET:
-                if(lastServerCount < Ref.client.cl_nGlobalServers) {
+                if(lastServerCount < Ref.client.getBrowser().cl_nGlobalServers) {
                     // Fill in new servers
-                    AddServerInfo(Ref.client.cl_globalServers, lastServerCount, Ref.client.cl_nGlobalServers-lastServerCount);
-                    lastServerCount = Ref.client.cl_nGlobalServers;
+                    AddServerInfo(Ref.client.getBrowser().cl_globalServers, lastServerCount, Ref.client.getBrowser().cl_nGlobalServers-lastServerCount);
+                    lastServerCount = Ref.client.getBrowser().cl_nGlobalServers;
                 }
                 break;
         }

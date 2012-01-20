@@ -66,22 +66,22 @@ public class Move {
     }
 
     private static void setMovementDir(MoveQuery query) {
-        if(query.cmd.Forward || query.cmd.Back || query.cmd.Right || query.cmd.Left) {
-            if (!query.cmd.Right && !query.cmd.Left && query.cmd.Forward ) {
+        if(query.cmd.forward != 0 || query.cmd.side != 0) {
+            if (query.cmd.side == 0 && query.cmd.forward > 0 ) {
                 query.ps.moveDirection = 0;
-            } else if ( query.cmd.Left && query.cmd.Forward) {
+            } else if ( query.cmd.side < 0 && query.cmd.forward > 0) {
                 query.ps.moveDirection = 1;
-            } else if ( query.cmd.Left && !query.cmd.Back && !query.cmd.Forward ) {
+            } else if ( query.cmd.side < 0 && query.cmd.forward == 0 ) {
                 query.ps.moveDirection = 2;
-            } else if ( query.cmd.Left && query.cmd.Back ) {
+            } else if ( query.cmd.side < 0 && query.cmd.forward < 0 ) {
                 query.ps.moveDirection = 3;
-            } else if ( !query.cmd.Right && !query.cmd.Left && query.cmd.Back ) {
+            } else if ( query.cmd.side == 0 && query.cmd.forward < 0 ) {
                 query.ps.moveDirection = 4;
-            } else if ( query.cmd.Right && query.cmd.Back ) {
+            } else if ( query.cmd.side > 0 && query.cmd.forward < 0 ) {
                 query.ps.moveDirection = 5;
-            } else if ( query.cmd.Right && !query.cmd.Back && !query.cmd.Forward ) {
+            } else if ( query.cmd.side > 0 && query.cmd.forward == 0 ) {
                 query.ps.moveDirection = 6;
-            } else if ( query.cmd.Right && query.cmd.Forward) {
+            } else if ( query.cmd.side > 0 && query.cmd.forward > 0) {
                 query.ps.moveDirection = 7;
             }
         } else {
@@ -165,14 +165,9 @@ public class Move {
         // Direction player wants to move
         Vector3f wishdir = new Vector3f();
         // Handle horizontal wish direction
-        if(query.cmd.Left)
-            wishdir.y -= 1f;
-        if(query.cmd.Right)
-            wishdir.y += 1f;
-        if(query.cmd.Forward)
-            wishdir.x += 1f;
-        if(query.cmd.Back)
-            wishdir.x -= 1f;
+        wishdir.y = PlayerInput.byteAsFloat(query.cmd.side);
+        wishdir.x = PlayerInput.byteAsFloat(query.cmd.forward);
+        
 
         wishdir.scale(speed);
         float len = wishdir.length();
@@ -631,28 +626,6 @@ public class Move {
        pm.ps.velocity.scale(newspeed);
    }
     
-    static void FrictionSpecial(MoveQuery pm) {
-        if(!pm.cmd.Left)
-            return;
-        
-       float speed2 = (float)Math.sqrt(pm.ps.velocity.x * pm.ps.velocity.x);
-       if(speed2 < 0.1f)
-           return;
-
-       float fric = friction;
-
-       float control = speed2;
-       float drop = control * fric * frametime;
-
-       float newspeed = speed2 - drop;
-       if(newspeed < 0)
-           newspeed = 0;
-
-       newspeed /= speed2;
-
-       pm.ps.velocity.x *= newspeed;
-//       pm.ps.velocity.y *= newspeed;
-   }
 
     static void AirAccelerate(MoveQuery pm, Vector3f wishdir, float wishspeed, float accel) {
         // Cap speed
@@ -743,6 +716,8 @@ public class Move {
         // Project down to flat plane
         pm.forward.z = 0;
         pm.right.z = 0;
+        Helper.Normalize(pm.forward);
+        Helper.Normalize(pm.right);
 
         // project the forward and right directions onto the ground plane
         ClipVelocity(pm.forward, pm.forward, pm.groundNormal, OVERCLIP);
@@ -980,16 +955,8 @@ public class Move {
         }
 
         // accelerate
-        float forwardmove = 0, sidemove = 0;
+        float forwardmove = PlayerInput.byteAsFloat(pm.cmd.forward), sidemove = PlayerInput.byteAsFloat(pm.cmd.side);
         // Handle horizontal wish direction
-        if(pm.cmd.Left)
-            sidemove -= 1f;
-        if(pm.cmd.Right)
-            sidemove += 1f;
-        if(pm.cmd.Forward)
-            forwardmove += 1f;
-        if(pm.cmd.Back)
-            forwardmove -= 1f;
 
         Vector3f wishvel = new Vector3f();
         wishvel.x = pm.forward.x * forwardmove + pm.right.x * sidemove;

@@ -3,6 +3,7 @@ package cubetech.ui;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
+import cubetech.input.Binds;
 import cubetech.input.MouseEvent;
 import cubetech.misc.Ref;
 
@@ -27,7 +28,7 @@ public class CSlider extends CComponent {
 
     @Override
     public void MouseEvent(MouseEvent evt) {
-        if(containsPoint(evt.Position) && Ref.Input.playerInput.Mouse1)
+        if(containsPoint(evt.Position) && Ref.Input.IsKeyPressed(Binds.KEY_MOUSE1))
         {
             // Get position on x axis as a fraction
             float pixelOffset = evt.Position.x - getInternalPosition().x;

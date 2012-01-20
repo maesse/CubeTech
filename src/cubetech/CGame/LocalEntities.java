@@ -14,6 +14,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Queue;
 
+import nbullet.util.DirectMotionState;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
@@ -123,16 +124,15 @@ public class LocalEntities {
 
 
     private static void addPhysics(LocalEntity le) {
-        MotionState m = le.phys_motionState;
-        Transform t = new Transform();
-        m.getWorldTransform(t);
+        DirectMotionState m = le.phys_motionState;
         RenderEntity ent = le.rEntity;
-        ent.origin.set(t.origin.x, t.origin.y, t.origin.z);
+        m.getOrigin(ent.origin);
         ent.origin.scale(CGPhysics.INV_SCALE_FACTOR);
-        Helper.matrixToAxis(t.basis, ent.axis);
+        m.getAxis(ent.axis);
+        //Helper.matrixToAxis(t.basis, ent.axis);
         ent.color.set(1,1,1,1);
 
-        int activationState = le.phys_body.getActivationState();
+        int activationState = 1;//le.phys_body.getActivationState();
         
         switch(activationState) {
             case 1: // active

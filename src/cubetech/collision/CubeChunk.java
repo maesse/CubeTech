@@ -6,6 +6,7 @@ import com.bulletphysics.dynamics.RigidBody;
 import cubetech.CGame.ChunkRender;
 import cubetech.Game.PhysicsSystem;
 import cubetech.common.Common;
+import cubetech.common.Helper;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.HashMap;
@@ -119,17 +120,17 @@ public class CubeChunk {
     ChunkSpatialPart lastPart = null;
     ChunkSpatialPart getCubesInVolume(Vector3f start, Vector3f end) {
         // start
-        int sx = (int)Math.floor(start.x / BLOCK_SIZE);
-        int sy = (int)Math.floor(start.y / BLOCK_SIZE);
-        int sz = (int)Math.floor(start.z / BLOCK_SIZE);
+        int sx = Helper.fastFloor(start.x / BLOCK_SIZE);
+        int sy = Helper.fastFloor(start.y / BLOCK_SIZE);
+        int sz = Helper.fastFloor(start.z / BLOCK_SIZE);
         if(sx >= SIZE) sx = SIZE-1;
         if(sy >= SIZE) sy = SIZE-1;
         if(sz >= SIZE) sz = SIZE-1;
 
         // end
-        int ex = (int)Math.floor(end.x / BLOCK_SIZE)+1;
-        int ey = (int)Math.floor(end.y / BLOCK_SIZE)+1;
-        int ez = (int)Math.floor(end.z / BLOCK_SIZE)+1;
+        int ex = Helper.fastFloor(end.x / BLOCK_SIZE)+1;
+        int ey = Helper.fastFloor(end.y / BLOCK_SIZE)+1;
+        int ez = Helper.fastFloor(end.z / BLOCK_SIZE)+1;
         if(ex > SIZE) ex = SIZE;
         if(ey > SIZE) ey = SIZE;
         if(ez > SIZE) ez = SIZE;
@@ -155,8 +156,7 @@ public class CubeChunk {
                 for (int x= sx; x < ex; x++) {
                     int index = getIndex(x, y, z);
 
-                    if(blockType[index] == 0)
-                        continue; // no cube there
+                    if(blockType[index] == 0) continue; // no cube there
 
                     // Save off real-world position
                     part.indexes[part.nIndex * 3] = x * BLOCK_SIZE + absmin[0];

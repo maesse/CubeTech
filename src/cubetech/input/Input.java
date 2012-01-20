@@ -1,125 +1,108 @@
 package cubetech.input;
 
-import cubetech.common.CVar;
-import cubetech.common.CVarFlags;
 import cubetech.common.Commands.ExecType;
-import cubetech.common.Common;
-import cubetech.common.Helper;
+import cubetech.common.*;
 import cubetech.gfx.GLRef;
 import cubetech.misc.Ref;
 import cubetech.net.ConnectState;
 import cubetech.ui.UI.MENU;
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import javax.swing.event.EventListenerList;
+import net.java.games.input.DirectInputEnvironmentPlugin;
 import org.lwjgl.LWJGLException;
-import org.lwjgl.input.Controller;
 import org.lwjgl.input.Controllers;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.util.vector.Vector2f;
-import org.lwjgl.util.vector.Vector3f;
 
 /**
  * Handles input from frame to frame
  * @author mads
  */
 public class Input {
-    public PlayerInput playerInput;
-    Vector2f mouseDelta;
-    
-    Key[] keys;
-    protected HashMap<Integer, EventListenerList> listenerList = new HashMap<Integer, EventListenerList>();
-    protected HashMap<Integer, EventListenerList> listenerListMouse = new HashMap<Integer, EventListenerList>();
-
-    private int KeyCatcher = 0;
-
-
+    // keycatchers ordered by importance
     public final static int KEYCATCH_NONE = 0;
-    public final static int KEYCATCH_UI = 1;
-    public final static int KEYCATCH_CONSOLE = 2;
-    public final static int KEYCATCH_CGAME = 4;
-    public final static int KEYCATCH_MESSAGE = 8;
-
-    ButtonState in_left, in_right, in_forward, in_back, in_up, in_down;
-
-    ButtonState[] in_buttons = new ButtonState[30]; // Custom buttons
-    // button0 = mouse1
-    // button1 = mouse2
-    // button2 = crouch
-    // button3 = scoreboard
-    // button4 = use
+    public final static int KEYCATCH_CGAME = 1;
+    public final static int KEYCATCH_UI = 2;
+    public final static int KEYCATCH_MESSAGE = 4;
+    public final static int KEYCATCH_OVERLAY = 8;
+    public final static int KEYCATCH_CONSOLE = 16;
     
-    public float[] viewangles = new float[3]; // viewangle this frame
-    float[] oldangles = new float[3]; // viewangles from last frame
-    public Binds binds;
-
+    
     public final static int ANGLE_PITCH = 0; // up/down
     public final static int ANGLE_YAW = 1; // left/right
     public final static int ANGLE_ROLL = 2; // fall over
-
+    
+    protected HashMap<Integer, EventListenerList> listenerList = new HashMap<Integer, EventListenerList>();
+    protected HashMap<Integer, EventListenerList> listenerListMouse = new HashMap<Integer, EventListenerList>();
+    
+    private boolean initialized = false;
+    private int KeyCatcher = 0;
+    public int frame_msec;
+    
+    public ClientInput[] clientInputs;
+    public Binds binds;
+    
+    private int keyboardClient = 0; // client who's getting keyboard/mouse input
+    
     // Custom mouse wheel code
     private int mWheelUpTime = 0;
     private int mWheelDownTime = 0;
-
+    private Vector2f mouseDelta = new Vector2f();
+    private Vector2f mousePosition = new Vector2f();
+    private int totalWheelDelta = 0;
+    private boolean[] mouseButtonStates;
+    
+    private Key[] keys;
     private int backSpaceTime = 0;
     private int backSpaceGracePeriod = 200;
     private int backSpaceRepeat = 30;
+    
+    private ControllerState kbState;
+    private Joystick[] joysticks = null;
+    // Joystick index -> client mapping
+    private int[] joystickMapping = new int[] {0,1,2,3};
+    private int lastControllerCheck = 0; // last new-controller check
+    private int controllerCheckTimeout = 1000; // how often to check for new controllers
 
-    private CVar sens;
+    public CVar sensitivity;
     private CVar in_mouselook;
     private CVar in_debug;
-    private boolean initialized = false;
+    private CVar in_nojoy;
+    public CVar j_pitch;
+    public CVar j_yaw;
+    public CVar j_forward;
+    public CVar j_side;
+    public CVar j_pitch_axis;
+    public CVar j_yaw_axis;
+    public CVar j_forward_axis;
+    public CVar j_side_axis;
+    public CVar j_deadzone;
+    
+    private InputOverlay overlay;
 
     public Input() {
         binds = new Binds(this);
-        viewangles[0] = 90;
-    }
-
-    public void initialize() {
-        if(initialized) return;
-
         in_debug = Ref.cvars.Get("in_debug", "0", EnumSet.of(CVarFlags.NONE));
-
-        in_forward = new ButtonState();
-        in_back = new ButtonState();
-        in_left = new ButtonState();
-        in_right = new ButtonState();
-        in_up = new ButtonState();
-        in_down = new ButtonState();
-        Ref.commands.AddCommand("+forward", in_forward.KeyDownHook);
-        Ref.commands.AddCommand("-forward", in_forward.KeyUpHook);
-        Ref.commands.AddCommand("+back", in_back.KeyDownHook);
-        Ref.commands.AddCommand("-back", in_back.KeyUpHook);
-        Ref.commands.AddCommand("+left", in_left.KeyDownHook);
-        Ref.commands.AddCommand("-left", in_left.KeyUpHook);
-        Ref.commands.AddCommand("+right", in_right.KeyDownHook);
-        Ref.commands.AddCommand("-right", in_right.KeyUpHook);
-        Ref.commands.AddCommand("+up", in_up.KeyDownHook);
-        Ref.commands.AddCommand("-up", in_up.KeyUpHook);
-        Ref.commands.AddCommand("+down", in_down.KeyDownHook);
-        Ref.commands.AddCommand("-down", in_down.KeyUpHook);
-
-        for (int i= 0; i < in_buttons.length; i++) {
-            in_buttons[i] = new ButtonState();
-            Ref.commands.AddCommand("+button" + i, in_buttons[i].KeyDownHook);
-            Ref.commands.AddCommand("-button" + i, in_buttons[i].KeyUpHook);
-        }
-        binds.BindKey("W", "+forward");
-        binds.BindKey("S", "+back");
-        binds.BindKey("A", "+left");
-        binds.BindKey("D", "+right");
-        binds.BindKey("SPACE", "+up");
-        binds.BindKey("C", "+down");
-        binds.BindKey("UP", "+forward");
-        binds.BindKey("DOWN", "+back");
-        binds.BindKey("LEFT", "+left");
-        binds.BindKey("RIGHT", "+right");
+        in_nojoy = Ref.cvars.Get("in_nojoy", "0", EnumSet.of(CVarFlags.NONE));
+        sensitivity = Ref.cvars.Get("sensitivity", "3", EnumSet.of(CVarFlags.ARCHIVE));
+        in_mouselook = Ref.cvars.Get("in_mouselook", "1", EnumSet.of(CVarFlags.ARCHIVE));
+        
+        binds.BindKey("W", "+KBforward");
+        binds.BindKey("S", "+KBback");
+        binds.BindKey("A", "+KBleft");
+        binds.BindKey("D", "+KBright");
+        binds.BindKey("SPACE", "+KBup");
+        binds.BindKey("C", "+KBdown");
+        binds.BindKey("UP", "+KBforward");
+        binds.BindKey("DOWN", "+KBback");
+        binds.BindKey("LEFT", "+KBleft");
+        binds.BindKey("RIGHT", "+KBright");
         binds.BindKey("F10", "console");
         binds.BindKey("BACKSLASH", "console");
-        binds.BindKey("TAB", "+button3");
+        binds.BindKey("TAB", "+KBbutton3");
         binds.BindKey("RETURN", "message");
         binds.BindKey("y", "message");
         binds.BindKey("1", "weapon 1");
@@ -127,19 +110,63 @@ public class Input {
         binds.BindKey("3", "weapon 3");
         binds.BindKey("4", "weapon 4");
         binds.BindKey("5", "weapon 5");
-        binds.BindKey("mouse1", "+button0");
-        binds.BindKey("mouse2", "+button1");
-        binds.BindKey("LCONTROL", "+button2");
+        binds.BindKey("mouse1", "+KBbutton0");
+        binds.BindKey("mouse2", "+KBbutton1");
+        binds.BindKey("LCONTROL", "+KBbutton2");
         binds.BindKey("E", "use");
         binds.BindKey("F11", "screenshot");
+        binds.BindKey("F12", "toggleoverlay");
         binds.BindKey("g", "dropweapon");
-        initialized = true;
+        binds.BindKey("JOY1_7", "toggleoverlay");
+        binds.BindKey("JOY2_7", "toggleoverlay");
+        binds.BindKey("JOY3_7", "toggleoverlay");
+        binds.BindKey("JOY1_a5p", "weapon next");
+        binds.BindKey("JOY1_a5n", "weapon prev");
+        binds.BindKey("JOY1_a4n", "+JOY1button0");
+        
+        for (int i = 0; i < 4; i++) {
+            binds.BindKey("JOY" + (i+1) + "_7", "toggleoverlay");
+            binds.BindKey("JOY" + (i+1) + "_9", "+JOY" + (i+1) + "up");
+            binds.BindKey("JOY" + (i+1) + "_0", "+JOY" + (i+1) + "up");
+            
+            String aliasname = "joy" + (i+1) + "togglecrouch";
+            String aliascaller = String.format("alias %s %son", aliasname, aliasname);
+            String aliason = String.format("alias %son \"+joy%dbutton2; alias %s %soff\"", aliasname, (i+1), aliasname, aliasname);
+            String aliasoff = String.format("alias %soff \"-joy%dbutton2; alias %s %son\"", aliasname, (i+1), aliasname, aliasname);
+            Ref.commands.ExecuteText(ExecType.NOW, aliason);
+            Ref.commands.ExecuteText(ExecType.NOW, aliasoff);
+            Ref.commands.ExecuteText(ExecType.NOW, aliascaller);
+            binds.BindKey("JOY" + (i+1) + "_8", aliasname);
+        }
 
+        j_pitch = Ref.cvars.Get("j_pitch", "0.1", null);
+    	j_yaw = Ref.cvars.Get("j_yaw", "-0.2", null);
+    	j_forward = Ref.cvars.Get("j_forward", "-1", null);
+    	j_side = Ref.cvars.Get("j_side", "1", null);
+    	j_pitch_axis = Ref.cvars.Get("j_pitch_axis", "2", null);
+    	j_yaw_axis = Ref.cvars.Get("j_yaw_axis", "3", null);
+    	j_forward_axis = Ref.cvars.Get("j_forward_axis", "0", null);
+    	j_side_axis = Ref.cvars.Get("j_side_axis", "1", null);
+        j_deadzone = Ref.cvars.Get("j_deadzone", "0.2", null);
+        
+        clientInputs = new ClientInput[4];
+        for (int i = 0; i < 4; i++) {
+            clientInputs[i] = new ClientInput(i);
+        }
+        
+         overlay = new InputOverlay(this);
     }
 
+    public void addKeyCatcher(int catcher) {
+        SetKeyCatcher(GetKeyCatcher() | catcher);
+    }
+    
+    public void removeKeyCatcher(int catcher) {
+        SetKeyCatcher(GetKeyCatcher() & ~catcher);
+    }
+    
     public void SetKeyCatcher(int catcher) {
-        if(catcher == KeyCatcher)
-            return;
+        if(catcher == KeyCatcher) return;
 
         // Was in game
         if(KeyCatcher == KEYCATCH_NONE && in_mouselook.isTrue()) {
@@ -147,14 +174,15 @@ public class Input {
         }
 
         ClearKeys();
+        
         // Pause/unpause when entering/exiting menu
-        if((KeyCatcher & KEYCATCH_UI) > 0
-                && (catcher & KEYCATCH_UI) == 0)
+        if((KeyCatcher & KEYCATCH_UI) > 0 && (catcher & KEYCATCH_UI) == 0)
             Ref.cvars.Set2("cl_paused", "0", true);
-        else if((KeyCatcher & KEYCATCH_UI) == 0
-                && (catcher & KEYCATCH_UI) > 0)
+        else if((KeyCatcher & KEYCATCH_UI) == 0 && (catcher & KEYCATCH_UI) > 0)
             Ref.cvars.Set2("cl_paused", "1", true);
+        
         KeyCatcher = catcher;
+        
         // was in menu and is now in game
         if(KeyCatcher == KEYCATCH_NONE && in_mouselook.isTrue()) {
             Mouse.setGrabbed(true);
@@ -170,25 +198,35 @@ public class Input {
     }
 
     void FireKeyEvent(KeyEvent evt) {
+        Key k = evt.getSource();
+        if(in_debug.isTrue()) Common.LogDebug("Key %s: %s", k.Pressed?"Pressed":"Released", binds.KeyToString(k.key));
+        
         Object[] listeners = null;
         if((KeyCatcher & KEYCATCH_CONSOLE) > 0 && listenerList.containsKey(KEYCATCH_CONSOLE)) {
             listeners = listenerList.get(KEYCATCH_CONSOLE).getListenerList();
+        } else if((KeyCatcher & KEYCATCH_OVERLAY) > 0 && listenerList.containsKey(KEYCATCH_OVERLAY)) {
+            listeners = listenerList.get(KEYCATCH_OVERLAY).getListenerList();
         } else if((KeyCatcher & KEYCATCH_MESSAGE) > 0 && listenerList.containsKey(KEYCATCH_MESSAGE)) {
             listeners = listenerList.get(KEYCATCH_MESSAGE).getListenerList();
         } else if((KeyCatcher & KEYCATCH_UI) > 0 && listenerList.containsKey(KEYCATCH_UI)) {
             listeners = listenerList.get(KEYCATCH_UI).getListenerList();
         } else if((KeyCatcher & KEYCATCH_CGAME) > 0 && listenerList.containsKey(KEYCATCH_CGAME)) {
             listeners = listenerList.get(KEYCATCH_CGAME).getListenerList();
-        }  else {
-            Key key = (Key)evt.getSource();
-            binds.ParseBinding(key.key, key.Pressed, key.Time);
-            return;
         }
         
-        for (int i= 0; i < listeners.length; i++) {
-            if(listeners[i] == KeyEventListener.class) {
-                ((KeyEventListener)listeners[i+1]).KeyPressed(evt);
+        boolean continueToBinds = true;
+        if(listeners != null) {
+            for (int i= 0; i < listeners.length; i++) {
+                if(listeners[i] == KeyEventListener.class) {
+                    continueToBinds = continueToBinds && ((KeyEventListener)listeners[i+1]).KeyPressed(evt);
+                }
             }
+        }
+        
+        // standard handler + some listeners don't want to block binds
+        if(continueToBinds) {
+            Key key = (Key)evt.getSource();
+            binds.ParseBinding(key.key, key.Pressed, key.Time);
         }
     }
 
@@ -197,6 +235,8 @@ public class Input {
         if((KeyCatcher & KEYCATCH_CONSOLE) > 0) {
             if(listenerListMouse.containsKey(KEYCATCH_CONSOLE))
                 listeners = listenerListMouse.get(KEYCATCH_CONSOLE).getListenerList();
+        } else if((KeyCatcher & KEYCATCH_OVERLAY) > 0 && listenerListMouse.containsKey(KEYCATCH_OVERLAY)) {
+            listeners = listenerListMouse.get(KEYCATCH_OVERLAY).getListenerList();
         } else if((KeyCatcher & KEYCATCH_MESSAGE) > 0 && listenerListMouse.containsKey(KEYCATCH_MESSAGE)) {
             listeners = listenerListMouse.get(KEYCATCH_MESSAGE).getListenerList();
         } else if((KeyCatcher & KEYCATCH_UI) > 0 && listenerListMouse.containsKey(KEYCATCH_UI)) {
@@ -216,11 +256,12 @@ public class Input {
     }
 
     public void Init() throws LWJGLException {
+        if(initialized) return;
+        
         // Keyboard init
         Keyboard.create();
         Keyboard.enableRepeatEvents(false);
-        if(!Keyboard.isCreated())
-            throw new LWJGLException("Keyboard not created.");
+        if(!Keyboard.isCreated()) throw new LWJGLException("Keyboard not created.");
         keys = new Key[Binds.KEY_EXTENSION_END]; // Mouse keys extends the set
         for (int i= 0; i < keys.length; i++) {
             keys[i] = new Key(i);
@@ -228,74 +269,107 @@ public class Input {
 
         // Mouse init
         Mouse.create();
+        mouseButtonStates = new boolean[Mouse.getButtonCount()];
 
+        // Controllers init
         Controllers.create();
+        
+        kbState = new ControllerState("KB");
+        
+        Ref.commands.AddCommand("toggleoverlay", cmd_toggleoverlay);
 
-        playerInput = new PlayerInput();
-        mouseDelta = new Vector2f();
-        sens = Ref.cvars.Get("sensitivity", "3", EnumSet.of(CVarFlags.ARCHIVE));
-        in_mouselook = Ref.cvars.Get("in_mouselook", "1", EnumSet.of(CVarFlags.ARCHIVE));
+        initialized = true;
     }
-
-    class Joystick {
-        Controller ctrl;
-        String name;
-        ArrayList<String> axisNames = new ArrayList<String>();
-        int buttons = 0;
-        Joystick(Controller ctrl) {
-            this.ctrl = ctrl;
-            int nAxis = ctrl.getAxisCount();
-            String axisnames = "";
-            for (int i= 0; i < nAxis; i++) {
-                axisNames.add(ctrl.getAxisName(i));
-                axisnames += axisNames.get(i) + ", ";
+    
+    private void updateControllerCount() {
+        if(true) return; // broken. need to modify lwjgl/jinput code to fix this
+        if(lastControllerCheck + controllerCheckTimeout > Ref.client.realtime) return;
+        lastControllerCheck = Ref.client.realtime;
+        
+        // Hax: LWJGL doesn't detect new controllers at runtime, so keep an eye on controller count
+        // and re-init the controllers when the count changes
+        
+        // Fix: This shit creates a dummy windows that never gets released, awesome right?
+        DirectInputEnvironmentPlugin lolwut = new DirectInputEnvironmentPlugin ();
+        
+        int currentCount = Controllers.isCreated() ? Controllers.getControllerCount() : 0;
+        int count = 0;
+        for (net.java.games.input.Controller c : lolwut.getControllers()) {
+            if ( (!c.getType().equals(net.java.games.input.Controller.Type.KEYBOARD)) &&
+                 (!c.getType().equals(net.java.games.input.Controller.Type.MOUSE)) ) {
+                    count++;
             }
-            buttons = ctrl.getButtonCount();
-            name = ctrl.getName();
-
-            Common.Log("[Input] New joystick '%s' registered. %d buttons. %d axis, %s",
-                    name, buttons, nAxis, axisnames);
+        }
+        if(currentCount != count) {
+            Controllers.destroy();
+            try {
+                Controllers.create();
+            } catch (LWJGLException ex) {
+                Common.Log("Controller error: " + Common.getExceptionString(ex));
+                Ref.cvars.Set2("in_nojoy", "1", true);
+            }
         }
     }
-
-    Joystick joystick = null;
 
     private void updateControllers() {
-        if(Controllers.getControllerCount() == 0) return;
+        if(in_nojoy.isTrue()) return;
+        updateControllerCount();
+        if(in_nojoy.isTrue()) return;
+        
+        int nControllers = Controllers.getControllerCount();
+        if(nControllers == 0) return;
 
-        if(joystick == null) {
-            joystick = new Joystick(Controllers.getController(0));
+        // First run, initialize
+        if(joysticks == null) {
+            joysticks = new Joystick[nControllers];
+            for (int i = 0; i < nControllers; i++) {
+                joysticks[i] = new Joystick(Controllers.getController(i));
+            }
         }
-
         
-        
+        for (int i = 0; i < joysticks.length; i++) {
+            joysticks[i].update();
+        }
+    }
+    
+    public Joystick getJoystick(int index) {
+        if(joysticks == null) return null;
+        else if(index < 0 || index >= joysticks.length) return null;
+        return joysticks[index];
+    }
+    
+    public ClientInput getClient(int index) {
+        if(index < 0 || index >= 4) Ref.common.Error(Common.ErrorCode.DROP, "Invalid clientindex " + index);
+        return clientInputs[index];
     }
 
     public void Update() {
         GLRef.checkError();
+        
         Display.processMessages();
-        GLRef.checkError();
         MouseUpdate();
-        GLRef.checkError();
         KeyboardUpdate();
         updateControllers();
-        GLRef.checkError();
-        UpdateUserInput();
-        GLRef.checkError();
-        
-        
+        for (int i = 0; i < clientInputs.length; i++) {
+            ClientInput input = clientInputs[i];
+            if(i == keyboardClient) {
+                // let this input client know of the mouse changes.
+                input.updateFromKeyboardMouse(kbState, mouseButtonStates, mousePosition, (int)mouseDelta.x, (int)mouseDelta.y, totalWheelDelta);
+            } else {
+                // Ensure that there isn't any mousedown even stuck if keyboardclient is switched around
+                input.clearKeyboardMouseState();
+            }
+        }
 
         // Repeat backspace events
         if(Keyboard.isKeyDown(Keyboard.KEY_BACK)) {
-            if(backSpaceTime == 0)
-                backSpaceTime = Ref.client.realtime + backSpaceGracePeriod;
+            if(backSpaceTime == 0) backSpaceTime = Ref.client.realtime + backSpaceGracePeriod;
+            // Send keydown-event
             else if(Ref.client.realtime > backSpaceTime) {
                 backSpaceTime = Ref.client.realtime + backSpaceRepeat;
-                // Send keydown-event
                 FireKeyEvent(new KeyEvent(GetKey(Keyboard.KEY_BACK)));
             }
-        } else
-            backSpaceTime = 0;
+        } else backSpaceTime = 0;
 
         // Send mwheel keyUp events if it's time
         if(mWheelDownTime != 0 && Ref.client.realtime - mWheelDownTime > 50) {
@@ -306,6 +380,8 @@ public class Input {
             binds.ParseBinding(binds.StringToKey("MWHEELUP"), false, (int) (Ref.client.realtime));
             mWheelUpTime = 0;
         }
+        
+        
     }
 
     public void ClearKeys() {
@@ -318,83 +394,48 @@ public class Input {
         }
     }
 
-    void UpdateUserInput() {
-//        if((GetKeyCatcher() & (KEYCATCH_CONSOLE | KEYCATCH_MESSAGE | KEYCATCH_UI)) > 0)
-//            return;
-
-        
-        playerInput.Forward = ((int)Math.ceil(in_forward.KeyState()) == 1)?true:false;
-        playerInput.Back = ((int)Math.ceil(in_back.KeyState()) == 1)?true:false;
-        playerInput.Left = ((int)Math.ceil(in_left.KeyState()) == 1)?true:false;
-        playerInput.Right = ((int)Math.ceil(in_right.KeyState()) == 1)?true:false;
-        playerInput.Up = ((int)Math.ceil(in_up.KeyState()) == 1)?true:false;
-        playerInput.Down = ((int)Math.ceil(in_down.KeyState()) == 1)?true:false;
-    }
-
     public boolean IsKeyPressed(int key) {
         if(key <0 || key >= keys.length)
             return false;
         return keys[key].Pressed;
     }
 
-    void MouseUpdate() {
-        // Update mouse
-        if(playerInput.Mouse1Diff)
-            playerInput.Mouse1Diff = false;
-        if(playerInput.Mouse2Diff)
-            playerInput.Mouse2Diff = false;
-        if(playerInput.Mouse3Diff)
-            playerInput.Mouse3Diff = false;
-        
-        int dx = 0, dy = 0;
-        boolean event = false;
+    private void MouseUpdate() {
+        mouseDelta.set(0,0);
+        totalWheelDelta = 0;
         while(Mouse.next() && !Ref.common.com_unfocused.isTrue()) {
-            event = true;
             // Add up delta
-            dx += Mouse.getEventDX();
-            dy += Mouse.getEventDY();
+            int evtDx = Mouse.getEventDX();
+            int evtDy = Mouse.getEventDY();
+            mouseDelta.x += evtDx;
+            mouseDelta.y += evtDy;
 
             // Set Position
             float mousex = (float)Mouse.getEventX() / (float)Ref.glRef.GetResolution().x;
             float mousey = (float)Mouse.getEventY() / (float)Ref.glRef.GetResolution().y;
             
             if(!Float.isInfinite(mousey) && !Float.isInfinite(mousex)) {
-                playerInput.MousePos.x = mousex;
-                playerInput.MousePos.y = mousey;
+                mousePosition.x = mousex;
+                mousePosition.y = mousey;
+                
             }
 
-            // Clamp to 0->1
-            playerInput.MousePos.x = (float)Math.max(Math.min(playerInput.MousePos.x, 1f),0f);
-            playerInput.MousePos.y = (float)Math.max(Math.min(playerInput.MousePos.y, 1f),0f);
+            Helper.Clamp(mousePosition, 0f, 1f);
 
             int wheelDelta = Mouse.getEventDWheel();
-            playerInput.WheelDelta += wheelDelta;
-            if(wheelDelta > 0)
-                wheelDelta = 1;
-            if(wheelDelta < 0)
-                wheelDelta = -1;
+            totalWheelDelta += wheelDelta;
+            wheelDelta = Helper.Clamp(wheelDelta, -1, 1);
 
             int button = Mouse.getEventButton();
             boolean pressed = false;
-            if(button != -1)
+            
+            if(button != -1) {
                 pressed = Mouse.getEventButtonState();
-            switch(button) {
-                case 0:
-                    playerInput.Mouse1Diff =  playerInput.Mouse1 != pressed;
-                    playerInput.Mouse1 = pressed;
-                    break;
-                case 1:
-                    playerInput.Mouse2Diff =  playerInput.Mouse2 != pressed;
-                    playerInput.Mouse2 = pressed;
-                    break;
-                case 2:
-                    playerInput.Mouse3Diff =  playerInput.Mouse3 != pressed;
-                    playerInput.Mouse3 = pressed;
-                    break;
+                mouseButtonStates[button] = pressed;
             }
-            GLRef.checkError();
-            FireMouseEvent(new MouseEvent(button, pressed, wheelDelta, dx, dy, new Vector2f(playerInput.MousePos.x,playerInput.MousePos.y)));
-            GLRef.checkError();
+            
+            FireMouseEvent(new MouseEvent(button, pressed, wheelDelta, evtDx, evtDy, new Vector2f(mousePosition)));
+            
             // Also fire a key event for button presses
             if(button != -1) {
                 // Fire regular mouse button event
@@ -430,40 +471,35 @@ public class Input {
                 mWheelUpTime = Ref.client.realtime;
             }
         }
-        if(!event) {
-            playerInput.WheelDelta = 0;
-        }
-
-        // Set delta
-        playerInput.MouseDelta[0] = dx;
-        playerInput.MouseDelta[1] = dy;
+        
+        
     }
 
     void KeyboardUpdate() {
-        
         for (int i= 0; i < keys.length; i++) {
             if(keys[i] != null)
                 keys[i].Changed = false;
         }
         
         int nProcessed = 0;
+//        int timeDelta = Ref.common.Milliseconds() - Ref.common.frametime;
+        
         while(Keyboard.next()) {
             boolean pressed = Keyboard.getEventKeyState();
             int key = Keyboard.getEventKey();
             char c = Keyboard.getEventCharacter();
-            //int msec = (int) (Keyboard.getEventNanoseconds() / (1000 * 1000));
-            int msec = Ref.client.realtime;
-
+            int eventTime = (int)(Keyboard.getEventNanoseconds() / (1000*1000));
+            eventTime += frame_msec;
             Key currKey = keys[key];
             
-            if(currKey.Pressed != pressed && currKey.Time <= msec) {
+            if(currKey.Pressed != pressed && currKey.Time <= eventTime) {
                 // Key changes state
                 currKey.Pressed = pressed;
                 currKey.Changed = true;
-                currKey.Time = msec;
+                currKey.Time = eventTime;
                 currKey.Char = c;
                 
-                if(in_debug.isTrue()) Common.LogDebug("Key %s: %s", pressed?"Pressed":"Released", binds.KeyToString(key));
+                
 
                 if(pressed) {
                     // Special case handling for escape
@@ -493,9 +529,9 @@ public class Input {
 //                        }
 
                         if((GetKeyCatcher() & KEYCATCH_UI) == 0) {
-                            if(Ref.client.state == ConnectState.ACTIVE)
+                            if(Ref.client.clc.state == ConnectState.ACTIVE)
                                 Ref.ui.SetActiveMenu(MENU.MAINMENU);
-                            else if(Ref.client.state != ConnectState.DISCONNECTED) {
+                            else if(Ref.client.clc.state != ConnectState.DISCONNECTED) {
                                 // Escape can abort an connection attempt
                                 Ref.commands.ExecuteText(ExecType.NOW, "disconnect\n");
                                 Ref.ui.SetActiveMenu(MENU.MAINMENU);
@@ -558,49 +594,44 @@ public class Input {
 
     }
 
-    private void MouseMove(PlayerInput cmd) {
-        if(cmd.MouseDelta[0] == 0 && cmd.MouseDelta[1] == 0) {
-            for (int i= 0; i < 3; i++) {
-                cmd.angles[i] = Helper.Angle2Short(viewangles[i]);
-            }
-            return; // No change
+    public PlayerInput getKeyboardInput() {
+        return clientInputs[keyboardClient].getInput();
+    }
+    
+    public void setKeyboardClient(int index) {
+        if(index < 0 || index >= 4) Ref.common.Error(Common.ErrorCode.DROP, "Invalid client index " + index);
+        keyboardClient = index;
+    }
+    
+    public void setJoystickClient(Joystick stick, int clientIndex) {
+        if(clientIndex < 0 || clientIndex >= 4) Ref.common.Error(Common.ErrorCode.DROP, "Invalid client index " + clientIndex);
+        joystickMapping[stick.getIndex()] = clientIndex;
+    }
+    
+    public int getJoystickMapping(int joystickIndex) {
+        return joystickMapping[joystickIndex];
+    }
+    
+    
+    private ICommand cmd_toggleoverlay = new ICommand() {
+        public void RunCommand(String[] args) {
+            overlay.toggleVisible();
         }
+    };
 
-        // Cast to float
-        float mx = cmd.MouseDelta[0];
-        float my = cmd.MouseDelta[1];
-
-        // Multiply by sensitivity
-        mx *= sens.fValue;
-        my *= sens.fValue;
-
-        viewangles[ANGLE_YAW] -= 0.022f * mx;
-        viewangles[ANGLE_PITCH] -= 0.022f * my;
-
-        if(viewangles[ANGLE_PITCH] > 168f)
-            viewangles[ANGLE_PITCH] = 168f;
-        else if(viewangles[ANGLE_PITCH] < 1f)
-            viewangles[ANGLE_PITCH] = 1f;
-
-        // Ensure angles have not been wrapped
-        cmd.angles[0] = Helper.Angle2Short(viewangles[0]);
-        cmd.angles[1] = Helper.Angle2Short(viewangles[1]);
-        cmd.angles[2] = Helper.Angle2Short(viewangles[2]);
-        
+    public InputOverlay getOverlay() {
+        return overlay;
     }
 
-
-
-    public PlayerInput CreateCmd() {
-        System.arraycopy(viewangles, 0, oldangles, 0, viewangles.length);
-        PlayerInput cmd = playerInput.Clone();
-        MouseMove(playerInput);
-        
-        for (int i= 0; i < in_buttons.length; i++) {
-            int state = (int) in_buttons[i].KeyState();
-            cmd.buttons[i] = state != 0;
+    public Joystick getJoystickForClient(int clientIndex) {
+        if(joysticks == null) return null;
+        for (int i = 0; i < joystickMapping.length; i++) {
+            if(joystickMapping[i] == clientIndex) return joysticks[i];
         }
-        cmd.weapon = Ref.client.cl.userCmd_weapon;
-        return cmd;
+        return null;
+    }
+
+    public int getKeyboardClient() {
+        return keyboardClient;
     }
 }

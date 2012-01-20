@@ -10,7 +10,7 @@ import java.util.HashMap;
  * Keeps track of binds
  * @author mads
  */
-public class Binds implements KeyEventListener {
+public class Binds  {
     // Custom keys not found in Lwjgl's Keyboard implementation
     public static final int KEY_MOUSE1 = 256;
     public static final int KEY_MOUSE2 = 257;
@@ -19,7 +19,11 @@ public class Binds implements KeyEventListener {
     public static final int KEY_MOUSE5 = 260;
     public static final int KEY_MWHEELUP = 261;
     public static final int KEY_MWHEELDOWN = 262;
-    public static final int KEY_EXTENSION_END = 263;
+    public static final int KEY_JOY1 = 263;
+    public static final int KEY_JOY2 = 263+32;
+    public static final int KEY_JOY3 = 263+32*2;
+    public static final int KEY_JOY4 = 263+32*3;
+    public static final int KEY_EXTENSION_END = 263+32*4;
 
     // Current binds
     HashMap<Integer, String> binds = new HashMap<Integer, String>();
@@ -42,10 +46,10 @@ public class Binds implements KeyEventListener {
 
     
 
-    public void KeyPressed(KeyEvent evt) {
-        Key realevt = (Key)evt.getSource();
-        ParseBinding(realevt.key, realevt.Pressed, realevt.Time);
-    }
+//    public void KeyPressed(KeyEvent evt) {
+//        Key realevt = (Key)evt.getSource();
+//        ParseBinding(realevt.key, realevt.Pressed, realevt.Time);
+//    }
 
     public void BindKey(String key, String bind) {
         int keyIndex = StringToKey(key);
@@ -138,8 +142,8 @@ public class Binds implements KeyEventListener {
 
     // Key init helper
     private void RegisterKey(String str, int keyIndex) {
-        stringToKeyMap.put(str, keyIndex);
-        keyToStringMap.put(keyIndex, str);
+        stringToKeyMap.put(str.toUpperCase(), keyIndex);
+        keyToStringMap.put(keyIndex, str.toUpperCase());
     }
 
     // Write all binds to this stringbuilder, for creating the config file
@@ -336,6 +340,20 @@ public class Binds implements KeyEventListener {
         RegisterKey("MOUSE5", KEY_MOUSE5);
         RegisterKey("MWHEELUP", KEY_MWHEELUP);
         RegisterKey("MWHEELDOWN", KEY_MWHEELDOWN);
+        
+        // Joystick keys
+        // JOY1_0 -> JOY4_31
+        int joyStart = KEY_JOY1;
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 16; j++) {
+                RegisterKey("JOY" + (i+1) + "_" + j, joyStart + j + i * 32);
+            }
+            // analog buttons for joysticks can be negative, centered and positive
+            for (int j = 0; j < 8; j++) {
+                RegisterKey("JOY" + (i+1) + "_a" + j + "p", joyStart + 16 + j*2 + i * 32);
+                RegisterKey("JOY" + (i+1) + "_a" + j + "n", joyStart + 16 + j*2+1 + i * 32);
+            }
+        }
     }
 
     

@@ -127,19 +127,25 @@ public class ClientCubeMap {
         CubeChunk[] renderList = getChunksWithinDistance(orgX, orgY, orgZ, chunkDistance);
 
         RenderEntity ent = Ref.render.createEntity(REType.WORLD);
-        ent.controllers = renderList;
+        ent.renderObject = renderList;
 
         Ref.render.addRefEntity(ent);
 
-        if(!Ref.glRef.shadowMan.isRendering()) {
+        int frame = Ref.client.framecount;
+        boolean newFrame = lastframe != frame;
+        lastframe = frame;
+        if(!Ref.glRef.shadowMan.isRendering() && newFrame) {
             builder.markLockedChunks(chunks); // push vertex data off to the chunks
             wipeOldChunkVBO(5000); // remove vbo's that hasn't been rendering for 5secs
         }
         
     }
 
+    private static int lastframe = -1;
     public static void renderChunkList(CubeChunk[] renderlist, ViewParams view) {
         // clear render stats
+        
+        
         nSides = 0;
         nChunks = 0;
         nVBOthisFrame = 0;

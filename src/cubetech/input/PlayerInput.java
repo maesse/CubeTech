@@ -3,7 +3,6 @@ package cubetech.input;
 import cubetech.common.Helper;
 import cubetech.common.items.Weapon;
 import cubetech.net.NetBuffer;
-import java.util.Arrays;
 import org.lwjgl.util.vector.Vector2f;
 
 /**
@@ -11,6 +10,8 @@ import org.lwjgl.util.vector.Vector2f;
  * @author mads
  */
 public class PlayerInput {
+    
+    
     // not sent
     public int[] MouseDelta = new int[2];
 
@@ -27,23 +28,24 @@ public class PlayerInput {
     public boolean Mouse2Diff;
     public boolean Mouse3;
     public boolean Mouse3Diff;
-    public boolean Forward;
-    public boolean Back;
-    public boolean Left;
-    public boolean Right;
+    public byte forward;
+    public byte side;
     public boolean Up;
     public boolean Down;
 
+    public static float byteAsFloat(byte b) {
+        float res = b;
+        res /= 127.0;
+        return res;
+    }
+    
     public static PlayerInput ReadDeltaUserCmd(NetBuffer buf, PlayerInput oldcmd) {
         PlayerInput dest = new PlayerInput();
         dest.serverTime = buf.ReadInt();
         if(buf.ReadBool()) { // Got new data
             int hags = buf.ReadInt();
             int index = 0;
-            dest.Forward = getBit(hags,index++);
-            dest.Back = getBit(hags,index++);
-            dest.Left = getBit(hags,index++);
-            dest.Right = getBit(hags,index++);
+            
             dest.Up = getBit(hags,index++);
             dest.Down = getBit(hags,index++);
             dest.Mouse1Diff = getBit(hags,index++);
@@ -54,13 +56,14 @@ public class PlayerInput {
             dest.Mouse3 = getBit(hags,index++);
             boolean hasWheel = getBit(hags,index++);
             boolean sameVec = getBit(hags,index++);
-
-            if(hasWheel)
-                dest.WheelDelta = buf.ReadInt();
-            if(!sameVec)
-                dest.MousePos = buf.ReadVector();
-            else
-                dest.MousePos.set(oldcmd.MousePos);
+            dest.forward = buf.ReadByte();
+            dest.side = buf.ReadByte();
+            if(hasWheel) dest.WheelDelta = buf.ReadInt();
+                
+            if(!sameVec) dest.MousePos = buf.ReadVector();
+            else dest.MousePos.set(oldcmd.MousePos);
+            
+            
 
             dest.angles[0] = buf.ReadInt();
             dest.angles[1] = buf.ReadInt();
@@ -71,11 +74,8 @@ public class PlayerInput {
             }
             dest.weapon = buf.ReadEnum(Weapon.class);
         } else { // unchanged
-
-            dest.Forward = oldcmd.Forward;
-            dest.Back = oldcmd.Back;
-            dest.Left = oldcmd.Left;
-            dest.Right = oldcmd.Right;
+            dest.side = oldcmd.side;
+            dest.forward = oldcmd.forward;
             dest.Up = oldcmd.Up;
             dest.Down = oldcmd.Down;
             dest.Mouse1Diff = oldcmd.Mouse1Diff;
@@ -108,25 +108,19 @@ public class PlayerInput {
     @Override
     public int hashCode() {
         int hash = 7;
-        hash = 59 * hash + Arrays.hashCode(this.angles);
-        hash = 59 * hash + this.WheelDelta;
-        hash = 59 * hash + (this.Mouse1 ? 1 : 0);
-        hash = 59 * hash + (this.Mouse1Diff ? 1 : 0);
-        hash = 59 * hash + (this.Mouse2 ? 1 : 0);
-        hash = 59 * hash + (this.Mouse2Diff ? 1 : 0);
-        hash = 59 * hash + (this.Mouse3 ? 1 : 0);
-        hash = 59 * hash + (this.Mouse3Diff ? 1 : 0);
-        hash = 59 * hash + (this.Forward ? 1 : 0);
-        hash = 59 * hash + (this.Back ? 1 : 0);
-        hash = 59 * hash + (this.Left ? 1 : 0);
-        hash = 59 * hash + (this.Right ? 1 : 0);
-        hash = 59 * hash + (this.Up ? 1 : 0);
-        hash = 59 * hash + (this.Down ? 1 : 0);
+        hash = 37 * hash + this.WheelDelta;
+        hash = 37 * hash + (this.Mouse1 ? 1 : 0);
+        hash = 37 * hash + (this.Mouse1Diff ? 1 : 0);
+        hash = 37 * hash + (this.Mouse2 ? 1 : 0);
+        hash = 37 * hash + (this.Mouse2Diff ? 1 : 0);
+        hash = 37 * hash + (this.Mouse3 ? 1 : 0);
+        hash = 37 * hash + (this.Mouse3Diff ? 1 : 0);
+        hash = 37 * hash + this.forward;
+        hash = 37 * hash + this.side;
+        hash = 37 * hash + (this.Up ? 1 : 0);
+        hash = 37 * hash + (this.Down ? 1 : 0);
         return hash;
     }
-
-
-
 
 
     private static int setBit(int val, int index, boolean value) {
@@ -168,10 +162,8 @@ public class PlayerInput {
 
         int hags = 0;
         int index = 0;
-        hags = setBit(hags, index++, Forward);
-        hags = setBit(hags, index++, Back);
-        hags = setBit(hags, index++, Left);
-        hags = setBit(hags, index++, Right);
+        
+        
         hags = setBit(hags, index++, Up);
         hags = setBit(hags, index++, Down);
         hags = setBit(hags, index++, Mouse1Diff);
@@ -181,15 +173,16 @@ public class PlayerInput {
         hags = setBit(hags, index++, Mouse3Diff);
         hags = setBit(hags, index++, Mouse3);
         hags = setBit(hags, index++, WheelDelta != 0);
+        
         boolean sameVec = Helper.Equals(MousePos, from.MousePos);
         hags = setBit(hags, index++, sameVec);
-
+        
         buf.Write(hags);
-        if(WheelDelta != 0)
-            buf.Write(WheelDelta);
-
-        if(!sameVec)
-            buf.Write(MousePos);
+        buf.Write(forward);
+        buf.Write(side);
+        if(WheelDelta != 0) buf.Write(WheelDelta);
+        if(!sameVec) buf.Write(MousePos);
+        
 
         buf.Write(angles[0]);
         buf.Write(angles[1]);
@@ -219,10 +212,8 @@ public class PlayerInput {
         n.Mouse2Diff = Mouse2Diff;
         n.Mouse3 = Mouse3;
         n.Mouse3Diff = Mouse3Diff;
-        n.Forward = Forward;
-        n.Back = Back;
-        n.Left = Left;
-        n.Right = Right;
+        n.forward = forward;
+        n.side = side;
         n.Up = Up;
         n.Down = Down;
         System.arraycopy(buttons, 0, n.buttons, 0, buttons.length);

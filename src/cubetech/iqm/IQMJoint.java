@@ -14,6 +14,7 @@ import org.lwjgl.util.vector.Vector4f;
  */
 public class IQMJoint {
     String name;
+    int index;
     int parent; // parent < 0 means this is a root bone
     float[] translate = new float[3], rotate = new float[4], scale = new float[3];
     Matrix4f baseframe;
@@ -24,17 +25,29 @@ public class IQMJoint {
     // rotation is in relative/parent local space
     // scale is pre-scaling <Sx, Sy, Sz>
     // output = (input*scale)*rotation + translation
+    
+    public String getName() {
+        return name;
+    }
+    
+    public int getIndex() {
+        return index;
+    }
+    
+    public int getParent() {
+        return parent;
+    }
 
     static void loadJoints(IQMModel model, ByteBuffer buffer) {
         if(model.header.num_joints == 0 || model.header.ofs_joints == 0) return;
 
         buffer.position(model.header.ofs_joints);
         model.joints = new IQMJoint[model.header.num_joints];
-        model.outframe = new Matrix4f[model.header.num_joints];
         model.baseframe = new Matrix4f[model.header.num_joints];
         model.invbaseframe = new Matrix4f[model.header.num_joints];
         for (int i= 0; i < model.header.num_joints; i++) {
             IQMJoint j = new IQMJoint();
+            j.index = i;
             int name = buffer.getInt();
             if(name >= 0) {
                 int end = name;

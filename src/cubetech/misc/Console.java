@@ -147,16 +147,16 @@ public class Console implements KeyEventListener, LogEventListener {
     }
 
     
-    public void KeyPressed(KeyEvent evt) {
+    public boolean KeyPressed(KeyEvent evt) {
         Key key = (Key)evt.getSource();
 
         // Ignore key-up events
-        if(!key.Pressed)
-            return;
+        if(!key.Pressed) return false;
+            
 
         // Console not visible
-        if((Ref.Input.GetKeyCatcher() & Input.KEYCATCH_CONSOLE) == 0)
-            return;
+        if((Ref.Input.GetKeyCatcher() & Input.KEYCATCH_CONSOLE) == 0) return false;
+            
 
         if(key.key == Keyboard.KEY_V && Ref.Input.IsKeyPressed(Keyboard.KEY_LCONTROL)) {
             Transferable t = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
@@ -166,7 +166,7 @@ public class Console implements KeyEventListener, LogEventListener {
                     cmdLine += s;
                     nConsecutiveTabs = 0;
                     isScrollingCommands = false;
-                    return;
+                    return false;
                 } catch (Exception ex) {}
             }
         }
@@ -225,6 +225,7 @@ public class Console implements KeyEventListener, LogEventListener {
                 }
                 break;
         }
+        return false;
     }
 
     // tab-tab...

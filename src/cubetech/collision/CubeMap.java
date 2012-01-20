@@ -6,6 +6,7 @@ import cubetech.CGame.ChunkRender;
 import cubetech.Game.PhysicsSystem;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
+import cubetech.common.Helper;
 import cubetech.misc.Ref;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -22,10 +23,12 @@ import org.lwjgl.util.vector.Vector3f;
  * @author mads
  */
 public class CubeMap {
-    public static final int MIN_Z = -2; // how many chunks to allow to grow downward
+    public static final int MIN_Z = -9; // how many chunks to allow to grow downward
     public static final int MAX_Z = 6;
     public static final int DEFAULT_GROW_DISTXY = 20;
     public static final int DEFAULT_GROW_DISTZ = 4;
+
+    
 
     // Chunks
     public OpenLongObjectHashMap chunks = new OpenLongObjectHashMap();
@@ -457,6 +460,16 @@ public class CubeMap {
         long a = bitTwiddle(x) | bitTwiddle(y)<<17 | bitTwiddle(z)<<34;
         return a;
     }
+    
+    public byte getCube(int x, int y, int z) {
+        CubeChunk chunk = getChunk(x/(CubeChunk.SIZE * CubeChunk.BLOCK_SIZE), y/(CubeChunk.SIZE * CubeChunk.BLOCK_SIZE), z/(CubeChunk.SIZE * CubeChunk.BLOCK_SIZE), false, chunks);
+        if(chunk == null) return (byte)0;
+        
+        x &= 31;
+        y &= 31;
+        z &= 31;
+        return chunk.getCubeType(CubeChunk.getIndex(x, y, z));
+    }
 
     // Twiddle an int down to 17bit
     private static long bitTwiddle(int input) {
@@ -490,13 +503,13 @@ public class CubeMap {
     public static ChunkAreaQuery getCubesInVolume(Vector3f mmin, Vector3f mmax, OpenLongObjectHashMap chunks, boolean server) {
         // Figure out min/max chunk positions
         int axisSize = CubeChunk.SIZE * CubeChunk.BLOCK_SIZE;
-        int minx = (int)Math.floor(mmin.x / axisSize);
-        int miny = (int)Math.floor(mmin.y / axisSize);
-        int minz = (int)Math.floor(mmin.z / axisSize);
+        int minx = Helper.fastFloor(mmin.x / axisSize);
+        int miny = Helper.fastFloor(mmin.y / axisSize);
+        int minz = Helper.fastFloor(mmin.z / axisSize);
 
-        int maxx = (int)Math.floor(mmax.x / axisSize)+1;
-        int maxy = (int)Math.floor(mmax.y / axisSize)+1;
-        int maxz = (int)Math.floor(mmax.z / axisSize)+1;
+        int maxx = Helper.fastFloor(mmax.x / axisSize)+1;
+        int maxy = Helper.fastFloor(mmax.y / axisSize)+1;
+        int maxz = Helper.fastFloor(mmax.z / axisSize)+1;
 
         
         ChunkAreaQuery query = new ChunkAreaQuery((maxz - minz) * (maxx - minx) * (maxy - miny));
@@ -536,8 +549,8 @@ public class CubeMap {
 
     public static CubeChunk getChunk(int x, int y, int z, boolean create, OpenLongObjectHashMap chunks) {
         long index = positionToLookup(x, y, z);
-        
-        if(!chunks.containsKey(index)) {
+        Object obj = chunks.get(index);
+        if(obj == null) {
             if(create) {
                 // Going to need to create this chunk
                 Ref.cm.cubemap.generateChunk(x,y,z, false);
@@ -547,7 +560,7 @@ public class CubeMap {
             }
         }
 
-        return (CubeChunk)chunks.get(index);
+        return (CubeChunk)obj;
     }
 
     

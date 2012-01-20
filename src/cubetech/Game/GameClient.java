@@ -14,6 +14,7 @@ import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityType;
 import cubetech.entities.Event;
 import cubetech.entities.Vehicle;
+import cubetech.input.ClientInput;
 import cubetech.input.PlayerInput;
 import cubetech.iqm.IQMAnim;
 import cubetech.misc.Ref;
@@ -556,7 +557,7 @@ public class GameClient extends Gentity {
 
         // Check for respawning
         if(isDead()) {
-            if(cmd.Mouse1 && Ref.game.level.time > respawnTime) {
+            if(cmd.buttons[ClientInput.BUTTON_MOUSE1] && Ref.game.level.time > respawnTime) {
                 respawn();
             }
             return;

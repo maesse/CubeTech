@@ -10,6 +10,7 @@ import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.GLRef;
 import cubetech.gfx.GLState;
+import cubetech.gfx.RenderList;
 import cubetech.gfx.Shader;
 import cubetech.gfx.ShadowManager;
 import cubetech.gfx.SkyBox;
@@ -40,11 +41,13 @@ public class Render {
     private RenderEntity[] entities = new RenderEntity[MAX_RENDER_ENTITIES];
     private int next = 0;
     private ArrayList<RenderEntity> renderList = new ArrayList<RenderEntity>();
+    private ArrayList<ViewParams> viewList = new ArrayList<ViewParams>();
 
     Shader softSprite = null;
     CVar r_gpuskin = Ref.cvars.Get("r_gpuskin", "1", EnumSet.of(CVarFlags.NONE));
     public CVar r_nocull = Ref.cvars.Get("r_nocull", "0", EnumSet.of(CVarFlags.TEMP));
     public ViewParams view = null;
+    private int currentRenderFlags = 0;
 
     public Render() {
         for (int i= 0; i < MAX_RENDER_ENTITIES; i++) {
@@ -54,17 +57,29 @@ public class Render {
 //            softSprite = Ref.glRef.getShader("softsprite");
 //        }
     }
+    
+    /**
+     * Attached the current renderlist to the given view and clears
+     * the list for the next view
+     * @param view 
+     */
+    public void assignAndClear(ViewParams view) {
+        view.renderList = new RenderList(renderList);
+        renderList = new ArrayList<RenderEntity>();
+        viewList.add(view);
+    }
 
     public void renderAll(ViewParams view, int renderFlags) {
         this.view = view;
         SecTag t = Profiler.EnterSection(Sec.RENDER);
         SecTag sub;
         GLRef.checkError();
+        currentRenderFlags = renderFlags;
         
         boolean shadowPass = (renderFlags & RF_SHADOWPASS) != 0;
         boolean postDeferred = (renderFlags & RF_POSTDEFERRED) != 0;
         
-        for (RenderEntity re : renderList) {
+        for (RenderEntity re : view.renderList.list) {
             if(shadowPass) {
                 // Skip render entities that doesn't cast shadows
                 if(re.hasFlag(RenderEntity.FLAG_NOSHADOW)) continue;
@@ -80,8 +95,8 @@ public class Render {
                     sub.ExitSection();
                     break;
                 case SKYBOX:
-                    if(re.controllers != null && re.controllers instanceof SkyBox) {
-                        SkyBox sky = (SkyBox) re.controllers;
+                    if(re.renderObject != null && re.renderObject instanceof SkyBox) {
+                        SkyBox sky = (SkyBox) re.renderObject;
                         sky.Render(view);
                     }
                     break;
@@ -121,7 +136,7 @@ public class Render {
     }
 
     private void renderWorld(RenderEntity ent) {
-        CubeChunk[] chunkList = (CubeChunk[]) ent.controllers;
+        CubeChunk[] chunkList = (CubeChunk[]) ent.renderObject;
         ClientCubeMap.renderChunkList(chunkList, view);
     }
 
@@ -135,7 +150,7 @@ public class Render {
                 shader = Ref.glRef.getShader("PolyDeferred");
                 deferredPoly = true;
             }
-            else shader = Ref.glRef.getShader("WorldFog");
+            else shader = Ref.glRef.getShader("Poly");
         }
         
         Ref.glRef.PushShader(shader);
@@ -147,16 +162,25 @@ public class Render {
             shader.setUniform("Modell", modelMatrix);
             GL11.glCullFace(GL11.GL_FRONT);
         } 
-        else if(!deferredPoly) {
-            Helper.col(ent.color);
-            GL11.glEnable(GL11.GL_BLEND);
-            GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-            GL11.glDepthMask(false);
-            GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
-            GL11.glPolygonOffset(-1f, 0);
-            GL11.glCullFace(GL11.GL_BACK);
+        else { 
+            if(!deferredPoly) {
+                Helper.col(ent.color);
+                
+                GL11.glEnable(GL11.GL_BLEND);
+                GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+                
+                
+                GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+                GL11.glPolygonOffset(-1f, 0);
+            } else {
+                shader.setUniform("far", view.farDepth); 
+                GL11.glDisable(GL11.GL_BLEND);
+            }
             
-        } else {
+            GL11.glDepthFunc(GL11.GL_LEQUAL);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glDepthMask(true);
+            GL11.glCullFace(GL11.GL_BACK);
             Matrix4f viewMatrix = view.viewMatrix;
             if(ent.hasFlag(RenderEntity.FLAG_SPRITE_AXIS)) {
                 Matrix4f modelMatrix = Helper.getModelMatrix(ent.axis, ent.origin, null);
@@ -164,18 +188,16 @@ public class Render {
             }
             shader.setUniform("ModelView", viewMatrix);
             shader.setUniform("Projection", view.ProjectionMatrix);
-            shader.setUniform("far", view.farDepth); 
-            GL11.glDisable(GL11.GL_BLEND);
-            GL11.glDepthMask(true);
-            GL11.glEnable(GL11.GL_DEPTH_TEST);
-            GL11.glCullFace(GL11.GL_BACK);
         }
         
-        ent.mat.getTexture().Bind();
+        
+        if(ent.mat != null) ent.mat.getTexture().Bind();
+        else Ref.ResMan.getWhiteTexture().Bind();
         Ref.ResMan.getNoNormalTexture().Bind();
         Ref.ResMan.getNoSpecularTexture().Bind();
         
-        GL11.glBegin(GL11.GL_QUADS);
+        int mode = ent.oldframe == 0? GL11.GL_QUADS : ent.oldframe;
+        GL11.glBegin(mode);
         {
             for (int i= 0; i < ent.frame; i++) {
                 GL20.glVertexAttrib2f(Shader.INDICE_COORDS, ent.verts[i].s, ent.verts[i].t);
@@ -189,13 +211,15 @@ public class Render {
         }
         GL11.glEnd();
 
-        if(!deferredPoly) {
-            GL11.glDepthMask(true);
-            GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
-            GL11.glPolygonOffset(0, 0);
-        }
+        
         if(shadowpass) {
             GL11.glCullFace(GL11.GL_BACK);
+        } else {
+            if(!deferredPoly) {
+//                GL11.glDepthMask(true);
+                GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
+                GL11.glPolygonOffset(0, 0);
+            }
         }
         Ref.glRef.PopShader();
     }
@@ -285,20 +309,17 @@ public class Render {
     
     private void renderModel(RenderEntity ent) {
         if(ent.model == null) return;
-        if(r_gpuskin.isTrue()) ent.flags |= RenderEntity.FLAG_GPUSKINNED;
-        else ent.flags &= ~RenderEntity.FLAG_GPUSKINNED;
-
-        //float frame = ent.oldframe * ent.backlerp + ent.frame * (1f-ent.backlerp);
-        ent.model.gpuskinning = (ent.flags & RenderEntity.FLAG_GPUSKINNED) != 0;
-        if(ent.controllers == null) ent.model.controllers = null;
-        else  ent.model.controllers = (BoneController[]) ent.controllers;
+        if(r_gpuskin.isTrue()) {
+            ent.model.renderGPUSkinned(ent.origin, ent.axis, ent.color, currentRenderFlags, view);
+        } else {
+            ent.model.renderCPUSkinned(ent.origin, ent.axis, ent.color, currentRenderFlags, view);
+        }
         
-        ent.model.animate(ent.frame, ent.oldframe, ent.backlerp);
+        // Render it
+        
+        
         //Vector3f org = new Vector3f(ent.origin);
-
         //int count = 10;
-        boolean shadowpass = Ref.cgame != null && Ref.glRef.shadowMan.isRendering();
-        ent.model.render(ent.origin, ent.axis, ent.color, shadowpass, view);
 //        for (int i = 0; i < count; i++) {
 //            for (int j = 0; j < count; j++) {
 //                org.x = ent.origin.x + (i-4) * 64;
@@ -315,6 +336,10 @@ public class Render {
         Vector3f position = ent.origin;
         Vector3f mins = ent.oldOrigin;
         Vector3f maxs = ent.oldOrigin2;
+        if(Vector3f.sub(maxs, mins, null).lengthSquared() < 0.001f) {
+            mins.set(-1f,-1f,-1f);
+            maxs.set(1f,1f,1f);
+        }
         GL11.glDisable(GL11.GL_DEPTH_TEST);
         GL11.glLineWidth(1f);
         GL11.glDisable(GL11.GL_CULL_FACE);
@@ -334,9 +359,6 @@ public class Render {
                 mins.x+position.x, mins.y+position.y, mins.z+position.z, ent.outcolor);
         }
         
-        if(ent.hasFlag(RenderEntity.FLAG_SPRITE_AXIS)) {
-            
-        }
         GL11.glEnable(GL11.GL_DEPTH_TEST);
         GL11.glEnable(GL11.GL_CULL_FACE);
     }
@@ -445,9 +467,14 @@ public class Render {
         
     }
 
+    /**
+     * Resets the renderer for a completely new frame
+     * Should only be called after all the views have been rendered
+     */
     public void reset() {
         next = 0;
         renderList.clear();
+        viewList.clear();
     }
 
     public RenderEntity createEntity() {
@@ -461,6 +488,10 @@ public class Render {
 
         ent.Type = type;
         return ent;
+    }
+
+    public ArrayList<ViewParams> getViewList() {
+        return viewList;
     }
 
 

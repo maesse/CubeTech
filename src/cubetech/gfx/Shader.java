@@ -532,7 +532,7 @@ public class Shader {
 
     private int getUniformIndex(String name) {
         Integer index = uniformMap.get(name);
-        if(index == null) {
+        if(!uniformMap.containsKey(name)) {
             // try to bind it
             int pos = ARBShaderObjects.glGetUniformLocationARB(shaderId, name);
             // Handle error

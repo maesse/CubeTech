@@ -29,6 +29,26 @@ public class Helper {
         dst.y = src.y;
     }
     
+    public static int fastFloor(float f) {
+        int tmp = (int)f;
+        return (float)tmp > f ? (int)(f-1.0f) : tmp;
+    }
+    
+    // takes a [-1;1] float and returns a [-127;127] signed byte
+    public static byte toClampedByte(float value) {
+        value *= 127;
+        if(value > 127) value = 127;
+        else if(value < -127) value = -127;
+        return (byte)value;
+    }
+    
+    public static byte addAndClamp(byte a, byte b) {
+        int value = a + b;
+        if(value > 127) value = 127;
+        else if(value < -127) value = -127;
+        return (byte)value;
+    }
+    
     public static Vector3f[] createBoxVerts(float size, Vector3f offset) {
         Vector3f[] quadData = new Vector3f[4*6];
         // X+
@@ -247,6 +267,19 @@ public class Helper {
     public static float Clamp(float value, float min, float max) {
         if(value < min) value = min;
         if(value > max) value = max;
+        return value;
+    }
+    
+    public static Vector2f Clamp(Vector2f value, float min, float max) {
+        value.x = Clamp(value.x, min, max);
+        value.y = Clamp(value.y, min, max);
+        return value;
+    }
+    
+    public static Vector3f Clamp(Vector3f value, float min, float max) {
+        value.x = Clamp(value.x, min, max);
+        value.y = Clamp(value.y, min, max);
+        value.z = Clamp(value.z, min, max);
         return value;
     }
 
@@ -701,9 +734,10 @@ public class Helper {
         dest[2].z = m.m22;
     }
     
-    public static void matrixToAxis(Matrix3f m, Vector3f[] dest) {
-//        m.invert();
-        assert(dest != null && dest.length >= 3);
+    public static Vector3f[] matrixToAxis(Matrix3f m, Vector3f[] dest) {
+        if(dest == null) {
+            dest = new Vector3f[] { new Vector3f(),new Vector3f(),new Vector3f()};
+        }
         dest[0].x = m.m00;
         dest[0].y = m.m10;
         dest[0].z = m.m20;
@@ -715,6 +749,7 @@ public class Helper {
         dest[2].x = m.m02;
         dest[2].y = m.m12;
         dest[2].z = m.m22;
+        return dest;
     }
     
     public static void matrixToAxis(javax.vecmath.Matrix3f m, Vector3f[] dest) {
@@ -1144,6 +1179,34 @@ public class Helper {
         int i = packFloat(v.x, 0, bits) | packFloat(v.y, 1, bits) | packFloat(v.z, 2, bits);
         
         return i;
+    }
+
+    public static Matrix3f matrixCopy(Matrix4f src, Matrix3f dest) {
+        if(dest == null) dest = new Matrix3f();
+        dest.m00 = src.m00;
+        dest.m10 = src.m10;
+        dest.m20 = src.m20;
+        dest.m01 = src.m01;
+        dest.m11 = src.m11;
+        dest.m21 = src.m21;
+        dest.m02 = src.m02;
+        dest.m12 = src.m12;
+        dest.m22 = src.m22;
+        return dest;
+    }
+
+    public static void transposeAxis(Matrix4f m) {
+        float tmp = m.m01;
+        m.m01 = m.m10;
+        m.m10 = tmp;
+        
+        tmp = m.m20;
+        m.m20 = m.m02;
+        m.m02 = tmp;
+        
+        tmp = m.m21;
+        m.m21 = m.m12;
+        m.m12 = tmp;
     }
 
     

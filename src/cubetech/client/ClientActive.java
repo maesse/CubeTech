@@ -1,5 +1,6 @@
 package cubetech.client;
 
+import cubetech.CGame.Snapshot;
 import cubetech.common.CS;
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
@@ -8,9 +9,11 @@ import cubetech.common.Common;
 import cubetech.common.Info;
 import cubetech.common.items.Weapon;
 import cubetech.entities.EntityState;
+import cubetech.input.Input;
 import cubetech.input.PlayerInput;
 import cubetech.misc.Ref;
 import cubetech.net.ConnectState;
+import cubetech.net.NetBuffer;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -48,8 +51,8 @@ public class ClientActive {
 
     public Weapon userCmd_weapon = null;
     public float userCmd_sens = 1f;
-
-    public boolean screenshot;
+    
+    
 
     public ClientActive() {
         serverid = Integer.MAX_VALUE;
@@ -67,12 +70,30 @@ public class ClientActive {
         }
     }
 
+    
+    // Called every frame to builds and sends a command packet to the server.
+    public void CreateNewCommands() {
+        // don't send any message if not connected
+        if(Ref.client.clc.state.ordinal() < ConnectState.PRIMED.ordinal()) return;
+
+        
+
+        boolean catchInput = (Ref.Input.GetKeyCatcher() & (Input.KEYCATCH_CONSOLE | Input.KEYCATCH_MESSAGE | Input.KEYCATCH_UI)) != 0;
+        int cmdNum = ++cmdNumber & 63;
+        if(catchInput && cmdNumber > 1) {
+            // don't update input to server, when client is using it
+            cmds[cmdNum] = cmds[(cmdNumber-1) & 63].Clone(); 
+        } else {
+            cmds[cmdNum] = Ref.Input.getClient(0).CreateCmd();
+        }
+        cmds[cmdNum].serverTime = serverTime;
+    }
 
 
     public void SetCGameTime() {
-        if(Ref.client.state != ConnectState.ACTIVE)
+        if(Ref.client.clc.state != ConnectState.ACTIVE)
         {
-            if(Ref.client.state != ConnectState.PRIMED)
+            if(Ref.client.clc.state != ConnectState.PRIMED)
                 return;
 
             if(Ref.client.demo.isPlaying()) {
@@ -90,7 +111,7 @@ public class ClientActive {
                 FirstSnapshot();
             }
 
-            if(Ref.client.state != ConnectState.ACTIVE)
+            if(Ref.client.clc.state != ConnectState.ACTIVE)
                 return; // Still not ACTIVE
         }
 
@@ -181,7 +202,7 @@ public class ClientActive {
                 // feed another messag, which should change
 		// the contents of cl.snap
                 Ref.client.demo.readDemoMessage();
-                if(Ref.client.state != ConnectState.ACTIVE) {
+                if(Ref.client.clc.state != ConnectState.ACTIVE) {
                     return; // end of demo
                 }
             }
@@ -251,13 +272,251 @@ public class ClientActive {
         if((snap.snapFlag & CLSnapshot.SF_NOT_ACTIVE) == CLSnapshot.SF_NOT_ACTIVE)
             return;
 
-        Ref.client.state = ConnectState.ACTIVE;
+        Ref.client.clc.state = ConnectState.ACTIVE;
 
         // set the timedelta so we are exactly on this first frame
         serverTimeDelta = snap.serverTime - Ref.client.realtime;
         oldServerTime = snap.serverTime;
 
         Ref.client.clc.timeDemoBaseTime = snap.serverTime;
+    }
+    
+    public boolean GetSnapshot(int snapNumber, Snapshot dest) {
+        if(snapNumber > snap.messagenum)
+            Ref.common.Error(Common.ErrorCode.DROP, "GetSnapshot: snapNumber > cl.snap.messagenum");
+
+        // if the frame has fallen out of the circular buffer, we can't return it
+        if(snap.messagenum - snapNumber >= 32)
+            return false;
+
+        // if the frame is not valid, we can't return it
+        CLSnapshot clSnap = snapshots[snapNumber & 31];
+        if(!clSnap.valid)
+            return false;
+
+        // if the entities in the frame have fallen out of their
+	// circular buffer, we can't return it
+        // TODO: Checkup on limit
+        if(parseEntitiesNum - clSnap.parseEntitiesNum >= Common.MAX_GENTITIES)
+            return false;
+
+        // write the snapshot
+//        if(clSnap.snapFlag != 0) {
+//            System.out.println("SnapFlags: " + clSnap.snapFlag);
+//        }
+        dest.snapFlags = clSnap.snapFlag;
+        dest.serverCommandSequence = clSnap.serverCommandSequence;
+        dest.ping = clSnap.ping;
+        dest.serverTime = clSnap.serverTime;
+        dest.ps = clSnap.ps;
+        dest.numEntities = clSnap.numEntities;
+        if(dest.numEntities > Snapshot.MAX_ENTITIES_IN_SNAPSHOT) {
+            Common.LogDebug(String.format("GetSnapshot(): truncated %d entities to %d", dest.numEntities, Snapshot.MAX_ENTITIES_IN_SNAPSHOT));
+            dest.numEntities = Snapshot.MAX_ENTITIES_IN_SNAPSHOT;
+        }
+        for (int i= 0; i < dest.numEntities; i++) {
+            dest.entities[i] = parseEntities[(clSnap.parseEntitiesNum + i) & Common.ENTITYNUM_NONE];
+        }
+        
+        // FIXME: configstring changes and server commands!!!
+
+        return true;
+    }
+    
+    /*
+    ================
+    CL_ParseSnapshot
+
+    If the snapshot is parsed properly, it will be copied to
+    cl.snap and saved in cl.snapshots[].  If the snapshot is invalid
+    for any reason, no changes to the state will be made at all.
+    ================
+    */
+    public void ParseSnapshot(NetBuffer buf) {
+        // read in the new snapshot to a temporary buffer
+        // we will only copy to cl.snap if it is valid
+        CLSnapshot newsnap = new CLSnapshot();
+        CLSnapshot oldsnap = null;
+
+        // we will have read any new server commands in this
+        // message before we got to svc_snapshot
+        newsnap.serverCommandSequence = Ref.client.clc.serverCommandSequence;
+        newsnap.serverTime = buf.ReadInt();
+
+        Ref.common.cl_paused.modified = false;
+        newsnap.messagenum = Ref.client.clc.serverMessageSequence;
+        
+        int deltaNum = buf.ReadInt();
+        if(deltaNum <= 0) {
+            newsnap.deltanum = -1;
+        }else {
+            newsnap.deltanum = newsnap.messagenum - deltaNum;
+        }
+        newsnap.snapFlag = buf.ReadInt();
+
+        // If the frame is delta compressed from data that we
+        // no longer have available, we must suck up the rest of
+        // the frame, but not use it, then ask for a non-compressed
+        // message
+        if(newsnap.deltanum <= 0) {
+            newsnap.valid = true; // uncompressed frame
+            Ref.client.demo.recievedFullSnapshot();
+        } else {
+            oldsnap = snapshots[newsnap.deltanum & 31];
+            if(!oldsnap.valid) {
+                // Should never happen
+                Common.Log("ParseSnapshot: Delta from invalid frame");
+            }
+            else if(oldsnap.messagenum != newsnap.deltanum) {
+                // The frame that the server did the delta from
+                // is too old, so we can't reconstruct it properly.
+                Common.LogDebug("Delta frame too old");
+            } else if(parseEntitiesNum - oldsnap.parseEntitiesNum > Common.MAX_GENTITIES - 128)
+                Common.LogDebug("ParseSnapshot: Delta parseEntitiesnum too old");
+            else
+                newsnap.valid = true; // valid delta parse
+        }
+
+        // read playerinfo
+        if(oldsnap == null)
+            newsnap.ps.ReadDelta(buf, null);
+        else
+            newsnap.ps.ReadDelta(buf, oldsnap.ps);
+
+
+        // read packet entities
+        ParsePacketEntities(buf, oldsnap, newsnap);
+
+         // if not valid, dump the entire thing now that it has
+         // been properly read
+        if(!newsnap.valid)
+            return;
+
+        // clear the valid flags of any snapshots between the last
+        // received and this one, so if there was a dropped packet
+        // it won't look like something valid to delta from next
+        // time we wrap around in the buffer
+        int oldMessageNum = snap.messagenum + 1;
+        if(newsnap.messagenum - oldMessageNum >= 32) {
+            oldMessageNum = newsnap.messagenum-31;
+        }
+
+        for (; oldMessageNum < newsnap.messagenum; oldMessageNum++) {
+            snapshots[oldMessageNum&31].valid = false;
+        }
+
+        // copy to the current good spot
+        snap = newsnap;
+        snap.ping = 999;
+        if(Ref.client.clc.netchan != null) {
+            for (int i= 0; i < 32; i++) {
+                int packNum = (Ref.client.clc.netchan.outgoingSequence - 1 - i) & 31;
+                if(snap.ps.commandTime >= outPackets[packNum].servertime) {
+                    snap.ping = Ref.client.realtime - outPackets[packNum].realtime;
+                    break;
+                }
+            }
+        }
+
+        // save the frame off in the backup array for later delta comparisons
+        snapshots[snap.messagenum & 31] = snap;
+        newsnapshots = true;
+
+    }
+
+    private void ParsePacketEntities(NetBuffer buf, CLSnapshot oldsnap, CLSnapshot newsnap) {
+        newsnap.parseEntitiesNum = parseEntitiesNum;
+        newsnap.numEntities = 0;
+
+        // delta from the entities present in oldframe
+        int oldindex = 0, oldnum = 0;
+        EntityState oldstate = null;
+        if(oldsnap == null)
+            oldnum = 99999;
+        else {
+            if(oldindex >= oldsnap.numEntities)
+                oldnum = 99999;
+            else
+            {
+                oldstate = parseEntities[(oldsnap.parseEntitiesNum + oldindex) & Common.MAX_GENTITIES-1];
+                oldnum = oldstate.ClientNum;
+            }
+        }
+
+        while(true) {
+            // read the entity index number
+            int newnum = buf.ReadShort();
+
+            if(newnum >= Common.MAX_GENTITIES-1)
+                break;
+
+            while(oldnum < newnum) {
+                // one or more entities from the old packet are unchanged
+                DeltaEntity(buf, newsnap, oldnum, oldstate, true);
+                oldindex++;
+
+                if(oldindex >= oldsnap.numEntities)
+                    oldnum = 99999;
+                else {
+                    oldstate = parseEntities[(oldsnap.parseEntitiesNum + oldindex) & Common.MAX_GENTITIES-1];
+                    oldnum = oldstate.ClientNum;
+                }
+            }
+
+            if(oldnum == newnum) {
+                // delta from previous state
+                DeltaEntity(buf, newsnap, newnum, oldstate, false);
+
+                oldindex++;
+
+                if(oldindex >= oldsnap.numEntities)
+                    oldnum = 99999;
+                else {
+                    oldstate = parseEntities[(oldsnap.parseEntitiesNum + oldindex) & Common.MAX_GENTITIES-1];
+                    oldnum = oldstate.ClientNum;
+                }
+                continue;
+            }
+
+            if(oldnum > newnum) {
+                // delta from baseline
+                DeltaEntity(buf, newsnap, newnum, entityBaselines[newnum], false);
+                continue;
+            }
+        }
+
+        // any remaining entities in the old frame are copied over
+        while(oldnum != 99999) {
+            // one or more entities from the old packet are unchanged
+            DeltaEntity(buf, newsnap, oldnum, oldstate, true);
+
+            oldindex++;
+
+            if(oldindex >= oldsnap.numEntities)
+                oldnum = 99999;
+            else
+            {
+                oldstate = parseEntities[(oldsnap.parseEntitiesNum + oldindex) & Common.MAX_GENTITIES-1];
+                oldnum = oldstate.ClientNum;
+            }
+        }
+    }
+
+    private void DeltaEntity(NetBuffer msg, CLSnapshot frame, int newnum, EntityState old, boolean unchanged) {
+        // save the parsed entity state into the big circular buffer so
+        // it can be used as the source for a later delta
+        EntityState ent = parseEntities[parseEntitiesNum & Common.MAX_GENTITIES-1];
+        if(unchanged)
+            old.Clone(ent);
+        else
+            ent.ReadDeltaEntity(msg, old, newnum);
+
+        parseEntities[parseEntitiesNum & Common.MAX_GENTITIES-1] = ent;
+        if(ent.ClientNum == Common.MAX_GENTITIES-1)
+            return; // entity was removed
+
+        parseEntitiesNum++;
+        frame.numEntities++;
     }
 
     /*

@@ -86,6 +86,8 @@ public class IQMAnim {
                 Matrix4f m = new Matrix4f();
                 mm.toMatrix4f(m);
                 
+                
+                
                 if(p._parent >= 0) {
                     Matrix4f.mul(model.baseframe[p._parent], m, m);
                     Matrix4f.mul(m, model.invbaseframe[j], m);

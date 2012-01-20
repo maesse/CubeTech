@@ -11,7 +11,6 @@ import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
 import cubetech.net.Packet;
 import cubetech.server.Server;
-import cubetech.testgame.TestGame;
 import java.applet.Applet;
 import java.awt.Canvas;
 import java.io.File;
@@ -74,7 +73,7 @@ public class Common {
     private boolean useSysTimer = true; // Controls the current timer. com_timer sets this.
     private Event tempevt = new Event();
 
-    private static TestGame game = null;
+
 
     public enum ErrorCode {
         FATAL, // exit the entire game with a popup window
@@ -129,8 +128,6 @@ public class Common {
                         config = args[++i];
                     } else if(s.equalsIgnoreCase("-undecorated")) {
                         undecorated = true;
-                    } else if(s.equalsIgnoreCase("-testgame")) {
-                        game = new TestGame();
                     }
                 }
             }
@@ -146,8 +143,8 @@ public class Common {
             // Init client and server
             Ref.server = new Server();
     //        Ref.server.Init();
-            if(game == null) Ref.client.Init();
-            else game.init();
+            Ref.client.Init();
+            
             
             
                 
@@ -254,8 +251,7 @@ public class Common {
 
             // Client Frame
             SecTag ptag = Profiler.EnterSection(Sec.CLIENT);
-            if(game != null) game.Frame(msec);
-            else Ref.client.Frame(msec);
+            Ref.client.Frame(msec);
             ptag.ExitSection();
             Profiler.reset(); 
         } catch(FrameException ex) {
@@ -429,7 +425,7 @@ public class Common {
                         }
                     } else {
                         SecTag t = Profiler.EnterSection(Sec.CL_PACKET);
-                        Ref.client.PacketEvent((Packet)ev.data);
+                        Ref.client.clc.PacketEvent((Packet)ev.data);
                         t.ExitSection();
                     }
                     break;

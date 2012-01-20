@@ -6,6 +6,8 @@
 package cubetech.misc;
 
 import java.nio.ByteBuffer;
+import java.util.Random;
+import java.util.zip.Deflater;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -58,6 +60,29 @@ public class PngEncoderTest {
         System.out.println(delta/count +"ms pr encode");
         
     }
+    
+    @Test
+    public void testDerp() {
+        Deflater defl = new Deflater(4);
+        byte[] data = new byte[30 * 1024 * 1024];
+        byte[] dataout = new byte[30 * 1024 * 1024];
+        Random rnd = new Random(984513218);
+        rnd.nextBytes(data);
+        defl.reset();
+        defl.setInput(data);
+        defl.finish();
+        defl.deflate(dataout);
+        
+        long start = System.nanoTime();
+        defl.reset();
+        defl.setInput(data);
+        defl.finish();
+        defl.deflate(dataout);
+        long end = System.nanoTime();
+        float delta = (end-start) / 1000000f;
+        System.out.println("10mb encode took " + delta + "ms");
+    }
+    
 
 
 }

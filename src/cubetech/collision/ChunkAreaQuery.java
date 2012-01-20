@@ -74,4 +74,8 @@ public class ChunkAreaQuery {
         parts[index++] = part;
         nCubes += part.nIndex;
     }
+
+    int getCount() {
+        return nCubes;
+    }
 }

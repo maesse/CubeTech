@@ -1,5 +1,6 @@
 package cubetech.gfx;
 
+import cubetech.CGame.ViewParams;
 import cubetech.misc.Ref;
 import java.nio.IntBuffer;
 import java.nio.ByteBuffer;
@@ -117,11 +118,12 @@ public class MultiRenderBuffer {
         glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
     }
     
-    public void start(boolean depthOnly) {
+    public void start(boolean depthOnly, ViewParams view) {
         // Bind our FBO and set the viewport to the proper size
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbHandle);
 	glPushAttrib(GL_VIEWPORT_BIT);
-	glViewport(0,0,width, height);
+	//glViewport(view.ViewportX, view.ViewportY, view.ViewportWidth, view.ViewportHeight);
+        glViewport(0,0,width, height);
 
 	// Clear the render targets
         if(!depthOnly) {
@@ -134,7 +136,8 @@ public class MultiRenderBuffer {
 
 	// Specify what to render an start acquiring
         if(depthOnly) {
-            //glReadBuffer(GL_BACK);
+            glDrawBuffer(GL_NONE);
+            glReadBuffer(GL_NONE);
         } else {
             int nColor = 0;
             intBuffer.clear();

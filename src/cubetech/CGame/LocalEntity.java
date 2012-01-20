@@ -1,16 +1,15 @@
 package cubetech.CGame;
 
-import com.bulletphysics.collision.shapes.CollisionShape;
-import com.bulletphysics.dynamics.RigidBody;
-import com.bulletphysics.linearmath.DefaultMotionState;
-import com.bulletphysics.linearmath.MotionState;
-import com.bulletphysics.linearmath.Transform;
+
 import cubetech.collision.CubeChunk;
 import cubetech.common.Helper;
 import cubetech.common.Trajectory;
 import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.PolyVert;
 import cubetech.misc.Ref;
+import nbullet.collision.shapes.CollisionShape;
+import nbullet.objects.RigidBody;
+import nbullet.util.DirectMotionState;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
@@ -55,7 +54,7 @@ public class LocalEntity {
 
     boolean freeMe = false;
 
-    public MotionState phys_motionState;
+    public DirectMotionState phys_motionState;
     public RigidBody phys_body;
 
     public void free() {
@@ -131,20 +130,20 @@ public class LocalEntity {
         
         le.pos.base.set(origin);
 
-        Transform t = new Transform();
-        t.setIdentity();
-        t.origin.set(origin.x, origin.y, origin.z);
-        t.origin.scale(CGPhysics.SCALE_FACTOR);
-        le.phys_motionState = new DefaultMotionState(t);
         
-        le.rEntity.origin.set(t.origin.x, t.origin.y, t.origin.z);
-        Helper.matrixToAxis(t.basis, le.rEntity.axis);
+        
+        Vector3f org = new Vector3f(origin);
+        org.scale(CGPhysics.SCALE_FACTOR);
+        le.phys_motionState = new DirectMotionState(org);
+        
+        le.rEntity.origin.set(org);
+        le.phys_motionState.getAxis(le.rEntity.axis);
         le.rEntity.verts = boxPolys;
         le.rEntity.frame = boxPolys.length;
 
         le.phys_body = Ref.cgame.physics.localCreateRigidBody(10f, le.phys_motionState, boxShape);
-        le.phys_body.setCcdMotionThreshold(2f);
-        le.phys_body.setCcdSweptSphereRadius(0.2f);
+//        le.phys_body.setCcdMotionThreshold(2f);
+//        le.phys_body.setCcdSweptSphereRadius(0.2f);
         return le;
     }
 

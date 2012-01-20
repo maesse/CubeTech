@@ -91,6 +91,7 @@ public class Profiler {
         public ArrayList<StackEntry> subTags = null;
         public float selfTime;
         public float sumTime;
+        public int calls = 1;
         StackEntry(SecTag tag) {
             this.tag = tag;
         }
@@ -110,7 +111,7 @@ public class Profiler {
         }
         @Override
         public String toString() {
-            return String.format("%s: %.2fms self, %.2fms total", tag.sec.toString(), selfTime, sumTime);
+            return String.format("%s: %.2fms self, %.2fms total (%d calls)", tag.sec.toString(), selfTime, sumTime, calls);
         }
     }
     
@@ -174,8 +175,33 @@ public class Profiler {
             stackEntry = null;
         }
         
+        
+        
         for (StackEntry entry : swapStackEntries) {
             entry.calcStackTimes();
+        }
+        
+        cleanStack(swapStackEntries);
+    }
+    
+    private static void cleanStack(ArrayList<StackEntry> entries) {
+        for (int i = 0; i < entries.size(); i++) {
+            StackEntry entry = entries.get(i);
+            
+            for (int j = entries.size()-1; j > i; j--) {
+                StackEntry subEntry = entries.get(j);
+                if(entry.tag.sec.equals(subEntry.tag.sec)) {
+                    // wrap into entry, merge subcalls
+                    entry.calls += subEntry.calls;
+                    entry.selfTime += subEntry.selfTime;
+                    entry.sumTime += subEntry.sumTime;
+                    if(subEntry.subTags != null) {
+                        entry.subTags.addAll(subEntry.subTags);
+                    }
+                    entries.remove(j);
+                }
+            }
+            if(entry.subTags != null) cleanStack(entry.subTags);
         }
     }
 

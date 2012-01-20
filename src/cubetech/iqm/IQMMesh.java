@@ -18,6 +18,7 @@ public class IQMMesh {
     CubeTexture tex = null;
     CubeTexture normalmap = null;
     CubeTexture specularmap = null;
+    private boolean noNormalMap, noSpecularMap;
     int first_vertex, num_vertexes;
     int first_triangle, num_triangles;
 
@@ -88,26 +89,38 @@ public class IQMMesh {
             tex = Ref.ResMan.LoadTexture(path);
         }
         if(normalmap == null && tex != null) {
-            int lastdot = tex.name.lastIndexOf(".");
-            String cleanname = tex.name.substring(0, lastdot);
-            cleanname += "_normal" + tex.name.substring(lastdot);
-            if(ResourceManager.FileExists(cleanname)) {
-                normalmap = Ref.ResMan.LoadTexture(cleanname);
-                normalmap.textureSlot = 3;
-            } else {
+            if(!noNormalMap) {
+                int lastdot = tex.name.lastIndexOf(".");
+                String cleanname = tex.name.substring(0, lastdot);
+                cleanname += "_normal" + tex.name.substring(lastdot);
+                if(ResourceManager.FileExists(cleanname)) {
+                    normalmap = Ref.ResMan.LoadTexture(cleanname);
+                    normalmap.textureSlot = 3;
+                } else {
+                    noNormalMap = true;
+                }
+            }
+            if(noNormalMap) {
                 Ref.ResMan.getNoNormalTexture().Bind();
             }
         } 
         if(specularmap == null && tex != null) {
-            int lastdot = tex.name.lastIndexOf(".");
-            String cleanname = tex.name.substring(0, lastdot);
-            cleanname += "_specular" + tex.name.substring(lastdot);
-            if(ResourceManager.FileExists(cleanname)) {
-                specularmap = Ref.ResMan.LoadTexture(cleanname);
-                specularmap.textureSlot = 4;
-            } else {
+            if(!noSpecularMap) {
+                int lastdot = tex.name.lastIndexOf(".");
+                String cleanname = tex.name.substring(0, lastdot);
+                cleanname += "_specular" + tex.name.substring(lastdot);
+                if(ResourceManager.FileExists(cleanname)) {
+                    specularmap = Ref.ResMan.LoadTexture(cleanname);
+                    specularmap.textureSlot = 4;
+                } else {
+                    noSpecularMap = true;
+                }
+            }
+            
+            if(noSpecularMap) {
                 Ref.ResMan.getNoSpecularTexture().Bind();
             }
+            
         }
         
         if(tex != null) tex.Bind();

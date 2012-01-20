@@ -13,7 +13,8 @@ public class Key {
 
         // State
         public boolean Pressed;
-        public int Time;
+        public int Time; // common time
+        public long keyTime; // key time
         public boolean Changed;
 
         public Key(int key) {

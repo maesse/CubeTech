@@ -57,19 +57,17 @@ public class MessageField implements KeyEventListener {
         Ref.textMan.AddText(new Vector2f(position.x, Ref.glRef.GetResolution().y - position.y ), str, Align.LEFT, null, maxSize, Type.GAME.HUD, 1);
     }
 
-    public void KeyPressed(KeyEvent evt) {
+    public boolean KeyPressed(KeyEvent evt) {
         Key key = (Key)evt.getSource();
 
-        if(!key.Pressed)
-            return;
+        if(!key.Pressed) return false;
 
         if(key.key == Keyboard.KEY_BACK) {
-            if(buffer.length() > 0)
-                buffer.deleteCharAt(buffer.length()-1);
-        }
-        else if(key.Char != Keyboard.CHAR_NONE && buffer.length() < widthInChars) {
+            if(buffer.length() > 0) buffer.deleteCharAt(buffer.length()-1);
+        } else if(key.Char != Keyboard.CHAR_NONE && buffer.length() < widthInChars) {
             buffer.append(key.Char);
         }
+        return false;
     }
 
 

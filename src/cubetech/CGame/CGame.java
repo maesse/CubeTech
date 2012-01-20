@@ -40,7 +40,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_viewmode = Ref.cvars.Get("cg_viewmode", "1", EnumSet.of(CVarFlags.NONE));
     CVar cg_swingspeed = Ref.cvars.Get("cg_swingspeed", "0.8", EnumSet.of(CVarFlags.CHEAT));
     CVar cg_freecam = Ref.cvars.Get("cg_freecam", "0", EnumSet.of(CVarFlags.CHEAT));
-
+    public CVar cg_drawprofiler = Ref.cvars.Get("cg_drawprofiler", "0", EnumSet.of(CVarFlags.NONE));
     CVar cg_tps = Ref.cvars.Get("cg_tps", "0", EnumSet.of(CVarFlags.NONE));
 
     public CGameState cg;
@@ -166,6 +166,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg.clientframe++;
         cg.PredictPlayerState();
         cg.showScores = cg.predictedPlayerState.oldButtons[3];
+        
 
         CalcViewValues();
 
@@ -216,7 +217,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             if(cg_skybox.isTrue()) {
                 RenderEntity ent = Ref.render.createEntity(REType.SKYBOX);
                 ent.flags = RenderEntity.FLAG_NOSHADOW | RenderEntity.FLAG_NOLIGHT;
-                ent.controllers = skyBox;
+                ent.renderObject = skyBox;
                 Ref.render.addRefEntity(ent);
             }
             
@@ -415,12 +416,11 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         }
 
     }
-
+    public int vrectIndex = 0;
     private void CalcViewValues() {
         speed = (float) (speed * 0.8 + cg.predictedPlayerState.velocity.length() * 0.2f);
-        if(cg.refdef == null)
         cg.refdef = new ViewParams();
-        cg.refdef.CalcVRect();
+        cg.refdef.CalcVRect(ViewParams.SliceType.NONE,vrectIndex,cg_viewsize.iValue);
 
         cg.bobcycle = (cg.predictedPlayerState.bobcycle & 128) >> 7;
         cg.bobfracsin = (float) Math.abs(Math.sin((float)(cg.predictedPlayerState.bobcycle & 0xff) / 127f * Math.PI));
@@ -437,13 +437,14 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
                     cg.demoPlayerState.moveType = Move.MoveType.NOCLIP;
                     cg.demoPlayerState.velocity.set(0,0,0); // clear velocity
                 }
-                WeightedMouseMove(Ref.Input.playerInput);
-                Ref.Input.playerInput.serverTime = Ref.common.framemsec;
-                cg.demoPlayerState.UpdateViewAngle(Ref.Input.playerInput);
+                PlayerInput input = Ref.Input.getKeyboardInput();
+                WeightedMouseMove(input);
+                input.serverTime = Ref.common.framemsec;
+                cg.demoPlayerState.UpdateViewAngle(input);
                 cg.demoPlayerState.commandTime = 0;
 
                 MoveQuery move = new MoveQuery(this);
-                move.cmd = Ref.Input.playerInput;
+                move.cmd = input;
                 move.ps = cg.demoPlayerState;
                 Move.Move(move);
                 Helper.VectorCopy(cg.demoPlayerState.origin, cg.refdef.Origin);
@@ -541,8 +542,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     }
 
 
-    public void KeyPressed(KeyEvent evt) {
-        
+    public boolean KeyPressed(KeyEvent evt) {
+        return false;
     }
 
     public void GotMouseEvent(MouseEvent evt) {
@@ -560,7 +561,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         if(str == null)
             str = "";
         cg.infoScreenText = str;
-        Ref.client.UpdateScreen();
+        Ref.client.clRender.UpdateScreen();
     }
 
     public void Shutdown() {
@@ -614,7 +615,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
     void ExecuteNewServerCommands(int serverCommandSequence) {
         while(cgs.serverCommandSequence < serverCommandSequence) {
-            String cmd = Ref.client.GetServerCommand(++cgs.serverCommandSequence);
+            String cmd = Ref.client.clc.GetServerCommand(++cgs.serverCommandSequence);
             if(cmd != null)
                 ServerCommand(cmd);
         }

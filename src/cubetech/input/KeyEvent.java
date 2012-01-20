@@ -1,18 +1,17 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.input;
 
-import java.util.EventObject;
 
 /**
  *
  * @author mads
  */
-public class KeyEvent extends EventObject {
-    public KeyEvent(Object source) {
-        super(source);
+public class KeyEvent {
+    private Key key;
+    public KeyEvent(Key source) {
+        key = source;
+    }
+    
+    public Key getSource() {
+        return key;
     }
 }

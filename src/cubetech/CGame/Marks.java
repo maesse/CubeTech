@@ -59,7 +59,7 @@ public class Marks {
             ent.verts = verts;
             ent.frame = numVerts;
             ent.mat = texture.asMaterial();
-            ent.flags = RenderEntity.FLAG_NOSHADOW;
+            ent.flags = RenderEntity.FLAG_NOSHADOW | RenderEntity.FLAG_NOLIGHT;
         }
     }
 

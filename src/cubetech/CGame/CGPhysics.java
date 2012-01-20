@@ -1,30 +1,33 @@
 package cubetech.CGame;
 
-import com.bulletphysics.BulletGlobals;
-import com.bulletphysics.BulletStats;
-import com.bulletphysics.collision.broadphase.*;
-import com.bulletphysics.collision.dispatch.*;
-import com.bulletphysics.collision.shapes.*;
-import com.bulletphysics.dynamics.*;
-import com.bulletphysics.dynamics.constraintsolver.Point2PointConstraint;
-import com.bulletphysics.dynamics.constraintsolver.SequentialImpulseConstraintSolver;
-import com.bulletphysics.linearmath.*;
-import cubetech.Game.Game;
+
+
 import cubetech.collision.CubeChunk;
 import cubetech.common.CVar;
-import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.common.ICommand;
-import cubetech.common.PlayerState;
 import cubetech.gfx.PolyVert;
 import cubetech.gfx.VBO;
 import cubetech.misc.Ref;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.ArrayList;
-import javax.vecmath.Quat4f;
+import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
+import nbullet.PhysicsSystem;
+import nbullet.collision.ClosestRayResult;
+import nbullet.collision.shapes.BoxShape;
+import nbullet.collision.shapes.ChunkShape;
+import nbullet.collision.shapes.CollisionShape;
+import nbullet.constraints.Generic6DofConstraint;
+import nbullet.constraints.Point2PointConstraint;
+import nbullet.objects.CollisionObject;
+import nbullet.objects.RigidBody;
+import nbullet.objects.SoftBody;
+import nbullet.util.BufferUtil;
+import nbullet.util.DirectMotionState;
+import nbullet.util.Transform;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.util.mapped.CacheUtil;
+import org.lwjgl.util.vector.Matrix3f;
 import org.lwjgl.util.vector.Vector3f;
-import org.lwjgl.util.vector.Vector4f;
 
 /**
  *
@@ -34,134 +37,137 @@ public class CGPhysics {
     public static final float INV_SCALE_FACTOR = 32f;
     public static final float SCALE_FACTOR = 1f / INV_SCALE_FACTOR;
 
-    public ArrayList<RigidBody> bodies = new ArrayList<RigidBody>();
-    private BoxShape boxShape;
-    PolyVert[] boxPoly;
-    private BoxShape characterShape;
-    private int lastPhysicsTime;
-    public DiscreteDynamicsWorld world;
-    private javax.vecmath.Vector3f charHalfSize;
-
-
+    PhysicsSystem world;
+    BoxShape boxShape;
+    int lastPhysicsTime;
     
     // Shared vertex buffer for the physics-cubes
     public VBO vertexBuffer;
     
-    private RigidBody player;
+    SoftBody soft;
+    int[] softIndices;
+    FloatBuffer softBuffer;
+    
 
     CGPhysics() {
         // Initalized the bullet physics world
-        CollisionConfiguration collConfig = new DefaultCollisionConfiguration();
-        CollisionDispatcher dispatch = new CollisionDispatcher(collConfig);
-        BroadphaseInterface broadphase = new DbvtBroadphase();
-        broadphase.getOverlappingPairCache().setInternalGhostPairCallback(new GhostPairCallback());
-        SequentialImpulseConstraintSolver solver = new SequentialImpulseConstraintSolver();
-
-        world = new DiscreteDynamicsWorld(dispatch, broadphase, solver, collConfig);
+        world = new PhysicsSystem();
+        
         CVar gravity = Ref.cvars.Find("sv_gravity");
-        float grav = 800;
+        float grav = 800 * SCALE_FACTOR;
         if(gravity != null) {
             grav = -gravity.fValue * SCALE_FACTOR;
         }
-        world.setGravity(new javax.vecmath.Vector3f(0, 0, grav));
-        
+        world.setGravity(new Vector3f(0, 0, grav));
+//        world.testNativePhysics(); // creates test ground plane
 
         float boxHalfSize = (CubeChunk.BLOCK_SIZE/2f) * SCALE_FACTOR;
-        boxShape = new BoxShape(new javax.vecmath.Vector3f(boxHalfSize, boxHalfSize, boxHalfSize));
-        Vector3f charHalfSize2 = Vector3f.sub(Game.PlayerMaxs, Game.PlayerMins, null);
-        charHalfSize2.scale(0.5f* SCALE_FACTOR);
-        charHalfSize = new javax.vecmath.Vector3f(charHalfSize2.x, charHalfSize2.y, charHalfSize2.z);
-        characterShape = new BoxShape(charHalfSize);
+        boxShape = new BoxShape(new Vector3f(boxHalfSize, boxHalfSize, boxHalfSize));
         
         Ref.commands.AddCommand("+pick", pick_cmd);
         Ref.commands.AddCommand("-pick", pick_cmd);
-        
-        BulletGlobals.setDeactivationDisabled(false);
-        BulletGlobals.setDeactivationTime(1.0f);
-        
-        createCharacterProxy();
-    }
-    
-    private void createCharacterProxy() {
-        Transform t = new Transform();
-        t.setIdentity();
-        
-        MotionState ms = new KinematicMotionState(t);
-        player = localCreateRigidKinematicBody(ms, characterShape);
+        Ref.commands.AddCommand("testsoft", pick_testsoft);
+
+//        BulletGlobals.setDeactivationDisabled(false);
+//        BulletGlobals.setDeactivationTime(1.0f);
+//        
+//        createCharacterProxy();
     }
 
-    
-
-   
-    
-    private class KinematicMotionState extends MotionState {
-        Transform t;
-        private KinematicMotionState(Transform t) {
-            this.t = t;
-        }
-        @Override
-        public Transform getWorldTransform(Transform t) {
-            t.set(this.t);
-            return t;
-        }
-
-        @Override
-        public void setWorldTransform(Transform t) {
-            
-        }
-        
-    }
-    
-    private void updatePlayerProxy(RigidBody body, PlayerState ps) {
-        Vector3f org = ps.origin;
-        
-        
-        KinematicMotionState ms =  (KinematicMotionState) body.getMotionState();
-        ms.t.origin.set(org.x, org.y, org.z);
-        ms.t.origin.scale(SCALE_FACTOR);
-//        ms.t.origin.add(charHalfSize);
-        
-        javax.vecmath.Vector3f vel = new javax.vecmath.Vector3f(ps.velocity.x, ps.velocity.y, ps.velocity.z);
-        vel.scale(SCALE_FACTOR);
-        body.setLinearVelocity(vel);
-    }
 
     public void stepPhysics() {
         int time = Ref.cgame.cg.time;
         
-        if(lastPhysicsTime == 0) {
-            lastPhysicsTime = time - 16;
-        }
-
-        if(time > lastPhysicsTime) {
-            if(player != null) {
-                updatePlayerProxy(player, Ref.cgame.cg.predictedPlayerState);
-                
-                
+        
+        handlePick();
+        
+        world.stepPhysics(time, 10, Ref.common.com_timescale.fValue / 120f);
+        
+        if(soft != null ) {
+            // Update softbody vertices
+            int vcount = soft.getVertexCount();
+            int stride = (4*4*2);
+            if(softBuffer == null || softBuffer.capacity() < vcount * stride) {
+                softBuffer = CacheUtil.createFloatBuffer(vcount * stride / 4);
             }
-            if (pickConstraint != null) {
-                // move the constraint pivot
-                Point2PointConstraint p2p = (Point2PointConstraint) pickConstraint;
-                if (p2p != null) {
-                    // keep it at the same picking distance
-                    Vector3f origin = Ref.cgame.cg.refdef.Origin;
-                    Vector3f ray = Ref.cgame.cg.refdef.ViewAxis[0];
-                    javax.vecmath.Vector3f cameraPosition = new javax.vecmath.Vector3f(origin.x, origin.y, origin.z);
-                    cameraPosition.scale(SCALE_FACTOR);
-                    javax.vecmath.Vector3f rayTo = new javax.vecmath.Vector3f(ray.x, ray.y, ray.z);
-                    rayTo.scale(BulletStats.gOldPickingDist);
-                    rayTo.add(cameraPosition);
-                    p2p.setPivotB(rayTo);
-                }
+            softBuffer.clear();
+            soft.getVertexData(softBuffer, true);
+            Vector3f[] verts = new Vector3f[vcount];
+            Vector3f[] normals = new Vector3f[vcount];
+            for (int i = 0; i < vcount; i++) {
+                verts[i] = new Vector3f(softBuffer.get(),softBuffer.get(),softBuffer.get());
+                verts[i].scale(INV_SCALE_FACTOR);
+                softBuffer.get();
+                normals[i] = new Vector3f(softBuffer.get(),softBuffer.get(),softBuffer.get());
+                softBuffer.get();
             }
-            BulletStats.setProfileEnabled(true);
-            float delta = (time - lastPhysicsTime) / 1000f;
-            world.stepSimulation(delta, 5, 1f/120f);
             
-            CProfileIterator it =  CProfileManager.getIterator();
-            lastPhysicsTime = time;
-            handleGhostObjects();
+            int icount = soft.getIndiceCount();
+            if(softIndices == null || softIndices.length < icount) {
+                
+                softIndices = new int[icount];
+                IntBuffer buf = CacheUtil.createIntBuffer(icount);
+                soft.getIndiceData(buf);
+                buf.get(softIndices);
+            }
+            
+            RenderEntity ent = Ref.render.createEntity(REType.POLY);
+
+            //ent.flags = RenderEntity.FLAG_NOLIGHT;
+            ent.verts = new PolyVert[icount];
+            ent.frame = icount;
+            ent.oldframe = GL11.GL_TRIANGLES;
+            for (int i = 0; i < icount; i++) {
+                ent.verts[i] = new PolyVert();
+                int index = softIndices[i];
+                ent.verts[i].xyz = verts[index];
+                if(normals != null) ent.verts[i].normal = normals[index];
+            }
+
+            Ref.render.addRefEntity(ent);
         }
+    }
+    
+    private void handlePick() {
+        if (pickConstraint != null && pickConstraint.isValid()) {
+           // move the constraint pivot
+           Point2PointConstraint p2p = (Point2PointConstraint) pickConstraint;
+           if (p2p != null && pickedBody.isValid()) {
+               // keep it at the same picking distance
+               Vector3f origin = Ref.cgame.cg.refdef.Origin;
+               Vector3f ray = Ref.cgame.cg.refdef.ViewAxis[0];
+               Vector3f cameraPosition = new Vector3f(origin);
+               cameraPosition.scale(SCALE_FACTOR);
+               Vector3f rayTo = new Vector3f(ray);
+               rayTo.scale(oldPickDist);
+               Vector3f.add(cameraPosition, rayTo, rayTo);
+               p2p.setPivotB(rayTo);
+               
+               RenderEntity ent = Ref.render.createEntity(REType.POLY);
+               Transform t = pickedBody.getCenterOfMassTransform(null);
+               
+               
+               t.toAxis(ent.axis);
+               
+               t.getOrigin(ent.origin);
+               ent.origin.scale(INV_SCALE_FACTOR);
+               ent.flags = RenderEntity.FLAG_NOLIGHT;
+               ent.verts = new PolyVert[6];
+               for (int i = 0; i < 6; i++) {
+                   ent.verts[i] = new PolyVert();
+               }
+               float axisLen = 32f;
+               ent.frame = 6;
+               ent.oldframe = GL11.GL_LINES;
+               ent.verts[0].xyz = ent.origin;
+               ent.verts[1].xyz = Helper.VectorMA(ent.origin, axisLen, ent.axis[0], null);
+               ent.verts[2].xyz = ent.origin;
+               ent.verts[3].xyz = Helper.VectorMA(ent.origin, axisLen, ent.axis[1], null);
+               ent.verts[4].xyz = ent.origin;
+               ent.verts[5].xyz = Helper.VectorMA(ent.origin, axisLen, ent.axis[2], null);
+               Ref.render.addRefEntity(ent);
+           }
+       }
     }
 
 
@@ -174,101 +180,59 @@ public class CGPhysics {
      * @param forcefalloff true if force should decrease with distance
      */
     public void explosionImpulse(Vector3f origin, float radius, float force, boolean forcefalloff) {
-        GhostObject ghostObj = new GhostObject();
-        
-        // Set shape
-        ghostObj.setCollisionShape(new SphereShape(radius*SCALE_FACTOR));
-
-        // Set origin
-        Transform t = new Transform();
-        t.setIdentity();
-        t.origin.set(origin.x, origin.y, origin.z);
-        t.origin.scale(SCALE_FACTOR); // scale to physics size
-        ghostObj.setWorldTransform(t);
-        
-        // Don't push bodies away
-        ghostObj.setCollisionFlags(ghostObj.getCollisionFlags() | CollisionFlags.NO_CONTACT_RESPONSE);
-
-        // add to world and out ghostobject list
-        world.addCollisionObject(ghostObj);
-        explosionObjects.add(ghostObj);
+//        GhostObject ghostObj = new GhostObject();
+//        
+//        // Set shape
+//        ghostObj.setCollisionShape(new SphereShape(radius*SCALE_FACTOR));
+//
+//        // Set origin
+//        Transform t = new Transform();
+//        t.setIdentity();
+//        t.origin.set(origin.x, origin.y, origin.z);
+//        t.origin.scale(SCALE_FACTOR); // scale to physics size
+//        ghostObj.setWorldTransform(t);
+//        
+//        // Don't push bodies away
+//        ghostObj.setCollisionFlags(ghostObj.getCollisionFlags() | CollisionFlags.NO_CONTACT_RESPONSE);
+//
+//        // add to world and out ghostobject list
+//        world.addCollisionObject(ghostObj);
+//        explosionObjects.add(ghostObj);
     }
 
-    public ArrayList<GhostObject> explosionObjects = new ArrayList<GhostObject>();
-    private void handleGhostObjects() {
-        javax.vecmath.Vector3f impulse = new javax.vecmath.Vector3f(0, 0, 200);
-        Transform t1 = new Transform();
-        Transform t2 = new Transform();
-        for (GhostObject ghostObject : explosionObjects) {
-            ghostObject.getWorldTransform(t1); // get ghost center
-            
-            for (CollisionObject collisionObject : ghostObject.getOverlappingPairs()) {
-                RigidBody b = RigidBody.upcast(collisionObject);
-                if(b != null && !b.isStaticObject()) {
-                    b.getWorldTransform(t2);
-                    impulse.x = t2.origin.x - t1.origin.x;
-                    impulse.y = t2.origin.y - t1.origin.y;
-                    impulse.z = t2.origin.z - t1.origin.z;
-                    float len = impulse.length();
-                    impulse.normalize();
-                    float scale = 200 - len;
-                    impulse.scale(scale);
-                    b.activate(true);
-                    b.applyCentralImpulse(impulse);
-                }
-            }
-            world.removeCollisionObject(ghostObject);
-        }
-        explosionObjects.clear();
-    }
 
     public void deleteBody(RigidBody body) {
         world.removeRigidBody(body);
-        bodies.remove(body);
+        body.destroyAll();
+    }
+    
+    public void removeBody(RigidBody body) {
+        world.removeRigidBody(body);
+    }
+    
+    public void deleteBody(SoftBody body) {
+        world.removeSoftBody(body);
+        body.destroy();
     }
 
-    public RigidBody localCreateRigidBody(float mass, Transform startTransform, CollisionShape shape) {
-        DefaultMotionState myMotionState = new DefaultMotionState(startTransform);
+    public RigidBody localCreateRigidBody(float mass, Vector3f startTransform, CollisionShape shape) {
+        Matrix3f basis = new Matrix3f();
+        basis.setIdentity();
+        
+        DirectMotionState myMotionState = new DirectMotionState(basis, startTransform);
         return localCreateRigidBody(mass, myMotionState, shape);
     }
 
-    public RigidBody localCreateRigidBody(float mass, MotionState mState, CollisionShape shape) {
-        // rigidbody is dynamic if and only if mass is non zero, otherwise static
-        boolean isDynamic = (mass != 0f);
-
-        javax.vecmath.Vector3f localInertia = new javax.vecmath.Vector3f(0f, 0f, 0f);
-        if (isDynamic) {
-                shape.calculateLocalInertia(mass, localInertia);
-        }
-
-        // using motionstate is recommended, it provides interpolation capabilities, and only synchronizes 'active' objects
-        RigidBodyConstructionInfo cInfo = new RigidBodyConstructionInfo(mass, mState, shape, localInertia);
-        RigidBody body = new RigidBody(cInfo);
-        
-        
-        
+    public RigidBody localCreateRigidBody(float mass, DirectMotionState mState, CollisionShape shape) {
+        RigidBody body = new RigidBody(mass, mState, shape);
         world.addRigidBody(body);
-        
         return body;
     }
     
-    public RigidBody localCreateRigidKinematicBody(MotionState mState, CollisionShape shape) {
-        // rigidbody is dynamic if and only if mass is non zero, otherwise static
-        
-
-        javax.vecmath.Vector3f localInertia = new javax.vecmath.Vector3f(0f, 0f, 0f);
-
-        // using motionstate is recommended, it provides interpolation capabilities, and only synchronizes 'active' objects
-        RigidBodyConstructionInfo cInfo = new RigidBodyConstructionInfo(0, mState, shape, localInertia);
-        RigidBody body = new RigidBody(cInfo);
-        body.setCollisionFlags(CollisionFlags.KINEMATIC_OBJECT);
-        body.setActivationState(RigidBody.DISABLE_DEACTIVATION);
-        
-        
+    public void addRigidBody(RigidBody body) {
         world.addRigidBody(body);
-        
-        return body;
     }
+    
     
     private ICommand pick_cmd = new ICommand() {
         public void RunCommand(String[] args) {
@@ -276,66 +240,97 @@ public class CGPhysics {
             handlePick(activate, Ref.cgame.cg.refdef.Origin, Ref.cgame.cg.refdef.ViewAxis[0]);
         }
     };
+    
+    private ICommand pick_testsoft = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(soft != null) {
+                deleteBody(soft);
+                softIndices = null;
+                softBuffer = null;
+                soft = null;
+            }
+            Vector3f org = new Vector3f(Ref.cgame.cg.refdef.Origin);
+            org.scale(SCALE_FACTOR);
+            soft = SoftBody.createBall(world, org, 1, 512);
+            
+            short collisionFilterGroup =  CollisionObject.FILTER_DEFAULT;
+            short collisionFilterMask = (short) (CollisionObject.FILTER_ALL);
+            world.addSoftBody(soft, collisionFilterGroup, collisionFilterMask);
+        }
+
+        
+    };
 
 
     RigidBody pickedBody = null;
     Point2PointConstraint pickConstraint = null;
+    Vector3f oldPickOrigin = new Vector3f();
+    float oldPickDist = 0f;
+    
     private void handlePick(boolean activate, Vector3f origin, Vector3f ray) {
         if (activate) {
-            javax.vecmath.Vector3f cameraPosition = new javax.vecmath.Vector3f(origin.x, origin.y, origin.z);
+            Vector3f cameraPosition = new Vector3f(origin.x, origin.y, origin.z);
             cameraPosition.scale(SCALE_FACTOR);
-            javax.vecmath.Vector3f rayTo = new javax.vecmath.Vector3f(ray.x, ray.y, ray.z);
+            Vector3f rayTo = new Vector3f(ray.x, ray.y, ray.z);
             rayTo.scale(100f*SCALE_FACTOR);
-            rayTo.add(cameraPosition);
+            Vector3f.add(rayTo, cameraPosition, rayTo);
             
             // add a point to point constraint for picking
             if (world != null) {
-                
-                CollisionWorld.ClosestRayResultCallback rayCallback = new CollisionWorld.ClosestRayResultCallback(cameraPosition, rayTo);
-                world.rayTest(cameraPosition, rayTo, rayCallback);
+                ClosestRayResult rayCallback = world.rayTestClosest(cameraPosition, rayTo);
                 if (rayCallback.hasHit()) {
-                    RigidBody body = RigidBody.upcast(rayCallback.collisionObject);
+                    CollisionObject obj = rayCallback.getCollisionObject();
+                    RigidBody body = null;
+                    if(obj instanceof RigidBody)  body = (RigidBody)obj;
                     if (body != null) {
-
                         // other exclusions?
                         if (!(body.isStaticObject() || body.isKinematicObject())) {
                             pickedBody = body;
-                            pickedBody.setActivationState(CollisionObject.DISABLE_DEACTIVATION);
-                            pickedBody.setDamping(0.1f, 0.99f);
-                            javax.vecmath.Vector3f pickPos = new javax.vecmath.Vector3f(rayCallback.hitPointWorld);
-
-                            Transform tmpTrans = body.getCenterOfMassTransform(new Transform());
+                            pickedBody.setActivationState(CollisionObject.ActivationStates.DISABLE_DEACTIVATION);
+//                            pickedBody.setDamping(0.1f, 0.99f);
+                            Vector3f delta = Vector3f.sub(rayTo, cameraPosition, null);
+                            delta.scale(rayCallback.getHitFraction());
+                            
+                            Vector3f pickPos = Vector3f.add(cameraPosition, delta, null);
+                            
+                            Transform tmpTrans = body.getCenterOfMassTransform(null);
+                            
                             tmpTrans.inverse();
-                            javax.vecmath.Vector3f localPivot = new javax.vecmath.Vector3f(pickPos);
-                            tmpTrans.transform(localPivot);
+                            Vector3f tmpPick = new Vector3f(pickPos);
+                            tmpTrans.transform(tmpPick);
+                            
+                            Point2PointConstraint p2p = new Point2PointConstraint(world, body, tmpPick);
+                            p2p.setImpulseClamp(10f);
+                            p2p.setTau(0.1f);
 
-                            Point2PointConstraint p2p = new Point2PointConstraint(body, localPivot);
-                            p2p.setting.impulseClamp = 3f;
-
-                            world.addConstraint(p2p);
+                            world.addConstraint(p2p, false);
                             pickConstraint = p2p;
                             // save mouse position for dragging
-                            BulletStats.gOldPickingPos.set(rayTo);
-                            javax.vecmath.Vector3f eyePos = new javax.vecmath.Vector3f(cameraPosition);
-                            javax.vecmath.Vector3f tmp = new javax.vecmath.Vector3f();
-                            tmp.sub(pickPos, eyePos);
-                            BulletStats.gOldPickingDist = tmp.length();
+                            oldPickOrigin.set(rayTo);
+                            
+                            Vector3f eyePos = new Vector3f(cameraPosition);
+                            Vector3f tmp = new Vector3f();
+                            Vector3f.sub(pickPos, eyePos, tmp);
+                            oldPickDist = tmp.length();
                             // very weak constraint for picking
-                            p2p.setting.tau = 0.1f;
                         }
                     }
                 }
             }
 
         } else {
-            if (pickConstraint != null && world != null) {
-                world.removeConstraint(pickConstraint);
+            if (pickConstraint != null && world != null ) {
+                if(pickConstraint.isValid()) {
+                    world.removeConstraint(pickConstraint);
+                }
                 // delete m_pickConstraint;
                 //printf("removed constraint %i",gPickingConstraintId);
                 pickConstraint = null;
-                pickedBody.setDamping(0.1f, 0.2f);
-                pickedBody.forceActivationState(CollisionObject.ACTIVE_TAG);
-                pickedBody.setDeactivationTime(0f);
+//                pickedBody.setDamping(0.1f, 0.2f);
+                if(pickedBody != null && pickedBody.isValid()) {
+                    pickedBody.forceActivationState(CollisionObject.ActivationStates.ACTIVE_TAG);
+                    pickedBody.setDeactivationTime(1f);
+                }
                 pickedBody = null;
             }
         }
@@ -355,57 +350,57 @@ public class CGPhysics {
 
     public void renderBodies() {
         if(true) return;
-        if(boxPoly == null) {
-            Vector3f[] boxverts = Helper.createBoxVerts(10, null);
-            boxPoly = new PolyVert[boxverts.length];
-            for (int i = 0; i < boxPoly.length; i++) {
-                boxPoly[i] = new PolyVert();
-                boxPoly[i].xyz = boxverts[i];
-            }
-        }
-        
-        
-                
-        Transform t = new Transform();
-        for (RigidBody rigidBody : bodies) {
-            //rigidBody.getWorldTransform(t);
-            MotionState mState = rigidBody.getMotionState();
-            mState.getWorldTransform(t);
-            
-            RenderEntity ent = Ref.render.createEntity(REType.POLY);
-            ent.flags |= RenderEntity.FLAG_SPRITE_AXIS;
-            ent.origin.set(t.origin.x, t.origin.y, t.origin.z);
-            Helper.matrixToAxis(t.basis, ent.axis);
-//            ent.axis[0].set(1,0,0);
-//            ent.axis[1].set(0,1,0);
-//            ent.axis[2].set(0,0,1);
-//            Vector3f dest = Helper.VectorMA(Ref.cgame.cg.refdef.Origin, 20f, Ref.cgame.cg.refdef.ViewAxis[0], null);
-//            ent.origin.set(dest);
-
-            
-            
-            int activationState = rigidBody.getActivationState();
-            ent.color.set(1,1,1,1);
-            switch(activationState) {
-                case 1: // active
-                    ent.color.set(1,0,0,1);
-                    break;
-                case 2:
-                    ent.color.set(1,1,0,1);
-                    break;
-                default:
-                    ent.color.set(0,0,1,1);
-            }
-
-            ent.outcolor.set(ent.color);
-            ent.outcolor.scale(255);
-            ent.mat = Ref.ResMan.getWhiteTexture().asMaterial();
-            
-            ent.verts = boxPoly;
-            ent.frame = boxPoly.length;
-
-            Ref.render.addRefEntity(ent);
-        }
+//        if(boxPoly == null) {
+//            Vector3f[] boxverts = Helper.createBoxVerts(10, null);
+//            boxPoly = new PolyVert[boxverts.length];
+//            for (int i = 0; i < boxPoly.length; i++) {
+//                boxPoly[i] = new PolyVert();
+//                boxPoly[i].xyz = boxverts[i];
+//            }
+//        }
+//        
+//        
+//                
+//        Transform t = new Transform();
+//        for (RigidBody rigidBody : bodies) {
+//            //rigidBody.getWorldTransform(t);
+//            MotionState mState = rigidBody.getMotionState();
+//            mState.getWorldTransform(t);
+//            
+//            RenderEntity ent = Ref.render.createEntity(REType.POLY);
+//            ent.flags |= RenderEntity.FLAG_SPRITE_AXIS;
+//            ent.origin.set(t.origin.x, t.origin.y, t.origin.z);
+//            Helper.matrixToAxis(t.basis, ent.axis);
+////            ent.axis[0].set(1,0,0);
+////            ent.axis[1].set(0,1,0);
+////            ent.axis[2].set(0,0,1);
+////            Vector3f dest = Helper.VectorMA(Ref.cgame.cg.refdef.Origin, 20f, Ref.cgame.cg.refdef.ViewAxis[0], null);
+////            ent.origin.set(dest);
+//
+//            
+//            
+//            int activationState = rigidBody.getActivationState();
+//            ent.color.set(1,1,1,1);
+//            switch(activationState) {
+//                case 1: // active
+//                    ent.color.set(1,0,0,1);
+//                    break;
+//                case 2:
+//                    ent.color.set(1,1,0,1);
+//                    break;
+//                default:
+//                    ent.color.set(0,0,1,1);
+//            }
+//
+//            ent.outcolor.set(ent.color);
+//            ent.outcolor.scale(255);
+//            ent.mat = Ref.ResMan.getWhiteTexture().asMaterial();
+//            
+//            ent.verts = boxPoly;
+//            ent.frame = boxPoly.length;
+//
+//            Ref.render.addRefEntity(ent);
+//        }
     }
     
     
@@ -414,24 +409,149 @@ public class CGPhysics {
         if (world != null) {
 
             LocalEntity lent = LocalEntity.physicsBox(origin, Ref.cgame.cg.time, 20000, Ref.ResMan.LoadTexture("data/textures/tile.png").asMaterial(), boxShape);
-            javax.vecmath.Vector3f linVel = new javax.vecmath.Vector3f(dir.x, dir.y, dir.z);
-            linVel.normalize();
+            Vector3f linVel = new Vector3f(dir.x, dir.y, dir.z);
+            linVel.normalise();
             linVel.scale(force);
 
             lent.phys_body.setLinearVelocity(linVel);
-            lent.phys_body.setAngularVelocity(new javax.vecmath.Vector3f(0f, 0f, 0f));
+            lent.phys_body.setAngularVelocity(new Vector3f(0f, 0f, 0f));
             lent.phys_body.setDamping(0.1f, 0.2f);
-            bodies.add(lent.phys_body);
+            
+//            Vector3f org2 = Helper.VectorMA(origin, 100f, dir, null);
+//            LocalEntity lent2 = LocalEntity.physicsBox(org2, Ref.cgame.cg.time, 21000, Ref.ResMan.LoadTexture("data/textures/tile.png").asMaterial(), boxShape);
+////            Vector3f linVel2 = new Vector3f(dir.x, dir.y, dir.z);
+////            linVel2.normalise();
+////            linVel2.scale(force);
+//
+////            lent2.phys_body.setLinearVelocity(linVel2);
+////            lent2.phys_body.setAngularVelocity(new Vector3f(0f, 0f, 0f));
+////            lent2.phys_body.setDamping(0.1f, 0.2f);
+//            
+//            Transform a = new Transform();
+//            a.origin.set(0.0f, 0.0f, 0.5f);
+//            Transform b = new Transform();
+//            b.origin.set(0.0f, 0.0f, -0.5f);
+//            lent.phys_body.setCollisionFlags(RigidBody.CF_NO_CONTACT_RESPONSE);
+//            Generic6DofConstraint cons = new Generic6DofConstraint(world, lent.phys_body, lent2.phys_body, a, b, true);
+//            cons.setAngularLowerLimit(new Vector3f(-PhysicsSystem.SIMD_PI * 0.3f,-PhysicsSystem.SIMD_PI * 0.3f,-PhysicsSystem.SIMD_EPSILON));
+//            cons.setAngularUpperLimit(new Vector3f(PhysicsSystem.SIMD_PI * 0.3f,PhysicsSystem.SIMD_PI * 0.3f,PhysicsSystem.SIMD_EPSILON));
+//            world.addConstraint(cons, true);
+//            bodies.add(lent.phys_body);
         }
     }
 
     void addChunk(CubeChunk chunk) {
         ChunkShape shape = new ChunkShape(chunk.blockType);
-        Transform tr = new Transform();
-        tr.setIdentity();
-        tr.origin.set(chunk.absmin[0] * SCALE_FACTOR, chunk.absmin[1] * SCALE_FACTOR, chunk.absmin[2] * SCALE_FACTOR);
-        chunk.physicsShape = localCreateRigidBody(0, tr, shape);
-        chunk.physicsShape.forceActivationState(RigidBody.DISABLE_SIMULATION);
         
+        
+        Vector3f origin = new Vector3f(chunk.absmin[0] * SCALE_FACTOR, chunk.absmin[1] * SCALE_FACTOR, chunk.absmin[2] * SCALE_FACTOR);
+        CollisionObject chunkObject = new CollisionObject();
+        chunkObject.setCollisionShape(shape);
+        chunkObject.setCollisionFlags(CollisionObject.CF_STATIC_OBJECT);
+        chunkObject.setActivationState(CollisionObject.ActivationStates.DISABLE_SIMULATION);
+        chunkObject.setWorldTransform(BufferUtil.toNativeTransform(null, origin));
+        
+        short collisionFilterGroup =  CollisionObject.FILTER_STATIC;
+	short collisionFilterMask = (short) (CollisionObject.FILTER_ALL ^ CollisionObject.FILTER_STATIC);
+        world.addCollisionObject(chunkObject, collisionFilterGroup, collisionFilterMask);
+        
+
+////        chunk.physicsShape = localCreateRigidBody(0, tr, shape);
+////        chunk.physicsShape.forceActivationState(RigidBody.DISABLE_SIMULATION);
+//        chunk.physicsSystem = this; // a bit derp
+    }
+
+
+//    public RigidBody localCreateRigidKinematicBody(MotionState mState, CollisionShape shape) {
+//        // rigidbody is dynamic if and only if mass is non zero, otherwise static
+//        
+//
+//        javax.vecmath.Vector3f localInertia = new javax.vecmath.Vector3f(0f, 0f, 0f);
+//
+//        // using motionstate is recommended, it provides interpolation capabilities, and only synchronizes 'active' objects
+//        RigidBodyConstructionInfo cInfo = new RigidBodyConstructionInfo(0, mState, shape, localInertia);
+//        RigidBody body = new RigidBody(cInfo);
+//        body.setCollisionFlags(CollisionFlags.KINEMATIC_OBJECT);
+//        body.setActivationState(RigidBody.DISABLE_DEACTIVATION);
+//        
+//        
+//        world.addRigidBody(body);
+//        
+//        return body;
+//    }
+        
+//    private void createCharacterProxy() {
+//        Transform t = new Transform();
+//        t.setIdentity();
+//        
+//        MotionState ms = new KinematicMotionState(t);
+//        player = localCreateRigidKinematicBody(ms, characterShape);
+//    }
+
+    
+
+//    public ArrayList<GhostObject> explosionObjects = new ArrayList<GhostObject>();
+//    private void handleGhostObjects() {
+//        javax.vecmath.Vector3f impulse = new javax.vecmath.Vector3f(0, 0, 200);
+//        Transform t1 = new Transform();
+//        Transform t2 = new Transform();
+//        for (GhostObject ghostObject : explosionObjects) {
+//            ghostObject.getWorldTransform(t1); // get ghost center
+//            
+//            for (CollisionObject collisionObject : ghostObject.getOverlappingPairs()) {
+//                RigidBody b = RigidBody.upcast(collisionObject);
+//                if(b != null && !b.isStaticObject()) {
+//                    b.getWorldTransform(t2);
+//                    impulse.x = t2.origin.x - t1.origin.x;
+//                    impulse.y = t2.origin.y - t1.origin.y;
+//                    impulse.z = t2.origin.z - t1.origin.z;
+//                    float len = impulse.length();
+//                    impulse.normalize();
+//                    float scale = 200 - len;
+//                    impulse.scale(scale);
+//                    b.activate(true);
+//                    b.applyCentralImpulse(impulse);
+//                }
+//            }
+//            world.removeCollisionObject(ghostObject);
+//        }
+//        explosionObjects.clear();
+//    }
+   
+//    
+//    private class KinematicMotionState extends MotionState {
+//        Transform t;
+//        private KinematicMotionState(Transform t) {
+//            this.t = t;
+//        }
+//        @Override
+//        public Transform getWorldTransform(Transform t) {
+//            t.set(this.t);
+//            return t;
+//        }
+//
+//        @Override
+//        public void setWorldTransform(Transform t) {
+//            
+//        }
+//        
+//    }
+    
+//    private void updatePlayerProxy(RigidBody body, PlayerState ps) {
+//        Vector3f org = ps.origin;
+//        
+//        
+//        KinematicMotionState ms =  (KinematicMotionState) body.getMotionState();
+//        ms.t.origin.set(org.x, org.y, org.z);
+//        ms.t.origin.scale(SCALE_FACTOR);
+////        ms.t.origin.add(charHalfSize);
+//        
+//        javax.vecmath.Vector3f vel = new javax.vecmath.Vector3f(ps.velocity.x, ps.velocity.y, ps.velocity.z);
+//        vel.scale(SCALE_FACTOR);
+//        body.setLinearVelocity(vel);
+//    }
+
+    public PhysicsSystem getWorld() {
+        return world;
     }
 }

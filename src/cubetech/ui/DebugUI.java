@@ -776,17 +776,17 @@ public class DebugUI extends javax.swing.JFrame implements LogEventListener {
 
     private void jToggleButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jToggleButton1ActionPerformed
         // Client listen
-        if(Ref.client == null)
-            return;
+        if(Ref.client == null) return;
 
         // Enable/Disable client update hook
-        if(jToggleButton1.isSelected())
-            Ref.client.SetUpdateListener(new FinishedUpdatingListener() {
+        if(jToggleButton1.isSelected()) {
+            Ref.client.updateListener = new FinishedUpdatingListener() {
             public void FinishedUpdating() {
                 UpdateClient();
-            }});
-        else
-            Ref.client.RemoveUpdateListener();
+            }};
+            
+        } else Ref.client.updateListener = null;
+            
 
     }//GEN-LAST:event_jToggleButton1ActionPerformed
 
@@ -870,8 +870,8 @@ public class DebugUI extends javax.swing.JFrame implements LogEventListener {
 
         clientFrametime.setText(""+Ref.client.frametime);
         clientRealtime.setText(""+Ref.client.realtime);
-        clientServername.setText(""+Ref.client.servername);
-        clientState.setText(Ref.client.state.toString());
+        clientServername.setText(""+Ref.client.clc.servername);
+        clientState.setText(Ref.client.clc.state.toString());
     }
 
     

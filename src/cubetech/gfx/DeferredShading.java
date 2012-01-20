@@ -40,6 +40,7 @@ public class DeferredShading {
     CVar r_scissor = Ref.cvars.Get("r_scissor", "1", null);
     CVar r_showscissor = Ref.cvars.Get("r_showscissor", "0", null);
     CubeTexture envmap = null;
+    private ViewParams currentView = null;
     
     public DeferredShading() {
         Vector2f resolution = Ref.glRef.GetResolution();
@@ -82,10 +83,13 @@ public class DeferredShading {
                 new Format[] {Format.RGBA, Format.RGBA32F, Format.RGBA16F, Format.DEPTH24});
     }
     
-    public void startDeferred() {
+    
+    
+    public void startDeferred(ViewParams view) {
         if(!r_deferred.isTrue()) return;
         isRendering = true;
-        mrt.start(false);
+        currentView = view;
+        mrt.start(false, view);
     }
     
     public void stopDeferred() {
@@ -94,9 +98,9 @@ public class DeferredShading {
         mrt.stop();
     }
     
-    public void startPostDeferred() {
+    public void startPostDeferred(ViewParams view) {
         if(!r_deferred.isTrue()) return;
-        mrt.start(true);
+        mrt.start(true, view);
     }
     
     public void stopPostDeferred() {
@@ -109,7 +113,7 @@ public class DeferredShading {
         Vector3f right = new Vector3f(1, 0, 0);
         Vector3f up = new Vector3f(0, 1, 0);
         
-        ViewParams view = Ref.cgame.cg.refdef;
+        ViewParams view = currentView;
         forward.scale(view.farDepth);
         float hfar = (float) ( Math.tan(view.FovY * Math.PI / 360f) * (view.farDepth));
         float wfar = (float) ( Math.tan(view.FovX * Math.PI / 360f) * (view.farDepth));
@@ -176,20 +180,19 @@ public class DeferredShading {
     
     public void finalizeShading() {
         if(!r_deferred.isTrue()) return;
-        if(Ref.cgame == null || Ref.cgame.cg == null || Ref.cgame.cg.refdef == null) return;
+        if(currentView == null) return;
 
-        ViewParams view = Ref.cgame.cg.refdef;
         
         boolean shadowsEnabled = Ref.glRef.shadowMan.isEnabled();
         if(shadowsEnabled) {
-            IThinkMethod renderFunction = new IThinkMethod() {
-                public void think(Gentity ent) {
-                    Ref.render.renderAll(Ref.cgame.cg.refdef, Render.RF_SHADOWPASS);
+            IRenderCallback renderFunction = new IRenderCallback() {
+                public void render(ViewParams view) {
+                    Ref.render.renderAll(view, Render.RF_SHADOWPASS);
                 }
             };
-            for (Light light : view.lights) {
+            for (Light light : currentView.lights) {
                 if(light.isCastingShadows()) {
-                    Ref.glRef.shadowMan.renderShadowsForLight(light, view, renderFunction);
+                    Ref.glRef.shadowMan.renderShadowsForLight(light, currentView, renderFunction);
                 }
             }
             
@@ -199,8 +202,9 @@ public class DeferredShading {
         // Set HUD render projection
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glLoadIdentity();
-        GL11.glOrtho(0, (int)Ref.glRef.GetResolution().x, 0, (int)Ref.glRef.GetResolution().y, 1,-1000);
-
+        GL11.glOrtho(currentView.ViewportX, currentView.ViewportWidth+currentView.ViewportX, currentView.ViewportY, currentView.ViewportY+currentView.ViewportHeight, 1, -1000);
+        //GL11.glOrtho(0, (int)Ref.glRef.GetResolution().x, 0, (int)Ref.glRef.GetResolution().y, 1,-1000);
+        
         GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glLoadIdentity();
@@ -214,19 +218,19 @@ public class DeferredShading {
         SecTag t = Profiler.EnterSection(Sec.AMBIENT_PASS);
         Shader shader = Ref.glRef.getShader("DeferredAmbientCube");
         Ref.glRef.PushShader(shader);
-        shader.setUniform("viewmatrix", Matrix4f.invert(view.viewMatrix, null));
+        shader.setUniform("viewmatrix", Matrix4f.invert(currentView.viewMatrix, null));
         shader.setUniform("ambientFactor", r_ambient.fValue);
         if(envmap == null) envmap = Ref.ResMan.LoadTexture("data/textures/skybox/ibl_sky", true);
         envmap.textureSlot = 3;
         envmap.Bind();
-        fullscreenPass(shader, true, true, true);
+        fullscreenPass(shader, true, false, true);
         envmap.Unbind();
         Ref.glRef.PopShader();
         t.ExitSection();
         
         
         
-        ArrayList<Light> lightList = view.lights;
+        ArrayList<Light> lightList = currentView.lights;
         for (Light light : lightList) {
             // if last pass used scissoring, disable it for this pass
             
@@ -241,7 +245,7 @@ public class DeferredShading {
                     Vector4f shaderPosition = new Vector4f(-direction.x,
                                                            -direction.y,
                                                            -direction.z, 0f);
-                    Matrix4f.transform(view.viewMatrix, shaderPosition, shaderPosition);
+                    Matrix4f.transform(currentView.viewMatrix, shaderPosition, shaderPosition);
                     shader.setUniform("lightPosition", shaderPosition);
                     shader.setUniform("lightDiffuse", light.getDiffuse());
                     shader.setUniform("lightSpecular", light.getSpecular());
@@ -252,8 +256,8 @@ public class DeferredShading {
 
                     Matrix4f[] shadowmat = shadows.getShadowViewProjections(4, light);
                     Vector4f shadowDepths = shadows.getCascadeDepths();
-                    shader.setUniform("invModelView", Matrix4f.invert(view.viewMatrix, null));
-                    shader.setUniform("projectionMatrix", view.ProjectionMatrix);
+                    shader.setUniform("invModelView", Matrix4f.invert(currentView.viewMatrix, null));
+                    shader.setUniform("projectionMatrix", currentView.ProjectionMatrix);
                     shader.setUniform("shadowMatrix", shadowmat);
                     shader.setUniform("cascadeDistances", shadowDepths);
                     shader.setUniform("shadow_bias", Ref.cvars.Find("shadow_bias").fValue);
@@ -270,7 +274,7 @@ public class DeferredShading {
                     Vector4f shaderPosition = new Vector4f(-direction.x,
                                                            -direction.y,
                                                            -direction.z, 0f);
-                    Matrix4f.transform(view.viewMatrix, shaderPosition, shaderPosition);
+                    Matrix4f.transform(currentView.viewMatrix, shaderPosition, shaderPosition);
                     shader.setUniform("lightPosition", shaderPosition);
                     fullscreenPass(shader, true, true, true);
                     Ref.glRef.PopShader();
@@ -284,7 +288,7 @@ public class DeferredShading {
                 
                 t = Profiler.EnterSection(Sec.POINT_LIGHT);
                 if(light.isCastingShadows() && shadowsEnabled) {
-                    if(setScissor(view, light)) {
+                    if(setScissor(currentView, light)) {
                         // cull
                         // fix: don't scissor when light has specular
                         t.ExitSection();
@@ -297,7 +301,7 @@ public class DeferredShading {
                     Vector4f shaderPosition = new Vector4f(position.x,
                                                            position.y,
                                                            position.z, 1f);
-                    Matrix4f.transform(view.viewMatrix, shaderPosition, shaderPosition);
+                    Matrix4f.transform(currentView.viewMatrix, shaderPosition, shaderPosition);
                     shader.setUniform("lightPosition", shaderPosition);
                     shader.setUniform("lightDiffuse", light.getDiffuse());
                     shader.setUniform("lightSpecular", light.getSpecular());
@@ -307,17 +311,17 @@ public class DeferredShading {
                     depth.textureSlot = 3;
                     depth.Bind();
 
-                    shader.setUniform("invModelView", Matrix4f.invert(view.viewMatrix, null));
-                    shader.setUniform("projectionMatrix", view.ProjectionMatrix);
+                    shader.setUniform("invModelView", Matrix4f.invert(currentView.viewMatrix, null));
+                    shader.setUniform("projectionMatrix", currentView.ProjectionMatrix);
                     shader.setUniform("shadow_bias", Ref.cvars.Find("shadow_bias").fValue);
                     shader.setUniform("shadow_factor", Ref.cvars.Find("shadow_factor").fValue);
                     GLRef.checkError();
                     fullscreenPass(shader, true, true, true);
-                    clearScissor(view);
+                    clearScissor(currentView);
                     Ref.glRef.PopShader();
                     depth.Unbind();
                 } else {
-                    if(setScissor(view, light)) {
+                    if(setScissor(currentView, light)) {
                         // cull
                         // fix: don't scissor when light has specular
                         t.ExitSection();
@@ -330,12 +334,12 @@ public class DeferredShading {
                     Vector4f shaderPosition = new Vector4f(position.x,
                                                            position.y,
                                                            position.z, 1f);
-                    Matrix4f.transform(view.viewMatrix, shaderPosition, shaderPosition);
+                    Matrix4f.transform(currentView.viewMatrix, shaderPosition, shaderPosition);
                     shader.setUniform("lightPosition", shaderPosition);
                     shader.setUniform("attenuation", new Vector4f(0.000f, 0.000f, 0.00005f, 0.0f));
                     // Render the light
                     fullscreenPass(shader, true, true, true);
-                    clearScissor(view);
+                    clearScissor(currentView);
                     Ref.glRef.PopShader();
                 }
                 t.ExitSection();
@@ -345,7 +349,7 @@ public class DeferredShading {
         
         shader = Ref.glRef.getShader("DeferredFog");
         Ref.glRef.PushShader(shader);
-        shader.setUniform("viewmatrix", Matrix4f.invert(view.viewMatrix, null));
+        shader.setUniform("viewmatrix", Matrix4f.invert(currentView.viewMatrix, null));
         fullscreenPass(shader, false, false, true);
         Ref.glRef.PopShader();
         
@@ -354,7 +358,7 @@ public class DeferredShading {
 
         GL11.glDepthFunc(GL11.GL_LEQUAL);
         GL11.glDepthMask(true);
-          
+        currentView = null;
     }
     
     private void singlePassLighting() {
@@ -391,7 +395,7 @@ public class DeferredShading {
     private void updateLightData() {
         int nLights = 6;
         Vector4f[] lightOut = new Vector4f[nLights*2];
-        Matrix4f viewMatrix = Ref.cgame.cg.refdef.viewMatrix;
+        Matrix4f viewMatrix = currentView.viewMatrix;
         // Transform the lights to view space
         for (int i = 0; i < nLights; i++) {
             Vector4f lightDir = new Vector4f(lights[i].x, lights[i].y, lights[i].z ,1f);
@@ -457,35 +461,37 @@ public class DeferredShading {
     }
     
     public void fullscreenPass(Shader shader, boolean tex0, boolean tex1, boolean tex2) {
-        float w = Ref.glRef.GetResolution().x;
-        float h = Ref.glRef.GetResolution().y;
-        
+        GLRef.checkError();
         setTextures(shader, tex0, tex1, tex2);
         
         Vector3f[] corners = calcFarPlaneCorners();
         
-        
+        GLRef.checkError();
+        boolean coords = shader.attributes.containsValue(Shader.INDICE_COORDS);
+        boolean needsCorners = shader.attributes.containsValue(Shader.INDICE_NORMAL);
+        needsCorners &= corners != null;
         
         // Texture coords are flipped on y axis
         glBegin(GL_QUADS);
         {
-            if(Ref.glRef.isShadersSupported() && corners != null) {
+            if(Ref.glRef.isShadersSupported()) {
                 // Fancy pants shaders
-                glVertexAttrib2f(Shader.INDICE_COORDS, 0, 0);
-                glVertexAttrib3f(Shader.INDICE_NORMAL, corners[0].x, corners[0].y, corners[0].z);
-                glVertexAttrib3f(Shader.INDICE_POSITION, 0, 0, 0);
+                
+                if(coords) glVertexAttrib2f(Shader.INDICE_COORDS, 0, 0);
+                if(needsCorners) glVertexAttrib3f(Shader.INDICE_NORMAL, corners[0].x, corners[0].y, corners[0].z);
+                glVertexAttrib3f(Shader.INDICE_POSITION, currentView.ViewportX, currentView.ViewportY, 0);
 
-                glVertexAttrib2f(Shader.INDICE_COORDS, 1, 0);
-                glVertexAttrib3f(Shader.INDICE_NORMAL, corners[1].x, corners[1].y, corners[1].z);
-                glVertexAttrib3f(Shader.INDICE_POSITION, w, 0, 0);
+                if(coords) glVertexAttrib2f(Shader.INDICE_COORDS, 1, 0);
+                if(needsCorners) glVertexAttrib3f(Shader.INDICE_NORMAL, corners[1].x, corners[1].y, corners[1].z);
+                glVertexAttrib3f(Shader.INDICE_POSITION, currentView.ViewportX + currentView.ViewportWidth, currentView.ViewportY, 0);
 
-                glVertexAttrib2f(Shader.INDICE_COORDS, 1, 1);
-                glVertexAttrib3f(Shader.INDICE_NORMAL, corners[2].x, corners[2].y, corners[2].z);
-                glVertexAttrib3f(Shader.INDICE_POSITION, w, h, 0);
+                if(coords) glVertexAttrib2f(Shader.INDICE_COORDS, 1, 1);
+                if(needsCorners) glVertexAttrib3f(Shader.INDICE_NORMAL, corners[2].x, corners[2].y, corners[2].z);
+                glVertexAttrib3f(Shader.INDICE_POSITION, currentView.ViewportX + currentView.ViewportWidth, currentView.ViewportY + currentView.ViewportHeight, 0);
 
-                glVertexAttrib2f(Shader.INDICE_COORDS, 0, 1);
-                glVertexAttrib3f(Shader.INDICE_NORMAL, corners[3].x, corners[3].y, corners[3].z);
-                glVertexAttrib3f(Shader.INDICE_POSITION, 0, h, 0);
+                if(coords) glVertexAttrib2f(Shader.INDICE_COORDS, 0, 1);
+                if(needsCorners) glVertexAttrib3f(Shader.INDICE_NORMAL, corners[3].x, corners[3].y, corners[3].z);
+                glVertexAttrib3f(Shader.INDICE_POSITION, currentView.ViewportX, currentView.ViewportY + currentView.ViewportHeight, 0);
             }
         }
         glEnd();

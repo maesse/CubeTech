@@ -1,32 +1,18 @@
 package cubetech.CGame;
 
-import com.bulletphysics.collision.dispatch.CollisionFlags;
-import com.bulletphysics.collision.shapes.BvhTriangleMeshShape;
-import com.bulletphysics.collision.shapes.IndexedMesh;
-import com.bulletphysics.collision.shapes.TriangleIndexVertexArray;
-import com.bulletphysics.dynamics.RigidBody;
-import com.bulletphysics.linearmath.Transform;
+import cubetech.collision.ClientCubeMap;
 import cubetech.collision.CubeChunk;
 import cubetech.collision.CubeMap;
 import cubetech.common.CVar;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
-import cubetech.common.Helper;
 import cubetech.gfx.*;
-
-import cubetech.misc.Profiler;
-import cubetech.misc.Profiler.Sec;
-import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
-import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import org.lwjgl.opengl.ARBVertexShader;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL20;
-import org.lwjgl.util.Color;
-import org.lwjgl.util.vector.Vector4f;
 
 /**
  * On the client side, a ChunkRender is piggybacked onto each chunk.
@@ -34,7 +20,6 @@ import org.lwjgl.util.vector.Vector4f;
  */
 public class ChunkRender {
     private static final float VBO_RESIZE_MULTIPLIER = 1.1f;
-    private static final int LAZY_TIME = 1000;
     public static final int SIZE = CubeChunk.SIZE;
     public static final int PLANE_SIZE = CubeChunk.PLANE_SIZE;
     public static final int BLOCK_SIZE = CubeChunk.BLOCK_SIZE;
@@ -165,7 +150,6 @@ public class ChunkRender {
             }
             return;
         }
-        long chunkid = CubeMap.positionToLookup(chunk.p[0], chunk.p[1], chunk.p[2]);
 
         // Create a VBO if we don't have one
         long startTime = System.nanoTime();
@@ -206,7 +190,7 @@ public class ChunkRender {
                 ms, sidesRendered,newVBO?"(new) ":(vboResized?"(resized) ":" "), percent);
         }
         //Common.LogDebug("Finished reading buffer");
-        Ref.cgame.map.nVBOthisFrame++;
+        ClientCubeMap.nVBOthisFrame++;
 
         vboReady = true;
         if(queuedDirty) {

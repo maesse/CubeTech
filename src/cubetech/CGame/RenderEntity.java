@@ -8,6 +8,7 @@ package cubetech.CGame;
 import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.PolyVert;
+import cubetech.iqm.IQMFrame;
 import cubetech.iqm.IQMModel;
 import cubetech.misc.Ref;
 import org.lwjgl.util.vector.Vector3f;
@@ -27,7 +28,7 @@ public class RenderEntity {
     public static final int FLAG_GPUSKINNED = 4;
     public static final int FLAG_NOLIGHT = 8; // Gets rendered after deferred pass
 
-    public IQMModel model = null;
+    public IQMFrame model = null;
     public REType Type = REType.SPRITE;
 
     public Vector4f color = new Vector4f(255,255,255,255); // 0 - 255f
@@ -38,7 +39,7 @@ public class RenderEntity {
     public Vector3f[] axis  =new Vector3f[3]; // rotation vectors
     public Vector3f origin = new Vector3f();
 
-    public Object controllers = null;
+    public Object renderObject = null;
 
     public int frame;
 
@@ -96,7 +97,7 @@ public class RenderEntity {
         frame = 0;
         oldframe = 0;
         backlerp = 0;
-        controllers = null;
+        renderObject = null;
         flags = 0;
         mat = null;
         Type = null;

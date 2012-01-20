@@ -13,18 +13,13 @@ import cubetech.net.NetBuffer;
 import cubetech.net.Packet;
 import cubetech.net.SVC;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import cubetech.misc.FastZipOutputStream;
 import cubetech.misc.FasterZip;
-import java.util.zip.ZipOutputStream;
 import org.lwjgl.BufferUtils;
 
 /**
@@ -47,12 +42,10 @@ public class DemoRecorder {
     public int startTime;
     public CameraTrack track = new CameraTrack();
 
-    private Client cl;
     private String demoName;
+    private Client cl = Ref.client;
 
-    public DemoRecorder(Client cl) {
-        this.cl = cl;
-
+    public DemoRecorder() {
         // init console commands
         Ref.commands.AddCommand("record", cmd_record);
         Ref.commands.AddCommand("stoprecord", cmd_stoprecord);
@@ -238,7 +231,7 @@ public class DemoRecorder {
 
             NetBuffer packet = NetBuffer.CreateCustom(ByteBuffer.wrap(pdata));
             cl.clc.LastPacketTime = cl.realtime;
-            cl.ParseServerMessage(packet);
+            cl.clc.ParseServerMessage(packet);
 
         } catch(BufferUnderflowException ex) {
             Common.Log("Hit the end of demo");
@@ -303,9 +296,9 @@ public class DemoRecorder {
             fileBuffer.order(ByteOrder.nativeOrder());
 
             Ref.Console.Close();
-            cl.state = ConnectState.CONNECTED;
+            cl.clc.state = ConnectState.CONNECTED;
             demoplaying = true;
-            cl.servername = name;
+            cl.clc.servername = name;
             demoName = name;            
             fileBuffer.order(ByteOrder.nativeOrder());
 
@@ -321,8 +314,8 @@ public class DemoRecorder {
             CubeMap.unserialize(fileBuffer, cmap.chunks);
 
             // read demo messages until connected
-            while(cl.state.ordinal() >= ConnectState.CONNECTED.ordinal()
-                    && cl.state.ordinal() < ConnectState.PRIMED.ordinal()) {
+            while(cl.clc.state.ordinal() >= ConnectState.CONNECTED.ordinal()
+                    && cl.clc.state.ordinal() < ConnectState.PRIMED.ordinal()) {
                 readDemoMessage();
             }
 
@@ -353,7 +346,7 @@ public class DemoRecorder {
                 return;
             }
 
-            if(cl.state != ConnectState.ACTIVE) {
+            if(cl.clc.state != ConnectState.ACTIVE) {
                 Common.Log("Must be in level to record");
                 return;
             }

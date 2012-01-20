@@ -19,6 +19,7 @@ public class VBO {
     private BufferTarget target; // vertex or index buffer
     private Usage usage;
     private ByteBuffer mappedBuffer = null; // currently mapped buffer
+    public int stride; // not strict in any sense, but helpful to keep it here
     
     public float resizeMultiplier = 1f; // multiplier for resize when mapping
     public enum BufferTarget {

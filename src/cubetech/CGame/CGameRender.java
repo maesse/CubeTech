@@ -1,10 +1,12 @@
 package cubetech.CGame;
 
 import com.bulletphysics.BulletStats;
+import cubetech.collision.ClientCubeMap;
 import cubetech.common.Score;
 import cubetech.Game.Game;
 import cubetech.Game.Gentity;
 import cubetech.Game.GentityFilter;
+import cubetech.Game.PhysicsSystem;
 import cubetech.collision.CubeChunk;
 import cubetech.collision.SingleCube;
 import cubetech.common.*;
@@ -17,6 +19,7 @@ import cubetech.entities.Vehicle.VehicleControls;
 import cubetech.entities.Vehicle.VehicleState;
 import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.CubeTexture;
+import cubetech.gfx.PolyVert;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
@@ -25,13 +28,24 @@ import cubetech.gfx.VBOPool;
 import cubetech.iqm.BoneAttachment;
 import cubetech.iqm.BoneController;
 import cubetech.iqm.IQMAnim;
+import cubetech.iqm.IQMFrame;
+import cubetech.iqm.IQMJoint;
+import cubetech.iqm.IQMMesh;
 import cubetech.iqm.IQMModel;
+import cubetech.iqm.RigidBoneMesh;
 import cubetech.misc.Profiler;
 import cubetech.misc.Ref;
 import cubetech.snd.SoundHandle;
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Locale;
+import nbullet.collision.shapes.BoxShape;
+import nbullet.collision.shapes.CollisionShape;
+import nbullet.objects.CollisionObject;
+import nbullet.objects.RigidBody;
+import nbullet.util.DirectMotionState;
+import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Matrix3f;
 import org.lwjgl.util.vector.Matrix4f;
@@ -91,7 +105,7 @@ public class CGameRender {
             Ref.common.Error(Common.ErrorCode.DROP, "Model not found: " + (es.modelindex-1));
         }
         IQMModel model = Ref.ResMan.loadModel(modelname);
-        ref.model = model;
+        ref.model = model.buildFrame(0, 0, 0, null);
         ref.origin.set(cent.lerpOrigin);
         cent.lerpAnglesQ.quatToMatrix(ref.axis);
         Ref.render.addRefEntity(ref);
@@ -113,7 +127,7 @@ public class CGameRender {
         if(wi != null) {
             Helper.rotateAroundDirection(ent.axis, game.cg.time/5f);
 
-            ent.model = wi.missileModel;
+            ent.model = wi.missileModel.buildFrame(0, 0, 0, null);
             ent.origin.set(cent.lerpOrigin);
             Ref.render.addRefEntity(ent);
 
@@ -143,7 +157,7 @@ public class CGameRender {
             IQMModel wModel = wi.getWeaponInfo().worldModel;
             if(wModel != null) {
                 RenderEntity ent = Ref.render.createEntity(REType.MODEL);
-                ent.model = wModel;
+                ent.model = wModel.buildFrame(0, 0, 0, null);
                 ent.origin.set(cent.lerpOrigin);
                 cent.lerpAnglesQ.quatToMatrix(ent.axis);
                 Ref.render.addRefEntity(ent);
@@ -183,7 +197,8 @@ public class CGameRender {
         
         WeaponInfo winfo = wi.getWeaponInfo();
         if(winfo == null || winfo.viewModel == null) return;
-        ent.model = winfo.viewModel;
+        IQMModel model = winfo.viewModel;
+        
 
         Vector3f angles = new Vector3f();
         CalculateWeaponPosition(ent.origin, angles);
@@ -205,13 +220,13 @@ public class CGameRender {
         Helper.VectorMA(ent.origin, game.cg.cg_gun_z.fValue, ent.axis[2], ent.origin);
         boolean isFiring = ps.weaponState == WeaponState.FIRING &&
                     ps.stats.getAmmo(ps.weapon)>0;
-        if(ent.model.anims != null && ent.model.anims.length > 0) {
-            IQMAnim anim = ent.model.anims[0];
+        if(model.anims != null && model.anims.length > 0) {
+            IQMAnim anim = model.anims[0];
 
-            if(ps.weaponState == WeaponState.READY && ent.model.getAnimation(Animations.READY) != null) {
-                anim = ent.model.getAnimation(Animations.READY);
-            } else if(isFiring && ent.model.getAnimation(Animations.FIRING) != null ) {
-                anim = ent.model.getAnimation(Animations.FIRING);
+            if(ps.weaponState == WeaponState.READY && model.getAnimation(Animations.READY) != null) {
+                anim = model.getAnimation(Animations.READY);
+            } else if(isFiring && model.getAnimation(Animations.FIRING) != null ) {
+                anim = model.getAnimation(Animations.FIRING);
             }
             int num = anim.num_frames;
             int first = anim.first_frame;
@@ -239,7 +254,7 @@ public class CGameRender {
         }
 
         Ref.render.addRefEntity(ent);
-        ent.model.animate(ent.frame, ent.oldframe, ent.backlerp);
+        ent.model = model.buildFrame(ent.frame, ent.oldframe, ent.backlerp, null);
         BoneAttachment muzzleBone = ent.model.getAttachment("muzzle");
         if(muzzleBone == null || winfo.flashTexture == null) return;
 //
@@ -311,6 +326,132 @@ public class CGameRender {
         swingAngles(angles.y, 0, 20, 0.3f, cent.pe.torso, false);
         angles.y = cent.pe.torso.pitchAngle;
     }
+    
+    private RigidBoneMesh findParent(RigidBoneMesh src, CEntity cent) {
+        int parentid = src.getJoint().getParent();
+        if(parentid < 0) return null;
+        IQMJoint[] joints = cent.pe.boneMeshModel.getJoints();
+        
+        RigidBoneMesh found = null;
+        IQMJoint currentParent = null;
+        do
+        {
+            currentParent = joints[parentid];
+
+            // Check if there's a meshbone for this joint
+            for (RigidBoneMesh mesh : cent.pe.boneMeshes) {
+                if(mesh.getJoint() == currentParent) {
+                    found = mesh;
+                    break;
+                }
+            }
+            
+            // Continue with next parent
+            if(found == null) parentid = currentParent.getParent();
+        } while(found == null && parentid >= 0);
+        
+        return found;
+    }
+    
+    private void handleMeshBones(CEntity cent, RenderEntity ent) {
+        IQMFrame frame = ent.model;
+        IQMModel model = frame.getModel();
+        HashMap<IQMMesh, IQMJoint> boneMeshes = model.getBoneMeshes();
+        boolean hasRigidBoneMeshes = cent.pe.boneMeshes != null;
+        boolean hasBoneMeshes = !boneMeshes.isEmpty();
+        if(hasRigidBoneMeshes && cent.pe.boneMeshModel != model) {
+            // New model has been selected, remove all the old rigidbonemeshes
+            for (RigidBoneMesh rigidBoneMesh : cent.pe.boneMeshes) {
+                if(rigidBoneMesh.rigidBody != null) {
+                    CollisionShape shape = rigidBoneMesh.rigidBody.getCollisionShape();
+                    game.physics.deleteBody(rigidBoneMesh.rigidBody);
+                    rigidBoneMesh.rigidBody = null;
+                    shape.destroy();
+                }
+            }
+            hasRigidBoneMeshes = false;
+            cent.pe.boneMeshes = null;
+            cent.pe.boneMeshModel = null;
+        }
+        if(!hasRigidBoneMeshes && hasBoneMeshes) {
+            // Set up new rigidbonemeshes
+            cent.pe.boneMeshModel = model;
+            ArrayList<RigidBoneMesh> rigidBoneMeshes = cent.pe.boneMeshes = new ArrayList<RigidBoneMesh>();
+            for (IQMMesh mesh : boneMeshes.keySet()) {
+                
+                IQMJoint joint = boneMeshes.get(mesh);
+                
+                RigidBoneMesh boneMesh = new RigidBoneMesh(game.physics.world, model, mesh, joint);
+                rigidBoneMeshes.add(boneMesh);
+                
+                Matrix4f modelMatrix = Helper.getModelMatrix(ent.axis, ent.origin, null);
+                boneMesh.createRigidBody(modelMatrix, frame);
+                
+                //break;
+            }
+        } else if(hasRigidBoneMeshes && hasBoneMeshes) {
+            // Update rigid bodies
+            for (RigidBoneMesh rigidBoneMesh : cent.pe.boneMeshes) {
+                if(rigidBoneMesh.getJoint().getName().equals("Bone.002") ||
+                        rigidBoneMesh.getJoint().getName().equals("Bone.001") ||
+                        rigidBoneMesh.getJoint().getName().equals("Bone.006") ||
+                        rigidBoneMesh.getJoint().getName().equals("Bone.005")) {
+                    RigidBoneMesh found = findParent(rigidBoneMesh, cent);
+                    rigidBoneMesh.connectToParent(found);
+                }
+                if(rigidBoneMesh.isBoneToPhysics()) {
+                    Matrix4f poseMatrix = rigidBoneMesh.getPosedModelToBone(frame, null);
+                    Matrix4f modelMatrix = Helper.getModelMatrix(ent.axis, ent.origin, null);
+                    Matrix4f.mul(modelMatrix, poseMatrix, modelMatrix);
+                    Helper.transposeAxis(modelMatrix);
+                    modelMatrix.m30 *= CGPhysics.SCALE_FACTOR;
+                    modelMatrix.m31 *= CGPhysics.SCALE_FACTOR;
+                    modelMatrix.m32 *= CGPhysics.SCALE_FACTOR;
+                    rigidBoneMesh.rigidBody.getMotionState().setWorldTransform(modelMatrix);
+                } else {
+                    // Undo scale & transpose axis
+                    Matrix4f meshMatrix = rigidBoneMesh.rigidBody.getMotionState().getWorldTransform((Matrix4f)null);
+                    meshMatrix.m30 *= CGPhysics.INV_SCALE_FACTOR;
+                    meshMatrix.m31 *= CGPhysics.INV_SCALE_FACTOR;
+                    meshMatrix.m32 *= CGPhysics.INV_SCALE_FACTOR;
+                    Helper.transposeAxis(meshMatrix);
+
+                    // Bring into model space
+                    Matrix4f modelMatrix = Helper.getModelMatrix(ent.axis, ent.origin, null);
+                    modelMatrix.invert();
+                    Matrix4f poseMatrix = Matrix4f.mul(modelMatrix, meshMatrix, null);
+                    Matrix4f boneMatrix = rigidBoneMesh.getBoneFromPosedModelMatrix(poseMatrix, null);
+                    frame.forcePoseMatrix(rigidBoneMesh.getJoint(), boneMatrix);
+                }
+                
+//                if(rigidBoneMesh.getJoint().getName().equals("Bone.002")) {
+//                    Matrix4f modelMatrix = rigidBoneMesh.rigidBody.getMotionState().getWorldTransform((Matrix4f)null);
+//                    rigidBoneMesh.setBoneToPhysics(false);
+//
+//                }
+                // debug draw:
+                RenderEntity rent = Ref.render.createEntity(REType.POLY);
+                rent.flags = RenderEntity.FLAG_NOLIGHT | RenderEntity.FLAG_NOSHADOW | RenderEntity.FLAG_SPRITE_AXIS;
+                Matrix4f modelMatrix = rigidBoneMesh.rigidBody.getMotionState().getWorldTransform((Matrix4f)null);
+                Helper.matrixToAxis(modelMatrix, rent.axis);
+                Helper.transform(modelMatrix, new Vector3f(0, 0, 0), rent.origin);
+                rent.origin.scale(CGPhysics.INV_SCALE_FACTOR);
+                Vector3f[] localmesh = rigidBoneMesh.getLocalMesh();
+                rent.frame = localmesh.length;
+                rent.oldframe = GL11.GL_LINE_STRIP;
+                rent.verts = new PolyVert[rent.frame];
+                for (int i = 0; i < rent.frame; i++) {
+                    rent.verts[i] = new PolyVert();
+                    rent.verts[i].xyz = localmesh[i];
+                }
+//                Ref.render.addRefEntity(rent);
+            }
+        }
+        
+        
+        // Go over each potential bonemesh and create it if it isn't already
+        
+    }
 
     // Render a player
     private void Player(CEntity cent) {
@@ -319,9 +460,9 @@ public class CGameRender {
         if((cent.currentState.eFlags & EntityFlags.NODRAW) != 0) return;
         RenderEntity ent = Ref.render.createEntity(REType.MODEL);
 
-        ent.model = Ref.ResMan.loadModel(ci.modelName);
+        IQMModel model = Ref.ResMan.loadModel(ci.modelName);
         
-        
+        if(model == null) return;
 
         // set origin & angles
         ent.origin.set(cent.lerpOrigin);
@@ -334,9 +475,12 @@ public class CGameRender {
         if(angles.x < -25) angles.x = -25;
         ent.axis = Helper.AnglesToAxis(angles, ent.axis);
 
-        playerAngles(cent, ent);
+        BoneController[] controllers = playerAngles(cent, ent);
 
         playerAnimation(cent, ent);
+        ent.model = model.buildFrame(ent.frame, ent.oldframe, ent.backlerp, controllers);
+        
+        handleMeshBones(cent, ent);
 
         // Fade out when close to camera
         Vector3f cameraOrigin = Ref.cgame.cg.refdef.Origin;
@@ -366,7 +510,7 @@ public class CGameRender {
         IQMModel weaponModel = w.getWeaponInfo().worldModel;
         if(weaponModel == null || ent.model == null) return;
 
-        ent.model.animate(ent.frame, ent.oldframe, ent.backlerp);
+        
         BoneAttachment bone = ent.model.getAttachment("weapon");
         if(bone == null) return;
 
@@ -374,12 +518,10 @@ public class CGameRender {
                     , bone.lastposition.y
                     , bone.lastposition.z);
 
-
-
         RenderEntity went = Ref.render.createEntity(REType.MODEL);
         went.color.set(255,255,255,255);
-        went.model = weaponModel;
-        weaponModel.animate(0, 0, 0);
+        
+        went.model = weaponModel.buildFrame(0, 0, 0, null);
 
         Helper.transform(ent.axis, ent.origin, boneOrigin);
         went.origin.set(boneOrigin);
@@ -424,6 +566,7 @@ public class CGameRender {
     // UI
     //
     void Draw2D() {
+        if(game.vrectIndex != 0) return;
         DrawChat();
         game.lag.Draw();
 
@@ -442,7 +585,7 @@ public class CGameRender {
             Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*4),
                     "VBOPool: " + VBOPool.Global.getFreeCount() + " free, " + VBOPool.Global.getBusyCount() + " in use", Align.LEFT, Type.HUD);
             Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()*5),
-                    "Chunks: " + game.map.nChunks + " visible. " + game.map.nSides + " quads. " + game.map.nVBOthisFrame + " vbo's filled this frame", Align.LEFT, Type.HUD);
+                    "Chunks: " + ClientCubeMap.nChunks + " visible. " + ClientCubeMap.nSides + " quads. " + ClientCubeMap.nVBOthisFrame + " vbo's filled this frame", Align.LEFT, Type.HUD);
         }
 
         // Draw crosshair
@@ -480,7 +623,7 @@ public class CGameRender {
         }
         if(Ref.common.developer.isTrue()) {
             Profiler.setForceGLFinish(false);
-            if(game.cg.showScores) drawprofiler();
+            if(game.cg_drawprofiler.isTrue()) drawprofiler();
         }
 
         if(Ref.common.cl_paused.iValue == 1) {
@@ -489,7 +632,7 @@ public class CGameRender {
             Ref.textMan.AddText(pos, "^3PAUSED", Align.CENTER, Type.HUD, 2,0);
         }
 
-        if(Ref.client.servername.equals("localhost")) {
+        if(Ref.client.clc.servername.equals("localhost")) {
             Gentity ent = Ref.game.Find(null, GentityFilter.CLASSNAME, "vehicle");
             if(ent != null) {
                 Vehicle v = (Vehicle)ent;
@@ -529,7 +672,7 @@ public class CGameRender {
         // Request update if scoreboard info is too old
         if(game.cg.scoresRequestTime + 2000 < game.cg.time) {
             game.cg.scoresRequestTime =game.cg.time;
-            Ref.client.AddReliableCommand("score", false);
+            Ref.client.clc.AddReliableCommand("score", false);
         }
 
         Vector2f res = Ref.glRef.GetResolution();
@@ -575,15 +718,20 @@ public class CGameRender {
     
     private void drawStackProfiler() {
         ArrayList<Profiler.StackEntry> entries = Profiler.getStackFrames();
-        int line = 6;
+        int line = 8;
         int maxlevels = 10;
+        Vector2f position = new Vector2f(3 * 20f,  (line) * Ref.textMan.GetCharHeight() * 0.75f);
+        Ref.textMan.AddText(position, "Stack Profiler:", Align.LEFT, Type.HUD, 1.0f);
         for (Profiler.StackEntry entry : entries) {
-            line = drawProfilerRecursive(entry, 8, line, maxlevels);
+            line = drawProfilerRecursive(entry, 3, line, maxlevels);
         }
     }
 
     private void drawprofiler() {
-        
+        Vector2f res = Ref.glRef.GetResolution();
+        Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+        spr.Set(new Vector2f(10, 10), new Vector2f(res.x-20, res.y-20), null, null, null);
+        spr.SetColor(0, 0, 0, 240);
         float[] times = Profiler.getTimes();
         float[] percentage = new float[times.length];
 
@@ -593,9 +741,9 @@ public class CGameRender {
         }
         
         float spacing = 220;
-        Vector2f res = Ref.glRef.GetResolution();
+        
         float x = 100;
-        float y = res.y - 100;
+        float y = 20;
 
         float[] frametimes = Profiler.getFrameTimes();
         int frametimesOffset  =Profiler.getFrametimeOffset();
@@ -604,12 +752,12 @@ public class CGameRender {
         for (int i= 0; i < frametimes.length; i++) {
             float time = frametimes[(i+frametimesOffset)%frametimes.length];
             time /= 1000/60f;
-            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+            spr = Ref.SpriteMan.GetSprite(Type.HUD);
             spr.Set(new Vector2f(x - 25 + (i)*width, 15), new Vector2f(width-2, height*time), null, null, null);
             spr.SetColor(255, 0, 0, 150);
         }
 
-        Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+        spr = Ref.SpriteMan.GetSprite(Type.HUD);
         spr.Set(new Vector2f(x-25, 10), new Vector2f(res.x-150, 100), null, null, null);
         spr.SetColor(0, 0, 0, 200);
 
@@ -646,16 +794,16 @@ public class CGameRender {
         drawStackProfiler();
         
         if(Ref.game != null && Ref.game.level.physics != null && Ref.game.level.physics.world != null) {
-            Ref.textMan.AddText(new Vector2f(900, 500), "gNumDeepPen: " + BulletStats.gNumDeepPenetrationChecks, Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(900, 500-Ref.textMan.GetCharHeight()), "gNumGjkChecks: " + BulletStats.gNumGjkChecks, Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(900, 500-Ref.textMan.GetCharHeight()*2f), "gNumSplitImpulseRec: " + BulletStats.gNumSplitImpulseRecoveries, Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(900, 500-Ref.textMan.GetCharHeight()*3f), "objects: " + Ref.game.level.physics.world.getNumCollisionObjects(), Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(900, 500-Ref.textMan.GetCharHeight()*4f), "pairs: " + Ref.game.level.physics.world.getBroadphase().getOverlappingPairCache().getNumOverlappingPairs(), Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(900, 620), "gNumDeepPen: " + BulletStats.gNumDeepPenetrationChecks, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(900, 620-Ref.textMan.GetCharHeight()), "gNumGjkChecks: " + BulletStats.gNumGjkChecks, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(900, 620-Ref.textMan.GetCharHeight()*2f), "gNumSplitImpulseRec: " + BulletStats.gNumSplitImpulseRecoveries, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(900, 620-Ref.textMan.GetCharHeight()*3f), "objects: " + Ref.game.level.physics.world.getNumCollisionObjects(), Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(900, 620-Ref.textMan.GetCharHeight()*4f), "pairs: " + Ref.game.level.physics.world.getBroadphase().getOverlappingPairCache().getNumOverlappingPairs(), Align.LEFT, Type.HUD);
         }
         
         int offset = 0;
         for (String s : Ref.cgame.map.builder.getInfo()) {
-            Ref.textMan.AddText(new Vector2f(600, 150+Ref.textMan.GetCharHeight()*(offset++)), s, Align.LEFT, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(900, 180+Ref.textMan.GetCharHeight()*(offset++)), s, Align.LEFT, Type.HUD);
         }
     }
 
@@ -732,7 +880,7 @@ public class CGameRender {
             game.lag.Draw();
 
         int ping = Ref.cgame.cg.snap.ps.ping;
-        int fps = Ref.client.currentFPS;
+        int fps = Ref.client.clRender.currentFPS;
 
         int in = Ref.net.clLastBytesIn;
         int out = Ref.net.clLastBytesOut;
@@ -853,7 +1001,7 @@ public class CGameRender {
     }
 
     private static final int[] moveOffsets = new int[] {0,22,45,-22,0,22,-45,-22};
-    private void playerAngles(CEntity cent, RenderEntity rent) {
+    private BoneController[] playerAngles(CEntity cent, RenderEntity rent) {
         Vector3f headAngle = new Vector3f(cent.lerpAngles);
         CVar noangles = Ref.cvars.Find("cg_noangles");
         if(noangles != null && noangles.isTrue()) {
@@ -864,7 +1012,7 @@ public class CGameRender {
         int dir = (int)cent.currentState.Angles2.y;
         if(dir < 0 || dir > 7) {
             Common.LogDebug("Invalid movedirection %d", dir);
-            return;
+            return null;
         }
         Vector3f legsAngle = new Vector3f();
 //        cent.pe.legs.yawing = true;
@@ -903,8 +1051,8 @@ public class CGameRender {
         BoneController legController1 = new BoneController("Cabeza", new Vector3f(-torsoAngle.x, headAngle.y-torsoAngle.y, 0));
         BoneController legController2 = new BoneController("Hips", new Vector3f(-torsoAngle.x, legsAngle.y-torsoAngle.y, 0));
         BoneController legController3 = new BoneController("Head", new Vector3f(-torsoAngle.x, headAngle.y-torsoAngle.y, 0));
-        rent.controllers = new BoneController[] {legController1,legController2,legController3};
         rent.axis = Helper.AnglesToAxis(torsoAngle, rent.axis);
+        return new BoneController[] {legController1,legController2,legController3};
     }
 
     private void swingAngles(float dest, int swingTolerance, int clampTolerance,

@@ -30,14 +30,16 @@ public class Bot {
         }
 
         Vector3f lookDest = Ref.game.g_entities[0].r.currentOrigin;
-        lookAt(cmd, lookDest);
+//        lookAt(cmd, lookDest);
 
         float looklen = Helper.VectorDistance(lookDest, getOrigin());
 
-        if(looklen < 100) cmd.buttons[2] = true;
+        if(looklen < 100) {
+            //cmd.buttons[2] = true;
+        }
         else {
-            cmd.Forward = true;
-            if(((Ref.game.level.time / 1000) & 1) == 1) cmd.Up = true;
+            //cmd.Forward = true;
+            //if(((Ref.game.level.time / 1000) & 1) == 1) cmd.Up = true;
         }
         return cmd;
     }

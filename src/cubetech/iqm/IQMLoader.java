@@ -78,6 +78,7 @@ public class IQMLoader {
             }
         }
 
+        // Check for bone-attachments
         if(model.joints != null) {
             ArrayList<IQMJoint> thighBones = new ArrayList<IQMJoint>();
             for (int i= 0; i < model.joints.length; i++) {
@@ -88,10 +89,8 @@ public class IQMLoader {
                 }
                 if(jointName.startsWith("@ATTACH ")) {
                     String bonename = iQMJoint.name.substring(8).trim();
-                    BoneAttachment att = new BoneAttachment();
-                    att.name = bonename;
-                    att.boneIndex = i;
-                    model.attachments.put(bonename, att);
+                    
+                    model.attachments.put(bonename, iQMJoint);
                 }
             }
             if(!thighBones.isEmpty()) {
@@ -99,18 +98,39 @@ public class IQMLoader {
             }
         }
 
+        
         if(model.header.num_joints > 0 && model.joints.length > 0) {
-            model.jointPose = new Vector3f[model.joints.length*2];
+            // Grab bone origins when in pose
+            model.jointPose = new Vector3f[model.joints.length];
             for (int i= 0; i < model.joints.length; i++) {
                  IQMJoint j = model.joints[i];
 
-                 model.jointPose[i*2] = new Vector3f(j.translate[0],j.translate[1],j.translate[2]);
                  Vector4f v = new Vector4f(0,0,0,1);
                  Matrix4f.transform(j.baseframe, v, v);
-                 model.jointPose[i*2+1] = new Vector3f(v);
+                 model.jointPose[i] = new Vector3f(v);
             }
+            
+            // Check for bone-connected collision meshes
+            for (IQMMesh mesh : model.meshes) {
+                if(!mesh.name.startsWith("@")) continue;
+                // See if a matching joint can be found
+                String boneName = mesh.name.substring(1);
+                IQMJoint found = null;
+                for (IQMJoint joint : model.joints) {
+                    if(!joint.name.equalsIgnoreCase(boneName)) continue;
+                    found = joint;
+                    break;
+                }
+                
+
+                if(found != null) {
+                    model.boneMeshes.put(mesh, found);
+                }
+            }
+            
         }
 
+        // shapekeys are experimental
         String keyShapeFile = file.replace(".iqm", ".shapekeys");
         if(ResourceManager.FileExists(keyShapeFile)) {
             try {
@@ -119,6 +139,8 @@ public class IQMLoader {
                 Logger.getLogger(IQMLoader.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
+        
+        
         
         return model;
     }

@@ -41,18 +41,18 @@ public class ButtonState {
 
         if(active) {
             // still down
-            if(downtime == 0)
-                msecBackup = Ref.common.frametime;
-            else
-                msecBackup += Ref.common.frametime - downtime;
+            if(downtime == 0) msecBackup = Ref.common.frametime;
+            else msecBackup += Ref.common.frametime - downtime;
+                
             downtime = Ref.common.frametime;
         }
 
-        float val = (float)msecBackup / Ref.client.frame_msec;
-        if(val < 0)
-            val = 0;
-        if(val > 1)
-            val = 1;
+        float val = (float)msecBackup / Ref.Input.frame_msec;
+        // This happens because of input delay
+        if(val < 0) val = 0;
+        if(val > 1) val = 1;
+        
+            
         return val;
     }
 
@@ -91,7 +91,7 @@ public class ButtonState {
         } catch(NumberFormatException e) {
         }
         if(time == 0)
-            msec += Ref.client.frame_msec / 2;
+            msec += Ref.Input.frame_msec / 2;
         else
             msec += time - downtime;
     }
@@ -123,7 +123,7 @@ public class ButtonState {
             return; // already down
 
         // save timestamp for partial frame summing
-        int time = Ref.client.realtime;
+        int time = Ref.common.frametime;
         try {
             if(tokens.length > 2)
                 time = Integer.parseInt(tokens[2]);
