@@ -11,12 +11,15 @@ import org.lwjgl.opengl.ARBUniformBufferObject;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.util.vector.Vector4f;
 import cubetech.CGame.ViewParams;
+import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.gfx.MultiRenderBuffer.Format;
 import cubetech.misc.Profiler;
 import cubetech.misc.Profiler.Sec;
 import cubetech.misc.Ref;
 import org.lwjgl.BufferUtils;
+import org.lwjgl.opengl.ARBFramebufferObject;
+import org.lwjgl.opengl.EXTFramebufferObject;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.Sphere;
 import org.lwjgl.util.vector.Matrix4f;
@@ -31,6 +34,7 @@ import static org.lwjgl.opengl.GL20.*;
  */
 public class DeferredShading {
     MultiRenderBuffer mrt;
+//    MultiRenderBuffer transbuffer;
     boolean isRendering = false;
     SSAO ssao;
     ShaderUBO lightBuffer;
@@ -42,14 +46,27 @@ public class DeferredShading {
     CubeTexture envmap = null;
     private ViewParams currentView = null;
     
+    
     public DeferredShading() {
         Vector2f resolution = Ref.glRef.GetResolution();
-        mrt = new MultiRenderBuffer((int)resolution.x, (int)resolution.y, 
-                new Format[] {Format.RGBA, Format.RGBA32F, Format.RGBA16F, Format.DEPTH24});
+        MultiRenderBuffer.MRBBuilder builder = new MultiRenderBuffer.MRBBuilder((int)resolution.x, (int)resolution.y);
+        builder.addFormat(Format.RGBA, true);
+        builder.addFormat(Format.RGBA16F, true);
+        builder.addFormat(Format.RGBA16F, true);
+        builder.addFormat(Format.DEPTH24, false);
+        mrt = new MultiRenderBuffer(builder);
+        
+//        MultiRenderBuffer.MRBBuilder builder2 = new MultiRenderBuffer.MRBBuilder((int)resolution.x, (int)resolution.y);
+//        builder2.addFormat(Format.RGBA, true);
+//        builder2.addExistingBuffer(Format.DEPTH24, false, mrt.getHandle(Format.DEPTH24));
+//        
+//        transbuffer = new MultiRenderBuffer(builder2);
         ssao = new SSAO();
         
         buildLightBuffer();
     }
+    
+    
     
     private void buildLightBuffer() {
         Shader shader = Ref.glRef.getShader("DeferredShading");
@@ -73,14 +90,15 @@ public class DeferredShading {
     }
     
     public void onResolutionChange() {
-        Vector2f resolution = Ref.glRef.GetResolution();
-        if(resolution.x == mrt.width && resolution.y == mrt.height) return;
-        
-        if(mrt != null) {
-            mrt.dispose();
+        if(mrt == null) {
+            Common.Log("No existing mrt created, not reacting to resolution change");
+            return;
         }
-        mrt = new MultiRenderBuffer((int)resolution.x, (int)resolution.y, 
-                new Format[] {Format.RGBA, Format.RGBA32F, Format.RGBA16F, Format.DEPTH24});
+        Vector2f resolution = Ref.glRef.GetResolution();
+        MultiRenderBuffer.MRBBuilder info = mrt.getInfo();
+        if(resolution.x == info.getWidth() && resolution.y == info.getHeight()) return;
+        mrt.dispose();
+        mrt = new MultiRenderBuffer(info);
     }
     
     
@@ -105,7 +123,25 @@ public class DeferredShading {
     
     public void stopPostDeferred() {
         if(!r_deferred.isTrue()) return;
-        mrt.stop();
+        
+        
+    }
+    
+    private void blitDepth() {
+        int w = mrt.getInfo().getWidth();
+        int h = mrt.getInfo().getHeight();
+        GLRef.checkError();
+        ARBFramebufferObject.glBindFramebuffer(ARBFramebufferObject.GL_READ_FRAMEBUFFER, mrt.fbHandle);
+        GLRef.checkError();
+        ARBFramebufferObject.glBindFramebuffer(ARBFramebufferObject.GL_DRAW_FRAMEBUFFER, 0);
+        GLRef.checkError();
+        ARBFramebufferObject.glBlitFramebuffer(0, 0, w-1, h-1, 
+                0, 0, w-1, h-1, 
+                GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        GLRef.checkError();
+        ARBFramebufferObject.glBindFramebuffer(ARBFramebufferObject.GL_READ_FRAMEBUFFER, 0);
+        
+        GLRef.checkError();
     }
     
     public Vector3f[] calcFarPlaneCorners() {
@@ -181,7 +217,8 @@ public class DeferredShading {
     public void finalizeShading() {
         if(!r_deferred.isTrue()) return;
         if(currentView == null) return;
-
+        
+        
         
         boolean shadowsEnabled = Ref.glRef.shadowMan.isEnabled();
         if(shadowsEnabled) {
@@ -197,7 +234,7 @@ public class DeferredShading {
             }
             
         }
-        
+//        transbuffer.start(false, currentView);
         
         // Set HUD render projection
         GL11.glMatrixMode(GL11.GL_PROJECTION);
@@ -359,6 +396,9 @@ public class DeferredShading {
         GL11.glDepthFunc(GL11.GL_LEQUAL);
         GL11.glDepthMask(true);
         currentView = null;
+        
+        blitDepth();
+
     }
     
     private void singlePassLighting() {

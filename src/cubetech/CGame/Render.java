@@ -95,7 +95,7 @@ public class Render {
                     sub.ExitSection();
                     break;
                 case SKYBOX:
-                    if(re.renderObject != null && re.renderObject instanceof SkyBox) {
+                    if(re.renderObject instanceof SkyBox) {
                         SkyBox sky = (SkyBox) re.renderObject;
                         sky.Render(view);
                     }
@@ -167,19 +167,21 @@ public class Render {
                 Helper.col(ent.color);
                 
                 GL11.glEnable(GL11.GL_BLEND);
-                GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+                GLState.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
                 
                 
                 GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
                 GL11.glPolygonOffset(-1f, 0);
+                GL11.glDepthMask(false);
             } else {
                 shader.setUniform("far", view.farDepth); 
                 GL11.glDisable(GL11.GL_BLEND);
+                GL11.glDepthMask(true);
             }
             
             GL11.glDepthFunc(GL11.GL_LEQUAL);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
-            GL11.glDepthMask(true);
+            
             GL11.glCullFace(GL11.GL_BACK);
             Matrix4f viewMatrix = view.viewMatrix;
             if(ent.hasFlag(RenderEntity.FLAG_SPRITE_AXIS)) {
@@ -216,9 +218,9 @@ public class Render {
             GL11.glCullFace(GL11.GL_BACK);
         } else {
             if(!deferredPoly) {
-//                GL11.glDepthMask(true);
+                GL11.glDepthMask(true);
                 GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
-                GL11.glPolygonOffset(0, 0);
+//                GL11.glPolygonOffset(0, 0);
             }
         }
         Ref.glRef.PopShader();
@@ -387,7 +389,7 @@ public class Render {
             if(ent.mat.blendmode == CubeMaterial.BlendMode.ONE) {
                 GLState.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE);
             } else {
-                GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+                GLState.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
             }
             AddQuadStampExt(ent.origin, left, up, ent.outcolor,
                     texOffset.x, texOffset.y, texOffset.x + texSize.x, texOffset.y + texSize.y);
@@ -424,7 +426,10 @@ public class Render {
 //            tex.loaded = true;
 //            tex.Bind();
         } else {
-            Ref.glRef.PushShader(Ref.glRef.getShader("WorldFog"));
+            Shader sh = Ref.glRef.getShader("Poly");
+            Ref.glRef.PushShader(sh);
+            sh.setUniform("ModelView", view.viewMatrix);
+            sh.setUniform("Projection", view.ProjectionMatrix);
         }
 
         GL11.glDepthMask(false); // dont write to depth

@@ -62,7 +62,7 @@ public class RenderEntity {
         ent.frame = verts.length;
         ent.verts = verts;
         ent.mat = tex.asMaterial();
-        ent.flags |= FLAG_NOSHADOW;
+        ent.flags = FLAG_NOSHADOW | FLAG_NOLIGHT;
         Ref.render.addRefEntity(ent);
         return ent;
     }

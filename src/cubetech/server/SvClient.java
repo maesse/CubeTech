@@ -1,41 +1,16 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.server;
 
 import cubetech.Game.ClientPersistant;
+import cubetech.Game.GameClient;
 import cubetech.client.CLSnapshot;
-import cubetech.collision.CubeChunk;
-import cubetech.common.CS;
-import cubetech.common.Commands;
-import cubetech.common.Common;
-import cubetech.common.Info;
-import cubetech.common.PlayerState;
-import cubetech.entities.EntityState;
-import cubetech.entities.EntityType;
-import cubetech.entities.Event;
-import cubetech.entities.SharedEntity;
-import cubetech.entities.SvEntity;
-import cubetech.gfx.ResourceManager;
+import cubetech.common.*;
+import cubetech.entities.*;
 import cubetech.input.PlayerInput;
 import cubetech.misc.Ref;
-import cubetech.net.CLC;
-import cubetech.net.NetBuffer;
-import cubetech.net.NetChan;
-import cubetech.net.SVC;
+import cubetech.net.*;
 import cubetech.server.ServerRun.ServerState;
-import java.io.IOException;
 import java.nio.BufferUnderflowException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.Queue;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import org.lwjgl.util.vector.Vector2f;
+import java.util.*;
 import org.lwjgl.util.vector.Vector3f;
 
 /**
@@ -43,41 +18,30 @@ import org.lwjgl.util.vector.Vector3f;
  * @author mads
  */
 public class SvClient {
-    private static final int MAX_DOWNLOAD_WINDOW = 8;
-    private static final int MAX_DOWNLOAD_BLKSIZE = 2400;
-
     
 
-
-    public enum ClientState {
-        FREE, // can be reused for a new connection
-        ZOMBIE, // client has been disconnected, but don't reuse
-        	// connection for a couple seconds
-        CONNECTED, // has been assigned to a client, but no gamestate yet
-        PRIMED, // gamestate has been sent, but client hasn't sent a usercmd
-        ACTIVE // client is fully in game
-    }
+    public SharedEntity gentity;
+    public String name;
+    public int id;
+    
+    // Splitscreen info tracking
+    int owner = -1;
+    int[] localClients = new int[] {-1,-1,-1};
 
     public ClientState state = ClientState.FREE;
     public String userinfo; // name, etc..
+    public PlayerInput lastUserCmd;
 
+    // All kinds of crap
     public String[] reliableCommands = new String[64];
     public int reliableSequence;
     public int reliableAcknowledge;
     public int reliableSent;
     public int messageAcknowledge;
-
     public int gamestateMessageNum;
-
-    public PlayerInput lastUserCmd;
-    public int lastMessageNum;
     public int lastClientCommand;
     public String lastClientCommandString = "";
-    public SharedEntity gentity;
-    public String name;
-
     public int deltaMessage;
-//    public int nextReliableTime;
     public int lastPacketTime;
     public int lastConnectTime;
     public int nextSnapshotTime;
@@ -88,42 +52,57 @@ public class SvClient {
     public int rate;
     public int snapshotMsec;
     public NetChan netchan;
-
     public int oldServerTime;
     public boolean[] csUpdated = new boolean[1025];
-    public int id;
 
-    // Downloading
-    String downloadName = null;
-    NetBuffer download = null;
-    int downloadSize; // total size
-    int downloadCount; // bytes sent
-    int downloadClientBlock; // last block we sent to the client, awaiting ack
-    int	downloadCurrentBlock;	// current block number
-    int	downloadXmitBlock;	// last block we xmited
-    byte[][] downloadBlocks = new byte[MAX_DOWNLOAD_WINDOW][];	// the buffers for the download blocks
-    int[] downloadBlockSize = new int[MAX_DOWNLOAD_WINDOW];
-    boolean downloadEOF;		// We have sent the EOF block
-    int	downloadSendTime;	// time we last got an ack from the client
+    private SvDownload download = new SvDownload(this);
 
     // Buffer up packets if netchan is clogged with fragmented stuff
     Queue<NetBuffer> netchan_queue = new LinkedList<NetBuffer>();
-
+    
+    void clone(SvClient newcl) {
+        newcl.gentity = gentity;
+        newcl.name = name;
+        newcl.id = id;
+        newcl.owner = owner;
+        newcl.state = state;
+        newcl.userinfo = userinfo; // name, etc..
+        newcl.reliableSequence = reliableSequence;
+        newcl.reliableAcknowledge = reliableAcknowledge;
+        newcl.reliableSent = reliableSent;
+        newcl.messageAcknowledge = messageAcknowledge;
+        newcl.gamestateMessageNum = gamestateMessageNum;
+        newcl.lastClientCommand = lastClientCommand;
+        newcl.lastClientCommandString = lastClientCommandString;
+        newcl.deltaMessage = deltaMessage;
+        newcl.lastPacketTime = lastPacketTime;
+        newcl.lastConnectTime = lastConnectTime;
+        newcl.nextSnapshotTime = nextSnapshotTime;
+        newcl.rateDelayed = rateDelayed;
+        newcl.timeoutCount = timeoutCount;
+        newcl.ping = ping;
+        newcl.rate = rate;
+        newcl.snapshotMsec = snapshotMsec;
+        newcl.netchan = netchan;
+        newcl.oldServerTime = oldServerTime;
+        newcl.lastUserCmd = lastUserCmd.Clone();
+        System.arraycopy(frames, 0, newcl.frames, 0, frames.length);
+        System.arraycopy(localClients, 0, newcl.localClients, 0, localClients.length);
+        System.arraycopy(reliableCommands, 0, newcl.reliableCommands, 0, reliableCommands.length);
+        System.arraycopy(csUpdated, 0, newcl.csUpdated, 0, csUpdated.length);
+    }
+    
     public SvClient() {
         for (int i= 0; i < frames.length; i++) {
             frames[i] = new ClientSnapshot();
         }
     }
-
-    private void WriteCubesToClient(NetBuffer msg) {
-        //OPS_CUBEEXT
-    }
-
+    
     private void UserMove(NetBuffer buf, boolean deltaCompressed) {
-        if(deltaCompressed)
-            deltaMessage = messageAcknowledge;
-        else
-            deltaMessage = -1;
+        if(deltaCompressed) deltaMessage = messageAcknowledge;
+        else deltaMessage = -1;
+        
+        
 
         int cmdCount = buf.ReadByte();
         if(cmdCount < 1) {
@@ -139,8 +118,13 @@ public class SvClient {
         PlayerInput[] cmds = new PlayerInput[cmdCount];
         PlayerInput oldcmd = new PlayerInput();
         for (int i= 0; i < cmdCount; i++) {
-            cmds[i] = PlayerInput.ReadDeltaUserCmd(buf, oldcmd);
-            oldcmd = cmds[i];
+            try {
+                cmds[i] = PlayerInput.ReadDeltaUserCmd(buf, oldcmd);
+                oldcmd = cmds[i];
+            } catch (BufferUnderflowException ex) {
+                int test = 2;
+            }
+            
         }
 
         // save time for ping calculation
@@ -194,7 +178,10 @@ public class SvClient {
         // set up the entity for the client
         gentity = Ref.server.sv.gentities[id];
 //        System.out.println("cliEnter: " + id);
-        gentity.s.ClientNum = id;
+        gentity.s.number = id;
+        
+        // Copy over localclients
+        System.arraycopy(localClients, 0, gentity.r.localClients, 0, 3);
 
         deltaMessage = -1;
         nextSnapshotTime = Ref.server.time; // generate one immediatly
@@ -231,6 +218,7 @@ public class SvClient {
     }
 
     void CheckTimeout(int droppoint, int zombiepoint) {
+        if(owner != -1) return; // got owner
         if(state == ClientState.ZOMBIE && lastPacketTime < zombiepoint) {
             // using the client id cause the cl->name is empty at this point
             Common.LogDebug("Going from ZOMBIE to FREE for client");
@@ -268,6 +256,9 @@ public class SvClient {
     }
 
     public void SendClientSnapshot() {
+        // send with owner
+        if(owner != -1) return;
+        
         BuildClientSnapshot();
 
         // bots need to have their snapshots build, but
@@ -284,17 +275,23 @@ public class SvClient {
         // and the playerState_t
         WriteSnapshotToClient(msg);
 
-        if(downloadName == null) {
+        if(!download.isDownloading()) {
             sendCubeFile();
         }
 
-        WriteDownloadToClient(msg);
+        download.writeDownloadToClient(msg);
 
         
 
         SendMessageToClient(msg);
 
 
+    }
+    
+    private void DoneDownload() {
+        sendCubeFile();
+//        System.out.println("download done");
+//        SendClientGameState();
     }
 
     private void BuildClientSnapshot() {
@@ -307,30 +304,49 @@ public class SvClient {
         // clear everything in this snapshot
         frame.num_entities = 0;
 
-        if(gentity == null || state == ClientState.ZOMBIE)
-            return;
+        if(gentity == null || state == ClientState.ZOMBIE) return;
 
         // grab the current playerState_t
         PlayerState ps = Ref.server.GameClientNum(id);
-        ps.Clone(frame.ps);
+        ps.Clone(frame.pss[0]);
+        frame.numPS = 1;
+        frame.lcIndex[0] = 0;
+        
+        // Add splitscreen clients
+        for (int i = 1; i < 4; i++) {
+            if(localClients[i-1] == -1) {
+                frame.lcIndex[i] = -1;
+                continue;
+            }
+            ps = Ref.server.GameClientNum(localClients[i-1]);
+            ps.Clone(frame.pss[i]);
+            frame.lcIndex[i] = frame.numPS;
+            frame.numPS++;
+        }
 
         // never send client's own entity, because it can
         // be regenerated from the playerstate
-        int clientnum = frame.ps.clientNum;
-        if(clientnum < 0 || clientnum >= Common.MAX_GENTITIES)
-        {
-            System.err.println("bad gEnt!");
-        }
+        for (int i = 0; i < frame.numPS; i++) {
+            int clientnum = frame.pss[i].clientNum;
+            if(clientnum < 0 || clientnum >= Common.MAX_GENTITIES)
+            {
+                System.err.println("bad gEnt!");
+            }
 
-        SvEntity svEnt = Ref.server.sv.svEntities[clientnum];
-        svEnt.snapshotCounter = Ref.server.sv.snapshotCounter;
+            SvEntity svEnt = Ref.server.sv.svEntities[clientnum];
+            svEnt.snapshotCounter = Ref.server.sv.snapshotCounter;
+        }
 
         // find the client's viewpoint
         ArrayList<Integer> snapEntNums = new ArrayList<Integer>();
 
-        // add all the entities directly visible to the eye, which
-        // may include portal entities that merge other viewpoints
-        AddEntitiesVisibleFromPoint(ps.origin, frame, snapEntNums, false);
+        for (int i = 0; i < frame.numPS; i++) {
+            // add all the entities directly visible to the eye, which
+            // may include portal entities that merge other viewpoints
+            AddEntitiesVisibleFromPoint(frame.pss[i].origin, frame, snapEntNums, false);
+        }
+        
+        
 
         // if there were portals visible, there may be out of order entities
         // in the list which will need to be resorted for the delta compression
@@ -362,28 +378,49 @@ public class SvClient {
             if(!ent.r.linked)
                 continue;
 
-            if(ent.s.ClientNum != i) {
-                Common.LogDebug("Fixing ent.s number, was: " + ent.s.ClientNum + ", should be: " + i);
-                ent.s.ClientNum = i;
+            if(ent.s.number != i) {
+                Common.LogDebug("Fixing ent.s number, was: " + ent.s.number + ", should be: " + i);
+                ent.s.number = i;
             }
 
             // entities can be flagged to explicitly not be sent to the client
             if(ent.r.svFlags.contains(SvFlags.NOCLIENT))
                 continue;
 
-            if(ent.r.svFlags.contains(SvFlags.SINGLECLIENT))
-                if(ent.r.singleClient != frame.ps.clientNum)
-                    continue;
+            if(ent.r.svFlags.contains(SvFlags.SINGLECLIENT)) {
+                int j;
+                for (j = 0; j < frame.numPS; j++) {
+                    if(ent.r.singleClient == frame.pss[j].clientNum) {
+                        break;
+                    }
+                }
+                if(j == frame.numPS) continue;
+            }
 
-            if(ent.r.svFlags.contains(SvFlags.NOTSINGLECLIENT))
-                if(ent.r.singleClient == frame.ps.clientNum)
-                    continue;
+            if(ent.r.svFlags.contains(SvFlags.NOTSINGLECLIENT)) {
+                // fix: splitscreen clients will get predictable events
+                int j;
+                for (j = 0; j < frame.numPS; j++) {
+                    if(ent.r.singleClient != frame.pss[j].clientNum) {
+                        break;
+                    }
+                }
+                if(j == frame.numPS) continue;
+            }
 
             if(ent.r.svFlags.contains(SvFlags.CLIENTMASK)) {
-                if(frame.ps.clientNum >= 32)
-                    Common.LogDebug("ClientMask >= 32");
-                if((~ent.r.singleClient & (1 << frame.ps.clientNum)) == (1 << frame.ps.clientNum))
-                    continue;
+                int j;
+                for (j = 0; j < frame.numPS; j++) {
+                    if(frame.pss[j].clientNum >= 32) {
+                        Ref.common.Error(Common.ErrorCode.DROP, "ClientMask >= 32");
+                    }
+                    
+                    if((~ent.r.singleClient & (1 << frame.pss[j].clientNum)) != 0) {
+                        break;
+                    }
+                }
+                
+                if(j != frame.numPS) continue;
             }
 
             SvEntity svEnt = Ref.server.SvEntityForGentity(ent);
@@ -415,7 +452,7 @@ public class SvClient {
 
         svEnt.snapshotCounter = Ref.server.sv.snapshotCounter;
 
-        snapEntNums.add(ent.s.ClientNum);
+        snapEntNums.add(ent.s.number);
     }
 
     private void WriteSnapshotToClient(NetBuffer msg) {
@@ -466,20 +503,35 @@ public class SvClient {
         // what we are delta'ing from
         msg.Write(lastframe);
 
+        // Figure out snapshot flags
         int snapflags = Ref.server.snapFlagServerBit;
-        if(rateDelayed)
-            snapflags |= CLSnapshot.SF_DELAYED;
-        if(state != ClientState.ACTIVE)
-            snapflags |= CLSnapshot.SF_NOT_ACTIVE;
-
+        if(rateDelayed) snapflags |= CLSnapshot.SF_DELAYED;
+        if(state != ClientState.ACTIVE) snapflags |= CLSnapshot.SF_NOT_ACTIVE;
+        if(frame.numPS > 1 || frame.lcIndex[0] != 0) {
+            snapflags |= CLSnapshot.SF_MULTIPS;
+        }
         msg.Write(snapflags);
+        
+        if((snapflags & CLSnapshot.SF_MULTIPS) != 0) {
+            msg.Write((byte)frame.numPS);
+            for (int i = 0; i < 4; i++) {
+                msg.Write((byte)frame.lcIndex[i]);
+            }
+        }
 
         int psSize = msg.GetBuffer().position();
+        
         // delta encode the playerstate
-        if(oldframe != null)
-            frame.ps.WriteDelta(msg, oldframe.ps);
-        else
-            frame.ps.WriteDelta(msg, null);
+        for (int i = 0; i < 4; i++) {
+            if(frame.lcIndex[i] == -1) continue;
+            
+            if(oldframe != null && oldframe.lcIndex[i] != -1){
+                frame.pss[frame.lcIndex[i]].WriteDelta(msg, oldframe.pss[oldframe.lcIndex[i]]);
+            } else {
+                frame.pss[frame.lcIndex[i]].WriteDelta(msg, null);
+            }
+        }
+        
         int entSize = msg.GetBuffer().position();
         psSize = entSize - psSize;
 
@@ -506,7 +558,7 @@ public class SvClient {
             else
             {
                 newent = Ref.server.snapshotEntities[(to.first_entity + newindex) % Ref.server.numSnapshotEntities];
-                newnum = newent.ClientNum;
+                newnum = newent.number;
             }
 
             if (oldindex >= fromnumentities)
@@ -514,7 +566,7 @@ public class SvClient {
             else
             {
                 oldent = Ref.server.snapshotEntities[(from.first_entity + oldindex) % Ref.server.numSnapshotEntities];
-                oldnum = oldent.ClientNum;
+                oldnum = oldent.number;
             }
 
             if (newnum == oldnum)
@@ -579,7 +631,7 @@ public class SvClient {
         // we must drop the connection
         // we check == instead of >= so a broadcast print added by SV_DropClient()
         // doesn't cause a recursive drop client
-        if(reliableSequence - reliableAcknowledge == 64 +1) {
+        if(reliableSequence - reliableAcknowledge == 64 +1 && owner == -1) {
             Common.Log("==== pending server commands ====");
             int i;
             for (i=reliableAcknowledge+1; i<= reliableSequence; i++) {
@@ -630,7 +682,7 @@ public class SvClient {
         EntityState nullstate = new EntityState();
         for (int i= 0; i < Common.MAX_GENTITIES; i++) {
             EntityState bases = Ref.server.sv.svEntities[i].baseline;
-            if(bases == null || bases.ClientNum <= 0)
+            if(bases == null || bases.number <= 0)
                 continue;
 
             buf.Write(SVC.OPS_BASELINE);
@@ -678,7 +730,7 @@ public class SvClient {
             // a gigantic connection message may have already put the nextSnapshotTime
             // more than a second away, so don't shorten it
             // do shorten if client is downloading
-            if(downloadName == null && nextSnapshotTime < Ref.server.time + 1000 * Ref.common.com_timescale.fValue)
+            if(!download.isDownloading() && nextSnapshotTime < Ref.server.time + 1000 * Ref.common.com_timescale.fValue)
                 nextSnapshotTime = (int) (Ref.server.time + 1000 * Ref.common.com_timescale.fValue);
         }
 
@@ -752,7 +804,7 @@ public class SvClient {
         // if this is a usercmd from a previous gamestate,
         // ignore it or retransmit the current gamestate
         //
-        if(serverid != Ref.server.sv.serverid && downloadName == null && !lastClientCommandString.equals("nextdl")) {
+        if(serverid != Ref.server.sv.serverid && !download.isDownloading() && !lastClientCommandString.equals("nextdl")) {
             if(serverid < Ref.server.sv.serverid && serverid >= Ref.server.sv.restartedServerId) {
                 // they just haven't caught the map_restart yet
                 Common.LogDebug(name + ": Ignoring pre map_restart/outdated client message");
@@ -780,32 +832,33 @@ public class SvClient {
         do {
             cmd = buf.ReadByte();
 
-            if(cmd == CLC.OPS_EOF)
-                break;
+            if(cmd == CLC.OPS_EOF)  break;
 
-            if(cmd != CLC.OPS_CLIENTCOMMAND)
-                break;
+            if(cmd == CLC.OPS_CLIENTCOMMAND) {
+                // check for flood protection
+                if(!ClientCommand(buf)) break;
+            }
+            
+            if(cmd == CLC.OPS_MOVE || cmd == CLC.OPS_MOVENODELTA) {
+                int clientIndex = buf.ReadByte();
+                SvClient cl;
+                if(clientIndex == 0) {
+                    cl = this;
+                } else {
+                    if(localClients[clientIndex-1] == -1) continue;
+                    cl = Ref.server.clients[localClients[clientIndex-1]];
+                }
+                
+                if(cmd == CLC.OPS_MOVE) {
+                    cl.UserMove(buf, true);
+                } else {
+                    cl.UserMove(buf, false);
+                }
+            }
 
-            if(!ClientCommand(buf))
-                break;  // we couldn't execute it because of the flood protection
-
-            if(state == ClientState.ZOMBIE)
-                return; // disconnect command
-
+            // got disconnect command?
+            if(state == ClientState.ZOMBIE) return; 
         } while(true);
-
-        switch(cmd) {
-            case CLC.OPS_MOVE:
-                UserMove(buf, true);
-                break;
-            case CLC.OPS_MOVENODELTA:
-                UserMove(buf, false);
-                break;
-            default:
-                if(cmd != CLC.OPS_EOF)
-                    Common.Log(name + ": Warning: bad command byte");
-                break;
-        }
     }
 
     private boolean ClientCommand(NetBuffer buf) {
@@ -813,19 +866,14 @@ public class SvClient {
         String s = buf.ReadString();
 
         // see if we have already executed it
-        if(lastClientCommand >= seq)
-            return true;
+        if(lastClientCommand >= seq) return true;
 
-//        System.out.println(name + ": ClientCmd: " + seq + ":" + s);
         // drop the connection if we have somehow lost commands
         if(seq > lastClientCommand + 1) {
             Common.Log(name + ": Lost clientcommands. Dropping");
             DropClient( "Lost reliable commands");
             return false;
         }
-
-//        // don't allow another command for one second
-//        nextReliableTime = Ref.server.time + 1000;
 
         ExecuteClientCommand(s);
         lastClientCommand = seq;
@@ -843,240 +891,36 @@ public class SvClient {
             UpdateUserInfo(tokens);
         else if(cmd.equalsIgnoreCase("disconnect"))
             DropClient("Disconnected");
-        else if(cmd.equalsIgnoreCase("download"))
-            BeginDownload(tokens);
-        else if(cmd.equalsIgnoreCase("nextdl"))
-            NextDownload(tokens);
+        else if(cmd.equalsIgnoreCase("download")) {
+            if(tokens.length >= 2) download.BeginDownload(tokens[1]);
+        } else if(cmd.equalsIgnoreCase("nextdl"))
+            download.nextDownload(tokens);
         else if(cmd.equalsIgnoreCase("stopdl"))
-            StopDownload();
+            download.StopDownload();
         else if(cmd.equalsIgnoreCase("donedl"))
             DoneDownload();
-        else if (Ref.server.sv.state == ServerState.GAME)
+        else if(cmd.startsWith("drop") && tokens.length >= 2) {
+            boolean out = cmd.startsWith("dropout");
+            try {
+                int clientIndex = Integer.parseInt(tokens[1])-1;
+                
+                if(out && localClients[clientIndex] != -1) {
+                    GameClient gc = Ref.server.sv.gameClients[localClients[clientIndex]];
+                    Ref.server.DropClient(gc, "dropped out");
+                } else if(!out && localClients[clientIndex] == -1) {
+                    Ref.server.addExtraLocalClient(this, clientIndex+1, userinfo);
+                }
+            } catch(NumberFormatException ex) {}
+        } else if (Ref.server.sv.state == ServerState.GAME)
             Ref.game.Client_Command(id, tokens);
-    }
-
-    private void BeginDownload(String[] tokens) {
-        // Stop any existing download
-        CloseDownload();
-
-        if(tokens.length < 2) return;
-
-        downloadName = tokens[1];
-    }
-
-    private void WriteDownloadToClient(NetBuffer msg) {
-        if(downloadName == null)
-            return;
-
-        String errorMessage = null;
-
-        if(download == null) {
-            if(downloadName.equals("@cube")) {
-                ClientSnapshot frame = frames[netchan.outgoingSequence & 31];
-                ClientPersistant pers = frame.ps.pers;
-                if(pers == null) return;
-
-
-                // we can go about this far without fragmenting the client
-                int maxPacketSize = NetChan.FRAGMENT_SIZE-30;
-
-                int leftOver = maxPacketSize - msg.GetBuffer().position();
-                //if(leftOver > 1400) leftOver = 1400;
-                leftOver *= 2f; // assume 50% compression ratio
-
-                ByteBuffer buf = pers.dequeueChunkData(leftOver);
-                if(buf == null) return;
-                download = new NetBuffer(buf);
-//            }
-            // Client is requesting the current map
-//            else if(downloadName.equalsIgnoreCase("map")) {
-
-//                if(Ref.cvars.Find("mapname").sValue.equalsIgnoreCase("custom") && !Ref.game.level.editmode) {
-//                    // Server is running custom map, but not editmode, so try to load the cached custom map
-//                    try {
-//                        download = ResourceManager.OpenFileAsNetBuffer("custom", false).getKey();
-//                    } catch (IOException ex) {
-//                        Logger.getLogger(SvClient.class.getName()).log(Level.SEVERE, null, ex);
-//                        download = Ref.cm.cm.SerializeMap(); // fallback to generation
-//                    }
-//                }
-//                else // in editmode - pack up current map
-//                    download = Ref.cm.cm.SerializeMap();
-            } else {
-                // Asking for regular file
-                try {
-                    download = ResourceManager.OpenFileAsNetBuffer(downloadName, false).getKey();
-                } catch (IOException ex) {
-                    errorMessage = "File not found.";
-                }
-            }
-            
-
-            if(download == null || download.GetBuffer().limit() <= 0 || errorMessage != null) {
-                msg.Write(SVC.OPS_DOWNLOAD);
-                msg.Write(0); // first chunk
-                msg.Write(-1); // error size
-                if(errorMessage == null) errorMessage = "unknown file error";
-                msg.Write(errorMessage); // error msg
-                downloadName = null;
-                CloseDownload();
-                return;
-            }
-
-            downloadSize = download.GetBuffer().limit();
-
-            if(!downloadName.startsWith("@")) Common.LogDebug("[Server] Starting file-upload: " + downloadName);
-            
-            downloadCurrentBlock = downloadCount = downloadXmitBlock = downloadClientBlock = 0;
-            downloadEOF = false;
-        }
-
-        // Perform any reads that we need to
-        while(downloadCurrentBlock - downloadClientBlock < MAX_DOWNLOAD_WINDOW
-                && downloadSize != downloadCount) {
-            int curindex = downloadCurrentBlock % MAX_DOWNLOAD_WINDOW;
-            if(downloadBlocks[curindex] == null)
-                downloadBlocks[curindex] = new byte[MAX_DOWNLOAD_BLKSIZE];
-
-            int lenght = MAX_DOWNLOAD_BLKSIZE;
-            if(download.GetBuffer().remaining() < lenght)
-                lenght = download.GetBuffer().remaining();
-            downloadBlockSize[curindex] = lenght;
-            
-            if(lenght > 0) {
-                try {
-                    download.GetBuffer().get(downloadBlocks[curindex], 0, lenght);
-                } catch(BufferUnderflowException e) {
-                    Common.LogDebug("unexpected eof");
-                    lenght = 0;
-                }
-            }
-
-            // EOF now
-            if(lenght == 0) {
-                downloadCount = downloadSize;
-                break;
-            }
-
-            downloadCount += downloadBlockSize[curindex];
-            // load next block
-            downloadCurrentBlock++;
-        }
-
-        // Check to see if we have eof condition and add the EOF block
-        if(downloadCount == downloadSize && !downloadEOF &&
-                downloadCurrentBlock - downloadClientBlock < MAX_DOWNLOAD_WINDOW) {
-            downloadBlockSize[downloadCurrentBlock % MAX_DOWNLOAD_WINDOW] = 0;
-            downloadCurrentBlock++;
-            downloadEOF = true;
-        }
-
-        // Loop up to window size times based on how many blocks we can fit in the
-	// client snapMsec and rate
-
-	// based on the rate, how many bytes can we fit in the snapMsec time of the client
-	// normal rate / snapshotMsec calculation
-        int blocksPerSnap = (int) (((rate * snapshotMsec) / 1000f + MAX_DOWNLOAD_BLKSIZE) / MAX_DOWNLOAD_BLKSIZE);
-        if(blocksPerSnap <= 1)
-            blocksPerSnap = 2;
-
-//        System.out.println(""+blocksPerSnap);
-
-        while(blocksPerSnap-- > 0) {
-            // Write out the next section of the file, if we have already reached our window,
-            // automatically start retransmitting
-            if(downloadClientBlock == downloadCurrentBlock)
-                return; // nothing to transmit
-
-            if(downloadXmitBlock == downloadCurrentBlock) {
-                // We have transmitted the complete window, should we start resending?
-                //FIXME:  This uses a hardcoded one second timeout for lost blocks
-                //the timeout should be based on client rate somehow
-                if(Ref.server.time - downloadSendTime > 1000) {
-                    downloadXmitBlock = downloadClientBlock;
-                } else
-                    return;
-            }
-
-            // Send current block
-            int curindex = downloadXmitBlock % MAX_DOWNLOAD_WINDOW;
-            msg.Write(SVC.OPS_DOWNLOAD);
-            msg.Write(downloadXmitBlock);
-
-            // block zero is special, contains file size
-            if(downloadXmitBlock == 0) {
-                msg.Write(downloadSize);
-                msg.Write(downloadName);
-            }
-
-            msg.Write(downloadBlockSize[curindex]);
-
-            // Write the block
-            if(downloadBlockSize[curindex] > 0) {
-                msg.Write(downloadBlocks[curindex], 0, downloadBlockSize[curindex]);
-            }
-
-//            System.out.println("writing block " + downloadXmitBlock);
-            downloadXmitBlock++;
-            downloadSendTime = Ref.server.time;
-        }
-
-
-    }
-
-    private void CloseDownload() {
-        if(download != null)
-            download = null;
-
-        download = null;
-        downloadName = null;
-    }
-
-    private void NextDownload(String[] tokens) {
-        int block = Integer.parseInt(tokens[1]);
-        if(block == downloadClientBlock) {
-
-            // Find out if we are done.  A zero-length block indicates EOF
-            if(downloadBlockSize[downloadClientBlock % MAX_DOWNLOAD_WINDOW] == 0) {
-//                Common.LogDebug("File " + downloadName + " complete.");
-                CloseDownload();
-                return;
-            }
-
-            downloadSendTime = Ref.server.time;
-            downloadClientBlock++;
-            return;
-        }
-
-        // We aren't getting an acknowledge for the correct block, drop the client
-	// FIXME: this is bad... the client will never parse the disconnect message
-	//			because the cgame isn't loaded yet
-        DropClient("broken download");
-    }
-
-    private void StopDownload() {
-        if(downloadName != null)
-            Common.LogDebug("Aborting file download: " + downloadName);
-
-        CloseDownload();
-    }
-
-    private void DoneDownload() {
-        sendCubeFile();
-//        System.out.println("download done");
-//        SendClientGameState();
+        
     }
 
     private void sendCubeFile() {
         ClientSnapshot frame = frames[netchan.outgoingSequence & 31];
-        ClientPersistant pers = frame.ps.pers;
+        ClientPersistant pers = frame.pss[0].pers;
         if(pers == null || pers.isQueueEmpty()) return;
-
-
-//        ByteBuffer buf = pers.queuedChunkData.poll();
-//        pers.queuedBytes -= buf.limit();
-//        download = new NetBuffer(buf);
-        downloadName = "@cube";
+        download.BeginDownload("@cube");
     }
 
     private void UpdateUserInfo(String[] tokens) {
@@ -1100,10 +944,17 @@ public class SvClient {
      * @param reason
      */
     public void DropClient(String reason) {
-        if(state == ClientState.ZOMBIE)
-            return;
+        if(state == ClientState.ZOMBIE) return;
+        
+        // Drop fake splitscreen clients
+        for (int i = 0; i < 3; i++) {
+            if(localClients[i] != -1) {
+                Ref.server.clients[localClients[i]].DropClient(reason);
+            }
+        }
+            
 
-        Common.Log("Dropping client");
+        Common.Log("Dropping client %s (reason: %s)", name, reason);
 
         if(!netchan.isBot) {
             // see if we already have a challenge for this ip
@@ -1117,23 +968,36 @@ public class SvClient {
         }
 
         // Kill any download
-        CloseDownload();
+        download.StopDownload();
 
         // tell everyone why they got dropped
         Ref.server.SendServerCommand(null, String.format("print \"%s %s\"\n", name, reason));
 
         // call the prog function for removing a client
-        Ref.game.Client_Disconnect(gentity.s.ClientNum);
+        Ref.game.Client_Disconnect(gentity.s.number);
 
         // add the disconnect command
-        Ref.server.SendServerCommand(this, String.format("disconnect \"%s\"\n", reason));
+        if(owner == -1) {
+            Ref.server.SendServerCommand(this, String.format("disconnect \"%s\"\n", reason));
+        } else {
+            // Don't send disconnect for fake clients
+            SvClient cl = Ref.server.clients[owner];
+            for (int i = 0; i < 3; i++) {
+                if(cl.localClients[i] == id) {
+                    cl.localClients[i] = -1;
+                }
+                if(cl.gentity != null && cl.gentity.r.localClients[i] == id) {
+                    cl.gentity.r.localClients[i] = -1;
+                }
+            }
+        }
 
         if(netchan.isBot) {
             // bots shouldn't go zombie, as there's no real net connection.
             Ref.server.freeBotClient(this);
         }
 
-        // nuke user info
+        // nuke user info.. yes, nuke it from orbit.
         SetUserInfo("");
 
         if(netchan.isBot) {
@@ -1249,5 +1113,16 @@ public class SvClient {
         } while(nameFail); // keep trying
 
         return name;
+    }
+
+    
+    
+    public enum ClientState {
+        FREE, // can be reused for a new connection
+        ZOMBIE, // client has been disconnected, but don't reuse
+        	// connection for a couple seconds
+        CONNECTED, // has been assigned to a client, but no gamestate yet
+        PRIMED, // gamestate has been sent, but client hasn't sent a usercmd
+        ACTIVE // client is fully in game
     }
 }

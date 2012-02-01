@@ -8,25 +8,15 @@ import com.bulletphysics.collision.broadphase.*;
 import com.bulletphysics.collision.dispatch.*;
 import com.bulletphysics.collision.shapes.*;
 import com.bulletphysics.dynamics.*;
-import com.bulletphysics.dynamics.constraintsolver.Point2PointConstraint;
 import com.bulletphysics.dynamics.constraintsolver.SequentialImpulseConstraintSolver;
 import com.bulletphysics.linearmath.*;
-import cubetech.Game.Game;
 import cubetech.collision.CubeChunk;
 import cubetech.common.CVar;
 import cubetech.common.Common;
-import cubetech.common.Helper;
-import cubetech.common.ICommand;
 import cubetech.common.PlayerState;
-import cubetech.gfx.PolyVert;
-import cubetech.gfx.VBO;
 import cubetech.misc.Ref;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
-import javax.vecmath.Quat4f;
 import org.lwjgl.util.vector.Vector3f;
-import org.lwjgl.util.vector.Vector4f;
 
 /**
  *

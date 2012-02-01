@@ -88,7 +88,10 @@ public class ClientRender {
         //Ref.glRef.deferred.startPostDeferred();
 
         Ref.render.renderAll(view, Render.RF_POSTDEFERRED);
-        //Ref.glRef.deferred.stopPostDeferred();
+        if(!view.renderList.list.isEmpty()) {
+            Ref.glRef.deferred.stopPostDeferred();
+        }
+        
         
     }
 
@@ -303,18 +306,8 @@ public class ClientRender {
                     Ref.ui.DrawConnectScreen(true);
                     break;
                 case ACTIVE:
-                    Ref.cgame.vrectIndex = 0;
                     Ref.cgame.DrawActiveFrame(Ref.client.cl.serverTime, Ref.client.demo.isPlaying());
-                    Ref.render.assignAndClear(Ref.cgame.cg.refdef);
-//                    Ref.cgame.vrectIndex = 1;
-//                    Ref.cgame.DrawActiveFrame(Ref.client.cl.serverTime, Ref.client.demo.isPlaying());
-//                    Ref.render.assignAndClear(Ref.cgame.cg.refdef);
-//                    Ref.cgame.vrectIndex = 2;
-//                    Ref.cgame.DrawActiveFrame(Ref.client.cl.serverTime, Ref.client.demo.isPlaying());
-//                    Ref.render.assignAndClear(Ref.cgame.cg.refdef);
-//                    Ref.cgame.vrectIndex = 3;
-//                    Ref.cgame.DrawActiveFrame(Ref.client.cl.serverTime, Ref.client.demo.isPlaying());
-//                    Ref.render.assignAndClear(Ref.cgame.cg.refdef);
+                    
                     break;
             }
         }

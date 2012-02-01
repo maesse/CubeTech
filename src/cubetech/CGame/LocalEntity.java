@@ -164,6 +164,7 @@ public class LocalEntity {
         le.color.set(r,g,b,a);
 
         le.rEntity = new RenderEntity(REType.SPRITE);
+        le.rEntity.flags = RenderEntity.FLAG_NOLIGHT | RenderEntity.FLAG_NOSHADOW;
         RenderEntity re = le.rEntity;
         le.radius = re.radius = radius;
         re.origin.set(origin);
@@ -174,7 +175,7 @@ public class LocalEntity {
         re.outcolor.w = 0xff;
         re.mat = mat;
         
-        re.flags = RenderEntity.FLAG_SPRITE_AXIS;
+        re.flags |= RenderEntity.FLAG_SPRITE_AXIS;
         Helper.perpendicularVector(dir, re.axis[0]);
         Vector3f.cross(re.axis[0], dir, re.axis[1]);
 
@@ -199,6 +200,7 @@ public class LocalEntity {
         le.color.set(r,g,b,a);
 
         le.rEntity = new RenderEntity(REType.BEAM);
+        le.rEntity.flags = RenderEntity.FLAG_NOLIGHT | RenderEntity.FLAG_NOSHADOW;
         RenderEntity re = le.rEntity;
         le.radius = re.radius = radius;
         re.origin.set(origin);
@@ -257,6 +259,7 @@ public class LocalEntity {
         le.radius = radius;
         le.rEntity = new RenderEntity(REType.SPRITE);
         RenderEntity re = le.rEntity;
+        re.flags = RenderEntity.FLAG_NOLIGHT | RenderEntity.FLAG_NOSHADOW;
         re.radius = radius;
         re.shaderTime = startTime / 1000f;
 
@@ -304,6 +307,7 @@ public class LocalEntity {
         le.pos.delta.set(velocity);
         le.pos.time = time;
         le.rEntity = new RenderEntity(REType.SPRITE);
+        le.rEntity.flags = RenderEntity.FLAG_NOLIGHT | RenderEntity.FLAG_NOSHADOW;
         le.rEntity.frame = Ref.rnd.nextInt(100)%mat.getAnimCount();
         le.rEntity.outcolor.set(255,255,255,255);
         le.rEntity.origin.set(origin);
@@ -321,7 +325,7 @@ public class LocalEntity {
         le.Flags = leFlags;
         le.radius = radius;
         le.rEntity = new RenderEntity(REType.SPRITE);
-        
+        le.rEntity.flags = RenderEntity.FLAG_NOLIGHT | RenderEntity.FLAG_NOSHADOW;
 
         le.Type = LocalEntity.TYPE_SCALE_FADE_COLOR;
         le.startTime = startTime;

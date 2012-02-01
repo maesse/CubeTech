@@ -9,26 +9,9 @@ import cubetech.Game.Bot.GBot;
 import cubetech.Game.Game;
 import cubetech.Game.GameClient;
 import cubetech.client.CLSnapshot;
-import cubetech.collision.ClipmapException;
-import cubetech.collision.CollisionResult;
-import cubetech.collision.CubeCollision;
-import cubetech.collision.CubeMap;
-import cubetech.common.CS;
-import cubetech.common.CVar;
-import cubetech.common.CVarFlags;
-import cubetech.common.Commands;
-import cubetech.common.Common;
-import cubetech.common.Content;
-import cubetech.common.Helper;
-import cubetech.common.ICommand;
-import cubetech.common.ITrace;
-import cubetech.common.Info;
-import cubetech.common.PlayerState;
-import cubetech.entities.EntityShared;
-import cubetech.entities.EntityState;
-import cubetech.entities.SharedEntity;
-import cubetech.entities.SvEntity;
-import cubetech.gfx.ResourceManager;
+import cubetech.collision.*;
+import cubetech.common.*;
+import cubetech.entities.*;
 import cubetech.input.PlayerInput;
 import cubetech.iqm.IQMModel;
 import cubetech.misc.MasterServer;
@@ -46,33 +29,25 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.FileChannel;
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import org.lwjgl.util.vector.Quaternion;
-
-
 import org.lwjgl.util.vector.Vector3f;
-import sun.security.krb5.Config;
 
 /**
  *
  * @author mads
  */
-public class Server implements ITrace {
-
-
+public final class Server implements ITrace {
     private boolean initialized = false;
+    
+    public ServerRun sv = new ServerRun();
     int timeResidual;
     int time;
-
-    public ServerRun sv = new ServerRun();
+    
+    SvClient[] clients;
 
     int numSnapshotEntities;
     int nextSnapshotEntities;
-    SvClient[] clients;
     EntityState[] snapshotEntities;
     int snapFlagServerBit = 0;
     WorldSector sv_worldSector = null;
@@ -87,11 +62,8 @@ public class Server implements ITrace {
     CVar sv_killserver;
     CVar sv_gametype;
     CVar sv_serverid;
-//    CVar sv_mapChecksum;
     CVar sv_lan;
     public CVar sv_chunklimit;
-
-    public HashMap<String, ICommand> ucmds = new HashMap<String, ICommand>();
 
     public Server() {
         Init();
@@ -106,9 +78,9 @@ public class Server implements ITrace {
     }
 
     SvEntity SvEntityForGentity(SharedEntity ent) {
-        if(ent == null || ent.s.ClientNum < 0 || ent.s.ClientNum >= Common.MAX_GENTITIES)
+        if(ent == null || ent.s.number < 0 || ent.s.number >= Common.MAX_GENTITIES)
             Ref.common.Error(Common.ErrorCode.DROP, "SvEntityForGentity invalid");
-        return sv.svEntities[ent.s.ClientNum];
+        return sv.svEntities[ent.s.number];
     }
 
     public String GetUserInfo(int id) {
@@ -653,6 +625,50 @@ public class Server implements ITrace {
         chal.pingTime = time;
         Ref.net.SendOutOfBandPacket(NetSource.SERVER, from, String.format("challengeResponse %d %d", chal.challenge, chal.clientChallenge));
     }
+    
+    public void addExtraLocalClient(SvClient owner, int lc, String userinfo) {
+        // Find free slot
+        SvClient newcl = null;
+        for (int i = 0; i < sv_maxclients.iValue; i++) {
+            if(clients[i].state == ClientState.FREE) {
+                newcl = clients[i];
+                break;
+            }
+        }
+        
+        if(newcl == null) return;
+        int n = newcl.id;
+        owner.clone(newcl);
+        newcl.id = n;
+        SharedEntity gent = sv.gentities[n];
+        newcl.gentity = gent;
+        newcl.netchan = new NetChan(NetSource.SERVER, owner.netchan.addr, owner.netchan.qport);
+        
+        newcl.userinfo = userinfo;
+        newcl.owner = newcl.gentity.r.owner = owner.id;
+        owner.localClients[lc-1] = owner.gentity.r.localClients[lc-1] = n;
+        for (int i = 0; i < 3; i++) {
+            newcl.localClients[i] = newcl.gentity.r.localClients[i] = -1;
+        }
+        
+        String denied = Ref.game.Client_Connect(n, true, false);
+        if(denied != null) {
+            Ref.net.SendOutOfBandPacket(NetSource.SERVER, owner.netchan.addr, String.format("print \"%s\"", denied));
+            Common.Log("Game rejected connection: " + denied);
+            return;
+        }
+        
+        newcl.UserInfoChanged(true);
+        if(owner.state.ordinal() >= ClientState.PRIMED.ordinal()) {
+            newcl.state = ClientState.PRIMED;
+            newcl.gamestateMessageNum = newcl.netchan.outgoingSequence;
+        } else {
+            newcl.state = ClientState.CONNECTED;
+        }
+        newcl.lastPacketTime = time;
+        newcl.lastConnectTime = time;
+        newcl.gamestateMessageNum = -1;
+    }
 
     private void DirectConnect(InetSocketAddress from, String[] tokens) {
         String userinfo = tokens[1];
@@ -749,13 +765,21 @@ public class Server implements ITrace {
             // we got a newcl, so reset the reliableSequence and reliableAcknowledge
             
         }
-            newcl.reliableAcknowledge = 0;
-            newcl.reliableSequence = 0;
+        
+        newcl.reliableAcknowledge = 0;
+        newcl.reliableSequence = 0;
         // build a new connection
         // accept the new client
         // this is the only place a client_t is ever initialized
         SharedEntity ent = sv.gentities[i];
         newcl.gentity = ent;
+        
+        newcl.owner = -1;
+        newcl.gentity.r.owner = -1;
+        for (int j = 0; j < 3; j++) {
+            newcl.localClients[j] = -1;
+            newcl.gentity.r.localClients[j] = -1;
+        }
 
         // save the address
         newcl.netchan = new NetChan(NetSource.SERVER, from, qport);
@@ -820,7 +844,7 @@ public class Server implements ITrace {
 
         if(gent.r.bmodel)
             gent.s.solid = EntityState.SOLID_BMODEL;
-        else if((gent.r.contents & (Content.BODY | Content.SOLID)) != 0) {
+        else if((gent.s.contents & (Content.BODY | Content.SOLID)) != 0) {
             gent.s.solid = Helper.boundsToSolid(gent.r.mins, gent.r.maxs);
             
         } else
@@ -993,7 +1017,7 @@ public class Server implements ITrace {
 
             // if it doesn't have any brushes of a type we
             // are looking for, ignore it
-            if((touch.r.contents & tracemask) == 0)
+            if((touch.s.contents & tracemask) == 0)
                 continue;
 
             // might intersect, so do an exact clip
@@ -1006,8 +1030,8 @@ public class Server implements ITrace {
                     if(frac < clip.frac) {
                         clip.frac = frac;
                         clip.hit = true;
-                        clip.entitynum = touch.s.ClientNum;
-                        clip.hitmask = touch.r.contents;
+                        clip.entitynum = touch.s.number;
+                        clip.hitmask = touch.s.contents;
                         clip.hitAxis.set(tempAxis);
                     }
                 }
@@ -1020,9 +1044,9 @@ public class Server implements ITrace {
                 if(res.frac  < clip.frac) {
                     clip.frac = res.frac;
                     clip.hit = res.hit;
-                    clip.entitynum = touch.s.ClientNum;
+                    clip.entitynum = touch.s.number;
                     clip.hitAxis = res.hitAxis;
-                    clip.hitmask = touch.r.contents;
+                    clip.hitmask = touch.s.contents;
                     clip.startsolid = res.startsolid;
                 }
             }
@@ -1128,7 +1152,7 @@ public class Server implements ITrace {
             clients[i] = new SvClient();
             clients[i].id = i;
         }
-        numSnapshotEntities = 2048;
+        numSnapshotEntities = sv_maxclients.iValue * 32 * 64;
         initialized = true;
         Ref.cvars.Set2("sv_running", "1", true);
     }
@@ -1200,7 +1224,7 @@ public class Server implements ITrace {
             if(!ent.r.linked)
                 continue;
 
-            ent.s.ClientNum = i;
+            ent.s.number = i;
             ent.s.Clone(sv.svEntities[i].baseline);
         }
     }
@@ -1316,7 +1340,7 @@ public class Server implements ITrace {
             if(clients[i].state == ClientState.FREE) {
                 SvClient client = clients[i];
                 client.gentity = sv.gentities[i];
-                client.gentity.s.ClientNum = i;
+                client.gentity.s.number = i;
                 client.state = ClientState.ACTIVE;
                 client.lastPacketTime = time;
                 if(client.netchan == null) client.netchan = new NetChan(NetSource.CLIENT, null, 0);

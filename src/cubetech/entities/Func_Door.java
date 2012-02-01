@@ -97,7 +97,7 @@ public class Func_Door implements IEntity {
             trig.r.mins.set(mins.x, mins.y, mins.z);
             trig.r.maxs.set(maxs.x, maxs.y, maxs.z); // FIX
             trig.parent = ent;
-            trig.r.contents = Content.TRIGGER;
+            trig.s.contents = Content.TRIGGER;
             trig.touch = Touch_DoorTrigger;
             // remember the thinnest axis
             trig.count = xaxis?0:1;

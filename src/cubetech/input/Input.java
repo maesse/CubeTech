@@ -50,7 +50,8 @@ public class Input {
     // Custom mouse wheel code
     private int mWheelUpTime = 0;
     private int mWheelDownTime = 0;
-    private Vector2f mouseDelta = new Vector2f();
+    private Vector2f[] mouseDelta = new Vector2f[] {new Vector2f(), new Vector2f()};
+    private int mouseIndex = 0;
     private Vector2f mousePosition = new Vector2f();
     private int totalWheelDelta = 0;
     private boolean[] mouseButtonStates;
@@ -63,12 +64,13 @@ public class Input {
     private ControllerState kbState;
     private Joystick[] joysticks = null;
     // Joystick index -> client mapping
-    private int[] joystickMapping = new int[] {0,1,2,3};
+    private int[] joystickMapping = new int[] {-1,-1,-1,-1};
     private int lastControllerCheck = 0; // last new-controller check
     private int controllerCheckTimeout = 1000; // how often to check for new controllers
 
     public CVar sensitivity;
     private CVar in_mouselook;
+    private CVar in_smooth;
     private CVar in_debug;
     private CVar in_nojoy;
     public CVar j_pitch;
@@ -89,6 +91,7 @@ public class Input {
         in_nojoy = Ref.cvars.Get("in_nojoy", "0", EnumSet.of(CVarFlags.NONE));
         sensitivity = Ref.cvars.Get("sensitivity", "3", EnumSet.of(CVarFlags.ARCHIVE));
         in_mouselook = Ref.cvars.Get("in_mouselook", "1", EnumSet.of(CVarFlags.ARCHIVE));
+        in_smooth = Ref.cvars.Get("in_smooth", "1", EnumSet.of(CVarFlags.ARCHIVE));
         
         binds.BindKey("W", "+KBforward");
         binds.BindKey("S", "+KBback");
@@ -105,11 +108,11 @@ public class Input {
         binds.BindKey("TAB", "+KBbutton3");
         binds.BindKey("RETURN", "message");
         binds.BindKey("y", "message");
-        binds.BindKey("1", "weapon 1");
-        binds.BindKey("2", "weapon 2");
-        binds.BindKey("3", "weapon 3");
-        binds.BindKey("4", "weapon 4");
-        binds.BindKey("5", "weapon 5");
+        binds.BindKey("1", "weapon 0 1");
+        binds.BindKey("2", "weapon 0 2");
+        binds.BindKey("3", "weapon 0 3");
+        binds.BindKey("4", "weapon 0 4");
+        binds.BindKey("5", "weapon 0 5");
         binds.BindKey("mouse1", "+KBbutton0");
         binds.BindKey("mouse2", "+KBbutton1");
         binds.BindKey("LCONTROL", "+KBbutton2");
@@ -117,12 +120,25 @@ public class Input {
         binds.BindKey("F11", "screenshot");
         binds.BindKey("F12", "toggleoverlay");
         binds.BindKey("g", "dropweapon");
+        
         binds.BindKey("JOY1_7", "toggleoverlay");
         binds.BindKey("JOY2_7", "toggleoverlay");
         binds.BindKey("JOY3_7", "toggleoverlay");
-        binds.BindKey("JOY1_a5p", "weapon next");
-        binds.BindKey("JOY1_a5n", "weapon prev");
+        
+        binds.BindKey("JOY1_a5p", "weapon 1 next");
+        binds.BindKey("JOY1_a5n", "weapon 1 prev");
         binds.BindKey("JOY1_a4n", "+JOY1button0");
+        binds.BindKey("JOY1_a4p", "+JOY1button1");
+        
+        binds.BindKey("JOY2_a5p", "weapon 2 next");
+        binds.BindKey("JOY2_a5n", "weapon 2 prev");
+        binds.BindKey("JOY2_a4n", "+JOY2button0");
+        binds.BindKey("JOY2_a4p", "+JOY2button1");
+        
+        binds.BindKey("JOY3_a5p", "weapon 3 next");
+        binds.BindKey("JOY3_a5n", "weapon 3 prev");
+        binds.BindKey("JOY3_a4n", "+JOY3button0");
+        binds.BindKey("JOY3_a4p", "+JOY3button1");
         
         for (int i = 0; i < 4; i++) {
             binds.BindKey("JOY" + (i+1) + "_7", "toggleoverlay");
@@ -354,7 +370,15 @@ public class Input {
             ClientInput input = clientInputs[i];
             if(i == keyboardClient) {
                 // let this input client know of the mouse changes.
-                input.updateFromKeyboardMouse(kbState, mouseButtonStates, mousePosition, (int)mouseDelta.x, (int)mouseDelta.y, totalWheelDelta);
+                float dx, dy;
+                if(in_smooth.isTrue()) {
+                    dx = (mouseDelta[0].x + mouseDelta[1].x) * 0.5f;
+                    dy = (mouseDelta[0].y + mouseDelta[1].y) * 0.5f;
+                } else {
+                    dx = mouseDelta[mouseIndex].x;
+                    dy = mouseDelta[mouseIndex].y;
+                }
+                input.updateFromKeyboardMouse(kbState, mouseButtonStates, mousePosition, dx, dy, totalWheelDelta);
             } else {
                 // Ensure that there isn't any mousedown even stuck if keyboardclient is switched around
                 input.clearKeyboardMouseState();
@@ -401,14 +425,15 @@ public class Input {
     }
 
     private void MouseUpdate() {
-        mouseDelta.set(0,0);
+        mouseIndex ^= 1;
+        mouseDelta[mouseIndex].set(0,0);
         totalWheelDelta = 0;
         while(Mouse.next() && !Ref.common.com_unfocused.isTrue()) {
             // Add up delta
             int evtDx = Mouse.getEventDX();
             int evtDy = Mouse.getEventDY();
-            mouseDelta.x += evtDx;
-            mouseDelta.y += evtDy;
+            mouseDelta[mouseIndex].x += evtDx;
+            mouseDelta[mouseIndex].y += evtDy;
 
             // Set Position
             float mousex = (float)Mouse.getEventX() / (float)Ref.glRef.GetResolution().x;
@@ -626,7 +651,7 @@ public class Input {
     public Joystick getJoystickForClient(int clientIndex) {
         if(joysticks == null) return null;
         for (int i = 0; i < joystickMapping.length; i++) {
-            if(joystickMapping[i] == clientIndex) return joysticks[i];
+            if(joystickMapping[i] == clientIndex && joysticks.length > i) return joysticks[i];
         }
         return null;
     }

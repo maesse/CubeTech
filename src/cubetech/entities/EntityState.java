@@ -22,7 +22,7 @@ import org.lwjgl.util.vector.Vector3f;
  */
 public class EntityState {
     public static final int SOLID_BMODEL = Integer.MAX_VALUE;
-    public int ClientNum = -1; // entity id
+    public int number = -1; // entity id
 
     
     
@@ -41,6 +41,9 @@ public class EntityState {
     public int modelindex = -1;
 
     public Weapon weapon;
+    
+    public int contents; // CONTENTS_TRIGGER, CONTENTS_SOLID, CONTENTS_BODY, etc
+                         // a non-solid entity should set to 0
     
     
     // not used atm
@@ -64,6 +67,7 @@ public class EntityState {
         Angles = new Vector3f();
         Angles2 = new Vector3f();
         origin = new Vector3f();
+        contents = 0;
         evt = 0;
         evtParams = 0;
         eType = EntityType.GENERAL;
@@ -72,7 +76,7 @@ public class EntityState {
         time = 0;
         pos = new Trajectory();
         apos = new Trajectory();
-        ClientNum = -1;
+        number = -1;
         solid = 0;
         otherEntityNum = 0;
         modelindex = -1;
@@ -80,26 +84,26 @@ public class EntityState {
     }
 
     private boolean IsEqual(EntityState s) {
-        if(ClientNum == s.ClientNum && time == s.time
+        if(number == s.number && time == s.time
                 && evtParams == s.evtParams && evt == s.evt
                 && pos.IsEqual(s.pos) && apos.IsEqual(s.apos)
                 && Helper.Equals(s.Angles, Angles) && Helper.Equals(Angles2, s.Angles2) && Helper.Equals(origin, s.origin)
                 && eType == s.eType && eFlags == s.eFlags
                 && frame == s.frame && otherEntityNum == s.otherEntityNum && solid == s.solid
-                && modelindex == s.modelindex && s.weapon == weapon)
+                && modelindex == s.modelindex && s.weapon == weapon && contents == s.contents)
             return true;
         return false;
     }
 
     public static void WriteDeltaRemoveEntity(NetBuffer buf, EntityState toRemove) {
-        buf.WriteShort(toRemove.ClientNum);
+        buf.WriteShort(toRemove.number);
         buf.Write(true); // remove
     }
 
     public void ReadDeltaEntity(NetBuffer buf, EntityState from, int newnum) {
         if(buf.ReadBool()) {
             // Remoev
-            ClientNum = Common.ENTITYNUM_NONE;
+            number = Common.ENTITYNUM_NONE;
             //Common.LogDebug("Removed entity");
             return;
         }
@@ -110,12 +114,12 @@ public class EntityState {
                 Clear();
             else
                 from.Clone(this);
-            ClientNum = newnum;
+            number = newnum;
             return;
         }
 
 
-        ClientNum = newnum;
+        number = newnum;
         Angles = buf.ReadDeltaVector(from.Angles);
         Angles2 = buf.ReadDeltaVector(from.Angles2);
         origin = buf.ReadDeltaVector(from.origin);
@@ -129,6 +133,7 @@ public class EntityState {
         apos.ReadDelta(buf, from.apos);
         otherEntityNum = buf.ReadDeltaShort((short)from.otherEntityNum);
         solid = buf.ReadDeltaInt(from.solid);
+        contents = buf.ReadDeltaInt(from.contents);
         modelindex = buf.ReadDeltaShort((short)from.modelindex);
         weapon = buf.ReadEnum(Weapon.class);
     }
@@ -139,13 +144,13 @@ public class EntityState {
             if(!force)
                 return;
 
-            buf.WriteShort(ClientNum);
+            buf.WriteShort(number);
             buf.Write(false); // not removed
             buf.Write(false); // no delta
             return;
         }
 
-        buf.WriteShort(ClientNum);
+        buf.WriteShort(number);
         buf.Write(false); // not removed
         buf.Write(true); // got delta
 
@@ -163,6 +168,7 @@ public class EntityState {
         apos.WriteDelta(buf, b.apos);
         buf.WriteDelta((short)b.otherEntityNum, (short)otherEntityNum);
         buf.WriteDelta(b.solid, solid);
+        buf.WriteDelta(b.contents, contents);
         buf.WriteDelta((short)b.modelindex, (short)modelindex);
         buf.WriteEnum(weapon);
     }
@@ -189,8 +195,9 @@ public class EntityState {
         st.apos.quater.set(apos.quater);
         st.apos.type = apos.type;
         st.apos.time = apos.time;
+        st.contents = contents;
         st.apos.duration = apos.duration;
-        st.ClientNum = ClientNum;
+        st.number = number;
         st.otherEntityNum = otherEntityNum;
         st.solid = solid;
         st.modelindex = modelindex;

@@ -8,6 +8,7 @@ import cubetech.gfx.CubeTexture;
 import org.lwjgl.util.vector.Matrix3f;
 import cubetech.common.Helper;
 import cubetech.misc.Ref;
+import java.util.ArrayList;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
@@ -60,7 +61,11 @@ public class IQMModel {
     HashMap<String, IQMJoint> attachments = new HashMap<String, IQMJoint>();
     Vector3f[] jointPose; // joint positions when in pose
     
-    HashMap<IQMMesh, IQMJoint> boneMeshes = new HashMap<IQMMesh, IQMJoint>();
+    // Known strings-to-bone lookups (eg. "Hips")
+    public HashMap<String, IQMJoint> controllerMap = new HashMap<String, IQMJoint>();
+    
+    public ArrayList<BoneMeshInfo> boneMeshInfo = new ArrayList<BoneMeshInfo>();
+    //HashMap<IQMMesh, IQMJoint> boneMeshes = new HashMap<IQMMesh, IQMJoint>();
     IQMFrame staticFrame = null; // if static model, cache the frame
     private Matrix4f tempMatrix = new Matrix4f();
     
@@ -83,9 +88,9 @@ public class IQMModel {
         return anims == null || joints == null;
     }
     
-    public HashMap<IQMMesh, IQMJoint> getBoneMeshes() {
-        return boneMeshes;
-    } 
+//    public HashMap<IQMMesh, IQMJoint> getBoneMeshes() {
+//        return boneMeshes;
+//    } 
     
     public IQMJoint[] getJoints() {
         return joints;
@@ -103,6 +108,15 @@ public class IQMModel {
         int mat1 = frame1 * header.num_joints;
         int mat2 = frame2 * header.num_joints;
         
+        IQMJoint[] controllerJoints = null;
+        if(iqmFrame.controllers != null) {
+            controllerJoints = new IQMJoint[iqmFrame.controllers.size()];
+            for (int i = 0; i < iqmFrame.controllers.size(); i++) {
+                BoneController bCtrl = iqmFrame.controllers.get(i);
+                controllerJoints[i] = controllerMap.get(bCtrl.boneName.toLowerCase());
+            }
+        }
+        
         iqmFrame.outframe = new Matrix4f[header.num_joints];
         // Interpolate matrixes between the two closest frames and concatenate with parent matrix if necessary.
         // Concatenate the result with the inverse of the base pose.
@@ -117,25 +131,38 @@ public class IQMModel {
             }
             Matrix4f dest = iqmFrame.outframe[i];
             
-
-            Helper.scale((1-frameOffset), m1, dest);
-            Helper.scale((frameOffset), m2, temp);
-            Matrix4f.add(dest, temp, dest);
-            dest.m33 = 1;
-            
-            if(iqmFrame.controllers != null) {
-                for (BoneController bCtrl : iqmFrame.controllers) {
-                    if(bCtrl.boneName.equals(joints[i].name)) {
-                        Vector3f[] faxis = Helper.AnglesToAxis(bCtrl.boneAngles);
-                        Matrix4f rot = Helper.axisToMatrix(faxis, null);
-                        Matrix4f.mul(rot, dest, dest);
-                        break;
+            // Find bone controller for this joint, if any
+            BoneController ctrl = null;
+            if(controllerJoints != null) {
+                for (int j = 0; j < controllerJoints.length; j++) {
+                    if(controllerJoints[j] == null) continue;
+                    if(joints[i] != controllerJoints[j]) continue;
+                    if(ctrl == null || ctrl.type == BoneController.Type.ADDITIVE) {
+                        // There may be more than one controller for one bone.
+                        // could be better.
+                        ctrl = iqmFrame.controllers.get(j);
                     }
                 }
             }
-
-            if(joints[i].parent >= 0) {
-                Matrix4f.mul(iqmFrame.outframe[joints[i].parent], dest, dest);
+            
+            if(ctrl != null && ctrl.type == BoneController.Type.ABSOLUTE) {
+                // got an absolute controller, load it directly
+                dest.load(ctrl.getMatrix());
+            } else {
+                // Do normal blended animation
+                Helper.scale((1-frameOffset), m1, dest);
+                Helper.scale((frameOffset), m2, temp);
+                Matrix4f.add(dest, temp, dest);
+                dest.m33 = 1;
+                
+                // check for additive bonecontroller
+                if(ctrl != null && ctrl.type == BoneController.Type.ADDITIVE) {
+                    Matrix4f.mul(ctrl.getMatrix(), dest, dest);
+                }
+                
+                if(joints[i].parent >= 0) {
+                    Matrix4f.mul(iqmFrame.outframe[joints[i].parent], dest, dest);
+                }
             }
         }
 
@@ -163,7 +190,7 @@ public class IQMModel {
         }
     }
     
-    public IQMFrame buildFrame(int frame, int oldframe, float backlerp, BoneController[] controllers) {
+    public IQMFrame buildFrame(int frame, int oldframe, float backlerp, ArrayList<BoneController> controllers) {
         // Use cached frame if it's a static model
         if(isStatic() && staticFrame != null) {
             return staticFrame;

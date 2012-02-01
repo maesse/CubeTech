@@ -12,5 +12,5 @@ import cubetech.Game.Gentity;
  * @author mads
  */
 public interface IDieMethod {
-    void die(Gentity self, Gentity inflictor, Gentity attacker, int dmg, MeansOfDeath mod);
+    void die(Gentity inflictor, Gentity attacker, int dmg, MeansOfDeath mod);
 }

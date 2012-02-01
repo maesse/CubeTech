@@ -72,7 +72,7 @@ public class Ak47 extends WeaponItem {
         Helper.VectorMA(end, r, right, end);
         Helper.VectorMA(end, u, up, end);
 
-        int passent = gc.s.ClientNum;
+        int passent = gc.s.number;
         Vector3f delta = Vector3f.sub(end, muzzle, null);
         Vector3f dir = new Vector3f(delta);
         dir.normalise();
@@ -90,14 +90,14 @@ public class Ak47 extends WeaponItem {
         Gentity tent = null;
         if(ent.isClient()) {
             tent = Ref.game.TempEntity(hit, Event.BULLET_HIT_FLESH.ordinal());
-            tent.s.evtParams = ent.s.ClientNum;
+            tent.s.evtParams = ent.s.number;
 
             Ref.game.damage(ent, null, gc, null, hit, 17, 0, MeansOfDeath.AK47);
         } else {
             tent = Ref.game.TempEntity(hit, Event.BULLET_HIT_WALL.ordinal());
             tent.s.evtParams = Helper.normalToInt(hitAxis);
         }
-        tent.s.otherEntityNum = gc.s.ClientNum;
+        tent.s.otherEntityNum = gc.s.number;
         return null;
     }
 

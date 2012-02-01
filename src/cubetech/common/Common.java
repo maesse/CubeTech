@@ -219,7 +219,7 @@ public class Common {
                     int remaining = minMsec - msec;
                     try {
                         if(remaining >= com_sleepPrecision.iValue)
-                            Thread.sleep(1);
+                            Thread.sleep(remaining);
                         else if(remaining >= com_yieldPrecision.iValue)
                             Thread.sleep(0);
                     } catch (InterruptedException ex) {

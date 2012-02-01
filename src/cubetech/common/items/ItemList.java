@@ -112,7 +112,7 @@ public class ItemList {
         dropped.item = item;
         dropped.r.mins.set(-32,-32,-32);
         dropped.r.maxs.set(32,32,32);
-        dropped.r.contents = Content.TRIGGER;
+        dropped.s.contents = Content.TRIGGER;
         dropped.touch = TouchItem;
         dropped.SetOrigin(origin);
         dropped.count = ammo;
@@ -141,7 +141,7 @@ public class ItemList {
             ent.s.eType = EntityType.ITEM;
             ent.s.modelindex = Ref.common.items.getItemIndex(ent.item);
 
-            ent.r.contents = Content.TRIGGER;
+            ent.s.contents = Content.TRIGGER;
             ent.use = RespawnItem;
             ent.touch = TouchItem;
 
@@ -158,7 +158,7 @@ public class ItemList {
     private IUseMethod RespawnItem = new IUseMethod() {
         public void use(Gentity self, Gentity other, Gentity activator) {
             // Relink a hidden entity into the world
-            self.r.contents = Content.TRIGGER;
+            self.s.contents = Content.TRIGGER;
             self.s.eFlags &= ~EntityFlags.NODRAW;
             self.r.svFlags.remove(SvFlags.NOCLIENT);
             self.Link();
@@ -198,7 +198,7 @@ public class ItemList {
                 return;
 
             int respawn = item.itemPicked(self, other);
-            Common.LogDebug("Item touched: " + other.s.ClientNum + ", " + self.item.getClassName());
+            Common.LogDebug("Item touched: " + other.s.number + ", " + self.item.getClassName());
 
             if(respawn == 0) return;
                 
@@ -212,7 +212,7 @@ public class ItemList {
             if(self.wait == -1) {
                 self.r.svFlags.add(SvFlags.NOCLIENT);
                 self.s.eFlags |= EntityFlags.NODRAW;
-                self.r.contents = 0;
+                self.s.contents = 0;
                 self.unlinkAfterEvent = true;
                 return;
             }
@@ -232,7 +232,7 @@ public class ItemList {
             // to be placed on movers.
             self.r.svFlags.add(SvFlags.NOCLIENT);
             self.s.eFlags |= EntityFlags.NODRAW;
-            self.r.contents = 0;
+            self.s.contents = 0;
 
             // ZOID
             // A negative respawn times means to never respawn this item (but don't

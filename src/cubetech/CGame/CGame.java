@@ -9,6 +9,7 @@ import cubetech.entities.EntityType;
 import cubetech.gfx.*;
 import cubetech.input.*;
 import cubetech.iqm.IQMModel;
+import cubetech.iqm.RigidBoneMesh;
 import cubetech.misc.Profiler;
 import cubetech.misc.Profiler.Sec;
 import cubetech.misc.Profiler.SecTag;
@@ -16,6 +17,7 @@ import cubetech.misc.Ref;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import nbullet.collision.shapes.CollisionShape;
 import org.lwjgl.util.vector.Matrix3f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
@@ -26,10 +28,10 @@ import org.lwjgl.util.vector.Vector3f;
  */
 public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     public static final int PLAYER_LAYER = -20;
-    CVar cg_nopredict = Ref.cvars.Get("cg_nopredict", "0", EnumSet.of(CVarFlags.TEMP));
+    public CVar cg_nopredict = Ref.cvars.Get("cg_nopredict", "0", EnumSet.of(CVarFlags.TEMP));
     CVar cg_smoothclients = Ref.cvars.Get("cg_smoothclients", "0", EnumSet.of(CVarFlags.TEMP));
-    CVar cg_errorDecay = Ref.cvars.Get("cg_errorDecay", "100", EnumSet.of(CVarFlags.TEMP));
-    CVar cg_showmiss = Ref.cvars.Get("cg_showmiss", "0", EnumSet.of(CVarFlags.TEMP));
+    public CVar cg_errorDecay = Ref.cvars.Get("cg_errorDecay", "100", EnumSet.of(CVarFlags.TEMP));
+    public CVar cg_showmiss = Ref.cvars.Get("cg_showmiss", "0", EnumSet.of(CVarFlags.TEMP));
     CVar cg_viewsize = Ref.cvars.Get("cg_viewsize", "100", EnumSet.of(CVarFlags.TEMP));
     CVar cg_fov = Ref.cvars.Get("cg_fov", "90", EnumSet.of(CVarFlags.ARCHIVE));
     CVar cg_chattime = Ref.cvars.Get("cg_chattime", "5000", EnumSet.of(CVarFlags.ARCHIVE)); // show text for this long
@@ -53,6 +55,10 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     ChatLine[] chatLines = new ChatLine[8];
     int chatIndex = 0;
     public CEntity[] cg_entities;
+    
+    // These CEntities have created something in the physics system
+    // and need some cleanup after they stop appearing in the snapshots
+    public ArrayList<CEntity> centitiesWithPhysics = new ArrayList<CEntity>(32);
     
     public ArrayList<CEntity> cg_solidEntities = new ArrayList<CEntity>(256);
     public ArrayList<CEntity> cg_triggerEntities = new ArrayList<CEntity>(256);
@@ -159,60 +165,67 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         }
         
         SecTag s = Profiler.EnterSection(Sec.CG_RENDER);
-
-        Ref.client.setUserCommand(cg.weaponSelect, cg.zoomSensitivity);
-
         // this counter will be bumped for every valid scene we generate
         cg.clientframe++;
-        cg.PredictPlayerState();
-        cg.showScores = cg.predictedPlayerState.oldButtons[3];
-        
-
-        CalcViewValues();
-
-        Ref.soundMan.Respatialize(cg.predictedPlayerState.clientNum, cg.refdef.Origin, cg.predictedPlayerState.velocity, cg.refdef.ViewAxis);
-//        AddLocalEntities();
-        
         cg.frametime = cg.time - cg.oldTime;
-        if(cg.frametime < 0)
-            cg.frametime = 0;
+        if(cg.frametime < 0) cg.frametime = 0;
         cg.oldTime = cg.time;
         lag.AddFrameInfo();
         
-        AddPacketEntities();
-        cg.addTestModel();
-
-        
-
         SecTag s2 = Profiler.EnterSection(Sec.PHYSICS);
         physics.stepPhysics();
         s2.ExitSection();
         
+        cg.nViewports = 0;
+        boolean[] renderClientViewport = new boolean[4];
+        for (int i = 0; i < 4; i++) {
+            if(cg.snap.lcIndex[i] == -1) {
+                renderClientViewport[i] = false;
+                continue;
+            }
+            cg.cur_localClientNum = i;
+            cg.cur_lc = cg.localClients[i];
+            cg.cur_ps = cg.snap.pss[cg.snap.lcIndex[i]];
+            
+            cg.nViewports++;
+            renderClientViewport[i] = true;
+            
+            Ref.client.setUserCommand(cg.cur_lc.weaponSelect, cg.cur_lc.zoomSensitivity, cg.cur_localClientNum);
+            cg.cur_lc.PredictPlayerState();
+            cg.showScores = cg.cur_lc.predictedPlayerState.oldButtons[3];
+        }
         
-        cgr.renderViewModel(cg.predictedPlayerState);
-        marks.addMarks();
-
-        physics.renderBodies();
-        Light.skylight.setDirection(new Vector3f(1,0,-1));
-        Light.skylight.setDiffuse(new Vector3f(1.0f, 1.0f, 1.0f));
-        Light.skylight.setSpecular(new Vector3f(1.0f,1.0f,1.0f));
-        Light.skylight.enableShadowCasting(true);
-        cg.refdef.lights.add(Light.skylight);
         
-        Vector3f handlight = new Vector3f(cg.predictedPlayerState.origin);
-//        handlight.z += 60f;
-//        handlight.x += 40f;
-        handlight.set(-100, 500, 90);
-        Light playerLight = Light.Point(handlight);
-        playerLight.setDiffuse(new Vector3f(1, 1f, 1));
-        playerLight.setSpecular(new Vector3f(1,1,1));
-        playerLight.enableShadowCasting(true);
-        //cg.refdef.lights.add(playerLight);
-//        playerLight = Light.Directional(new Vector3f(1.0f, 0.5f, -1f));
-//        playerLight.setDiffuse(new Vector3f(0, 0f, 1));
-//        playerLight.setSpecular(new Vector3f(0,0,1));
-        //cg.refdef.lights.add(playerLight);
-
+        
+        if(cg.nViewports == 3) cg.nViewports = 4;
+        cg.cur_viewport = 0;
+        for (int i = 0; i < 4; i++) {
+            if(!renderClientViewport[i]) continue;
+            cg.cur_localClientNum = i;
+            cg.cur_lc = cg.localClients[i];
+            cg.cur_ps = cg.snap.pss[cg.snap.lcIndex[i]];
+            
+            renderForClient();
+            
+            if(i == 0) {
+                Ref.soundMan.Respatialize(cg.cur_lc.predictedPlayerState.clientNum, cg.refdef.Origin, cg.cur_lc.predictedPlayerState.velocity, cg.refdef.ViewAxis);
+            }
+            cg.cur_viewport++;
+        }
+        
+        for (int i = 0; i < 4; i++) {
+            if(!renderClientViewport[i]) continue;
+            cg.cur_localClientNum = i;
+            cg.cur_lc = cg.localClients[i];
+            cg.cur_ps = cg.snap.pss[cg.snap.lcIndex[i]];
+            cg.cur_lc.wasDead = cg.cur_ps.stats.Health <= 0;
+        }
+        
+        s.ExitSection();
+    }
+    
+    private void renderForClient() {
+        CalcViewValues();
         if(map != null) {
             if(cg_skybox.isTrue()) {
                 RenderEntity ent = Ref.render.createEntity(REType.SKYBOX);
@@ -223,6 +236,20 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             
             map.Render(cg.refdef);
         }
+        AddPacketEntities();
+        cg.addTestModel();
+        cgr.player.renderViewModel(cg.cur_lc.predictedPlayerState);
+        marks.addMarks();
+
+        physics.renderBodies();
+        Light.skylight.setDirection(new Vector3f(1,0,-1));
+        Light.skylight.setDiffuse(new Vector3f(1.0f, 1.0f, 1.0f));
+        Light.skylight.setSpecular(new Vector3f(1.0f,1.0f,1.0f));
+        Light.skylight.enableShadowCasting(true);
+        cg.refdef.lights.add(Light.skylight);
+        
+
+        
         
         ParticleSystem.update();
         LocalEntities.addLocalEntities();
@@ -283,7 +310,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         
         // UI
         cgr.Draw2D();
-        s.ExitSection();
+        
+        Ref.render.assignAndClear(Ref.cgame.cg.refdef);
     }
     
     private void drawEntityBBox(Vector3f[] bounds, Vector3f origin, Vector3f[] axis) {
@@ -416,16 +444,27 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         }
 
     }
-    public int vrectIndex = 0;
+    
     private void CalcViewValues() {
-        speed = (float) (speed * 0.8 + cg.predictedPlayerState.velocity.length() * 0.2f);
+        speed = (float) (speed * 0.8 + cg.cur_lc.predictedPlayerState.velocity.length() * 0.2f);
         cg.refdef = new ViewParams();
-        cg.refdef.CalcVRect(ViewParams.SliceType.NONE,vrectIndex,cg_viewsize.iValue);
+        
+        ViewParams.SliceType slice = ViewParams.SliceType.NONE;
+        switch(cg.nViewports) {
+            case 2:
+                slice = ViewParams.SliceType.VERTICAL;
+                break;
+            case 4:
+                slice = ViewParams.SliceType.BOTH;
+                break;
+        }
+        
+        cg.refdef.CalcVRect(slice,cg.cur_viewport,cg_viewsize.iValue);
 
-        cg.bobcycle = (cg.predictedPlayerState.bobcycle & 128) >> 7;
-        cg.bobfracsin = (float) Math.abs(Math.sin((float)(cg.predictedPlayerState.bobcycle & 0xff) / 127f * Math.PI));
-        cg.xyspeed = (float) Math.sqrt(cg.predictedPlayerState.velocity.x * cg.predictedPlayerState.velocity.x +
-                                    cg.predictedPlayerState.velocity.y * cg.predictedPlayerState.velocity.y);
+        cg.cur_lc.bobcycle = (cg.cur_lc.predictedPlayerState.bobcycle & 128) >> 7;
+        cg.cur_lc.bobfracsin = (float) Math.abs(Math.sin((float)(cg.cur_lc.predictedPlayerState.bobcycle & 0xff) / 127f * Math.PI));
+        cg.cur_lc.xyspeed = (float) Math.sqrt(cg.cur_lc.predictedPlayerState.velocity.x * cg.cur_lc.predictedPlayerState.velocity.x +
+                                    cg.cur_lc.predictedPlayerState.velocity.y * cg.cur_lc.predictedPlayerState.velocity.y);
 
         if(cg_freecam.isTrue() && cg.playingdemo) {
             if(Ref.client.demo.track.playingTrack()) {
@@ -433,7 +472,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             } else {
                 // Do a fake playerstate for freecamming in demos
                 if(cg.demoPlayerState == null) {
-                    cg.demoPlayerState = cg.predictedPlayerState.Clone(null);
+                    cg.demoPlayerState = cg.cur_lc.predictedPlayerState.Clone(null);
                     cg.demoPlayerState.moveType = Move.MoveType.NOCLIP;
                     cg.demoPlayerState.velocity.set(0,0,0); // clear velocity
                 }
@@ -453,25 +492,25 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             }
         } else {
 
-            Helper.VectorCopy(cg.predictedPlayerState.origin, cg.refdef.Origin);
+            Helper.VectorCopy(cg.cur_lc.predictedPlayerState.origin, cg.refdef.Origin);
 
-            Helper.VectorCopy(cg.predictedPlayerState.viewangles, cg.refdef.Angles);
+            Helper.VectorCopy(cg.cur_lc.predictedPlayerState.viewangles, cg.refdef.Angles);
 
             if(cg_errorDecay.fValue > 0f) {
-                int t = cg.time - cg.predictedErrorTime;
+                int t = cg.time - cg.cur_lc.predictedErrorTime;
                 float f = (cg_errorDecay.fValue - t) / cg_errorDecay.fValue;
                 if(f > 0 && f < 1)
-                    Helper.VectorMA(cg.refdef.Origin, f, cg.predictedError, cg.refdef.Origin);
+                    Helper.VectorMA(cg.refdef.Origin, f, cg.cur_lc.predictedError, cg.refdef.Origin);
                 else
-                    cg.predictedErrorTime = 0;
+                    cg.cur_lc.predictedErrorTime = 0;
             }
 
-            cg.refdef.Origin.z += cg.predictedPlayerState.viewheight;
+            cg.refdef.Origin.z += cg.cur_lc.predictedPlayerState.viewheight;
 
             if(cg_tps.isTrue()) {
                 cg.refdef.offsetThirdPerson();
             } else {
-                Vector3f.add(cg.refdef.Angles, cg.predictedPlayerState.punchangle, cg.refdef.Angles);
+                Vector3f.add(cg.refdef.Angles, cg.cur_lc.predictedPlayerState.punchangle, cg.refdef.Angles);
             }
         }
 
@@ -521,19 +560,19 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             cg.frameInterpolation = 0;
 
         
-        cg.autoAngle = (float) ((((cg.time>>1) & 1023) * Math.PI * 2) / 1024.0f);
+        cg.cur_lc.autoAngle = (float) ((((cg.time>>1) & 1023) * Math.PI * 2) / 1024.0f);
         
         // generate and add the entity from the playerstate
-        PlayerState ps = cg.predictedPlayerState;
-        ps.ToEntityState(cg.predictedPlayerEntity.currentState, false);
-        cgr.AddCEntity(cg.predictedPlayerEntity);
+        PlayerState ps = cg.cur_lc.predictedPlayerState;
+        ps.ToEntityState(cg.cur_lc.predictedPlayerEntity.currentState, false);
+        cgr.AddCEntity(cg.cur_lc.predictedPlayerEntity);
 
         // lerp the non-predicted value for lightning gun origins
-        cg_entities[cg.snap.ps.clientNum].CalcLerpPosition();
+        cg_entities[cg.cur_ps.clientNum].CalcLerpPosition();
 
         // add each entity sent over by the server
         for (int i= 0; i < cg.snap.numEntities; i++) {
-            CEntity cent = cg_entities[cg.snap.entities[i].ClientNum];
+            CEntity cent = cg_entities[cg.snap.entities[i].number];
             cgr.AddCEntity(cent);
         }
 
@@ -548,6 +587,24 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
     public void GotMouseEvent(MouseEvent evt) {
         
+    }
+
+    // Cleans up playerentity
+    public void cleanPhysicsFromCEntity(CEntity physcent) {
+        if(physcent.pe.boneMeshModel == null) return;
+        
+        for (RigidBoneMesh bmesh : physcent.pe.boneMeshes) {
+            if(bmesh.rigidBody != null) {
+                CollisionShape shape = bmesh.rigidBody.getCollisionShape();
+                physics.deleteBody(bmesh.rigidBody);
+                bmesh.rigidBody = null;
+                shape.destroy();
+            }
+        }
+        
+        physcent.pe.boneMeshModel = null;
+        physcent.pe.boneMeshes = null;
+        Common.LogDebug("Cleaned physics from centity");
     }
 
     class ChatLine {
@@ -593,12 +650,12 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg_triggerEntities.clear();
 
         Snapshot snap = cg.snap;
-        if(cg.nextSnap != null && !cg.nextFrameTeleport && !cg.thisFrameTeleport) {
+        if(cg.nextSnap != null) {
             snap = cg.nextSnap;
         }
 
         for (int i= 0; i < snap.numEntities; i++) {
-            CEntity cent = cg_entities[snap.entities[i].ClientNum];
+            CEntity cent = cg_entities[snap.entities[i].number];
             EntityState ent = cent.currentState;
 
             if(ent.eType == EntityType.ITEM || ent.eType == EntityType.TRIGGER) {
@@ -747,7 +804,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         for (CEntity cent : cg_solidEntities) {
             EntityState ent = cent.nextState;
 
-            if(ent.ClientNum == passEntityNum)
+            if(ent.number == passEntityNum)
                 continue;
 
             // Extract encoded bbox
@@ -766,7 +823,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             CollisionResult res = Ref.collision.TransformedBoxTrace(start, end, mins, maxs, tracemask);
 
             if(res.frac < worldResult.frac) {
-                worldResult.entitynum = ent.ClientNum;
+                worldResult.entitynum = ent.number;
                 worldResult.frac = res.frac;
                 worldResult.hit = res.hit;
                 worldResult.hitAxis = res.hitAxis;
@@ -783,8 +840,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
 
 
     public int GetCurrentPlayerEntityNum() {
-        if(cg.predictedPlayerState != null)
-            return cg.predictedPlayerState.clientNum;
+        if(cg.cur_lc.predictedPlayerState != null)
+            return cg.cur_lc.predictedPlayerState.clientNum;
         else
             return -1;
     }

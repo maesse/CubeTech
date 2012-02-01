@@ -431,6 +431,7 @@ public class Move {
     }
 
     static void beginWeaponChange(MoveQuery pm, Weapon newWeapon) {
+        if(newWeapon == null) newWeapon = Weapon.NONE;
         if(!pm.ps.stats.hasWeapon(newWeapon)) return;
 
         if(pm.ps.weaponState == WeaponState.DROPPING) return;
@@ -443,7 +444,7 @@ public class Move {
 
     static void finishWeaponChange(MoveQuery pm) {
         Weapon w = pm.cmd.weapon;
-
+        if(w == null) w = Weapon.NONE;
         // maybe fix (make stats.getFirstWeapon())
         if(!pm.ps.stats.hasWeapon(w)) w = Weapon.NONE;
         pm.ps.weapon = w;
@@ -505,7 +506,10 @@ public class Move {
         WeaponItem w = Ref.common.items.getWeapon(pm.ps.weapon);
 
         // take an ammo away if not infinite
-        pm.ps.stats.addAmmo(pm.ps.weapon, -1);
+        CVar freeAmmo = Ref.cvars.Find("g_freeammo");
+        if(freeAmmo == null || !freeAmmo.isTrue()) {
+            pm.ps.stats.addAmmo(pm.ps.weapon, -1);
+        }
 
         // fire weapon
         if(primary) {
@@ -1024,6 +1028,8 @@ public class Move {
 //        pm.ps.stepTime -= msec;
         pm.ps.jumpTime -= msec;
         pm.ps.ducktime -= msec;
+        pm.ps.dmgTime -= msec;
+        if(pm.ps.dmgTime < 0) pm.ps.dmgTime = 0;
         if(pm.ps.stepTime < 0)
             pm.ps.stepTime = 0;
         if(pm.ps.jumpTime < 0)

@@ -203,7 +203,7 @@ public class Vehicle extends GPhysicsEntity implements IUseMethod, IThinkMethod 
             PhysicsSystem.toUnscaledVec(t.origin, wheelEntites[i].r.currentOrigin);
             wheelEntites[i].r.mins.set(-16,-16,-16);
             wheelEntites[i].r.maxs.set(16,16,16);
-            wheelEntites[i].r.contents = Content.SOLID;
+            wheelEntites[i].s.contents = Content.SOLID;
             wheelEntites[i].s.pos.type = Trajectory.INTERPOLATE;
             wheelEntites[i].s.pos.base.set(wheelEntites[i].r.currentOrigin);
             wheelEntites[i].s.apos.type = Trajectory.QUATERNION;
@@ -332,7 +332,7 @@ public class Vehicle extends GPhysicsEntity implements IUseMethod, IThinkMethod 
         r.mins.set(-50,-50,-50);
         r.maxs.set(50,50,50);
         s.eType = EntityType.GENERAL;
-        r.contents = Content.PHYSICS;
+        s.contents = Content.PHYSICS;
         ClipMask = Content.SOLID;
         this.use = this;
         this.think = this;
@@ -354,7 +354,7 @@ public class Vehicle extends GPhysicsEntity implements IUseMethod, IThinkMethod 
             wheelEntites[j].s.eType = EntityType.GENERAL;
             wheelEntites[j].r.mins.set(-3,-3,-3);
             wheelEntites[j].r.maxs.set(-3,-3,-3);
-            wheelEntites[j].r.contents = Content.PHYSICS;
+            wheelEntites[j].s.contents = Content.PHYSICS;
             wheelEntites[j].r.bmodel = true;
             wheelEntites[j].s.modelindex = Ref.server.registerModel("data/models/wheel.iqm");
             wheelEntites[j].Link();

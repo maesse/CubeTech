@@ -14,14 +14,15 @@ import cubetech.entities.EntityState;
  */
 public class Snapshot {
     public static final int MAX_ENTITIES_IN_SNAPSHOT = 256;
+    
     public int snapFlags;			// SNAPFLAG_RATE_DELAYED, etc
     public int	ping;
-
     public int	serverTime;		// server time the message is valid for (in msec)
 
-    //public byte[] areamask = new byte[32];		// 32 portalarea visibility bits
-
-    public PlayerState ps;						// complete information about the current player at this time
+    // complete information about the current players at this time
+    public int[] lcIndex = new int[] {0,-1,-1,-1};
+    public PlayerState[] pss = new PlayerState[4];
+    public int numPS;
 
     public int numEntities;			// all of the entities that need to be presented
     public EntityState[] entities = new EntityState[MAX_ENTITIES_IN_SNAPSHOT];	// 256 at the time of this snapshot

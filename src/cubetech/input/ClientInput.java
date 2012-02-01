@@ -96,12 +96,12 @@ public class ClientInput {
         cmd.angles[2] = Helper.Angle2Short(viewangles[2]);
         
         // Store current weapon
-        cmd.weapon = Ref.client.cl.userCmd_weapon;
+        cmd.weapon = Ref.client.cl.localClients[clientIndex].userCmd_weapon;
         
         return cmd;
     }
     
-    private void updateMouse(boolean[] buttonStates, Vector2f mousePos, int dx, int dy, int wheelDelta) {
+    private void updateMouse(boolean[] buttonStates, Vector2f mousePos, float dx, float dy, int wheelDelta) {
         playerInput.Mouse1Diff = false;
         playerInput.Mouse2Diff = false;
         playerInput.Mouse3Diff = false;
@@ -132,13 +132,20 @@ public class ClientInput {
         updateFromKeyboardMouse(null, noButtons, null, 0, 0, 0);
     }
     
-    public void updateFromKeyboardMouse(ControllerState kbState, boolean[] buttonStates, Vector2f mousePos, int dx, int dy, int wheelDelta) {
+    public void updateFromKeyboardMouse(ControllerState kbState, boolean[] buttonStates, Vector2f mousePos, float dx, float dy, int wheelDelta) {
         updateMouse(buttonStates, mousePos, dx, dy, wheelDelta);
         this.kbState = kbState;
     }
     
     private void KeyboardMove() {
-        if(kbState == null) return;
+        if(kbState == null) {
+            // Since joysticks are additive, these values need to be zeroed out
+            playerInput.side = 0;
+            playerInput.forward = 0;
+            playerInput.Up = false;
+            playerInput.Down = false;
+            return;
+        }
         
         float side = kbState.in_right.KeyState() - kbState.in_left.KeyState();
         float forward = kbState.in_forward.KeyState() - kbState.in_back.KeyState();

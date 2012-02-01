@@ -2,6 +2,7 @@ package cubetech.Game.Bot;
 
 import cubetech.Game.GameClient;
 import cubetech.common.Helper;
+import cubetech.input.ClientInput;
 import cubetech.input.PlayerInput;
 import cubetech.misc.Ref;
 import cubetech.server.SvClient;
@@ -24,9 +25,10 @@ public class Bot {
         PlayerInput cmd = new PlayerInput();
 
         // Handle respawn
-        if(gc.isDead() && gc.respawnTime + 1000 < Ref.game.level.time)  {
-            cmd.Mouse1 = true;
-            cmd.Mouse1Diff = true;
+        if(gc.isDead() && gc.respawnTime + 50000 < Ref.game.level.time)  {
+            cmd.buttons[ClientInput.BUTTON_MOUSE1] = true;
+//            cmd.Mouse1 = true;
+//            cmd.Mouse1Diff = true;
         }
 
         Vector3f lookDest = Ref.game.g_entities[0].r.currentOrigin;

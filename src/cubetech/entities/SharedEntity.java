@@ -22,8 +22,8 @@ public class SharedEntity {
     public EntityShared r; // shared by both the server system and game
 
     public SvEntity GetSvEntity() {
-        if(s.ClientNum < 0 || s.ClientNum >= Common.MAX_GENTITIES)
-            Ref.common.Error(Common.ErrorCode.DROP, "SharedEntity.GetSvEntity: Bad index " + s.ClientNum);
-        return Ref.server.sv.svEntities[s.ClientNum];
+        if(s.number < 0 || s.number >= Common.MAX_GENTITIES)
+            Ref.common.Error(Common.ErrorCode.DROP, "SharedEntity.GetSvEntity: Bad index " + s.number);
+        return Ref.server.sv.svEntities[s.number];
     }
 }

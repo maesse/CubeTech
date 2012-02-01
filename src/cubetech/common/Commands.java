@@ -251,6 +251,24 @@ public final class Commands {
         }
         return str.toString().trim();
     }
+    
+    public static String[] trimTokens(String[] tokens) {
+        int count = 0;
+        for (int i = 0; i < tokens.length; i++) {
+            tokens[i] = tokens[i].replace('\n', ' ').trim();
+            if(!tokens[i].isEmpty()) count++;
+        }
+        if(count != tokens.length) {
+            String[] ntokens = new String[count];
+            int n = 0;
+            for (int i = 0; i < tokens.length; i++) {
+                if(tokens[i].isEmpty()) continue;
+                ntokens[n++] = tokens[i];
+            }
+            tokens = ntokens;
+        }
+        return tokens;
+    }
 
     // Takes a string and splits it up
     public static String[] TokenizeString(String str, boolean ignoreQuotes) {
@@ -342,6 +360,7 @@ public final class Commands {
 
                 text_out += c;
                 offset++;
+                if(c == '\n') break;
             }
 
             tempTokens.add(text_out);

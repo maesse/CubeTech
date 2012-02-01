@@ -132,7 +132,7 @@ public class Cubar extends WeaponItem {
         SingleCube cube = null;
         if(Ref.cgame.map != null) {
             Vector3f dir = Ref.cgame.cg.refdef.ViewAxis[0];
-            Vector3f origin = Ref.cgame.cg.predictedPlayerState.getViewOrigin();
+            Vector3f origin = Ref.cgame.cg.cur_lc.predictedPlayerState.getViewOrigin();
             CubeCollision col = CubeMap.TraceRay(origin, dir, 8, Ref.cgame.map.chunks);
             if(col != null) {
                  cube = new SingleCube(col);

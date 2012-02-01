@@ -31,7 +31,7 @@ import org.lwjgl.util.vector.Vector3f;
  * except for 'client->pers' and 'client->sess'
  * @author mads
  */
-public class GameClient extends Gentity {
+public class GameClient extends Gentity implements IDieMethod, IPainMethod {
     public PlayerState ps = new PlayerState();  // communicated by server to clients
 
     // the rest of the structure is private to game
@@ -57,6 +57,14 @@ public class GameClient extends Gentity {
 
     // This is set if currently in a vehicle
     Vehicle vehicle = null;
+    
+    
+    // when force commands is true, some commands don't check if cheats are enabled
+    private boolean forceCommands = false;
+    
+    public GameClient() {
+        this.pain = (IPainMethod)this;
+    }
 
     void updatePlayerCubes() {
         if(r.svFlags.contains(SvFlags.BOT)) return;
@@ -193,7 +201,7 @@ public class GameClient extends Gentity {
     }
 
     public void SendServerCommand(String str) {
-        Ref.server.GameSendServerCommand(s.ClientNum, str);
+        Ref.server.GameSendServerCommand(s.number, str);
     }
 
     // Handle incomming commands from the client
@@ -212,7 +220,7 @@ public class GameClient extends Gentity {
         } else if(cmd.equals("god")) {
             cmd_God.RunCommand(tokens);
         } else if(cmd.equals("dropweapon")) {
-            tossWeapon(ps.weapon);
+            tossWeapon(ps.weapon, true);
         }  else if(cmd.equals("use")) {
             playerUse();
         } else
@@ -221,41 +229,42 @@ public class GameClient extends Gentity {
     
     private ICommand cmd_Give = new ICommand() {
         public void RunCommand(String[] args) {
-            if(!Ref.game.CheatsOk(thisIsSilly))
-                return;
+            if(!forceCommands && !Ref.game.CheatsOk(thisIsSilly)) return;
+            
+            for (int i = 1; i < args.length; i++) {
+                String name = args[i].toLowerCase().trim();
 
-            String name = Commands.Args(args).toLowerCase().trim();
+                if(name.equals("health")) {
+                    setHealth(ps.stats.MaxHealth);
+                    return;
+                }
 
-            if(name.equals("health")) {
-                setHealth(ps.stats.MaxHealth);
-                return;
-            }
+                // Get a specific item for the player
+                IItem item = Ref.common.items.findItemByClassname(name);
+                if(item != null) {
+                    Gentity ent = Ref.game.Spawn();
+                    ent.s.origin.set(r.currentOrigin);
+                    ent.classname = item.getClassName();
+                    Ref.game.spawnItem(ent, item);
+                    Ref.common.items.FinishSpawningItem.think(ent);
+                    Ref.common.items.TouchItem.touch(ent, thisIsSilly);
+                    if(ent.inuse) ent.Free();
+                } else if(name.equalsIgnoreCase("car")) {
+                    Vehicle ent = (Vehicle) Ref.game.Spawn(Vehicle.class);
 
-            // Get a specific item for the player
-            IItem item = Ref.common.items.findItemByClassname(name);
-            if(item != null) {
-                Gentity ent = Ref.game.Spawn();
-                ent.s.origin.set(r.currentOrigin);
-                ent.classname = item.getClassName();
-                Ref.game.spawnItem(ent, item);
-                Ref.common.items.FinishSpawningItem.think(ent);
-                Ref.common.items.TouchItem.touch(ent, thisIsSilly);
-                if(ent.inuse) ent.Free();
-            } else if(name.equalsIgnoreCase("car")) {
-                Vehicle ent = (Vehicle) Ref.game.Spawn(Vehicle.class);
-                
-                // Get an x/y direciton vector
-                Vector3f forward = getForwardVector();
-                forward.z = 0f;
-                float len = Helper.Normalize(forward);
-                if(len == 0) forward.x = 1f;
+                    // Get an x/y direciton vector
+                    Vector3f forward = getForwardVector();
+                    forward.z = 0f;
+                    float len = Helper.Normalize(forward);
+                    if(len == 0) forward.x = 1f;
 
-                Helper.VectorMA(r.currentOrigin, 200, forward, ent.r.currentOrigin);
-                ent.s.pos.type = Trajectory.STATIONARY;
-                ent.s.pos.base.set(ent.r.currentOrigin);
-                ent.initVehicle();
-                ent.Link();
-            }
+                    Helper.VectorMA(r.currentOrigin, 200, forward, ent.r.currentOrigin);
+                    ent.s.pos.type = Trajectory.STATIONARY;
+                    ent.s.pos.base.set(ent.r.currentOrigin);
+                    ent.initVehicle();
+                    ent.Link();
+                }
+            }   
         }
     };
     
@@ -317,7 +326,7 @@ public class GameClient extends Gentity {
 
             godmode = false;
             setHealth(-999);
-            player_die.die(thisIsSilly, thisIsSilly, thisIsSilly, 10000, meansOfDeath.SUICIDE);
+            die(thisIsSilly, thisIsSilly, 10000, meansOfDeath.SUICIDE);
         }
     };
 
@@ -370,7 +379,7 @@ public class GameClient extends Gentity {
         if(r.linked)
             Unlink();
 
-        Init(s.ClientNum);
+        Init(s.number);
 
         // locate ent at a spawn point
         ClientSpawn();
@@ -386,11 +395,15 @@ public class GameClient extends Gentity {
         int entFlags = ps.eFlags;
         ps = new PlayerState();
         ps.eFlags = entFlags;
-        ps.clientNum = s.ClientNum;
-
+        ps.clientNum = s.number;
+        
         Ref.server.LocateGameData(Ref.game.level.sentities, Ref.game.level.num_entities, Ref.game.level.clients);
         Ref.server.GameSendServerCommand(-1, String.format("print \"%s entered the game.\"\n", pers.Name));
         Ref.game.CalculateRanks();
+        
+        
+        s.contents = Content.CORPSE;
+        Unlink();
     }
 
     /**
@@ -408,8 +421,9 @@ public class GameClient extends Gentity {
         Ref.server.GameSendServerCommand(clientIndex, String.format("chat \"%s^0: %s\"\n", sourceName, text));
     }
 
+    // todo: clean up this mess
     private void ClientSpawn() {
-        int index = s.ClientNum;
+        int index = s.number;
         Common.LogDebug("Spawning : " + pers.Name);
         // toggle the teleport bit so the client knows to not lerp
         // and never clear the voted flag
@@ -427,8 +441,7 @@ public class GameClient extends Gentity {
         classname = "player";
         r.mins = new Vector3f(Game.PlayerMins);
         r.maxs = new Vector3f(Game.PlayerMaxs);
-        r.contents = Content.BODY;
-        die = player_die;
+        s.contents = Content.BODY;
         ClipMask = Content.PLAYERCLIP | Content.BODY;
         ps.clientNum = index;
 
@@ -460,6 +473,10 @@ public class GameClient extends Gentity {
         ps.ToEntityState(s, false);
         r.currentOrigin.set(ps.origin);
         Link();
+        
+        forceCommands = true;
+        Client_Command(Commands.TokenizeString(Ref.game.g_spawncmd.sValue, false));
+        forceCommands = false;
 
         ClientEndFrame();
         ps.ToEntityState(s, false);
@@ -477,7 +494,7 @@ public class GameClient extends Gentity {
     }
 
     public void Client_Think() {
-        pers.cmd = Ref.server.GetUserCommand(s.ClientNum);
+        pers.cmd = Ref.server.GetUserCommand(s.number);
         lastCmdTime = Ref.game.level.time;
 
         // don't think if the client is not yet connected (and thus not yet spawned in)
@@ -569,7 +586,7 @@ public class GameClient extends Gentity {
 
         // Check for death
         if(ps.origin.z < Ref.game.g_killheight.iValue) {
-            Die();
+            die(null, null, 99999, MeansOfDeath.FALLING);
         }
     }
 
@@ -623,7 +640,7 @@ public class GameClient extends Gentity {
             Gentity hit = Ref.game.g_entities[entNum];
             if(hit.touch == null) continue;
 
-            if((hit.r.contents & Content.TRIGGER) == 0) continue;
+            if((hit.s.contents & Content.TRIGGER) == 0) continue;
 
             // use seperate code for determining if an item is picked up
             // so you don't have to actually contact its bounding box
@@ -643,76 +660,70 @@ public class GameClient extends Gentity {
 
     
 
-    private IDieMethod player_die = new IDieMethod() {
-        public void die(Gentity self, Gentity inflictor, Gentity attacker, int dmg, MeansOfDeath mod) {
-            if(ps.moveType == MoveType.DEAD) return;
+    public void die(Gentity inflictor, Gentity attacker, int dmg, MeansOfDeath mod) {
+        if(ps.moveType == MoveType.DEAD) return;
+        
+        if(ps.stats.Health > 0) ps.stats.Health = 0;
+    
+        ps.moveType = MoveType.DEAD;
 
-            ps.moveType = MoveType.DEAD;
-
-            int killer;
-            String killerName = "<non-client>";
-            if(attacker != null) {
-                killer = attacker.s.ClientNum;
-                if(attacker.isClient()) {
-                    killerName = attacker.getClient().pers.Name;
-                }
-            } else {
-                killer = Common.ENTITYNUM_WORLD;
-                killerName = "<world>";
+        int killer;
+        String killerName = "<non-client>";
+        if(attacker != null) {
+            killer = attacker.s.number;
+            if(attacker.isClient()) {
+                killerName = attacker.getClient().pers.Name;
             }
-
-            Common.Log("Kill: %d %d: %s killed %s by %s", killer, self.s.ClientNum, killerName, pers.Name, mod.toString());
-
-            // broadcast the death event to everyone
-            Gentity ent = Ref.game.TempEntity(self.r.currentOrigin, Event.ORBITUARY.ordinal());
-            ent.s.evtParams = mod.ordinal();
-            ent.s.otherEntityNum = self.s.ClientNum;
-            ent.s.frame = killer;
-            ent.r.svFlags.add(SvFlags.BROADCAST);
-
-            tossClientItems();
-
-            self.s.weapon = Weapon.NONE;
-            self.r.contents = Content.CORPSE;
-            respawnTime = Ref.game.level.time + 1000;
-
-            ps.animation = ((ps.animation & 128) ^ 128) | Animations.DIE.ordinal();
-
-            Ref.game.AddEvent(self, Event.DIED, killer);
-            
-            
-
-            Ref.server.LinkEntity(self.shEnt);
-            Ref.game.level.physics.PlayerDie(ps);
+        } else {
+            killer = Common.ENTITYNUM_WORLD;
+            killerName = "<world>";
         }
 
+        Common.Log("Kill: %d %d: %s killed %s by %s", killer, s.number, killerName, pers.Name, mod.toString());
 
-    };
+        // broadcast the death event to everyone
+        Gentity ent = Ref.game.TempEntity(r.currentOrigin, Event.ORBITUARY.ordinal());
+        ent.s.evtParams = mod.ordinal();
+        ent.s.otherEntityNum = s.number;
+        ent.s.frame = killer;
+        ent.r.svFlags.add(SvFlags.BROADCAST);
 
-    private void tossClientItems() {
+        tossClientItems(false);
+
+        s.weapon = Weapon.NONE;
+        s.contents = Content.CORPSE;
+        respawnTime = Ref.game.level.time + 1000;
+
+        ps.animation = ((ps.animation & 128) ^ 128) | Animations.DIE.ordinal();
+
+        Ref.game.AddEvent(this, Event.DIED, killer);
+
+        Ref.server.LinkEntity(shEnt);
+        Ref.game.level.physics.PlayerDie(ps);
+    }
+    
+    private void tossClientItems(boolean throwInWorld) {
         Weapon[] weaponList = ps.stats.getWeapons();
         for (Weapon w : weaponList) {
-            tossWeapon(w);
+            tossWeapon(w, throwInWorld);
         }
     }
 
-    private void tossWeapon(Weapon w) {
+    private void tossWeapon(Weapon w, boolean throwInWorld) {
         if(!ps.stats.hasWeapon(w)) return;
         if(w == Weapon.NONE) return;
-        WeaponItem wi = Ref.common.items.getWeapon(w);
-        Ref.common.items.dropItem(this, wi, 0, ps.stats.getAmmo(w));
+        int ammo = ps.stats.getAmmo(w);
         ps.stats.removeWeapon(w);
         ps.weapon = ps.stats.getWeaponNearest(w, false);
         ps.weaponState = WeaponState.RAISING;
         ps.weaponTime = Ref.common.items.getWeapon(w).getRaiseTime();
+        if(throwInWorld) {
+            WeaponItem wi = Ref.common.items.getWeapon(w);
+            Ref.common.items.dropItem(this, wi, 0, ammo);
+        }
     }
 
-    public void Die() {
-        ps.AddPredictableEvent(Event.DIED, 0);
-        ps.velocity.set(0,0,0);
-        if(!isDead())
-            ps.stats.Health = 0;
-    }
+    
 
     public boolean isDead() {
         return ps.stats.Health <= 0;
@@ -754,7 +765,7 @@ public class GameClient extends Gentity {
     public String Client_Connect(int id, boolean firsttime, boolean isBot) {
         Clear();
 
-        if(id != s.ClientNum)
+        if(id != s.number)
             Ref.common.Error(ErrorCode.DROP, "Client_Connect: YOU DERPED UP");
         
         clientIndex = id;
@@ -773,7 +784,8 @@ public class GameClient extends Gentity {
         }
 
         Ref.game.CalculateRanks();
-
+        s.contents = 0;
+        ps.moveType = MoveType.DEAD;
         return null;
     }
 
@@ -783,6 +795,7 @@ public class GameClient extends Gentity {
         // and players should never be free'd, so don't call it here.
         ////// super.Clear();
         ps.Clear();
+        forceCommands = false;
         pers = new ClientPersistant();
         lastCmdTime = 0;
         inactivityTime = 0;
@@ -795,7 +808,7 @@ public class GameClient extends Gentity {
         classname = "disconnected";
         pers.connected = ClientPersistant.ClientConnected.DISCONNECTED;
 
-        Ref.server.SetConfigString(CS.CS_PLAYERS+s.ClientNum, null);
+        Ref.server.SetConfigString(CS.CS_PLAYERS+s.number, null);
 
         Ref.game.CalculateRanks();
         Ref.game.level.physics.PlayerLeave(ps);
@@ -820,7 +833,7 @@ public class GameClient extends Gentity {
         int i = 0;
         Vector3f origin = new Vector3f(spot.s.origin);
         while(i < 10 && !spotOk) {
-            CollisionResult res = Ref.server.Trace(origin, origin, Game.PlayerMins, Game.PlayerMaxs, -1, spot.s.ClientNum);
+            CollisionResult res = Ref.server.Trace(origin, origin, Game.PlayerMins, Game.PlayerMaxs, -1, spot.s.number);
             if(res.frac == 1f && !res.startsolid) {
                 spotOk = true;
                 break;
@@ -868,7 +881,7 @@ public class GameClient extends Gentity {
         ps.eFlags |= EntityFlags.NODRAW;
         ps.velocity.set(0, 0, 0);
         ps.moveType = MoveType.NOCLIP;
-        ps.vehicle = vehicle.s.ClientNum;
+        ps.vehicle = vehicle.s.number;
         Ref.game.level.physics.PlayerDie(ps);
 
         ps.ducking = false;
@@ -884,6 +897,10 @@ public class GameClient extends Gentity {
         // todo: setParent(vehicle)
 
         return true;
+    }
+
+    public void pain(Gentity self, Gentity attacker, int dmg) {
+        ps.dmgTime += 100;
     }
 
     

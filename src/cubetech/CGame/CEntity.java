@@ -80,7 +80,7 @@ public class CEntity {
 
             // if this is a player event set the entity number of the client entity number
             if((currentState.eFlags & EntityFlags.PLAYER_EVENT) > 0)
-                currentState.ClientNum = currentState.otherEntityNum;
+                currentState.number = currentState.otherEntityNum;
 
             previousEvent = 1;
             currentState.evt = currentState.eType - EntityType.EVENTS;
@@ -95,7 +95,7 @@ public class CEntity {
 
         // calculate the position at exactly the frame time
         currentState.pos.Evaluate(Ref.cgame.cg.snap.serverTime, lerpOrigin);
-        Ref.soundMan.SetEntityPosition(currentState.ClientNum, lerpOrigin, currentState.pos.delta);
+        Ref.soundMan.SetEntityPosition(currentState.number, lerpOrigin, currentState.pos.delta);
         Event();
         //Ref.cgame.EntityEvent(this, lerpOrigin);
     }
@@ -127,7 +127,7 @@ public class CEntity {
         if(Ref.cgame.cg_smoothclients.iValue == 0)
         {
             // make sure the clients use TR_INTERPOLATE
-            if(currentState.ClientNum < 64) {
+            if(currentState.number < 64) {
                 currentState.pos.type = Trajectory.INTERPOLATE;
                 nextState.pos.type = Trajectory.INTERPOLATE;
             }
@@ -140,7 +140,7 @@ public class CEntity {
 
         // first see if we can interpolate between two snaps for
 	// linear extrapolated clients
-        if(interpolate && currentState.pos.type == Trajectory.LINEAR_STOP && currentState.ClientNum  < 64)
+        if(interpolate && currentState.pos.type == Trajectory.LINEAR_STOP && currentState.number  < 64)
         {
             InterpolateEntityPosition();
             return;
@@ -152,7 +152,7 @@ public class CEntity {
 
         // adjust for riding a mover if it wasn't rolled into the predicted
         // player state
-        if(this != Ref.cgame.cg.predictedPlayerEntity) {
+        if(this != Ref.cgame.cg.cur_lc.predictedPlayerEntity) {
             // AdjustForMover...
         }
     }
@@ -205,7 +205,7 @@ public class CEntity {
 
         switch(event) {
             case FOOTSTEP:
-                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.cgame.cgs.media.s_footStep, SoundChannel.AUTO, 0.5f);
+                Ref.soundMan.startSound(null,currentState.number, Ref.cgame.cgs.media.s_footStep, SoundChannel.AUTO, 0.5f);
                 break;
             case STEP:
                 
@@ -218,28 +218,28 @@ public class CEntity {
                     break;
                 }
                 IItem item = Ref.common.items.getItem(index);
-                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound(item.getPickupSound()), SoundChannel.ITEM, 1.0f);
+                Ref.soundMan.startSound(null,currentState.number, Ref.soundMan.AddWavSound(item.getPickupSound()), SoundChannel.ITEM, 1.0f);
                 break;
             case ITEM_RESPAWN:
-                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.cgame.cgs.media.s_itemRespawn, SoundChannel.AUTO, 1.0f);
+                Ref.soundMan.startSound(null,currentState.number, Ref.cgame.cgs.media.s_itemRespawn, SoundChannel.AUTO, 1.0f);
                 break;
             case DIED:
-                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/sounds/die.wav"), SoundChannel.AUTO, 1.0f);
+                Ref.soundMan.startSound(null,currentState.number, Ref.soundMan.AddWavSound("data/sounds/die.wav"), SoundChannel.AUTO, 1.0f);
                 break;
             case GOAL:
-                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/sounds/ouch.wav"), SoundChannel.AUTO, 1.0f);
+                Ref.soundMan.startSound(null,currentState.number, Ref.soundMan.AddWavSound("data/sounds/ouch.wav"), SoundChannel.AUTO, 1.0f);
                 break;
             case HIT_WALL:
-                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/sounds/ouch.wav"), SoundChannel.AUTO, 1.0f);
+                Ref.soundMan.startSound(null,currentState.number, Ref.soundMan.AddWavSound("data/sounds/ouch.wav"), SoundChannel.AUTO, 1.0f);
                 break;
             case JUMP:
-                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/sounds/hop.wav"), SoundChannel.AUTO, 1.0f);
+                Ref.soundMan.startSound(null,currentState.number, Ref.soundMan.AddWavSound("data/sounds/hop.wav"), SoundChannel.AUTO, 1.0f);
                 break;
             case NO_AMMO:
-                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/sounds/ammoclick.wav"), SoundChannel.AUTO, 1.0f);
+                Ref.soundMan.startSound(null,currentState.number, Ref.soundMan.AddWavSound("data/sounds/ammoclick.wav"), SoundChannel.AUTO, 1.0f);
                 break;
             case CHANGE_WEAPON:
-                Ref.soundMan.startSound(null,currentState.ClientNum, Ref.soundMan.AddWavSound("data/sounds/swosh.wav"), SoundChannel.AUTO, 1.0f);
+                Ref.soundMan.startSound(null,currentState.number, Ref.soundMan.AddWavSound("data/sounds/swosh.wav"), SoundChannel.AUTO, 1.0f);
                 break;
             case FIRE_WEAPON:
                 Ref.cgame.weapons.fireWeaponEvent(this);
@@ -271,7 +271,7 @@ public class CEntity {
     }
 
     void Effects() {
-        Ref.soundMan.SetEntityPosition(currentState.ClientNum, lerpOrigin, currentState.pos.delta);
+        Ref.soundMan.SetEntityPosition(currentState.number, lerpOrigin, currentState.pos.delta);
 
 
     }

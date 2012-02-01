@@ -13,7 +13,7 @@ public class PlayerInput {
     
     
     // not sent
-    public int[] MouseDelta = new int[2];
+    public float[] MouseDelta = new float[2];
 
     // this is transmitted
     public Vector2f MousePos = new Vector2f(0.5f,0.5f); // no need to send this one

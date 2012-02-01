@@ -150,7 +150,7 @@ public class Gentity {
     public void Init(int i) {
         inuse = true;
         classname = "noclass";
-        s.ClientNum = i;
+        s.number = i;
         r.ownernum = Common.ENTITYNUM_NONE;
     }
 

@@ -48,7 +48,7 @@ public class ParticleSystem {
 
     private static ICommand cmd_testemit = new ICommand() {
         public void RunCommand(String[] args) {
-            Vector3f origin = Ref.cgame.cg.predictedPlayerEntity.lerpOrigin;
+            Vector3f origin = Ref.cgame.cg.cur_lc.predictedPlayerEntity.lerpOrigin;
             Vector3f normal = new Vector3f(0, 0, 1);
 
             if(args.length < 2) {

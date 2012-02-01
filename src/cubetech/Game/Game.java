@@ -1,5 +1,7 @@
 package cubetech.Game;
 
+import cubetech.CGame.CEntity;
+import cubetech.CGame.PlayerEntity;
 import cubetech.Game.Bot.GBot;
 import cubetech.collision.CubeChunk;
 import cubetech.common.CS;
@@ -20,6 +22,7 @@ import cubetech.entities.SharedEntity;
 import cubetech.entities.Info_Player_Spawn;
 import cubetech.entities.Missiles;
 import cubetech.input.PlayerInput;
+import cubetech.iqm.RigidBoneMesh;
 import cubetech.misc.Ref;
 import cubetech.server.SvFlags;
 import cubetech.spatial.SectorQuery;
@@ -27,6 +30,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import nbullet.collision.shapes.CollisionShape;
 import org.lwjgl.util.vector.Vector3f;
 
 /**
@@ -58,6 +62,8 @@ public class Game {
     CVar sv_movemode;
     CVar g_killheight;
     CVar g_knockback;
+    CVar g_freeammo;
+    CVar g_spawncmd;
 
     public SpawnEntities spawnEntities;
     public Gentity[] g_entities;
@@ -73,8 +79,8 @@ public class Game {
         g_maxclients = Ref.cvars.Get("g_maxclients", "32", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.LATCH, CVarFlags.USER_INFO));
         g_editmode = Ref.cvars.Get("g_editmode", "0", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
         g_killheight = Ref.cvars.Get("g_killheight", "-3000", EnumSet.of(CVarFlags.NONE, CVarFlags.ARCHIVE));
-
-        
+        g_spawncmd = Ref.cvars.Get("g_spawncmd", "give weapon_ak47 weapon_cubar weapon_rocketlauncher", EnumSet.of(CVarFlags.ARCHIVE));
+        g_freeammo = Ref.cvars.Get("g_freeammo", "1", EnumSet.of(CVarFlags.SERVER_INFO));
         sv_movemode = Ref.cvars.Get("sv_movemode", "1", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO));
         sv_gravity = Ref.cvars.Get("sv_gravity", "800", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
         sv_jumpmsec = Ref.cvars.Get("sv_jumpmsec", "200", EnumSet.of(CVarFlags.SERVER_INFO, CVarFlags.USER_INFO, CVarFlags.ARCHIVE));
@@ -130,7 +136,7 @@ public class Game {
         for (int i= 0; i < Common.MAX_GENTITIES; i++) {
             if(i < level.maxclients) {
                 g_entities[i] = new GameClient();
-                g_entities[i].s.ClientNum = i;
+                g_entities[i].s.number = i;
                 g_clients[i] = (GameClient)g_entities[i];
             }
             else g_entities[i] = new Gentity();
@@ -156,7 +162,7 @@ public class Game {
 
     private void WorldSpawn() {
         Ref.server.SetConfigString(CS.CS_LEVEL_START_TIME, ""+level.startTime);
-        g_entities[Common.ENTITYNUM_WORLD].s.ClientNum = Common.ENTITYNUM_WORLD;
+        g_entities[Common.ENTITYNUM_WORLD].s.number = Common.ENTITYNUM_WORLD;
         g_entities[Common.ENTITYNUM_WORLD].classname = "worldspawn";
 
         Ref.server.SetConfigString(CS.CS_WARMUP, ""+0);
@@ -439,7 +445,7 @@ public class Game {
     // Adds an event+parm and twiddles the event counter
     public void AddEvent(Gentity ent, Event evt, int evtParms) {
         if(evt == Event.NONE) {
-            Common.LogDebug("Zero event added for entity " + ent.s.ClientNum);
+            Common.LogDebug("Zero event added for entity " + ent.s.number);
             return;
         }
 
@@ -467,7 +473,7 @@ public class Game {
 
         int start = 0;
         if(from != null)
-            start = from.s.ClientNum+1;
+            start = from.s.number+1;
 
         for (; start < level.num_entities; start++) {
             from = g_entities[start];
@@ -648,7 +654,7 @@ public class Game {
             if(client != null) {
                 client.ps.stats.Health -= take;
                 if(client.ps.stats.Health <= 0) {
-                    targ.die.die(targ, inflictor, attacker, take, mod);
+                    client.die(inflictor, attacker, take, mod);
                     if(attacker.isClient()) {
                         attacker.getClient().pers.score++;
                     }
@@ -666,5 +672,7 @@ public class Game {
             
         }
     }
+
+    
 
 }

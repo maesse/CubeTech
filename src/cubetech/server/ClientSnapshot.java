@@ -7,7 +7,10 @@ import cubetech.common.PlayerState;
  * @author mads
  */
 public class ClientSnapshot {
-    public PlayerState ps = new PlayerState();
+    public PlayerState[] pss;
+    public int[] lcIndex;
+    public int numPS;
+    
     public int num_entities;
     public int first_entity; // into the circular sv_packet_entities[]
                             // the entities MUST be in increasing state number
@@ -16,4 +19,12 @@ public class ClientSnapshot {
     public int messageSent; // time the message was transmitted
     public int messageAcked; // time the message was acked
     public int messageSize; // used to rate drop packets
+    
+    public ClientSnapshot() {
+        pss = new PlayerState[4];
+        lcIndex = new int[4];
+        for (int i = 0; i < 4; i++) {
+            pss[i] = new PlayerState();
+        }
+    }
 }

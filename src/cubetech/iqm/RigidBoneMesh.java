@@ -2,7 +2,9 @@ package cubetech.iqm;
 
 
 
+import cubetech.CGame.CEntity;
 import cubetech.CGame.CGPhysics;
+import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.misc.Ref;
 import java.nio.ByteBuffer;
@@ -11,7 +13,9 @@ import nbullet.PhysicsSystem;
 import nbullet.collision.shapes.BoxShape;
 import nbullet.collision.shapes.CollisionShape;
 import nbullet.collision.shapes.ConvexHullShape;
+
 import nbullet.constraints.Generic6DofConstraint;
+import nbullet.constraints.Generic6DofSpringConstraint;
 import nbullet.objects.CollisionObject;
 import nbullet.objects.RigidBody;
 import nbullet.util.DirectMotionState;
@@ -30,6 +34,8 @@ public class RigidBoneMesh {
     private Vector3f[] poseVertices; // base pose
     private Matrix4f modelToBone;
     public RigidBody rigidBody;
+    public BoneMeshInfo info;
+    private BoneMeshInfo originalInfo;
     private boolean boneToPhysics = true;
     
     private PhysicsSystem system;
@@ -37,14 +43,75 @@ public class RigidBoneMesh {
     // For dynamic bonemeshes connected to something
     private boolean connectedToParent = false;
     private RigidBoneMesh parentBoneMesh = null;
+    private Generic6DofSpringConstraint springCons;
     private Generic6DofConstraint cons;
     
-    public RigidBoneMesh(PhysicsSystem system, IQMModel model, IQMMesh mesh, IQMJoint joint) {
+    public RigidBoneMesh(PhysicsSystem system, IQMModel model, BoneMeshInfo info) {
         this.system = system;
-        this.mesh = mesh;
-        this.joint = joint;
+        this.info = info;
+        originalInfo = info.clone(null);
+        this.mesh = info.mesh;
+        this.joint = info.joint;
         this.model = model;
         generateLocalMesh();
+    }
+    
+    public void restoreInfo(CEntity cent) {
+        changeInfo(originalInfo.clone(null), cent);
+    }
+    
+    public BoneMeshInfo getOriginalInfo() {
+        return originalInfo;
+    }
+    
+    public void changeInfo(BoneMeshInfo info, CEntity cent) {
+        if(this.info.equals(info)) return;
+        BoneMeshInfo oldinfo = this.info;
+        this.info = info;
+        
+        RigidBoneMesh parentMesh = parentBoneMesh;
+        if(oldinfo.type != BoneMeshInfo.Type.RIGID && connectedToParent) {
+            // Need to remove the old constraint
+            removeConnection();
+        }
+        
+        if(info.type != BoneMeshInfo.Type.RIGID) {
+            if(parentMesh != null) {
+                // Connect to parent (again)
+                connectToParent(parentMesh);
+            } else if(cent != null) {
+                connectToParent(cent);
+            } else {
+                Common.Log("RigidBoneMesh.changeInfo: Can't build constraint for %s because ");
+            }
+        }
+    }
+    
+    private static RigidBoneMesh findParent(RigidBoneMesh src, CEntity cent) {
+        int parentid = src.getJoint().getParent();
+        if(parentid < 0) return null;
+        
+        IQMJoint[] joints = cent.pe.boneMeshModel.getJoints();
+        
+        RigidBoneMesh found = null;
+        IQMJoint currentParent = null;
+        do
+        {
+            currentParent = joints[parentid];
+
+            // Check if there's a meshbone for this joint
+            for (RigidBoneMesh mesh : cent.pe.boneMeshes) {
+                if(mesh.getJoint() == currentParent) {
+                    found = mesh;
+                    break;
+                }
+            }
+            
+            // Continue with next parent
+            if(found == null) parentid = currentParent.getParent();
+        } while(found == null && parentid >= 0);
+        
+        return found;
     }
     
     public void createRigidBody(Matrix4f modelMatrix, IQMFrame frame) {
@@ -67,7 +134,7 @@ public class RigidBoneMesh {
             system.addRigidBody(rigidBody);
         } else {
             
-            rigidBody = Ref.cgame.physics.localCreateRigidBody(10, ms, shape);
+            rigidBody = Ref.cgame.physics.localCreateRigidBody(info.mass, ms, shape);
 //            rigidBody.setAngularVelocity(new Vector3f());
 //            rigidBody.setLinearVelocity(new Vector3f());
         }
@@ -97,10 +164,40 @@ public class RigidBoneMesh {
         Transform b = new Transform();
         b.origin.set(bLocalTrans);
         
-        cons = new Generic6DofConstraint(system, bodya, bodyb, a, b, true);
-        cons.setAngularLowerLimit(new Vector3f(-PhysicsSystem.SIMD_PI * 0.3f,-PhysicsSystem.SIMD_EPSILON,-PhysicsSystem.SIMD_PI * 0.3f));
-        cons.setAngularUpperLimit(new Vector3f(PhysicsSystem.SIMD_PI  * 0.3f,PhysicsSystem.SIMD_EPSILON,PhysicsSystem.SIMD_PI * 0.3f));
-        system.addConstraint(cons, true);
+        if(info.type == BoneMeshInfo.Type.SPRING) {
+            springCons = new Generic6DofSpringConstraint(system, bodya, bodyb, a, b, true);
+            springCons.setAngularLowerLimit(new Vector3f(PhysicsSystem.SIMD_PI * info.rminx,PhysicsSystem.SIMD_PI * info.rminy,PhysicsSystem.SIMD_PI * info.rminz));
+            springCons.setAngularUpperLimit(new Vector3f(PhysicsSystem.SIMD_PI  * info.rmaxx,PhysicsSystem.SIMD_PI  * info.rmaxy,PhysicsSystem.SIMD_PI  * info.rmaxz));
+            
+            if(info.springx) {
+                springCons.enableSpring(Generic6DofSpringConstraint.SpringIndex.RX, true);
+                springCons.setStiffness(Generic6DofSpringConstraint.SpringIndex.RX, info.sforcex);
+                springCons.setDamping(Generic6DofSpringConstraint.SpringIndex.RX, info.sdampingx);
+                springCons.setEquilibriumPoint(Generic6DofSpringConstraint.SpringIndex.RX, 0f);
+            }
+            
+            if(info.springy) {
+                springCons.enableSpring(Generic6DofSpringConstraint.SpringIndex.RY, true);
+                springCons.setStiffness(Generic6DofSpringConstraint.SpringIndex.RY, info.sforcey);
+                springCons.setDamping(Generic6DofSpringConstraint.SpringIndex.RY, info.sdampingy);
+                springCons.setEquilibriumPoint(Generic6DofSpringConstraint.SpringIndex.RY, 0f);
+            }
+            
+            if(info.springz) {
+                springCons.enableSpring(Generic6DofSpringConstraint.SpringIndex.RZ, true);
+                springCons.setStiffness(Generic6DofSpringConstraint.SpringIndex.RZ, info.sforcez);
+                springCons.setDamping(Generic6DofSpringConstraint.SpringIndex.RZ, info.sdampingz);
+                springCons.setEquilibriumPoint(Generic6DofSpringConstraint.SpringIndex.RZ, 0f);
+            }
+            
+            system.addConstraint(springCons, true);
+        } else if(info.type == BoneMeshInfo.Type.FLEXIBLE) {
+            cons = new Generic6DofConstraint(system, bodya, bodyb, a, b, true);
+            cons.setAngularLowerLimit(new Vector3f(PhysicsSystem.SIMD_PI * info.rminx,PhysicsSystem.SIMD_PI * info.rminy,PhysicsSystem.SIMD_PI * info.rminz));
+            cons.setAngularUpperLimit(new Vector3f(PhysicsSystem.SIMD_PI  * info.rmaxx,PhysicsSystem.SIMD_PI  * info.rmaxy,PhysicsSystem.SIMD_PI  * info.rmaxz));
+            system.addConstraint(cons, true);
+        }
+        
         parentBoneMesh = other;
         connectedToParent = true;
         
@@ -112,9 +209,17 @@ public class RigidBoneMesh {
         parentBoneMesh = null;
         
         // Clean up constraint
-        system.removeConstraint(cons);
-        cons.destroy(true);
-        cons = null;
+        if(springCons != null) {
+            system.removeConstraint(springCons);
+            springCons.destroy(true);
+            springCons = null;
+        }
+        
+        if(cons != null) {
+            system.removeConstraint(cons);
+            cons.destroy(true);
+            cons = null;
+        }
     }
     
     public void setBoneToPhysics(boolean istrue) {
@@ -300,5 +405,14 @@ public class RigidBoneMesh {
         Matrix4f Test = Matrix4f.mul(dest, invModelToBone, null);
         
         return dest;
+    }
+
+    public void connectToParent(CEntity cent) {
+        RigidBoneMesh found = findParent(this, cent);
+        if(found != null) {
+            connectToParent(found);
+        } else if(getJoint().getIndex() != 0) {
+            Common.Log("Model missing base bone mesh");
+        }
     }
 }

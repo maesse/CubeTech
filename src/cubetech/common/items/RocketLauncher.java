@@ -117,7 +117,7 @@ public class RocketLauncher extends WeaponItem {
         r.think = Missiles.ExplodeMissile;
         r.s.eType = EntityType.MISSILE;
         r.s.weapon = getWeapon();
-        r.r.ownernum = gc.s.ClientNum;
+        r.r.ownernum = gc.s.number;
         r.parent = gc;
         r.splashDamage = 100;
         r.splashRadius = 130;

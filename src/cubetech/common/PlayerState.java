@@ -65,6 +65,7 @@ public class PlayerState {
     public int animation = 0;
     public int animTime = 0;
     public int moveDirection = 0;
+    public int dmgTime = 0;
 
     // Duck handling
     public boolean ducking;
@@ -94,6 +95,7 @@ public class PlayerState {
         vehicle = 0;
         fallVelocity = 0;
         clientNum = 0;
+        dmgTime = 0;
         commandTime = 0;
         delta_angles = new int[3];
         delta_angles[0] = -16000;
@@ -170,6 +172,7 @@ public class PlayerState {
         ps.groundEntity = groundEntity;
         ps.fallVelocity = fallVelocity;
         ps.commandTime = commandTime;
+        ps.dmgTime = dmgTime;
         ps.delta_angles[0] = delta_angles[0];
         ps.delta_angles[1] = delta_angles[1];
         ps.delta_angles[2] = delta_angles[2];
@@ -228,7 +231,7 @@ public class PlayerState {
 
         // TODO animation
         s.frame = animation;
-        s.ClientNum = clientNum;
+        s.number = clientNum;
         s.time = bobcycle;
         s.pos.base.set(origin);
         s.pos.type = Trajectory.INTERPOLATE;
@@ -244,6 +247,7 @@ public class PlayerState {
         s.Angles2.y = moveDirection;
 
         s.apos.type = Trajectory.INTERPOLATE;
+        s.contents = (stats.Health > 0 ? Content.BODY : Content.CORPSE);
         s.apos.base.set(viewangles);
         s.eFlags = eFlags;
         if(stats.Health <= 0) s.eFlags |= EntityFlags.DEAD;
@@ -275,9 +279,9 @@ public class PlayerState {
             int extEvt = externalEvent;
             externalEvent = 0;
             Gentity t = Ref.game.TempEntity(origin, evt);
-            int number = t.s.ClientNum;
+            int n = t.s.number;
             ToEntityState(t.s, false);
-            t.s.ClientNum = number;
+            t.s.number = n;
             t.s.eType = EntityType.EVENTS + evt;
             t.s.eFlags |= EntityFlags.PLAYER_EVENT;
             t.s.otherEntityNum = clientNum;
@@ -318,6 +322,7 @@ public class PlayerState {
         msg.WriteDelta(ps.moveType, moveType);
         msg.WriteDelta(ps.stepTime, stepTime);
         msg.WriteDelta(ps.jumpTime, jumpTime);
+        msg.WriteDelta(ps.dmgTime, dmgTime);
         msg.Write(applyPull);
         msg.Write(jumpDown);
         msg.Write(canDoubleJump);
@@ -372,6 +377,7 @@ public class PlayerState {
         moveType = msg.ReadDeltaInt(ps.moveType);
         stepTime = msg.ReadDeltaInt(ps.stepTime);
         jumpTime = msg.ReadDeltaInt(ps.jumpTime);
+        dmgTime = msg.ReadDeltaInt(ps.dmgTime);
         applyPull = msg.ReadBool();
         jumpDown = msg.ReadBool();
         canDoubleJump = msg.ReadBool();

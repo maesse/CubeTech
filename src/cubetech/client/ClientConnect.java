@@ -76,6 +76,8 @@ public class ClientConnect {
         Ref.commands.AddCommand("disconnect", cmd_Disconnect);
         Ref.commands.AddCommand("cmd", cmd_Cmd);
         Ref.commands.AddCommand("downloadfile",cmd_downloadfile);
+        Ref.commands.AddCommand("cl_dropin", cmd_dropinout);
+        Ref.commands.AddCommand("cl_dropout", cmd_dropinout);
     }
 
     /*
@@ -193,7 +195,7 @@ public class ClientConnect {
         AddReliableCommand("download " + file, false);
     }
 
-    // Returns true of everything was parsed Ok.
+    // Returns true if everything was parsed Ok.
     private boolean ParseDownload(NetBuffer buf) {
 //        if(clc.downloadName == null) {
 //            Common.Log("Recieving unrequested download");
@@ -310,19 +312,8 @@ public class ClientConnect {
             Common.Log(Common.getExceptionString(ex));
         }
     }
-
-    private ICommand cmd_downloadfile = new ICommand() {
-        public void RunCommand(String[] args) {
-            if(args.length > 1) {
-                downloadList.add(args[1]);
-                
-                if(downloadName == null)
-                    NextDownload();
-            }
-            else
-                Common.Log("usage: downloadfile <filename> - queues the file for retrieval");
-        }
-    };
+    
+    
     
     public String GetServerCommand(int commandNumber) {
         // if we have irretrievably lost a reliable command, drop the connection
@@ -366,79 +357,12 @@ public class ClientConnect {
         }
 
         if(tokens[0].equalsIgnoreCase("map_restart")) {
-            Ref.client.cl.cmds = new PlayerInput[64];
+            Ref.client.cl.cmds = new PlayerInput[4][64];
             return cmd;
         }
 
         return cmd;
     }
-    
-    // Console commands
-    private ICommand cmd_Connect = new ICommand() {
-        public void RunCommand(String[] args) {
-            if(args.length != 2) {
-                Common.Log("usage: connect <hostname[:ip]>");
-                return;
-            }
-
-            String server = args[1];
-            servermessage = "";
-
-            if(Ref.common.sv_running.iValue == 1 && !server.equalsIgnoreCase("localhost")) {
-                // If running a server, shut it down
-                Ref.server.Shutdown("Server quit");
-            }
-
-            // Make sure the local server is killed
-            Ref.cvars.Set2("sv_killserver", "1", true);
-            Ref.server.Frame(0);
-
-            Ref.client.Disconnect(true);
-            Ref.Console.Close();
-
-            InetSocketAddress endp = Ref.net.LookupHost(server);
-            if(endp == null || endp.getAddress() == null) {
-                Common.Log("Connect failed: Could not lookup hostname");
-                state = ConnectState.DISCONNECTED;
-                return;
-            }
-
-            if(endp.getHostName() != null) {
-                Common.Log(String.format("%s resolved to %s", endp.getHostName(), endp.getAddress().getHostAddress()));
-            }
-
-            servername = server;
-            ServerAddr = endp;
-            state = ConnectState.CONNECTING;
-            challenge = Ref.rnd.nextInt(9999999);
-            ConnectTime = -99999;
-            ConnectPacketCount = 0;
-            Ref.Input.SetKeyCatcher(Input.KEYCATCH_NONE);
-        }
-    };
-
-    // Console commands
-    private ICommand cmd_Disconnect = new ICommand() {
-        public void RunCommand(String[] args) {
-            if(state != ConnectState.DISCONNECTED)
-                Ref.common.Error(Common.ErrorCode.DISCONNECT, "Disconnected from server");
-        }
-    };
-
-    // Console commands
-    private ICommand cmd_Cmd = new ICommand() {
-        public void RunCommand(String[] args) {
-            if(state != ConnectState.ACTIVE || Ref.client.demo.isPlaying()) {
-                Common.Log("Not connected to a server.");
-                return;
-            }
-
-            // don't forward the first argument
-            if(args.length > 1) {
-                AddReliableCommand(Commands.Args(args), false);
-            }
-        }
-    };
     
     public void PacketEvent(Packet data) {
         LastPacketTime = Ref.client.realtime;
@@ -530,6 +454,7 @@ public class ClientConnect {
                         return;
                     break;
                 default:
+                    // TODO: should be drop error
                     Common.Log("Illegible server message.");
                     break;
             }
@@ -848,12 +773,6 @@ public class ClientConnect {
 //            System.out.println("Sending: " + clc.reliableCommands[i & 63]);
         }
 
-        // Ensure valid cmdbackup settings
-        if(Ref.client.cl_cmdbackup.iValue < 0)
-            Ref.client.cl_cmdbackup.set("1");
-        else if(Ref.client.cl_cmdbackup.iValue > 5)
-            Ref.client.cl_cmdbackup.set("5");
-
         // we want to send all the usercmds that were generated in the last
         // few packet, so even if a couple packets are dropped in a row,
         // all the cmds will make it to the server
@@ -867,22 +786,29 @@ public class ClientConnect {
 
         PlayerInput old = nullstate;
         if(count >= 1) {
-            // begin a client move command
-            if(!cl.snap.valid || Ref.client.demo.isAwaitingFullSnapshot()
-                    || serverMessageSequence != cl.snap.messagenum
-                    || Ref.client.cl_nodelta.iValue > 0)
-                msg.Write(CLC.OPS_MOVENODELTA);
-            else
-                msg.Write(CLC.OPS_MOVE);
+            for (int i = 0; i < 4; i++) {
+                if(i > 0 && cl.snap.valid && cl.snap.lcIndex[i] == -1) continue;
+                // begin a client move command
+                if(!cl.snap.valid || Ref.client.demo.isAwaitingFullSnapshot()
+                        || serverMessageSequence != cl.snap.messagenum
+                        || Ref.client.cl_nodelta.iValue > 0)
+                    msg.Write(CLC.OPS_MOVENODELTA);
+                else
+                    msg.Write(CLC.OPS_MOVE);
 
-            // write the command count
-            msg.WriteByte(count);
+                // Client client index
+                msg.WriteByte(i);
 
-            // write all the commands, including the predicted command
-            for (int i= 0; i < count; i++) {
-                int index = (cl.cmdNumber - count + 1 + i) & 63;
-                cl.cmds[index].WriteDeltaUserCmd(msg, old);
-                old = cl.cmds[index];
+                // write the command count
+                msg.WriteByte(count);
+
+                // write all the commands, including the predicted command
+                old = nullstate;
+                for (int j= 0; j < count; j++) {
+                    int index = (cl.cmdNumber - count + 1 + j) & 63;
+                    cl.cmds[i][index].WriteDeltaUserCmd(msg, old);
+                    old = cl.cmds[i][index];
+                }
             }
         }
 
@@ -898,5 +824,105 @@ public class ClientConnect {
         netchan.Transmit(msg);
     }
 
+    private ICommand cmd_dropinout = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(args.length < 2)  {
+                Common.Log("usage: cl_drop<in/out> <0-3>");
+                return;
+            }
+            if(state != ConnectState.ACTIVE || Ref.client.demo.isPlaying()) return;
+            // get player index
+            int player;
+            try {
+                player = Integer.parseInt(args[1]);
+                player = Helper.Clamp(player, 0, 3);
+            } catch(NumberFormatException ex) { return; }
+            
+            boolean in = args[0].toLowerCase().contains("cl_dropin");
+            String cmd = "drop" + (in ? "in" : "out") + " " + player;
+            // maybe fix: send userinfo here
+            AddReliableCommand(cmd, false);
+        }
+    };
+    
+    private ICommand cmd_downloadfile = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(args.length > 1) {
+                downloadList.add(args[1]);
+                
+                if(downloadName == null)
+                    NextDownload();
+            }
+            else
+                Common.Log("usage: downloadfile <filename> - queues the file for retrieval");
+        }
+    };
+    
+    // Console commands
+    private ICommand cmd_Connect = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(args.length != 2) {
+                Common.Log("usage: connect <hostname[:ip]>");
+                return;
+            }
+
+            String server = args[1];
+            servermessage = "";
+
+            if(Ref.common.sv_running.iValue == 1 && !server.equalsIgnoreCase("localhost")) {
+                // If running a server, shut it down
+                Ref.server.Shutdown("Server quit");
+            }
+
+            // Make sure the local server is killed
+            Ref.cvars.Set2("sv_killserver", "1", true);
+            Ref.server.Frame(0);
+
+            Ref.client.Disconnect(true);
+            Ref.Console.Close();
+
+            InetSocketAddress endp = Ref.net.LookupHost(server);
+            if(endp == null || endp.getAddress() == null) {
+                Common.Log("Connect failed: Could not lookup hostname");
+                state = ConnectState.DISCONNECTED;
+                return;
+            }
+
+            if(endp.getHostName() != null) {
+                Common.Log(String.format("%s resolved to %s", endp.getHostName(), endp.getAddress().getHostAddress()));
+            }
+
+            servername = server;
+            ServerAddr = endp;
+            state = ConnectState.CONNECTING;
+            challenge = Ref.rnd.nextInt(9999999);
+            ConnectTime = -99999;
+            ConnectPacketCount = 0;
+            Ref.Input.SetKeyCatcher(Input.KEYCATCH_NONE);
+        }
+    };
+
+    // Console commands
+    private ICommand cmd_Disconnect = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(state != ConnectState.DISCONNECTED)
+                Ref.common.Error(Common.ErrorCode.DISCONNECT, "Disconnected from server");
+        }
+    };
+
+    // Console commands
+    private ICommand cmd_Cmd = new ICommand() {
+        public void RunCommand(String[] args) {
+            if(state != ConnectState.ACTIVE || Ref.client.demo.isPlaying()) {
+                Common.Log("Not connected to a server.");
+                return;
+            }
+
+            // don't forward the first argument
+            if(args.length > 1) {
+                AddReliableCommand(Commands.Args(args), false);
+            }
+        }
+    };
     
 }

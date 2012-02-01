@@ -40,12 +40,12 @@ public class SkyBox {
         }
         // Render thyme!
         Vector4f tx = new Vector4f(0,0,1,1);
-        float radius = (int) (view.farDepth * 0.55f);
+        float radius = (int) (view.farDepth * 0.01f);
         GL11.glCullFace(GL11.GL_FRONT);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glDepthFunc(GL11.GL_ALWAYS);
+        GL11.glEnable(GL11.GL_DEPTH_TEST);
+        GL11.glDepthFunc(GL11.GL_LEQUAL);
         GL11.glDisable(GL11.GL_BLEND);
-        GL11.glDepthMask(false);
+        GL11.glDepthMask(true);
         float offset = 0.05f;
         view.Origin.z += radius*offset;
         // Top: Z+
@@ -146,9 +146,9 @@ public class SkyBox {
         }
         GL11.glEnd();
         GL11.glEnable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_DEPTH_TEST);
-        GL11.glDepthFunc(GL11.GL_LEQUAL);
-        GL11.glDepthMask(true);
+//        GL11.glEnable(GL11.GL_DEPTH_TEST);
+//        GL11.glDepthFunc(GL11.GL_LEQUAL);
+//        GL11.glDepthMask(true);
         view.Origin.z -= radius*offset;
         GL11.glCullFace(GL11.GL_BACK);
         if(Ref.glRef.deferred.isEnabled()) {

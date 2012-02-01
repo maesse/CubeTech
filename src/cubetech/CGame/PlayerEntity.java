@@ -15,4 +15,5 @@ public class PlayerEntity {
     // Physics simulated bones
     public ArrayList<RigidBoneMesh> boneMeshes;
     public IQMModel boneMeshModel;
+    public int lastcontents;
 }

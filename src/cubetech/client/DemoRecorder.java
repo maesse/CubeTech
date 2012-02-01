@@ -132,7 +132,7 @@ public class DemoRecorder {
         EntityState nullstate = new EntityState();
         for (int i= 0; i < Common.MAX_GENTITIES; i++) {
             EntityState bases = cl.cl.entityBaselines[i];
-            if(bases == null || bases.ClientNum <= 0)
+            if(bases == null || bases.number <= 0)
                 continue;
 
             nbuf.Write(SVC.OPS_BASELINE);

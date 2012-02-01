@@ -300,7 +300,7 @@ public class CGPhysics {
                             tmpTrans.transform(tmpPick);
                             
                             Point2PointConstraint p2p = new Point2PointConstraint(world, body, tmpPick);
-                            p2p.setImpulseClamp(10f);
+                            p2p.setImpulseClamp(100f);
                             p2p.setTau(0.1f);
 
                             world.addConstraint(p2p, false);
@@ -342,7 +342,7 @@ public class CGPhysics {
             Vector3f viewXY = new Vector3f(Ref.cgame.cg.refdef.ViewAxis[0]);
             viewXY.z = 0f;
             viewXY.normalise();
-            Vector3f origin = Helper.VectorMA(Ref.cgame.cg.predictedPlayerEntity.lerpOrigin, Ref.cgame.cg.predictedPlayerState.viewheight, new Vector3f(0, 0, 1), null);
+            Vector3f origin = Helper.VectorMA(Ref.cgame.cg.cur_lc.predictedPlayerEntity.lerpOrigin, Ref.cgame.cg.cur_lc.predictedPlayerState.viewheight, new Vector3f(0, 0, 1), null);
             origin = Helper.VectorMA(origin, 60, viewXY, origin);
             shootBox(origin, Ref.cgame.cg.refdef.ViewAxis[0], 20f); // shootbox scales it down
         }

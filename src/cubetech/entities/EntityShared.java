@@ -26,8 +26,7 @@ public class EntityShared {
     public Vector3f absmin = new Vector3f(); // derived from mins/maxs and origin + rotation
 
     // Used by clipMoveToEntities
-    public int contents; // CONTENTS_TRIGGER, CONTENTS_SOLID, CONTENTS_BODY, etc
-                         // a non-solid entity should set to 0
+    
     
     // when a trace call is made and passEntityNum != ENTITYNUM_NONE,
     // an ent will be excluded from testing if:
@@ -44,6 +43,9 @@ public class EntityShared {
     public Vector3f currentOrigin = new Vector3f(); // Also used for Linking
     public Vector3f maxs = new Vector3f(); // Also used for Linking
     public Vector3f mins = new Vector3f(); // Also used for Linking
+    
+    public int[] localClients = new int[] {-1,-1,-1};
+    public int owner = -1;
 
     // The corresponding Gentity will clear the shared entity, when
     // it is freed.
@@ -52,6 +54,8 @@ public class EntityShared {
         linkcount = 0;
         svFlags = EnumSet.of(SvFlags.NONE);
         singleClient = 0;
+        localClients = new int[] {-1,-1,-1};
+        owner = -1;
         mins = new Vector3f();
         maxs = new Vector3f();
         absmin = new Vector3f();

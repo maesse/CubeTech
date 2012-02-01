@@ -270,9 +270,9 @@ public class Client {
     }
 
     // CGame tells us what weapon we're using and if we should scale mouse sens (when cgame is zooming for instance)
-    public void setUserCommand(Weapon weapon, float sensitivityScale) {
-        cl.userCmd_weapon = weapon;
-        cl.userCmd_sens = sensitivityScale;
+    public void setUserCommand(Weapon weapon, float sensitivityScale, int clientNum) {
+        cl.localClients[clientNum].userCmd_weapon = weapon;
+        cl.localClients[clientNum].userCmd_sens = sensitivityScale;
     }
 
     public void FlushMemory() {
@@ -296,16 +296,15 @@ public class Client {
         
     }
 
-    public PlayerInput GetUserCommand(int cmdNum) {
-        if(cmdNum > cl.cmdNumber)
+    public PlayerInput GetUserCommand(int cmdNum, int clientNum) {
+        if(cmdNum > cl.cmdNumber) {
             Ref.common.Error(Common.ErrorCode.DROP, "GetUserCommand(): cmdnum > cl.cmdNumber");
+        }
 
         // the usercmd has been overwritten in the wrapping
         // buffer because it is too far out of date
-        if(cmdNum <= cl.cmdNumber - 64)
-            return null;
-
-        return cl.cmds[cmdNum & 63];
+        if(cmdNum <= cl.cmdNumber - 64) return null;
+        return cl.cmds[clientNum][cmdNum & 63];
     }
 
     public ServerBrowser getBrowser() {

@@ -7,6 +7,7 @@ import cubetech.common.Helper;
 import cubetech.gfx.*;
 import cubetech.misc.Ref;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
 import nbullet.util.Transform;
 import org.lwjgl.opengl.ARBUniformBufferObject;
@@ -47,7 +48,7 @@ public class IQMFrame {
     int oldframe;
     float backlerp;
     IQMAnim currentAnim = null;
-    public BoneController[] controllers = null;
+    public ArrayList<BoneController> controllers = null;
     HashMap<String, BoneAttachment> attachments = new HashMap<String, BoneAttachment>();
     
     RigidBoneMesh rigidBoneMesh;
@@ -69,16 +70,16 @@ public class IQMFrame {
         return model;
     }
     
-    private void animateBoneMeshes() {
-        boneMeshes = new HashMap<IQMMesh, Vector3f[]>();
-        for (IQMMesh mesh : model.boneMeshes.keySet()) {
-            IQMJoint joint = model.boneMeshes.get(mesh);
-            RigidBoneMesh bmesh = new RigidBoneMesh(Ref.cgame.physics.getWorld(), model, mesh, joint);
-            Vector3f[] vertices = bmesh.poseMesh(this);
-            boneMeshes.put(mesh, vertices);
-        }
-        
-    }
+//    private void animateBoneMeshes() {
+//        boneMeshes = new HashMap<IQMMesh, Vector3f[]>();
+//        for (IQMMesh mesh : model.boneMeshes.keySet()) {
+//            IQMJoint joint = model.boneMeshes.get(mesh);
+//            RigidBoneMesh bmesh = new RigidBoneMesh(Ref.cgame.physics.getWorld(), model, mesh, joint);
+//            Vector3f[] vertices = bmesh.poseMesh(this);
+//            boneMeshes.put(mesh, vertices);
+//        }
+//        
+//    }
     
     
     

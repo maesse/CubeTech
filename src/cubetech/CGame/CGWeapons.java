@@ -6,6 +6,7 @@
 package cubetech.CGame;
 
 import cubetech.common.Helper;
+import cubetech.common.PlayerState;
 import cubetech.common.items.Weapon;
 import cubetech.common.items.WeaponInfo;
 import cubetech.common.items.WeaponItem;
@@ -37,7 +38,7 @@ public class CGWeapons {
         // play a sound
         if(wi.fireSound != null && !wi.fireSound.isEmpty()) {
             SoundHandle buffer = Ref.soundMan.AddWavSound(wi.fireSound);
-            Ref.soundMan.startSound(null, ent.ClientNum, buffer, SoundChannel.WEAPON, 0.35f);
+            Ref.soundMan.startSound(null, ent.number, buffer, SoundChannel.WEAPON, 0.35f);
         }
 
         cent.muzzleFlashTime = Ref.cgame.cg.time;
@@ -88,7 +89,8 @@ public class CGWeapons {
     void bullet(Vector3f end, int sourceEntityNum, Vector3f normal, boolean flesh, int fleshEntityNum) {
         if(sourceEntityNum >= 0) {
             Vector3f start = calcMuzzlePoint(sourceEntityNum, null);
-            tracer(start, end);
+            if(start != null) tracer(start, end);
+            
         }
         if(flesh) {
             bleed(end, fleshEntityNum);
@@ -103,7 +105,7 @@ public class CGWeapons {
 
     private void bleed(Vector3f origin, int entitynum) {
         // don't show player's own blood in view
-        if(entitynum == Ref.cgame.cg.snap.ps.clientNum) return;
+        if(entitynum == Ref.cgame.cg.cur_ps.clientNum) return;
         Vector3f dir = Ref.cgame.cg_entities[entitynum].lerpOrigin;
         Vector3f.sub(origin, dir, dir);
         dir.normalise();
@@ -170,12 +172,16 @@ public class CGWeapons {
     private static Vector3f forward = new Vector3f();
     static Vector3f calcMuzzlePoint(int entitynum, Vector3f dest) {
         if(dest == null) dest = new Vector3f();
-        if(entitynum == Ref.cgame.cg.snap.ps.clientNum) {
-            dest.set(Ref.cgame.cg.snap.ps.origin);
-            dest.z += Ref.cgame.cg.snap.ps.viewheight - 8;
-            Helper.AngleVectors(Ref.cgame.cg.snap.ps.viewangles, forward, null, null);
-            Helper.VectorMA(dest, 16, forward, dest);
-            return dest;
+        for (int i = 0; i < Ref.cgame.cg.localClients.length; i++) {
+            PlayerState lcPs = Ref.cgame.cg.localClients[i].predictedPlayerState;
+            if(lcPs != null && Ref.cgame.cg.localClients[i].validPPS &&
+                    lcPs.clientNum == entitynum) {
+                dest.set(Ref.cgame.cg.cur_ps.origin);
+                dest.z += Ref.cgame.cg.cur_ps.viewheight - 8;
+                Helper.AngleVectors(Ref.cgame.cg.cur_ps.viewangles, forward, null, null);
+                Helper.VectorMA(dest, 16, forward, dest);
+                return dest;
+            }
         }
 
         CEntity cent = Ref.cgame.cg_entities[entitynum];
