@@ -1,6 +1,7 @@
 #version 130
 attribute vec3 v_position;
 attribute vec3 v_view;
+attribute vec2 v_coords;
 
 uniform float near;
 uniform float far;
@@ -24,5 +25,6 @@ void main()
     depthin = ((gl_Position.z)-near) / (far-near);
     texcoords = gl_Position.xy / gl_Position.w;
     texcoords = texcoords * 0.5 + 0.5;
+    texcoords = v_coords;
     view = v_view;
 }

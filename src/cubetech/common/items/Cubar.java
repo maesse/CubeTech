@@ -140,8 +140,12 @@ public class Cubar extends WeaponItem {
         }
         if(cube != null) {
             RenderEntity ent = Ref.render.createEntity(REType.BBOX);
+            ent.flags = RenderEntity.FLAG_NOLIGHT | RenderEntity.FLAG_NOSHADOW;
             ent.origin.set(cube.getOrigin());
             ent.oldOrigin.set(cube.getSize());
+            // from min + size to center + halfsize
+            ent.oldOrigin.scale(0.5f);
+            Vector3f.add(ent.origin, ent.oldOrigin, ent.origin);
             Ref.render.addRefEntity(ent);
         }
     }

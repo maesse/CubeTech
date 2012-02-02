@@ -35,7 +35,9 @@ public class Profiler {
         AMBIENT_PASS,
     ENDFRAME,
     SV_PACKET,
-    CL_PACKET}
+    CL_PACKET,
+    VBO_MAP,
+    RENDER_POLYBATCH}
 
     private static long[] timeTable = new long[Sec.values().length];
     private static float[] msTable = new float[Sec.values().length];

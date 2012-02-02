@@ -510,6 +510,22 @@ public class DeferredShading {
         boolean coords = shader.attributes.containsValue(Shader.INDICE_COORDS);
         boolean needsCorners = shader.attributes.containsValue(Shader.INDICE_NORMAL);
         needsCorners &= corners != null;
+        Vector2f res = Ref.glRef.GetResolution();
+        float sx = 0, sy = 0, tx = 1, ty = 1;
+        if(currentView.ViewportWidth * 2 == (int)res.x) {
+            if(currentView.ViewportX > 0) {
+                sx = 0.5f;
+            } else {
+                tx = 0.5f;
+            }
+        }
+        if(currentView.ViewportHeight * 2 == (int)res.y) {
+            if(currentView.ViewportY > 0) {
+                sy = 0.5f;
+            } else {
+                ty = 0.5f;
+            }
+        }
         
         // Texture coords are flipped on y axis
         glBegin(GL_QUADS);
@@ -517,19 +533,19 @@ public class DeferredShading {
             if(Ref.glRef.isShadersSupported()) {
                 // Fancy pants shaders
                 
-                if(coords) glVertexAttrib2f(Shader.INDICE_COORDS, 0, 0);
+                if(coords) glVertexAttrib2f(Shader.INDICE_COORDS, sx, sy);
                 if(needsCorners) glVertexAttrib3f(Shader.INDICE_NORMAL, corners[0].x, corners[0].y, corners[0].z);
                 glVertexAttrib3f(Shader.INDICE_POSITION, currentView.ViewportX, currentView.ViewportY, 0);
 
-                if(coords) glVertexAttrib2f(Shader.INDICE_COORDS, 1, 0);
+                if(coords) glVertexAttrib2f(Shader.INDICE_COORDS, tx, sy);
                 if(needsCorners) glVertexAttrib3f(Shader.INDICE_NORMAL, corners[1].x, corners[1].y, corners[1].z);
                 glVertexAttrib3f(Shader.INDICE_POSITION, currentView.ViewportX + currentView.ViewportWidth, currentView.ViewportY, 0);
 
-                if(coords) glVertexAttrib2f(Shader.INDICE_COORDS, 1, 1);
+                if(coords) glVertexAttrib2f(Shader.INDICE_COORDS, tx, ty);
                 if(needsCorners) glVertexAttrib3f(Shader.INDICE_NORMAL, corners[2].x, corners[2].y, corners[2].z);
                 glVertexAttrib3f(Shader.INDICE_POSITION, currentView.ViewportX + currentView.ViewportWidth, currentView.ViewportY + currentView.ViewportHeight, 0);
 
-                if(coords) glVertexAttrib2f(Shader.INDICE_COORDS, 0, 1);
+                if(coords) glVertexAttrib2f(Shader.INDICE_COORDS, sx, ty);
                 if(needsCorners) glVertexAttrib3f(Shader.INDICE_NORMAL, corners[3].x, corners[3].y, corners[3].z);
                 glVertexAttrib3f(Shader.INDICE_POSITION, currentView.ViewportX, currentView.ViewportY + currentView.ViewportHeight, 0);
             }

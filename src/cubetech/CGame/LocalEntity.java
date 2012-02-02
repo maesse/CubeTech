@@ -238,6 +238,7 @@ public class LocalEntity {
 
         le.rEntity = new RenderEntity(REType.BEAM);
         RenderEntity re = le.rEntity;
+        le.rEntity.flags = RenderEntity.FLAG_NOLIGHT | RenderEntity.FLAG_NOSHADOW;
         le.radius = re.radius = radius;
         re.origin.set(origin);
         re.oldOrigin.set(origin);

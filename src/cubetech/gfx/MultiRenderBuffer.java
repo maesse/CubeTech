@@ -144,10 +144,10 @@ public class MultiRenderBuffer {
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbHandle);
         // save viewport so it can be restored
 	glPushAttrib(GL_VIEWPORT_BIT);
-        glViewport(0,0,info.width, info.height);
+        glViewport(view.ViewportX,view.ViewportY,view.ViewportWidth, view.ViewportHeight);
 
 	// Clear the render targets
-        if(!depthOnly) {
+        if(!depthOnly && view.ViewportX == 0) {
             glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
             glClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
         }

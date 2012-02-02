@@ -20,6 +20,7 @@ public class VBO {
     private Usage usage;
     private ByteBuffer mappedBuffer = null; // currently mapped buffer
     public int stride; // not strict in any sense, but helpful to keep it here
+    public StrideInfo strideInfo;
     
     public float resizeMultiplier = 1f; // multiplier for resize when mapping
     public enum BufferTarget {
@@ -75,9 +76,6 @@ public class VBO {
             Ref.common.Error(ErrorCode.FATAL, "VBO.map(): Buffer is already mapped.");
         }
 
-        // Bind
-        bind();
-
         // Resize to fit
         if(bytes > sizeInBytes) {
             // create a new VBO
@@ -85,6 +83,9 @@ public class VBO {
             if(resizeMultiplier >= 1f) sizeInBytes = (int) (bytes * resizeMultiplier);
             TotalBytes += sizeInBytes;
             resize(sizeInBytes);
+        } else {
+            // Bind
+            bind();
         }
 
         // Check if we have a cached buffer

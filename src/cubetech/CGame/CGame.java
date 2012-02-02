@@ -175,6 +175,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         SecTag s2 = Profiler.EnterSection(Sec.PHYSICS);
         physics.stepPhysics();
         s2.ExitSection();
+        marks.updateMarks();
         
         cg.nViewports = 0;
         boolean[] renderClientViewport = new boolean[4];
@@ -452,7 +453,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         ViewParams.SliceType slice = ViewParams.SliceType.NONE;
         switch(cg.nViewports) {
             case 2:
-                slice = ViewParams.SliceType.VERTICAL;
+                slice = ViewParams.SliceType.HORIZONAL;
                 break;
             case 4:
                 slice = ViewParams.SliceType.BOTH;

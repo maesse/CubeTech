@@ -6,6 +6,7 @@ import cubetech.misc.Ref;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL20;
+import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector4f;
 
 /**
@@ -38,6 +39,14 @@ public class SkyBox {
         if(Ref.glRef.deferred.isEnabled()) {
             Ref.glRef.deferred.setTextures(shader, false, false, true);
         }
+        Vector2f res = Ref.glRef.GetResolution();
+        float ofsx = view.ViewportX / res.x;
+        float ofsy = view.ViewportY / res.y;
+        float scalex = view.ViewportWidth / res.x;
+        float scaley = view.ViewportHeight / res.y;
+        
+        Vector4f depthScale = new Vector4f(ofsx,ofsy,scalex,scaley);
+        shader.setUniform("depthOffset", depthScale);
         // Render thyme!
         Vector4f tx = new Vector4f(0,0,1,1);
         float radius = (int) (view.farDepth * 0.01f);
@@ -45,7 +54,7 @@ public class SkyBox {
         GL11.glEnable(GL11.GL_DEPTH_TEST);
         GL11.glDepthFunc(GL11.GL_LEQUAL);
         GL11.glDisable(GL11.GL_BLEND);
-        GL11.glDepthMask(true);
+        GL11.glDepthMask(false);
         float offset = 0.05f;
         view.Origin.z += radius*offset;
         // Top: Z+
@@ -63,9 +72,6 @@ public class SkyBox {
             GL11.glVertex3f(view.Origin.x - radius,view.Origin.y + radius,view.Origin.z + radius);
         }
         GL11.glEnd();
-
-        
-        
 
         // Bottom: Z-
         dn.Bind();
@@ -146,9 +152,7 @@ public class SkyBox {
         }
         GL11.glEnd();
         GL11.glEnable(GL11.GL_BLEND);
-//        GL11.glEnable(GL11.GL_DEPTH_TEST);
-//        GL11.glDepthFunc(GL11.GL_LEQUAL);
-//        GL11.glDepthMask(true);
+        GL11.glDepthMask(true);
         view.Origin.z -= radius*offset;
         GL11.glCullFace(GL11.GL_BACK);
         if(Ref.glRef.deferred.isEnabled()) {

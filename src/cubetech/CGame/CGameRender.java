@@ -2,57 +2,28 @@ package cubetech.CGame;
 
 import com.bulletphysics.BulletStats;
 import cubetech.collision.ClientCubeMap;
-import cubetech.common.Score;
-import cubetech.Game.Game;
 import cubetech.Game.Gentity;
 import cubetech.Game.GentityFilter;
-import cubetech.Game.PhysicsSystem;
 import cubetech.collision.CubeChunk;
-import cubetech.collision.SingleCube;
 import cubetech.common.*;
 import cubetech.common.items.*;
 import cubetech.entities.EntityFlags;
 import cubetech.entities.EntityState;
 import cubetech.entities.EntityType;
 import cubetech.entities.Vehicle;
-import cubetech.entities.Vehicle.VehicleControls;
-import cubetech.entities.Vehicle.VehicleState;
-import cubetech.gfx.CubeMaterial;
-import cubetech.gfx.CubeTexture;
-import cubetech.gfx.PolyVert;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
-import cubetech.gfx.VBO;
 import cubetech.gfx.VBOPool;
-import cubetech.iqm.BoneAttachment;
-import cubetech.iqm.BoneController;
-import cubetech.iqm.BoneMeshInfo;
-import cubetech.iqm.IQMAnim;
-import cubetech.iqm.IQMFrame;
-import cubetech.iqm.IQMJoint;
-import cubetech.iqm.IQMMesh;
 import cubetech.iqm.IQMModel;
-import cubetech.iqm.RigidBoneMesh;
 import cubetech.misc.Profiler;
 import cubetech.misc.Ref;
 import cubetech.snd.SoundHandle;
-import java.nio.FloatBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Locale;
-import nbullet.collision.shapes.BoxShape;
-import nbullet.collision.shapes.CollisionShape;
-import nbullet.objects.CollisionObject;
-import nbullet.objects.RigidBody;
-import nbullet.util.DirectMotionState;
-import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.Color;
-import org.lwjgl.util.vector.Matrix3f;
-import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
-import org.lwjgl.util.vector.Vector4f;
 
 /**
  *
@@ -200,54 +171,49 @@ public class CGameRender {
     }
     
     private void drawDamage(Vector2f offset, Vector2f res) {
-        float dmg = game.cg.cur_lc.predictedPlayerState.dmgTime / 100f;
+        float dmg = game.cg.cur_lc.predictedPlayerState.dmgTime / 200f;
         dmg = Helper.Clamp(dmg, 0, 1);
         Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
         
-        spr.Set(offset.x, res.y-offset.y, res.x, res.y, null);
+        spr.Set(offset.x, offset.y, res.x, res.y, null);
         spr.SetColor(255, 0, 0, (int)(255*dmg));
     }
     
-    private void calcPlayerMinMax(Vector2f offset, Vector2f res) {
-        // local min/max pixels
-        float divx = 1f;
-        float divy = 1f;
-        if(game.cg.nViewports == 2) divx = 0.5f;
-        else if(game.cg.nViewports >= 3) {
-            divx = 0.5f;
-            divy = 0.5f;
-        }
-        
-        res.set(Ref.glRef.GetResolution());
-        res.x *= divx;
-        res.y *= divy;
-        int ofsx = game.cg.cur_viewport & 1;
-        int ofsy = (game.cg.cur_viewport / 2);
-        offset.set(ofsx * res.x, ofsy * res.y);
+    private void getPlayerMinMax(Vector2f offset, Vector2f res) {
+        offset.set(game.cg.refdef.ViewportX, game.cg.refdef.ViewportY);
+        res.set(game.cg.refdef.ViewportWidth, game.cg.refdef.ViewportHeight);
     }
     
     private void drawPlayerHUD() {
         Vector2f offset = new Vector2f(), res = new Vector2f();
-        calcPlayerMinMax(offset, res);
-        drawCrosshair(offset, res);
+        getPlayerMinMax(offset, res);
+        
+        
         drawDamage(offset, res);
         
         // Death info
         if(game.cg.cur_lc.predictedPlayerState.stats.Health <= 0) {
-            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y /2f  - Ref.textMan.GetCharHeight()*2), "^5You are dead", Align.CENTER, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y/2f  - Ref.textMan.GetCharHeight()), "Click mouse to spawn", Align.CENTER, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x / 2f, Ref.glRef.GetResolution().y/2f), "ESC for menu", Align.CENTER, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(offset.x + res.x / 2f, Ref.glRef.GetResolution().y - (offset.y + res.y /2f  + Ref.textMan.GetCharHeight()*2)), "^5You are dead", Align.CENTER, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(offset.x + res.x / 2f, Ref.glRef.GetResolution().y - (offset.y + res.y/2f  + Ref.textMan.GetCharHeight())), "Shoot to spawn", Align.CENTER, Type.HUD);
+            Ref.textMan.AddText(new Vector2f(offset.x + res.x / 2f, Ref.glRef.GetResolution().y - (offset.y + res.y/2f)), "ESC for menu", Align.CENTER, Type.HUD);
+        } else {
+            float textScale = 2f;
+            if(game.cg.nViewports > 2) textScale = 1.25f;
+            drawCrosshair(offset, res);
+            // Health
+            PlayerState ps = game.cg.cur_ps;
+            Ref.textMan.AddText(new Vector2f(offset.x, Ref.glRef.GetResolution().y - (offset.y + Ref.textMan.GetCharHeight()*textScale)), "HP: " + ps.stats.Health, Align.LEFT, Type.HUD,textScale);
+            // Ammo
+            if(ps.weapon != Weapon.NONE) {
+                Ref.textMan.AddText(new Vector2f(offset.x + res.x, Ref.glRef.GetResolution().y - (offset.y + Ref.textMan.GetCharHeight()*textScale)), "Ammo: " + ps.stats.getAmmo(ps.weapon), Align.RIGHT, Type.HUD,textScale);
+                String col = "";
+                if(ps.weaponState == WeaponState.FIRING) col = "^5";
+                if(ps.weaponState == WeaponState.RAISING || ps.weaponState == WeaponState.DROPPING) col = "^2";
+                Ref.textMan.AddText(new Vector2f(offset.x + res.x/2f, Ref.glRef.GetResolution().y - (offset.y + Ref.textMan.GetCharHeight()*1)), col+ps.weapon , Align.CENTER, Type.HUD);
+            }
         }
         
-        // Health
-        PlayerState ps = game.cg.cur_ps;
-        Ref.textMan.AddText(new Vector2f(offset.x, offset.y + res.y - Ref.textMan.GetCharHeight()*2), "HP: " + ps.stats.Health, Align.LEFT, Type.HUD,2f);
-        // Ammo
-        if(ps.weapon != Weapon.NONE) {
-            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*2), "Ammo: " + ps.stats.getAmmo(ps.weapon), Align.RIGHT, Type.HUD,2f);
-            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x/2f, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*2), ""+ps.weapon , Align.CENTER, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x/2f, Ref.glRef.GetResolution().y - Ref.textMan.GetCharHeight()*1), "(" + ps.weaponState + ")", Align.CENTER, Type.HUD);
-        }
+        
     }
     
     //
@@ -260,7 +226,7 @@ public class CGameRender {
         DrawChat();
         game.lag.Draw();
 
-        if(Ref.common.isDeveloper()) {
+        if(Ref.common.isDeveloper() && game.cg.nViewports <= 1) {
             Ref.textMan.AddText(new Vector2f(0, 0),
                     "Position: " + game.cg.refdef.Origin, Align.LEFT, Type.HUD);
             Ref.textMan.AddText(new Vector2f(0, Ref.textMan.GetCharHeight()),

@@ -178,8 +178,13 @@ public class ChunkRender {
         buffer.put(src);
 
         vbo.unmap();
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_POSITION, 3, GL11.GL_FLOAT, false, 32, 0);
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COLOR, 4, GL11.GL_UNSIGNED_BYTE, true, 32, 3*4);
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_COORDS, 2, GL11.GL_FLOAT, false, 32, 4*4);
+        ARBVertexShader.glVertexAttribPointerARB(Shader.INDICE_NORMAL, 2, GL11.GL_FLOAT, false, 32, 6*4);
+        vbo.unbind();
         vbo_nFaces = sidesRendered;
-
+        
         long endTime = System.nanoTime();
         float ms = (endTime - startTime)/(1000F*1000F);
         float ms2 = (endTime - startTime2)/(1000F*1000F);

@@ -900,7 +900,7 @@ public class GameClient extends Gentity implements IDieMethod, IPainMethod {
     }
 
     public void pain(Gentity self, Gentity attacker, int dmg) {
-        ps.dmgTime += 100;
+        ps.dmgTime += 200;
     }
 
     

@@ -8,14 +8,24 @@ import cubetech.common.CVarFlags;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Helper;
+import cubetech.gfx.AbstractBatchRender;
+import cubetech.gfx.CubeMaterial;
 import cubetech.gfx.CubeMaterial.BlendMode;
 import cubetech.gfx.CubeTexture;
+import cubetech.gfx.GLState;
+import cubetech.gfx.IBatchCall;
 import cubetech.gfx.PolyVert;
+import cubetech.gfx.Shader;
+import cubetech.gfx.StrideInfo;
+import cubetech.gfx.VBO;
 import cubetech.misc.Ref;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Queue;
+import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.vector.Vector3f;
 
 /**
@@ -28,62 +38,80 @@ public class Marks {
     private static final int MAX_VERTS_ON_POLY = 64;
 
     CVar cg_marks = Ref.cvars.Get("cg_marks", "1000", EnumSet.of(CVarFlags.ARCHIVE));
-
-
     private int[] fragmentData = new int[MAX_MARK_FRAGMENTS*2];
     private Vector3f[] pointData = new Vector3f[MAX_MARK_POINTS];
+    
+    // batched rendering
+    private VBO vbo = null;
+    private ArrayList<IBatchCall> calls = new ArrayList<IBatchCall>();
 
     private Queue<MarkPoly> activeMarks = new LinkedList<MarkPoly>();
     private Queue<MarkPoly> freeMarks = new LinkedList<MarkPoly>();
-
-    private class MarkPoly {
-        public int time;
-        public CubeTexture texture;
-        public PolyVert[] verts = new PolyVert[10];
-        public int numVerts;
-        public RenderEntity ent = new RenderEntity(REType.POLY);
-
-        public void clear() {
-            time = 0;
-            texture = null;
-            numVerts = 0;
-        }
-
-        private void set(CubeTexture mat, int numPoints, PolyVert[] verts) {
-            time = Ref.cgame.cg.time;
-            texture = mat;
-            numVerts = numPoints;
-            System.arraycopy(verts, 0, this.verts, 0, numPoints);
-
-            // set renderentity
-            ent.verts = verts;
-            ent.frame = numVerts;
-            ent.mat = texture.asMaterial();
-            ent.flags = RenderEntity.FLAG_NOSHADOW | RenderEntity.FLAG_NOLIGHT;
-        }
-    }
-
     
-
-    private class MarkRun {
-        public Vector3f[] inPoints;
-        public Vector3f projection;
-        public Vector3f mins, maxs;
-
-
-        public int maxPoints;
-        public Vector3f[] pointBuffer;
-
-        public int maxFragments;
-        public int[] fragmentBuffer;
-
-        public int returnedVerts;
-        public int returnedFragments;
-    }
+    int vboSize = MAX_VERTS_ON_POLY * cg_marks.iValue * 36;
 
     public Marks() {
+        
     }
-
+    
+    // vertex setup
+    // position (3 * 4 bytes)
+    // normal (3 * 4 bytes)
+    // uv coords (2 * 4 bytes)
+    // color (4 bytes)
+    // total: 36 bytes pr. vertex
+    
+    private void updateVBO() {
+        if(cg_marks.iValue <= 0) return;
+        
+        if(vbo == null) {
+            vbo = new VBO(vboSize, VBO.BufferTarget.Vertex, VBO.Usage.DYNAMIC);
+            StrideInfo info = new StrideInfo(36);
+            info.addItem(Shader.INDICE_POSITION, 3, GL11.GL_FLOAT, false, 0);
+            info.addItem(Shader.INDICE_NORMAL, 3, GL11.GL_FLOAT, false, 12);
+            info.addItem(Shader.INDICE_COORDS, 2, GL11.GL_FLOAT, false, 24);
+            info.addItem(Shader.INDICE_COLOR, 4, GL11.GL_UNSIGNED_BYTE, true, 32);
+            vbo.strideInfo = info;
+        }
+        
+        vbo.discard();
+        ByteBuffer mappedVBO = vbo.map(vboSize);
+        calls.clear();
+        RenderCall call = null;
+        for (MarkPoly markPoly : activeMarks) {
+            markPoly.write(mappedVBO);
+            
+            if(call == null) {
+                call = new RenderCall(markPoly, 0);
+            } else if(!call.addToCall(markPoly)) {
+                calls.add(call);
+                int endOffset = call.vertexOffset + call.vertexCount;
+                call = new RenderCall(markPoly, endOffset);
+            }
+        }
+        if(call != null) calls.add(call);
+        
+        vbo.unmap();
+        vbo.unbind();
+    }
+    
+    public void renderBatched() {
+        if(calls.isEmpty()) return;
+        BatchedRender batches = new BatchedRender();
+        batches.vbo = vbo;
+        batches.calls = calls;
+        
+        RenderEntity ent = Ref.render.createEntity(REType.POLYBATCH);
+        ent.renderObject = batches;
+        ent.flags = RenderEntity.FLAG_NOLIGHT | RenderEntity.FLAG_NOSHADOW;
+        Ref.render.addRefEntity(ent);
+        
+    }
+    
+    public void updateMarks() {
+        updateVBO();
+    }
+    
     public void addMarks() {
         if(cg_marks.modified){
             // Change max decal count
@@ -94,6 +122,8 @@ public class Marks {
                 freeMarks.add(new MarkPoly());
             }
         }
+        
+        renderBatched();
 
         Iterator<MarkPoly> it = activeMarks.iterator();
         while(it.hasNext()) {
@@ -106,7 +136,7 @@ public class Marks {
                 // move on
                 continue;
             }
-            Ref.render.addRefEntity(markPoly.ent);
+            //Ref.render.addRefEntity(markPoly.ent);
         }
     }
 
@@ -327,8 +357,6 @@ public class Marks {
             return 0;
         }
 
-        
-
         int[] counts = new int[3];
         for (int i= 0; i < numInPoints; i++) {
             float dot = Vector3f.dot(inPoints[i], normal);
@@ -475,5 +503,146 @@ public class Marks {
         ChunkAreaQuery q = CubeMap.getCubesInVolume(mins, maxs, Ref.cgame.map.chunks, false);
         return q;
         
+    }
+    
+    private class MarkPoly {
+        public int time;
+        public CubeTexture texture;
+        public PolyVert[] verts = new PolyVert[10];
+        public int numVerts;
+        public RenderEntity ent = new RenderEntity(REType.POLY);
+
+        public void clear() {
+            time = 0;
+            texture = null;
+            numVerts = 0;
+        }
+
+        private void set(CubeTexture mat, int numPoints, PolyVert[] verts) {
+            time = Ref.cgame.cg.time;
+            texture = mat;
+            numVerts = numPoints;
+            this.verts = verts;
+            //System.arraycopy(verts, 0, this.verts, 0, numPoints);
+
+            // set renderentity
+            ent.verts = verts;
+            ent.frame = numVerts;
+            ent.mat = texture.asMaterial();
+            ent.flags = RenderEntity.FLAG_NOSHADOW | RenderEntity.FLAG_NOLIGHT;
+        }
+
+         // vertex setup
+        // position (3 * 4 bytes)
+        // normal (3 * 4 bytes)
+        // uv coords (2 * 4 bytes)
+        // color (4 bytes)
+        // total: 36 bytes pr. vertex
+
+        private void write(ByteBuffer mappedVBO) {
+            for (int i = 0; i < numVerts; i++) {
+                PolyVert v = verts[i];
+                mappedVBO.putFloat(v.xyz.x);
+                mappedVBO.putFloat(v.xyz.y);
+                mappedVBO.putFloat(v.xyz.z);
+                if(v.normal != null) {
+                    mappedVBO.putFloat(v.normal.x);
+                    mappedVBO.putFloat(v.normal.y);
+                    mappedVBO.putFloat(v.normal.z);
+                } else {
+                    mappedVBO.putFloat(0f);
+                    mappedVBO.putFloat(0f);
+                    mappedVBO.putFloat(0f);
+                }
+                mappedVBO.putFloat(v.s);
+                mappedVBO.putFloat(v.t);
+                // black color
+                mappedVBO.put((byte)255);
+                mappedVBO.put((byte)255);
+                mappedVBO.put((byte)255);
+                mappedVBO.put((byte)255);
+            }
+        }
+    }
+
+    
+
+    private class MarkRun {
+        public Vector3f[] inPoints;
+        public Vector3f projection;
+        public Vector3f mins, maxs;
+
+
+        public int maxPoints;
+        public Vector3f[] pointBuffer;
+
+        public int maxFragments;
+        public int[] fragmentBuffer;
+
+        public int returnedVerts;
+        public int returnedFragments;
+    }
+    
+    public static class BatchedRender extends AbstractBatchRender {
+        @Override
+        public void setState(ViewParams view) {
+            // Setup shader
+            Shader shader = Ref.glRef.getShader("Poly");
+            Ref.glRef.PushShader(shader);
+            shader.setUniform("ModelView", view.viewMatrix);
+            shader.setUniform("Projection", view.ProjectionMatrix);
+
+            // Setup opengl state
+            GL11.glEnable(GL11.GL_BLEND);
+            GLState.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+            GL11.glPolygonOffset(-1f, 0);
+            GL11.glDepthMask(false);
+            GL11.glDepthFunc(GL11.GL_LEQUAL);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glCullFace(GL11.GL_BACK);
+        }
+
+        @Override
+        public void unsetState() {
+            // reset state
+            GL11.glDepthMask(true);
+            GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
+
+            // pop shader
+            Ref.glRef.PopShader();
+        }
+        
+    }
+    
+    public static class RenderCall implements IBatchCall {
+        CubeMaterial mat = null;
+        int flags;
+        int vertexCount;
+        int vertexOffset;
+        RenderCall(MarkPoly v, int startOffset) {
+            this.vertexCount = v.numVerts;
+            this.mat = v.ent.mat;
+            this.flags = v.ent.flags;
+            vertexOffset = startOffset;
+        }
+        
+        boolean addToCall(MarkPoly v) {
+            if(v.ent.mat != mat || v.ent.flags != flags) return false;
+            vertexCount += v.numVerts;
+            return true;
+        }
+
+        public CubeMaterial getMaterial() {
+            return mat;
+        }
+
+        public int getVertexOffset() {
+            return vertexOffset;
+        }
+
+        public int getVertexCount() {
+            return vertexCount;
+        }
     }
 }

@@ -50,10 +50,12 @@ public class ClientRender {
     private void BeginFrame() {
        GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
        Ref.SpriteMan.Reset();
+       Ref.render.newFrame();
     }
     
     private void renderView(final ViewParams view) {
         view.apply();
+//        GL11.glViewport(0, 0, 1280, 800);
         if(Ref.glRef.shadowMan.isEnabled() && !Ref.glRef.deferred.isEnabled() && 
                 view != null && view.lights.size() > 0) {
             Ref.glRef.shadowMan.renderShadowsForLight(view.lights.get(0), view, new IRenderCallback() {

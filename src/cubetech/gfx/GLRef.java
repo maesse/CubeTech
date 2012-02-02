@@ -769,6 +769,7 @@ public class GLRef {
             builder = new ShaderBuilder("Poly");
             builder.setAttribute("vposition", Shader.INDICE_POSITION);
             builder.setAttribute("vcoords", Shader.INDICE_COORDS);
+            builder.setAttribute("vcolor", Shader.INDICE_COLOR);
             builder.mapTextureUniform("tex", 0);
             builder.createShader();
 
@@ -858,6 +859,7 @@ public class GLRef {
             
             builder = new ShaderBuilder("DeferredAmbientCube");
             builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
             builder.mapTextureUniform("tex0", 0);
             builder.mapTextureUniform("tex2", 2);
             builder.mapTextureUniform("envmap", 3);

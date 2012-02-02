@@ -61,7 +61,6 @@ public class CGWeapons {
                 // explosion yay!
                 float radius = 130;
                 RingEmitter.spawn(radius, origin);
-                
                 SparkEmitter.spawn(radius, origin);
                 TrailEmitter.spawn(origin, radius);
                 FireEmitter.create(20, radius*0.5f, origin);

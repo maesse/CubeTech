@@ -393,7 +393,7 @@ public class ClientActive {
             newsnap.numPS = buf.ReadByte();
             for (int i = 0; i < 4; i++) {
                 newsnap.lcIndex[i] = buf.ReadByte();
-                if(newsnap.lcIndex[i] != -1) newsnap.pss[i] = new PlayerState();
+                if(newsnap.lcIndex[i] != -1) newsnap.pss[newsnap.lcIndex[i]] = new PlayerState();
             }
         } else {
             newsnap.numPS = 1;

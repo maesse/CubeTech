@@ -6,29 +6,18 @@ import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Helper;
-import cubetech.gfx.CubeMaterial;
-import cubetech.gfx.CubeTexture;
-import cubetech.gfx.GLRef;
-import cubetech.gfx.GLState;
-import cubetech.gfx.RenderList;
-import cubetech.gfx.Shader;
-import cubetech.gfx.ShadowManager;
-import cubetech.gfx.SkyBox;
-import cubetech.iqm.BoneController;
+import cubetech.gfx.*;
+import cubetech.gfx.PolyBatcher.PolyBatch;
 import cubetech.misc.Profiler;
 import cubetech.misc.Profiler.Sec;
 import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumSet;
-import java.util.LinkedList;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
-import org.lwjgl.util.vector.Matrix4f;
-import org.lwjgl.util.vector.Vector2f;
-import org.lwjgl.util.vector.Vector3f;
-import org.lwjgl.util.vector.Vector4f;
+import org.lwjgl.util.vector.*;
 
 /**
  *
@@ -40,22 +29,26 @@ public class Render {
     private static final int MAX_RENDER_ENTITIES = 1000;
     private RenderEntity[] entities = new RenderEntity[MAX_RENDER_ENTITIES];
     private int next = 0;
-    private ArrayList<RenderEntity> renderList = new ArrayList<RenderEntity>();
-    private ArrayList<ViewParams> viewList = new ArrayList<ViewParams>();
-
-    Shader softSprite = null;
+    
     CVar r_gpuskin = Ref.cvars.Get("r_gpuskin", "1", EnumSet.of(CVarFlags.NONE));
     public CVar r_nocull = Ref.cvars.Get("r_nocull", "0", EnumSet.of(CVarFlags.TEMP));
+    public CVar r_batchsprites = Ref.cvars.Get("r_batchsprites", "1", EnumSet.of(CVarFlags.TEMP));
+    
+    private ArrayList<RenderEntity> renderList = new ArrayList<RenderEntity>();
+    private ArrayList<ViewParams> viewList = new ArrayList<ViewParams>();
     public ViewParams view = null;
     private int currentRenderFlags = 0;
+    
+    private PolyBatcher polyBatcher = new PolyBatcher();
 
     public Render() {
         for (int i= 0; i < MAX_RENDER_ENTITIES; i++) {
             entities[i] = new RenderEntity(REType.NONE);
         }
-//        if(Ref.glRef.srgbBuffer != null && softSprite == null) {
-//            softSprite = Ref.glRef.getShader("softsprite");
-//        }
+    }
+    
+    public void newFrame() {
+        polyBatcher.reset();
     }
     
     /**
@@ -78,6 +71,16 @@ public class Render {
         
         boolean shadowPass = (renderFlags & RF_SHADOWPASS) != 0;
         boolean postDeferred = (renderFlags & RF_POSTDEFERRED) != 0;
+        
+        
+        
+        if(postDeferred && !shadowPass && r_batchsprites.isTrue()) {
+            sub = Profiler.EnterSection(Sec.RENDER_POLYBATCH);
+            polyBatcher.beginList();
+            sub.ExitSection();
+        }
+        
+        
         
         for (RenderEntity re : view.renderList.list) {
             if(shadowPass) {
@@ -123,11 +126,33 @@ public class Render {
                     renderPoly(re, shadowPass);
                     sub.ExitSection();
                     break;
+                case POLYBATCH:
+                    sub = Profiler.EnterSection(Sec.RENDER_POLYBATCH);
+                    renderPolyBatch(re);
+                    sub.ExitSection();
+                    break;
                 default:
                     Ref.common.Error(ErrorCode.FATAL, "Render.renderAll(): unknown type " + re.Type);
                     break;
             }
             
+        }
+        
+        if(postDeferred && !shadowPass && r_batchsprites.isTrue()) {
+            sub = Profiler.EnterSection(Sec.RENDER_POLYBATCH);
+            PolyBatch b = polyBatcher.finishList();
+            if(b != null) {
+                // hot-wire a renderentity
+                
+                RenderEntity rent = new RenderEntity(REType.POLYBATCH);
+                rent.renderObject = b;
+                
+                // render batch
+                
+                renderPolyBatch(rent);
+                
+            }
+            sub.ExitSection();
         }
         
         t.ExitSection();
@@ -138,6 +163,41 @@ public class Render {
     private void renderWorld(RenderEntity ent) {
         CubeChunk[] chunkList = (CubeChunk[]) ent.renderObject;
         ClientCubeMap.renderChunkList(chunkList, view);
+    }
+    
+    private void renderPolyBatch(RenderEntity re) {
+        // get render batches
+        if(!(re.renderObject instanceof AbstractBatchRender)) return;
+        AbstractBatchRender calls = (AbstractBatchRender)re.renderObject;
+        
+        calls.setState(view);
+        
+        // setup vbo
+        calls.vbo.bind();
+        calls.vbo.strideInfo.enableAtribs();
+        calls.vbo.strideInfo.applyInfo();
+        
+        
+        // bind default materials
+        Ref.ResMan.getNoNormalTexture().Bind();
+        Ref.ResMan.getNoSpecularTexture().Bind();
+        
+        // Submit rendercalls
+        for (int i = 0; i < calls.calls.size(); i++) {
+            IBatchCall call = calls.calls.get(i);
+            
+            // change texture
+            call.getMaterial().getTexture().Bind();
+            
+            // render vertices
+            GL11.glDrawArrays(GL11.GL_QUADS, call.getVertexOffset(), call.getVertexCount());
+        }
+        
+        // unbind vbo
+        calls.vbo.strideInfo.disableAttribs();
+        calls.vbo.unbind();
+        
+        calls.unsetState();
     }
 
     public void renderPoly(RenderEntity ent, boolean shadowpass) {
@@ -240,7 +300,7 @@ public class Render {
         float len = Vector3f.sub(end, start, null).length();
 
         // compute side vector
-        Vector3f renderOrg = Ref.cgame.cg.refdef.Origin;
+        Vector3f renderOrg = view.Origin;
         Vector3f v1 = Vector3f.sub(start, renderOrg, null);
         Vector3f v2 = Vector3f.sub(end, renderOrg, null);
         Helper.Normalize(v1); Helper.Normalize(v2);
@@ -373,101 +433,150 @@ public class Render {
         if(useAxis) {
             left.set(ent.axis[0]);
             up.set(ent.axis[1]);
-            GL11.glDisable(GL11.GL_CULL_FACE);
         } else {
-            left.set(Ref.cgame.cg.refdef.ViewAxis[1]);
-            up.set(Ref.cgame.cg.refdef.ViewAxis[2]);
+            left.set(view.ViewAxis[1]);
+            up.set(view.ViewAxis[2]);
         }
         left.scale(radius);
         up.scale(-radius);
 
+        float s1 = 0, t1 = 0, s2 = 1, t2 = 1;
+        
         if(ent.mat != null && ent.mat.getTexture() != null) {
-            // Grab texture offsets from material
-            ent.mat.getTexture().Bind();
             Vector2f texSize = ent.mat.getTextureSize();
             Vector2f texOffset = ent.mat.getTextureOffset(ent.frame);
-            if(ent.mat.blendmode == CubeMaterial.BlendMode.ONE) {
-                GLState.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE);
+            s1 = texOffset.x;
+            t1 = texOffset.y;
+            s2 = s1 + texSize.x;
+            t2 = t1 + texSize.y;
+        } 
+        
+        boolean rendernow = !r_batchsprites.isTrue() || currentRenderFlags != RF_POSTDEFERRED;
+        if(rendernow) {
+            // Setup render state
+            if(ent.mat != null && ent.mat.getTexture() != null) {
+                // Grab texture offsets from material
+                ent.mat.getTexture().Bind();
+                if(ent.mat.blendmode == CubeMaterial.BlendMode.ONE) {
+                    GLState.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE);
+                } else {
+                    GLState.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
+                }
             } else {
                 GLState.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
+                Ref.ResMan.getWhiteTexture().Bind();
             }
-            AddQuadStampExt(ent.origin, left, up, ent.outcolor,
-                    texOffset.x, texOffset.y, texOffset.x + texSize.x, texOffset.y + texSize.y);
-        }
-        else {
-            GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-            Ref.ResMan.getWhiteTexture().Bind();
-            AddQuadStamp(ent.origin, left, up, ent.outcolor);
-        }
 
-        if(useAxis) {
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glDepthMask(false); // dont write to depth
+
+            AddQuadStampExt(ent.origin, left, up, ent.outcolor,s1,t1,s2,t2);
+
+            // clear renderstate
             GL11.glEnable(GL11.GL_CULL_FACE);
+            GL11.glDepthMask(true);
+        } else {
+            // add to polygon batch and render later
+            polyBatcher.addSpriteCall(ent);
+            ByteBuffer dst = polyBatcher.getMappedBuffer();
+            writeQuadStamp(dst, ent.origin, left, up, ent.outcolor,s1,t1,s2,t2);
         }
     }
-
-    private void AddQuadStamp(Vector3f origin, Vector3f left, Vector3f up, Vector4f color) {
-        AddQuadStampExt(origin, left, up, color,0,0,1,1);
+    
+    private void writeQuadStamp(ByteBuffer dst, Vector3f origin, Vector3f left, Vector3f up, Vector4f color, float s1, float t1, float s2, float t2) {
+        float r = color.x/255f, g = color.y/255f, b = color.z/255f, a = color.w/255f;
+        
+        dst.putFloat(origin.x + left.x + up.x);
+        dst.putFloat(origin.y + left.y + up.y);
+        dst.putFloat(origin.z + left.z + up.z);
+        
+        dst.putFloat(0f);
+        dst.putFloat(0f);
+        dst.putFloat(0f);
+        
+        dst.putFloat(s1);
+        dst.putFloat(t1);
+        
+        dst.put((byte)color.x); dst.put((byte)color.y); dst.put((byte)color.z); dst.put((byte)color.w);
+        
+        dst.putFloat(origin.x - left.x + up.x);
+        dst.putFloat(origin.y - left.y + up.y);
+        dst.putFloat(origin.z - left.z + up.z);
+        
+        dst.putFloat(0f);
+        dst.putFloat(0f);
+        dst.putFloat(0f);
+        
+        dst.putFloat(s2);
+        dst.putFloat(t1);
+        
+        dst.put((byte)color.x); dst.put((byte)color.y); dst.put((byte)color.z); dst.put((byte)color.w);
+        
+        dst.putFloat(origin.x - left.x - up.x);
+        dst.putFloat(origin.y - left.y - up.y);
+        dst.putFloat(origin.z - left.z - up.z);
+        
+        dst.putFloat(0f);
+        dst.putFloat(0f);
+        dst.putFloat(0f);
+        
+        dst.putFloat(s2);
+        dst.putFloat(t2);
+        
+        dst.put((byte)color.x); dst.put((byte)color.y); dst.put((byte)color.z); dst.put((byte)color.w);
+        
+        dst.putFloat(origin.x + left.x - up.x);
+        dst.putFloat(origin.y + left.y - up.y);
+        dst.putFloat(origin.z + left.z - up.z);
+        
+        dst.putFloat(0f);
+        dst.putFloat(0f);
+        dst.putFloat(0f);
+        
+        dst.putFloat(s1);
+        dst.putFloat(t2);
+        
+        dst.put((byte)color.x); dst.put((byte)color.y); dst.put((byte)color.z); dst.put((byte)color.w);
     }
 
     private void AddQuadStampExt(Vector3f origin, Vector3f left, Vector3f up, Vector4f color, float s1, float t1, float s2, float t2) {
-        // soft particles disabled when no fbo or r_softparticles isn't true
-        boolean useSoftSprites = false;//Ref.glRef.srgbBuffer != null && Ref.glRef.r_softparticles.isTrue();
-        CubeTexture tex = null; // depth
+        Shader sh = Ref.glRef.getShader("Poly");
+        Ref.glRef.PushShader(sh);
+        sh.setUniform("ModelView", view.viewMatrix);
+        sh.setUniform("Projection", view.ProjectionMatrix);
         
-        if(useSoftSprites) {
-            // use soft particle shader
-//            Ref.glRef.PushShader(softSprite);
-//            softSprite.setUniform("res", Ref.glRef.GetResolution());
-//
-//            // Bind depth from FBO
-//            
-//            tex = Ref.glRef.srgbBuffer.getAsTexture();
-//            tex.textureSlot = 1;
-//            tex.loaded = true;
-//            tex.Bind();
-        } else {
-            Shader sh = Ref.glRef.getShader("Poly");
-            Ref.glRef.PushShader(sh);
-            sh.setUniform("ModelView", view.viewMatrix);
-            sh.setUniform("Projection", view.ProjectionMatrix);
-        }
-
-        GL11.glDepthMask(false); // dont write to depth
+        float r = color.x/255f, g = color.y/255f, b = color.z/255f, a = color.w/255f;
+        
         GL11.glBegin(GL11.GL_QUADS);
         {
             // Fancy pants shaders
             GL20.glVertexAttrib2f(Shader.INDICE_COORDS, s1, t1);
-            Helper.col(color);
+            GL20.glVertexAttrib4f(Shader.INDICE_COLOR, r,g,b,a);
             GL20.glVertexAttrib3f(Shader.INDICE_POSITION, origin.x + left.x + up.x
                                                         , origin.y + left.y + up.y
                                                         , origin.z + left.z + up.z);
 
             GL20.glVertexAttrib2f(Shader.INDICE_COORDS, s2, t1);
-            Helper.col(color);
+            GL20.glVertexAttrib4f(Shader.INDICE_COLOR, r,g,b,a);
             GL20.glVertexAttrib3f(Shader.INDICE_POSITION, origin.x - left.x + up.x
                                                         , origin.y - left.y + up.y
                                                         , origin.z - left.z + up.z);
 
             GL20.glVertexAttrib2f(Shader.INDICE_COORDS, s2, t2);
-            Helper.col(color);
+            GL20.glVertexAttrib4f(Shader.INDICE_COLOR, r,g,b,a);
             GL20.glVertexAttrib3f(Shader.INDICE_POSITION, origin.x - left.x - up.x
                                                         , origin.y - left.y - up.y
                                                         , origin.z - left.z - up.z);
 
             GL20.glVertexAttrib2f(Shader.INDICE_COORDS, s1, t2);
-            Helper.col(color);
+            GL20.glVertexAttrib4f(Shader.INDICE_COLOR, r,g,b,a);
             GL20.glVertexAttrib3f(Shader.INDICE_POSITION, origin.x + left.x - up.x
                                                         , origin.y + left.y - up.y
                                                         , origin.z + left.z - up.z);
         }
         GL11.glEnd();
-        GL11.glDepthMask(true);
-
         
 
-        if(useSoftSprites) {
-            tex.Unbind();
-        }
         Ref.glRef.PopShader();
         
     }
@@ -498,6 +607,8 @@ public class Render {
     public ArrayList<ViewParams> getViewList() {
         return viewList;
     }
+
+    
 
 
     
