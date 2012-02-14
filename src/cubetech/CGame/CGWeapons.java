@@ -62,7 +62,7 @@ public class CGWeapons {
                 float radius = 130;
                 RingEmitter.spawn(radius, origin);
                 SparkEmitter.spawn(radius, origin);
-                TrailEmitter.spawn(origin, radius);
+                TrailEmitter.spawn(origin, radius+3);
                 FireEmitter.create(20, radius*0.5f, origin);
 
                 if(dir == null) {
@@ -109,63 +109,84 @@ public class CGWeapons {
         Vector3f.sub(origin, dir, dir);
         dir.normalise();
         dir.z += 0.5f;
-        dir.scale(100f);
-        LocalEntity.bloodExplosion(Ref.cgame.cg.time, origin, dir, Ref.cgame.cgs.media.t_blood);
+        dir.normalise();
+        int nBloodSplatters = 4;
+        
+        for (int i = 0; i < nBloodSplatters; i++) {
+            Vector3f vel = new Vector3f(dir);
+            float rnd1 = Ref.rnd.nextFloat();
+            float rnd2 = Ref.rnd.nextFloat();
+            vel.x += rnd1;
+            vel.y += rnd2;
+            vel.scale(100f);
+            LocalEntity.bloodExplosion(Ref.cgame.cg.time, origin, vel, Ref.cgame.cgs.media.t_blood);
+        }
+        
     }
 
     private void tracer(Vector3f start, Vector3f end) {
+        
         // todo/fix: this method uses the refdef from the last frame
         Vector3f.sub(end, start, forward);
         float len = Helper.Normalize(forward);
 
+        float startlen = 50;
+        float startFrac = 0.1f;
+        float endFrac = 0.3f;
         // start at least a little ways from the muzzle
-        if(len < 100) return;
-        float beginOffset = 50 + Ref.rnd.nextFloat() * (len - 60);
-        float endOffset = beginOffset + 200;
+        if(len < startlen) return;
+        float rnd = Ref.rnd.nextFloat();
+        float beginOffset = startlen + rnd * startFrac * (len - startlen);
+        float endOffset = beginOffset + len * rnd * endFrac;
         if(endOffset > len) endOffset = len;
 
         Vector3f p1 = Helper.VectorMA(start, beginOffset, forward, null);
         Vector3f p2 = Helper.VectorMA(start, endOffset, forward, null);
         
+        CubeTexture tex = Ref.ResMan.LoadTexture("data/particles/spark2.png");
+        LocalEntity lent = LocalEntity.sparkTrail(p1, forward, 16f, 100, Ref.cgame.cg.time, tex.asMaterial(), 1f,65/255f,0f,1f);
+        lent.Type = LocalEntity.TYPE_SCALE_FADE;
+        lent.Flags = LocalEntity.FLAG_DONT_SCALE;
+        lent.rEntity.oldOrigin.set(p2);
+//
+//        Vector3f line = new Vector3f();
+//        line.x = Vector3f.dot(forward, Ref.cgame.cg.refdef.ViewAxis[1]);
+//        line.y = Vector3f.dot(forward, Ref.cgame.cg.refdef.ViewAxis[2]);
+//
+//        Vector3f right = new Vector3f(Ref.cgame.cg.refdef.ViewAxis[1]);
+//        right.scale(line.y);
+//        Helper.VectorMA(right, -line.x, Ref.cgame.cg.refdef.ViewAxis[2], right);
+//        right.normalise();
+//
+//        float tracerWidth = 5;
+//
+//        PolyVert[] verts = new PolyVert[4];
+//        PolyVert vert = new PolyVert();
+//        vert.s = 0;
+//        vert.t = 1;
+//        vert.xyz = Helper.VectorMA(p2, tracerWidth, right, null);
+//        verts[0] = vert;
+//
+//        vert = new PolyVert();
+//        vert.s = 0;
+//        vert.t = 0;
+//        vert.xyz = Helper.VectorMA(p2, -tracerWidth, right, null);
+//        verts[3] = vert;
+//
+//        vert = new PolyVert();
+//        vert.s = 1;
+//        vert.t = 0;
+//        vert.xyz = Helper.VectorMA(p1, -tracerWidth, right, null);
+//        verts[2] = vert;
+//
+//        vert = new PolyVert();
+//        vert.s = 1;
+//        vert.t = 1;
+//        vert.xyz = Helper.VectorMA(p1, tracerWidth, right, null);
+//        verts[1] = vert;
 
-        Vector3f line = new Vector3f();
-        line.x = Vector3f.dot(forward, Ref.cgame.cg.refdef.ViewAxis[1]);
-        line.y = Vector3f.dot(forward, Ref.cgame.cg.refdef.ViewAxis[2]);
-
-        Vector3f right = new Vector3f(Ref.cgame.cg.refdef.ViewAxis[1]);
-        right.scale(line.y);
-        Helper.VectorMA(right, -line.x, Ref.cgame.cg.refdef.ViewAxis[2], right);
-        right.normalise();
-
-        float tracerWidth = 5;
-
-        PolyVert[] verts = new PolyVert[4];
-        PolyVert vert = new PolyVert();
-        vert.s = 0;
-        vert.t = 1;
-        vert.xyz = Helper.VectorMA(p2, tracerWidth, right, null);
-        verts[0] = vert;
-
-        vert = new PolyVert();
-        vert.s = 0;
-        vert.t = 0;
-        vert.xyz = Helper.VectorMA(p2, -tracerWidth, right, null);
-        verts[3] = vert;
-
-        vert = new PolyVert();
-        vert.s = 1;
-        vert.t = 0;
-        vert.xyz = Helper.VectorMA(p1, -tracerWidth, right, null);
-        verts[2] = vert;
-
-        vert = new PolyVert();
-        vert.s = 1;
-        vert.t = 1;
-        vert.xyz = Helper.VectorMA(p1, tracerWidth, right, null);
-        verts[1] = vert;
-
-        RenderEntity ent = RenderEntity.addPolyToScene(verts, Ref.ResMan.LoadTexture("data/particles/spark2.png"));
-        ent.color.set(255,65,0,255);
+        //RenderEntity ent = RenderEntity.addPolyToScene(verts, Ref.ResMan.LoadTexture("data/particles/spark2.png"));
+        //ent.color.set(255,65,0,255);
     }
 
     private static Vector3f forward = new Vector3f();
@@ -175,9 +196,9 @@ public class CGWeapons {
             PlayerState lcPs = Ref.cgame.cg.localClients[i].predictedPlayerState;
             if(lcPs != null && Ref.cgame.cg.localClients[i].validPPS &&
                     lcPs.clientNum == entitynum) {
-                dest.set(Ref.cgame.cg.cur_ps.origin);
-                dest.z += Ref.cgame.cg.cur_ps.viewheight - 8;
-                Helper.AngleVectors(Ref.cgame.cg.cur_ps.viewangles, forward, null, null);
+                dest.set(lcPs.origin);
+                dest.z += lcPs.viewheight - 8;
+                Helper.AngleVectors(lcPs.viewangles, forward, null, null);
                 Helper.VectorMA(dest, 16, forward, dest);
                 return dest;
             }

@@ -1,16 +1,23 @@
 package cubetech.gfx;
 
+import cubetech.CGame.ViewParams;
 import cubetech.common.CVar;
+import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.common.ICommand;
+import cubetech.misc.PoissonGenerator;
 import cubetech.misc.Profiler;
 import cubetech.misc.Profiler.Sec;
 import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
+import java.util.ArrayList;
 import org.lwjgl.opengl.ARBTextureFloat;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
+import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.util.Color;
 import org.lwjgl.util.ReadableColor;
@@ -28,21 +35,23 @@ public class SSAO {
     Vector3f[] kernel;
     
     // shader uniforms
-    private CVar ssao_kernelRadius = Ref.cvars.Get("ssao_kernelRadius", "24", null);
-    public CVar ssao_enable = Ref.cvars.Get("ssao_enable", "0", null);
+    private CVar ssao_kernelRadius = Ref.cvars.Get("ssao_kernelRadius", "36", null);
+    public CVar ssao_enable = Ref.cvars.Get("ssao_enable", "1", null);
     public CVar ssao_display = Ref.cvars.Get("ssao_display", "0", null); // render on top of everything
-    private CVar ssao_renderscale = Ref.cvars.Get("ssao_renderscale", "1.0", null);
+    private CVar ssao_renderscale = Ref.cvars.Get("ssao_renderscale", "0.5", null);
     
     private FrameBuffer lowresTarget;
+    private FrameBuffer lowresBlurTarget;
     private Vector2f targetResolution;
     
     public SSAO() {
         noiseTexture = generateNoiseTexture(4,4);
-        kernel = generateKernel(32);
+        kernel = generatePoissonKernel(32);
         ssao_renderscale.modified = false;
         int w = (int) (Ref.glRef.GetResolution().x * ssao_renderscale.fValue);
         int h = (int) (Ref.glRef.GetResolution().y * ssao_renderscale.fValue);
         lowresTarget = new FrameBuffer(true, false, w, h, GL11.GL_TEXTURE_2D);
+        lowresBlurTarget = new FrameBuffer(true, false, w, h, GL11.GL_TEXTURE_2D);
         targetResolution = new Vector2f(Ref.glRef.GetResolution());
         Ref.commands.AddCommand("ssao_rebuildKernel", ssao_rebuildKernel);
     }
@@ -50,19 +59,20 @@ public class SSAO {
     private ICommand ssao_rebuildKernel = new ICommand() {
         public void RunCommand(String[] args) {
             int kernelSize = 32;
-            kernel = generateKernel(kernelSize);
+            kernel = generatePoissonKernel(kernelSize);
         }
     };
     
-    public void run(DeferredShading s) {
+    public void debugDraw() {
+        if(ssao_display.isTrue()) {
+            blitTarget();
+        }
+    }
+    
+    public void run(DeferredShading s, ViewParams view) {
         if(!ssao_enable.isTrue()) return;
-        SecTag t = Profiler.EnterSection(Sec.SSAO);
-        // Push shader to gfx system
-        Shader shader = Ref.glRef.getShader("DeferredAO");
-        Ref.glRef.PushShader(shader);
         
-        // Apply textures and uniforms
-        applyUniforms(shader);
+        SecTag t = Profiler.EnterSection(Sec.SSAO);
         
         int w = (int) (Ref.glRef.GetResolution().x * ssao_renderscale.fValue);
         int h = (int) (Ref.glRef.GetResolution().y * ssao_renderscale.fValue);
@@ -70,57 +80,79 @@ public class SSAO {
         if(!Helper.Equals(targetResolution, Ref.glRef.GetResolution()) || ssao_renderscale.modified) {
             // resize target    
             lowresTarget.resize(w, h);
+            lowresBlurTarget.resize(w, h);
             targetResolution.set(Ref.glRef.GetResolution());
             ssao_renderscale.modified = false;
         }
+        float sw = view.rectXScale * w;
+        float sh = view.rectYScale * h;
+        GL11.glPushAttrib(GL11.GL_VIEWPORT_BIT);
+        GL11.glViewport((int)(sw), (int)(sh), (int)(view.rectWidthScale * w), (int)(view.rectHeightScale * h));
+        GL11.glDisable(GL11.GL_BLEND);
+        // Push shader to gfx system
+        Shader shader = Ref.glRef.getShader("DeferredAO");
+        Ref.glRef.PushShader(shader);
         
-        GL11.glViewport(0, 0, w, h);
+        // Apply textures and uniforms
+        applyUniforms(shader, view);
         
         lowresTarget.Bind();
+        
         // Do fullscreen pass
         s.fullscreenPass(shader, false, false, true);
         
-        lowresTarget.Unbind();
-        
-        GL11.glViewport(0, 0, (int)Ref.glRef.GetResolution().x, (int)Ref.glRef.GetResolution().y);
-        
         // Clean up
+        lowresTarget.Unbind();
         Ref.glRef.PopShader();
         
-        if(ssao_display.isTrue()) {
-            blitTarget();
-        }
+        // Blur the ssao
+        shader = Ref.glRef.getShader("SSAOBlur");
+        Ref.glRef.PushShader(shader);
+        Vector4f viewOffset = new Vector4f(view.rectXScale, view.rectYScale, view.rectWidthScale, view.rectHeightScale);
+        shader.setUniform("viewOffset", viewOffset);
+        shader.setUniform("texelSize", new Vector2f(1f/(targetResolution.x * ssao_renderscale.fValue), 1f/(targetResolution.y  * ssao_renderscale.fValue)));
         
-        //blitTarget();
+        lowresBlurTarget.Bind();
+        CubeTexture tex = getSSAOTarget(false);
+        tex.setWrap(GL13.GL_CLAMP_TO_BORDER);
+        tex.Bind();
+        s.fullscreenPass(shader, false, false, false);
+        tex.Unbind();
+        lowresBlurTarget.Unbind();
         
-        // POsition test
-//        Vector3f[] corners = s.calcFarPlaneCorners();
-//        Vector3f texcoords = new Vector3f(1f,1f, 0.5f);
-//        
-//        Vector3f viewray = (Vector3f) new Vector3f(corners[2]).scale(texcoords.z);
-//        // back to screen space
-//        Vector4f projview = new Vector4f(viewray.x,viewray.y,viewray.z,1.0f);
-//        Matrix4f.transform(Ref.cgame.cg.refdef.ProjectionMatrix, projview, projview);
-//        // scale & bias to texture space
-//        projview.scale(1.0f / projview.w);
-//        projview.x = projview.x * 0.5f + 0.5f;
-//        projview.y = projview.y * 0.5f + 0.5f;
-//        
-//        Vector2f diff = new Vector2f(texcoords.x - projview.x, texcoords.y - projview.y);
+        Ref.glRef.PopShader();
+        
+        GL11.glPopAttrib();
+        GL11.glEnable(GL11.GL_BLEND);
+        
         t.ExitSection();
         
     }
     
-    public CubeTexture getSSAOTarget() {
-        CubeTexture tex = new CubeTexture(lowresTarget.getTarget(), lowresTarget.getTextureId(), "Lowres AO target");
+    public CubeTexture getSSAOTarget(boolean blurTarget) {
+        CubeTexture tex = null;
+        if(blurTarget) {
+            tex = new CubeTexture(lowresBlurTarget.getTarget(), lowresBlurTarget.getTextureId(), "Lowres AO target");
+        } else {
+            tex = new CubeTexture(lowresTarget.getTarget(), lowresTarget.getTextureId(), "Lowres AO target");
+        }
+        tex.textureSlot = 4;
         tex.loaded = true;
-        tex.setFiltering(false, GL11.GL_LINEAR);
+        if(blurTarget) {
+            tex.setFiltering(false, GL11.GL_LINEAR);
+            tex.setFiltering(true, GL11.GL_LINEAR);
+        } else {
+            tex.setFiltering(false, GL11.GL_NEAREST);
+            tex.setFiltering(true, GL11.GL_NEAREST);
+        }
+        
         return tex;
     }
     
     private void blitTarget() {
         Ref.glRef.pushShader("Blit");
-        CubeTexture tex = getSSAOTarget();
+        CubeTexture tex = getSSAOTarget(true);
+        tex.textureSlot = 0;
         tex.Bind();
         float w = Ref.glRef.GetResolution().x;
         float h = Ref.glRef.GetResolution().y;
@@ -150,28 +182,46 @@ public class SSAO {
         GLRef.checkError();
     }
     
-    private void applyUniforms(Shader shader) {
+    private void applyUniforms(Shader shader, ViewParams view) {
         Vector2f noiseScale = new Vector2f(Ref.glRef.GetResolution());
-        noiseScale.scale(1f/(2*noiseTexture.Width));
-        
+        noiseScale.scale(1f/(noiseTexture.Width/ssao_renderscale.fValue));
         
         Integer mapid = shader.textureMap.get("noise");
         if(mapid != null && mapid >= 0) {
             int uniformid = shader.GetTextureIndex(3);
             shader.setUniform(uniformid, 3);
-            noiseTexture.setFiltering(false, GL11.GL_LINEAR);
+            noiseTexture.setFiltering(false, GL11.GL_NEAREST);
             noiseTexture.setWrap(GL11.GL_REPEAT);
             noiseTexture.textureSlot = 3;
             noiseTexture.Bind();
         }
-        
         
         shader.setUniform("far", Ref.cgame.cg.refdef.farDepth);
         shader.setUniform("kernel", kernel);
         shader.setUniform("noiseScale", noiseScale);
         shader.setUniform("kernelRadius", ssao_kernelRadius.fValue);
         shader.setUniform("projectionMatrix", Ref.cgame.cg.refdef.ProjectionMatrix);
-        
+        Vector4f viewOffset = new Vector4f(view.rectXScale, view.rectYScale, view.rectWidthScale, view.rectHeightScale);
+        shader.setUniform("viewOffset", viewOffset);
+    }
+    
+    public static Vector3f[] generatePoissonKernel(int sampleCount) {
+        ArrayList<Vector3f> kernel = PoissonGenerator.generateUnitSphere(new Vector3f(0, 0, 1), sampleCount/2, sampleCount/2);
+        ArrayList<Vector3f> kernel2 = PoissonGenerator.generateUnitSphere(new Vector3f(0, 0, 1), sampleCount/2, sampleCount/2);
+        for (int i = 0; i < kernel2.size(); i++) {
+            kernel2.get(i).scale(0.3f);
+        }
+        if((kernel.size() + kernel2.size()) != sampleCount) {
+            Common.LogDebug("Couldn't generate wanted poisson kernel size of " + sampleCount + ". (got " + kernel.size() + ")");
+        }
+        Vector3f[] dest = new Vector3f[kernel.size() + kernel2.size()];
+        for (int i = 0; i < kernel.size(); i++) {
+            dest[i] = kernel.get(i);
+        }
+        for (int i = 0; i < kernel2.size(); i++) {
+            dest[i+kernel.size()] = kernel2.get(i);
+        }
+        return dest;
     }
     
     /**
@@ -180,26 +230,26 @@ public class SSAO {
      * @return 
      */
     public static Vector3f[] generateKernel(int sampleCount) {
+        
         Vector3f[] kernel = new Vector3f[sampleCount];
         
-        Vector3f kernelsum = new Vector3f();
         
         for (int i = 0; i < sampleCount; i++) {
             // Generate hemisphere point
             kernel[i] = new Vector3f(((float)Ref.rnd.nextFloat() - 0.5f) * 2f,
                                      ((float)Ref.rnd.nextFloat() - 0.5f) * 2f,
-                                     ((float)Ref.rnd.nextFloat()));
+                                     ((float)Ref.rnd.nextFloat() - 0.5f) * 2f);
             
             // Normalize
             kernel[i].normalise();
             
+            if(kernel[i].z < 0) kernel[i].z *= -1f;
+            
             // Distribute
-            float scale = (float)i / sampleCount;
-            scale = 0.2f + (0.8f * scale * scale);
+            float scale = (float)i / (sampleCount-1);
+            scale = 0.1f + (0.9f  * scale);
+            
             kernel[i].scale(scale);
-            kernelsum.x += kernel[i].x < 0? -kernel[i].x : kernel[i].x;
-            kernelsum.y += kernel[i].y < 0? -kernel[i].y : kernel[i].y;
-            kernelsum.z += kernel[i].z < 0? -kernel[i].z : kernel[i].z;
         }
         
         return kernel;

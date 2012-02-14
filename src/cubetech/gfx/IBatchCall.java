@@ -8,4 +8,5 @@ public interface IBatchCall {
     public CubeMaterial getMaterial();
     public int getVertexOffset();
     public int getVertexCount();
+    public int getDrawMode();
 }

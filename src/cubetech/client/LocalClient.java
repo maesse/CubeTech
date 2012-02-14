@@ -135,7 +135,7 @@ public class LocalClient {
         PlayerInput oldest = Ref.client.GetUserCommand(cmdNum, localIndex);
         if(oldest == null) return;
         if(oldest.serverTime > snapPS.commandTime && oldest.serverTime < Ref.cgame.cg.time) {
-            Ref.cgame.Print("Exceeded packet_backup on commands");
+            Ref.cgame.Print(localIndex, "Exceeded packet_backup on commands");
             return;
         }
 
@@ -192,7 +192,7 @@ public class LocalClient {
                     float len = delta.length();
                     if(len > 0.1f) {
                         if(Ref.cgame.cg_showmiss.isTrue()) {
-                            Ref.cgame.Print("Prediction miss: " + len);
+                            Ref.cgame.Print(localIndex, "Prediction miss: " + len);
                         }
                         if(Ref.cgame.cg_errorDecay.iValue > 0) {
                             int t = Ref.cgame.cg.time - predictedErrorTime;

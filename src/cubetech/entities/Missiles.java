@@ -64,6 +64,11 @@ public class Missiles {
         // change over to a normal entity right at the point of impact
         ent.s.eType = EntityType.GENERAL;
         Vector3f endPos = res.getPOI(null);
+        // move POI back a bit
+        Vector3f delta = new Vector3f(res.delta);
+        float len = Helper.Normalize(delta);
+        Helper.VectorMA(endPos, -Helper.Clamp(len, 0, 5), delta, endPos);
+        
         ent.SetOrigin(endPos);
 
         Gentity other = Ref.game.g_entities[res.entitynum];

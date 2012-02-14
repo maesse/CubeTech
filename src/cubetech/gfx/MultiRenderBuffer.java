@@ -264,6 +264,14 @@ public class MultiRenderBuffer {
             this.height = height;
         }
         
+        public MRBBuilder cloneFormats(int width, int height) {
+            MRBBuilder b = new MRBBuilder(width, height);
+            for (Eh eh : ehs) {
+                b.addFormat(eh.format, eh.rtt);
+            }
+            return b;
+        }
+        
         public void addFormat(Format format, boolean renderToTexture) {
             addExistingBuffer(format, renderToTexture, -1);
         }

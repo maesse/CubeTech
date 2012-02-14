@@ -48,7 +48,7 @@ public class MessageField implements KeyEventListener {
         float bgwidth = 300;
         Vector2f maxSize = Ref.glRef.GetResolution();
         maxSize = new Vector2f(maxSize.x -  position.x - 50, maxSize.y);
-        Vector2f size = Ref.textMan.GetStringSize(str, maxSize, null,1, Type.HUD);
+        Vector2f size = Ref.textMan.defaultFont.GetStringSize(str, maxSize, null,1, Type.HUD);
         bgwidth = size.x ;
         float bgheight = size.y ;
         Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);

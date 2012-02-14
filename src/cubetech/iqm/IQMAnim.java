@@ -13,7 +13,7 @@ import org.lwjgl.util.vector.Vector3f;
  */
 public class IQMAnim {
     public static final int FLAG_ANIM_LOOP = 1;
-    String name;
+    public String name;
     
     public int first_frame, num_frames;
     float framerate;

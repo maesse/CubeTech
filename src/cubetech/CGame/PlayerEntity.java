@@ -11,6 +11,7 @@ import java.util.ArrayList;
 public class PlayerEntity {
     public LerpFrame torso = new LerpFrame();
     public LerpFrame legs = new LerpFrame();
+    public int lastRenderFrame;
     
     // Physics simulated bones
     public ArrayList<RigidBoneMesh> boneMeshes;

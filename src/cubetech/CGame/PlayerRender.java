@@ -60,22 +60,23 @@ public class PlayerRender {
         if(model == null) return;
         if(cent.pe.boneMeshModel != null) {
             boolean wasdead = false;
-            boolean isdead = true;
+            boolean isdead = false;
                     
             if(cent.currentState.contents != cent.pe.lastcontents) {
             
                 wasdead = (cent.pe.lastcontents & Content.CORPSE) != 0;
                 isdead = (cent.currentState.contents & Content.CORPSE) != 0;
-            } else {
-                for (int i = 0; i < Ref.cgame.cg.localClients.length; i++) {
-                    LocalClient cl = Ref.cgame.cg.localClients[i];
-                    if(cl.validPPS && cl.clientNum == cent.currentState.number) {
-                        wasdead = cl.wasDead;
-                        isdead = cl.predictedPlayerState.stats.Health <= 0;
-                        break;
-                    }
-                }
-            }
+            } 
+//            else {
+//                for (int i = 0; i < Ref.cgame.cg.localClients.length; i++) {
+//                    LocalClient cl = Ref.cgame.cg.localClients[i];
+//                    if(cl.validPPS && cl.clientNum == cent.currentState.number) {
+//                        wasdead = cl.wasDead;
+//                        isdead = cl.predictedPlayerState.stats.Health <= 0;
+//                        break;
+//                    }
+//                }
+//            }
             if(wasdead != isdead) {
                 if(!wasdead && isdead) {
                     // Make ragdoll
@@ -339,7 +340,7 @@ public class PlayerRender {
             if(anim == Animations.IDLE) anim = Animations.IDLE_GUN1;
             if(anim == Animations.WALK) anim = Animations.WALK_GUN1;
         }
-        runLerpFrame(ci, cent.pe.torso, anim.ordinal(), speedScale);
+        runLerpFrame(ci, cent.pe.torso, anim.ordinal() | (cent.currentState.frame & 128), speedScale);
 
         ent.oldframe = cent.pe.torso.oldFrame;
         ent.frame = cent.pe.torso.frame;
@@ -427,6 +428,7 @@ public class PlayerRender {
 
         // Check if we have a valid animation
         IQMAnim anim = model.getAnimation(animation);
+        
         if(anim == null) {
             //Common.LogDebug("Can't find animation %s in model %s", animation.toString(), ci.modelName);
             if(model.anims == null) return;
@@ -455,25 +457,28 @@ public class PlayerRender {
             return null;
         }
         Vector3f legsAngle = new Vector3f();
-//        cent.pe.legs.yawing = true;
-        cent.pe.legs.pitching = false;
-
         Vector3f torsoAngle = new Vector3f();
-//        cent.pe.torso.yawing = true;
-        cent.pe.torso.pitching = false;
-        // yaw
-        torsoAngle.y = headAngle.y + 0.35f * moveOffsets[dir];
-        legsAngle.y = headAngle.y + moveOffsets[dir];
-        swingAngles(torsoAngle.y, 25, 90, game.cg_swingspeed.fValue, cent.pe.torso, true); // yaw
-        Animations anim = cent.currentState.frameAsAnimation();
-        if(anim != null && anim == Animations.IDLE) {
-            cent.pe.legs.yawing = false;
-            swingAngles(legsAngle.y, 20, 110, game.cg_swingspeed.fValue*0.5f, cent.pe.legs, true); // yaw
-        } else if(cent.pe.legs.yawing) {
-            swingAngles(legsAngle.y, 0, 110, game.cg_swingspeed.fValue, cent.pe.legs, true); // yaw
-        } else {
-            swingAngles(legsAngle.y, 40, 110, game.cg_swingspeed.fValue, cent.pe.legs, true); // yaw
+        
+        if(cent.pe.lastRenderFrame != Ref.client.framecount) {
+            cent.pe.legs.pitching = false;
+            cent.pe.torso.pitching = false;
+            
+            // yaw
+            torsoAngle.y = headAngle.y + 0.35f * moveOffsets[dir];
+            legsAngle.y = headAngle.y + moveOffsets[dir];
+            swingAngles(torsoAngle.y, 10, 90, game.cg_swingspeed.fValue, cent.pe.torso, true, 1f); // yaw
+            Animations anim = cent.currentState.frameAsAnimation();
+            if(anim != null && anim == Animations.IDLE) {
+                cent.pe.legs.yawing = false;
+                swingAngles(legsAngle.y, 20, 110, game.cg_swingspeed.fValue*0.5f, cent.pe.legs, true, 1f); // yaw
+            } else if(cent.pe.legs.yawing) {
+                swingAngles(legsAngle.y, 0, 110, game.cg_swingspeed.fValue, cent.pe.legs, true, 1f); // yaw
+            } else {
+                swingAngles(legsAngle.y, 40, 110, game.cg_swingspeed.fValue, cent.pe.legs, true, 1f); // yaw
+            }
         }
+        cent.pe.lastRenderFrame = Ref.client.framecount;
+        
         torsoAngle.y = cent.pe.torso.yawAngle;
         legsAngle.y = cent.pe.legs.yawAngle;
 
@@ -481,29 +486,31 @@ public class PlayerRender {
         float dest;
         if(headAngle.x < 0 ) {
             dest = (headAngle.x) * 0.75f;
-            if(dest < -30) dest = -30;
+            if(dest < -60) dest = -60;
         } else {
             dest = headAngle.x * 0.75f;
-            if(dest> 30) dest = 30;
+            if(dest> 60) dest = 60;
         }
-        swingAngles(dest, 15, 30, 0.1f, cent.pe.torso, false);
+        
+        swingAngles(dest, 0, 30, 0.1f, cent.pe.torso, false, 1f);
+        headAngle.x = cent.pe.torso.pitchAngle;
         BoneController hips = new BoneController(BoneController.Type.ADDITIVE, "Hip", new Vector3f(-torsoAngle.x, legsAngle.y-torsoAngle.y, 0));
-        BoneController head = new BoneController(BoneController.Type.ADDITIVE, "Head", new Vector3f(-torsoAngle.x, headAngle.y-torsoAngle.y, 0));
-        rent.axis = Helper.AnglesToAxis(torsoAngle, rent.axis);
+        BoneController head = new BoneController(BoneController.Type.ADDITIVE, "Spine", new Vector3f(0,torsoAngle.x-headAngle.x,0));
+        rent.axis = Helper.AnglesToAxis(new Vector3f(0, torsoAngle.y, torsoAngle.z), rent.axis);
         ArrayList<BoneController> controllers = new ArrayList<BoneController>();
-        controllers.add(hips);
+        //controllers.add(hips);
         controllers.add(head);
         return controllers;
     }
 
     private void swingAngles(float dest, int swingTolerance, int clampTolerance,
-            float speed, LerpFrame out, boolean isYaw) {
+            float speed, LerpFrame out, boolean isYaw, float swingScale) {
         boolean swinging = isYaw?out.yawing:out.pitching;
         float angle = isYaw?out.yawAngle:out.pitchAngle;
         float swing;
         if(!swinging) {
             // see if a swing should be started
-            swing = Helper.AngleSubtract(angle, dest);
+            swing = Helper.AngleSubtract(angle, dest) * swingScale;
             if(swing > swingTolerance || swing < -swingTolerance) {
                 swinging = true;
             }
@@ -515,7 +522,7 @@ public class PlayerRender {
 
         // modify the speed depending on the delta
 	// so it doesn't seem so linear
-        swing = Helper.AngleSubtract(dest, angle);
+        swing = Helper.AngleSubtract(dest, angle) ;
         float scale = Math.abs(swing);
         scale /= (float)clampTolerance;
 //        scale /= swingTolerance;
@@ -570,7 +577,7 @@ public class PlayerRender {
         if(Ref.cgame.cg.testGun) return;
 
         RenderEntity ent = Ref.render.createEntity(REType.MODEL);
-        ent.flags |= RenderEntity.FLAG_NOSHADOW;
+        ent.flags |= RenderEntity.FLAG_NOSHADOW | RenderEntity.FLAG_WEAPONPROJECTION;
         // get clientinfo for animation map
         WeaponItem wi = Ref.common.items.getWeapon(ps.weapon);
         if(wi == null) return;
@@ -584,8 +591,10 @@ public class PlayerRender {
         IQMModel model = winfo.viewModel;
         
 
+        Vector3f weaponAngles = new Vector3f();
+        CalculateWeaponPosition(ent.origin, weaponAngles);
         Vector3f angles = new Vector3f();
-        CalculateWeaponPosition(ent.origin, angles);
+        angles.set(game.cg.refdef.Angles);
         if(ps.weaponState == WeaponState.DROPPING) {
             float dropFrac = 1f - ((float)ps.weaponTime / wi.getDropTime());
             if(dropFrac < 0) dropFrac = 0;
@@ -597,6 +606,7 @@ public class PlayerRender {
             if(dropFrac > 1) dropFrac = 1f;
             angles.x += dropFrac * 90;
         }
+        
         ent.axis = Helper.AnglesToAxis(angles, ent.axis);
 
         Helper.VectorMA(ent.origin, game.cg.cg_gun_x.fValue, ent.axis[0], ent.origin);
@@ -606,12 +616,13 @@ public class PlayerRender {
                     ps.stats.getAmmo(ps.weapon)>0;
         if(model.anims != null && model.anims.length > 0) {
             IQMAnim anim = model.anims[0];
-
+            
             if(ps.weaponState == WeaponState.READY && model.getAnimation(Animations.READY) != null) {
                 anim = model.getAnimation(Animations.READY);
             } else if(isFiring && model.getAnimation(Animations.FIRING) != null ) {
                 anim = model.getAnimation(Animations.FIRING);
             }
+            
             int num = anim.num_frames;
             int first = anim.first_frame;
             if(ps.weaponTime > 0 && isFiring) {
@@ -638,7 +649,11 @@ public class PlayerRender {
         }
 
         Ref.render.addRefEntity(ent);
-        ent.model = model.buildFrame(ent.frame, ent.oldframe, ent.backlerp, null);
+        ArrayList<BoneController> ctrls = new ArrayList<BoneController>();
+        Vector3f boneAngles = new Vector3f((float)Math.sin(Ref.cgame.cg.time/1000f)*16f,0,0);
+        BoneController gunBone = new BoneController(BoneController.Type.ADDITIVE, "WeaponController", weaponAngles);
+        ctrls.add(gunBone);
+        ent.model = model.buildFrame(ent.frame, ent.oldframe, ent.backlerp, ctrls);
         BoneAttachment muzzleBone = ent.model.getAttachment("muzzle");
         if(muzzleBone == null || winfo.flashTexture == null) return;
 //
@@ -647,7 +662,7 @@ public class PlayerRender {
         if(Ref.cgame.cg.time - cent.muzzleFlashTime > 20) return;
 //
         RenderEntity flash = Ref.render.createEntity(REType.SPRITE);
-        flash.flags |= RenderEntity.FLAG_SPRITE_AXIS;
+        flash.flags = RenderEntity.FLAG_SPRITE_AXIS | RenderEntity.FLAG_NOLIGHT | RenderEntity.FLAG_NOSHADOW | RenderEntity.FLAG_WEAPONPROJECTION;
         flash.mat = Ref.ResMan.LoadTexture(winfo.flashTexture).asMaterial();
         flash.mat.blendmode = CubeMaterial.BlendMode.ONE;
         flash.outcolor.set(255,255,255,255);
@@ -658,17 +673,21 @@ public class PlayerRender {
         flash.origin.set(vec.x, vec.y, vec.z);
         // Get attachment point
         Vector3f[] rotatedMuzzleAxis = new Vector3f[3];
-        rotatedMuzzleAxis[0] = muzzleBone.axis[1];
+        rotatedMuzzleAxis[0] = muzzleBone.axis[0];//muzzleBone.axis[1];
         rotatedMuzzleAxis[1] = muzzleBone.axis[2];
         rotatedMuzzleAxis[2] = muzzleBone.axis[0];
+        Helper.rotateAroundDirection(rotatedMuzzleAxis, (Ref.rnd.nextFloat()-0.5f)*60f);
         Helper.mul(rotatedMuzzleAxis, ent.axis, flash.axis);
         Ref.render.addRefEntity(flash);
     }
     
     private void CalculateWeaponPosition(Vector3f position, Vector3f angles) {
         position.set(game.cg.refdef.Origin);
+        
         angles.set(game.cg.refdef.Angles);
-
+        Vector3f angleScale = new Vector3f(0.1f, 0.3f, 1f);
+        
+        
         // on odd legs, invert some angles
         float scale;
         if((game.cg.cur_lc.bobcycle & 1) != 0) {
@@ -678,16 +697,25 @@ public class PlayerRender {
         }
 
         // gun angles from bobbing
-        angles.z += scale * game.cg.cur_lc.bobfracsin * 0.015;
-        angles.y += scale * game.cg.cur_lc.bobfracsin * 0.01;
-        angles.x += game.cg.cur_lc.xyspeed * game.cg.cur_lc.bobfracsin * 0.005;
+        angles.z += scale * game.cg.cur_lc.bobfracsin * 0.008;
+        //angles.y += scale * game.cg.cur_lc.bobfracsin * 0.01;
+        angles.x += game.cg.cur_lc.xyspeed * game.cg.cur_lc.bobfracsin * 0.08;
 
-//        CEntity cent = game.cg.cur_lc.predictedPlayerEntity;
-//        swingAngles(angles.x, 0, 10, 0.4f, cent.pe.torso, true);
-//        angles.x = cent.pe.torso.yawAngle;
-//        
-//        swingAngles(angles.y, 0, 10, 0.4f, cent.pe.torso, false);
-//        angles.y = cent.pe.torso.pitchAngle;
+        
+        CEntity cent = game.cg.cur_lc.predictedPlayerEntity;
+        swingAngles(angles.x, 0, 10, 0.1f, cent.pe.torso, true, 1f);
+        swingAngles(angles.y, 0, 30, 0.2f, cent.pe.torso, false, 1f);
+        angles.x = cent.pe.torso.yawAngle;
+        angles.y = cent.pe.torso.pitchAngle;
+        
+        angles.x = Helper.AngleSubtract(angles.x, game.cg.refdef.Angles.x)*angleScale.x;
+        angles.y = Helper.AngleSubtract(angles.y, game.cg.refdef.Angles.y)*angleScale.y;
+        angles.z = Helper.AngleSubtract(angles.z, game.cg.refdef.Angles.z)*angleScale.z;
+        
+        float tmp = angles.x;
+        angles.x = angles.y;
+        angles.y = tmp;
+        
     }
     
     private Matrix4f createModelMatrix(Vector3f[] axis, Vector3f position, Matrix4f dest) {

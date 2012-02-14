@@ -5,6 +5,7 @@ import cubetech.common.Commands;
 import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.common.IThinkMethod;
+import cubetech.misc.Callback;
 import cubetech.misc.FileWatcher;
 import cubetech.misc.Ref;
 import java.io.File;
@@ -30,7 +31,7 @@ import org.lwjgl.util.vector.*;
  *
  * @author mads
  */
-public class Shader {
+public final class Shader {
     public static final int INDICE_POSITION = 0;
     public static final int INDICE_NORMAL = 1;
     public static final int INDICE_COLOR = 6;
@@ -47,8 +48,8 @@ public class Shader {
     private int geomShader = -1; // Geometry shader, if any
     private String shaderName = "NONE";
 
-    private int[] textureUniforms = new int[8];
-    HashMap<String, Integer> textureMap = new HashMap<String, Integer>(); // name -> textureUniforms index
+    private int[] textureUniforms = new int[8]; // textureSlot -> uniform index
+    HashMap<String, Integer> textureMap = new HashMap<String, Integer>(); // name -> uniform index
     HashMap<String, Integer> attributes = new HashMap<String, Integer>();
     HashMap<String, Integer> uniformMap = new HashMap<String, Integer>();
     private boolean validated = false;
@@ -56,12 +57,12 @@ public class Shader {
     private ShaderBuilder builder;
     private FileWatcher watcher;
     private Shader thisShader;
-    private IThinkMethod onFileChange = new IThinkMethod() {
-        public void think(Gentity ent) {
-
+    private Callback<File,Void> onFileChange = new Callback<File,Void>() {
+        public Void execute(File e, Object tag) {
             if(Ref.cvars.Find("developer").isTrue()) {
                 Ref.glRef.enqueueShaderRecompile(thisShader);
             }
+            return null;
         }
     };
 
@@ -73,6 +74,10 @@ public class Shader {
 
     public Shader(ShaderBuilder builder) throws Exception {
         if(!Ref.glRef.isInitalized()) throw new Exception("OpenGL is not initialized");
+        for (int i = 0; i < 8; i++) {
+            textureUniforms[i] = -1;
+        }
+        
         thisShader = this;
         this.builder = builder;
 
@@ -96,12 +101,22 @@ public class Shader {
             mapTextureUniform(builderUniforms[i], i);
         }
         validate();
+        
+        for (int textureSlot : textureMap.values()) {
+            if(textureSlot == -1) continue;
+            for (int i = 0; i < textureUniforms.length; i++) {
+                if(textureUniforms[i] == textureSlot) {
+                    setUniform(textureUniforms[i], i);
+                    break;
+                }
+            }
+        }
 
         Ref.glRef.shaders.put(builder.getName(), this);
 
         if(!Ref.glRef.isApplet()) {
-            watcher = new FileWatcher(new File(Ref.cvars.Find("devpath").sValue+shaderName+".vert"), onFileChange);
-            watcher = new FileWatcher(new File(Ref.cvars.Find("devpath").sValue+shaderName+".frag"), onFileChange);
+            watcher = new FileWatcher(new File(Ref.cvars.Find("devpath").sValue+shaderName+".vert"), null, onFileChange);
+            watcher = new FileWatcher(new File(Ref.cvars.Find("devpath").sValue+shaderName+".frag"), null, onFileChange);
         }
     }
     
@@ -240,6 +255,16 @@ public class Shader {
             mapTextureUniform(builderUniforms[i], i);
         }
         validate();
+        
+        for (Integer textureSlot : textureMap.values()) {
+            if(textureSlot == -1) continue;
+            for (int i = 0; i < textureUniforms.length; i++) {
+                if(textureUniforms[i] == textureSlot) {
+                    setUniform(textureUniforms[i], i);
+                    break;
+                }
+            }
+        }
 
         if(currentBound) Ref.glRef.shader.Bind();
     }
@@ -359,6 +384,7 @@ public class Shader {
     public void mapTextureUniform(String name, int textureIndex) {
         textureUniforms[textureIndex] = ARBShaderObjects.glGetUniformLocationARB(shaderId, name);
         textureMap.put(name, textureUniforms[textureIndex]);
+        
         GLRef.checkError();
     }
 

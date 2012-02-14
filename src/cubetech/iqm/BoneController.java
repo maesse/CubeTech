@@ -36,6 +36,7 @@ public class BoneController {
         
         Vector3f[] faxis = Helper.AnglesToAxis(boneAngles);
         Matrix4f rot = Helper.axisToMatrix(faxis, null);
+        boneMatrix = rot;
         return rot;
     }
 

@@ -68,15 +68,8 @@ public class CubeTexture {
 
     public void Bind() {
         if(loaded) {
-             
-                glActiveTexture(GL_TEXTURE0+textureSlot);
-                glBindTexture(Target, TextureID);
-            
-            
-            
-            
-//            GLRef.checkError();
-            
+            glActiveTexture(GL_TEXTURE0+textureSlot);
+            glBindTexture(Target, TextureID);
         } else {
             Ref.ResMan.getWhiteTexture().Bind();
         }

@@ -138,7 +138,7 @@ public class ClientRender {
         if(Ref.client.cl_showfps.iValue == 1)
             Ref.textMan.AddText(new Vector2f(Ref.glRef.GetResolution().x, 0), ""+currentFPS, Align.RIGHT, Type.HUD);
         Ref.SpriteMan.DrawHUD();
-        Ref.textMan.Render(); // Draw remaining text - shouldn't be any
+        Ref.textMan.finishRenderQueue(); // Draw remaining text - shouldn't be any
 
 
         if(screenshot || (Ref.client.demo.isPlaying() && Ref.cvars.Find("cl_demorecord").isTrue())) {

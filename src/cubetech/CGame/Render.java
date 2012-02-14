@@ -91,6 +91,12 @@ public class Render {
             
             if(postDeferred != re.hasFlag(RenderEntity.FLAG_NOLIGHT)) continue;
             
+            Matrix4f tmpMatrix = null;
+            if(re.hasFlag(RenderEntity.FLAG_WEAPONPROJECTION)) {
+                tmpMatrix = view.ProjectionMatrix;
+                view.ProjectionMatrix = view.getWeaponProjection();
+            }
+            
             switch(re.Type) {
                 case WORLD:
                     sub = Profiler.EnterSection(Sec.RENDER_WORLD);
@@ -134,6 +140,10 @@ public class Render {
                 default:
                     Ref.common.Error(ErrorCode.FATAL, "Render.renderAll(): unknown type " + re.Type);
                     break;
+            }
+            
+            if(re.hasFlag(RenderEntity.FLAG_WEAPONPROJECTION)) {
+                view.ProjectionMatrix = tmpMatrix;
             }
             
         }
@@ -190,7 +200,7 @@ public class Render {
             call.getMaterial().getTexture().Bind();
             
             // render vertices
-            GL11.glDrawArrays(GL11.GL_QUADS, call.getVertexOffset(), call.getVertexCount());
+            GL11.glDrawArrays(call.getDrawMode(), call.getVertexOffset(), call.getVertexCount());
         }
         
         // unbind vbo
@@ -298,7 +308,7 @@ public class Render {
         Vector3f end = ent.origin;
 
         float len = Vector3f.sub(end, start, null).length();
-
+        if(len < 1f) return;
         // compute side vector
         Vector3f renderOrg = view.Origin;
         Vector3f v1 = Vector3f.sub(start, renderOrg, null);
@@ -317,6 +327,10 @@ public class Render {
         boolean useSoftSprites = false;//Ref.glRef.srgbBuffer != null && Ref.glRef.r_softparticles.isTrue();
         CubeTexture tex = null; // depth
 
+        Shader sh = Ref.glRef.getShader("Poly");
+        Ref.glRef.PushShader(sh);
+        sh.setUniform("ModelView", view.viewMatrix);
+        sh.setUniform("Projection", view.ProjectionMatrix);
 //        if(useSoftSprites) {
 //            // use soft particle shader
 //            Ref.glRef.PushShader(softSprite);
@@ -367,6 +381,7 @@ public class Render {
             tex.Unbind();
             Ref.glRef.PopShader();
         }
+        Ref.glRef.PopShader();
     }
     
     private void renderModel(RenderEntity ent) {

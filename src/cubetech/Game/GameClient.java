@@ -886,7 +886,7 @@ public class GameClient extends Gentity implements IDieMethod, IPainMethod {
 
         ps.ducking = false;
         ps.ducked = false;
-        ps.viewheight = (int) Game.PlayerViewHeight;
+        ps.viewheight = Game.PlayerViewHeight;
         ps.ducktime = 0;
         ps.jumpTime = 0;
 

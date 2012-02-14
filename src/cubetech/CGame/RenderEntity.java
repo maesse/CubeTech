@@ -27,6 +27,7 @@ public class RenderEntity {
     public static final int FLAG_NOSHADOW = 2;
     public static final int FLAG_GPUSKINNED = 4;
     public static final int FLAG_NOLIGHT = 8; // Gets rendered after deferred pass
+    public static final int FLAG_WEAPONPROJECTION = 16; // uses custom (secondary) projection matrix
 
     public IQMFrame model = null;
     public REType Type = REType.SPRITE;

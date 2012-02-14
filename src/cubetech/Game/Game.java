@@ -3,12 +3,14 @@ package cubetech.Game;
 import cubetech.CGame.CEntity;
 import cubetech.CGame.PlayerEntity;
 import cubetech.Game.Bot.GBot;
+import cubetech.collision.CollisionResult;
 import cubetech.collision.CubeChunk;
 import cubetech.common.CS;
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
 import cubetech.common.Commands.ExecType;
 import cubetech.common.Common;
+import cubetech.common.Content;
 import cubetech.common.DamageFlag;
 import cubetech.common.Helper;
 import cubetech.common.ICommand;
@@ -38,11 +40,11 @@ import org.lwjgl.util.vector.Vector3f;
  * @author mads
  */
 public class Game {
-    public static final Vector3f PlayerMins = new Vector3f(-30,-30,-46);
-    public static final Vector3f PlayerMaxs = new Vector3f(30,30,40);
+    public static final Vector3f PlayerMins = new Vector3f(-15,-15,-46);
+    public static final Vector3f PlayerMaxs = new Vector3f(15,15,40);
     public static final float PlayerViewHeight = 26; // from center
-    public static final Vector3f PlayerDuckedMins = new Vector3f(-30,-30,-46);
-    public static final Vector3f PlayerDuckedMaxs = new Vector3f(30,30,0);
+    public static final Vector3f PlayerDuckedMins = new Vector3f(-15,-15,-46);
+    public static final Vector3f PlayerDuckedMaxs = new Vector3f(15,15,0);
     public static final float PlayerDuckedHeight = -7; // from center
     CVar sv_speed;
     CVar sv_gravity;
@@ -515,6 +517,7 @@ public class Game {
 
     public boolean radiusDamage(Vector3f origin, Gentity attacker, int dmg, int radius, Gentity ignore, MeansOfDeath mod) {
         if(radius < 1) radius = 1;
+        int sqRadius = radius * radius;
 
         Vector3f mins = Vector3f.sub(origin, new Vector3f(radius, radius, radius), null);
         Vector3f maxs = Vector3f.add(origin, new Vector3f(radius, radius, radius), null);
@@ -527,7 +530,6 @@ public class Game {
             if(ent == ignore) continue;
 
             // find the distance from the edge of the bounding box
-
             for (int i= 0; i < 3; i++) {
                 float org = Helper.VectorGet(origin, i);
                 float min = Helper.VectorGet(ent.r.absmin, i);
@@ -536,18 +538,26 @@ public class Game {
                 else if(org > max) Helper.VectorSet(v, i, org - max);
                 else Helper.VectorSet(v, i, 0);
             }
+            
+            int rad = (int)(v.x * v.x + v.y * v.y + v.z * v.z);
+            
+            if(rad >= sqRadius) continue;
 
             float dist = v.length();
-            if(dist >= radius) {
-                continue;
-            }
-
             float points = dmg * (1f - dist / radius);
             if(ent.isClient()) {
-                hitClient = true;
-                Vector3f dir = Vector3f.sub(ent.r.currentOrigin, origin, null);
-                dir.z += 24;
-                damage(ent, null, attacker, dir, origin, (int)points, DamageFlag.RADIUS, mod);
+                Vector3f viewOrigin = ent.getClient().ps.getViewOrigin();
+                boolean ok = rad == 0;
+                if(!ok) {
+                    CollisionResult res = Ref.server.Trace(origin, viewOrigin, null, null, Content.MASK_PLAYERSOLID, Common.ENTITYNUM_NONE);
+                    ok = res.frac < 1 && res.entitynum == ent.s.number;
+                }
+                
+                if(ok) {
+                    hitClient = true;
+                    Vector3f dir = Vector3f.sub(viewOrigin, origin, null);
+                    damage(ent, null, attacker, dir, origin, (int)points, DamageFlag.RADIUS, mod);
+                }
             }
             
             
@@ -602,20 +612,18 @@ public class Game {
             }
         }
 
-        if(dir == null || dir.length() == 0) {
+        if(dir == null || Helper.Normalize(dir) == 0.0f) {
             dflags |= DamageFlag.NO_KNOCKBACK;
-        } else {
-            dir.normalise();
         }
 
         int knockback = damage;
-        if(knockback > 200) {
-            knockback = 200;
+        if(knockback > 100) {
+            knockback = 100;
         }
 
         // figure momentum add, even if the damage won't be taken
         if(knockback > 0 && client != null && (dflags & DamageFlag.NO_KNOCKBACK) == 0) {
-            float mass = 200;
+            float mass = 100;
 
             Vector3f kvel = new Vector3f(dir);
             kvel.scale(g_knockback.fValue * (float)knockback / mass);
@@ -647,7 +655,6 @@ public class Game {
         }
 
         int take = damage;
-        int save;
 
         // do it
         if(take > 0) {

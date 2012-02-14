@@ -140,10 +140,7 @@ public class Move {
     private static void MoveSingle(MoveQuery query) {
         // determine the time
         msec = query.cmd.serverTime - query.ps.commandTime;
-        if(msec < 1)
-            msec = 1;
-        if(msec > 200)
-            msec = 200;
+        msec = Helper.Clamp(msec, 1, 200);
         query.ps.commandTime = query.cmd.serverTime;
         frametime = msec * 0.001f;
 
@@ -388,14 +385,14 @@ public class Move {
         float duckedView = Game.PlayerDuckedHeight;
         float standingView = Game.PlayerViewHeight;
 
-        pm.ps.viewheight = (int)((duckedView * frac) + (standingView * (1f-frac)));
+        pm.ps.viewheight = ((duckedView * frac) + (standingView * (1f-frac)));
     }
 
     static void finishDuck(MoveQuery pm) {
         boolean wasDucked = pm.ps.ducked;
         pm.ps.ducked = true;
         pm.ps.ducking = false;
-        pm.ps.viewheight = (int) Game.PlayerDuckedHeight;
+        pm.ps.viewheight =  Game.PlayerDuckedHeight;
 
         if(pm.onGround) {
 
@@ -425,7 +422,7 @@ public class Move {
         pm.ps.ducked = false;
         pm.ps.ducking = false;
         pm.ps.ducktime = 0;
-        pm.ps.viewheight = (int) Game.PlayerViewHeight;
+        pm.ps.viewheight =  Game.PlayerViewHeight;
 
         groundTrace(pm);
     }
@@ -669,6 +666,7 @@ public class Move {
         pm.ps.groundEntity = Common.ENTITYNUM_NONE;
         pm.groundNormal = null;
         pm.ps.velocity.z = jumpvel;
+        
         
         ContinueAnim(Animations.JUMP, pm, true);
         return true;

@@ -1,6 +1,7 @@
 package cubetech.CGame;
 
 import cubetech.Game.Gentity;
+import cubetech.client.LocalClient;
 import cubetech.collision.*;
 import cubetech.common.*;
 import cubetech.common.items.IItem;
@@ -15,6 +16,7 @@ import cubetech.misc.Profiler.Sec;
 import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import nbullet.collision.shapes.CollisionShape;
@@ -34,6 +36,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     public CVar cg_showmiss = Ref.cvars.Get("cg_showmiss", "0", EnumSet.of(CVarFlags.TEMP));
     CVar cg_viewsize = Ref.cvars.Get("cg_viewsize", "100", EnumSet.of(CVarFlags.TEMP));
     CVar cg_fov = Ref.cvars.Get("cg_fov", "90", EnumSet.of(CVarFlags.ARCHIVE));
+    CVar cg_modelfov = Ref.cvars.Get("cg_modelfov", "65", EnumSet.of(CVarFlags.ARCHIVE));
     CVar cg_chattime = Ref.cvars.Get("cg_chattime", "5000", EnumSet.of(CVarFlags.ARCHIVE)); // show text for this long
     CVar cg_chatfadetime = Ref.cvars.Get("cg_chatfadetime", "500", EnumSet.of(CVarFlags.ARCHIVE)); // + this time for fading out
     CVar cg_drawSolid = Ref.cvars.Get("cg_drawSolid", "0", EnumSet.of(CVarFlags.NONE));
@@ -42,6 +45,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     CVar cg_viewmode = Ref.cvars.Get("cg_viewmode", "1", EnumSet.of(CVarFlags.NONE));
     CVar cg_swingspeed = Ref.cvars.Get("cg_swingspeed", "0.8", EnumSet.of(CVarFlags.CHEAT));
     CVar cg_freecam = Ref.cvars.Get("cg_freecam", "0", EnumSet.of(CVarFlags.CHEAT));
+    CVar cg_fovHorPlus = Ref.cvars.Get("cg_fovHorPlus", "0", EnumSet.of(CVarFlags.ARCHIVE));
     public CVar cg_drawprofiler = Ref.cvars.Get("cg_drawprofiler", "0", EnumSet.of(CVarFlags.NONE));
     CVar cg_tps = Ref.cvars.Get("cg_tps", "0", EnumSet.of(CVarFlags.NONE));
 
@@ -52,7 +56,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     public CGameRender cgr;
     public LagOMeter lag;
 
-    ChatLine[] chatLines = new ChatLine[8];
+    ChatLog[] chatLogs = new ChatLog[4];
     int chatIndex = 0;
     public CEntity[] cg_entities;
     
@@ -86,8 +90,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         marks = new Marks();
         Ref.cvars.Set2("cg_editmode", "0", true);
 
-        for (int i= 0; i < chatLines.length; i++) {
-            chatLines[i] = new ChatLine();
+        for (int i = 0; i < chatLogs.length; i++) {
+            chatLogs[i] = new ChatLog();
         }
 
         // Clear everything
@@ -243,9 +247,9 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         marks.addMarks();
 
         physics.renderBodies();
-        Light.skylight.setDirection(new Vector3f(1,0,-1));
-        Light.skylight.setDiffuse(new Vector3f(1.0f, 1.0f, 1.0f));
-        Light.skylight.setSpecular(new Vector3f(1.0f,1.0f,1.0f));
+        Light.skylight.setDirection(new Vector3f(1,-0.4f,-1.75f));
+        Light.skylight.setDiffuse(new Vector3f(1.0f,0.985f,0.867f));
+        Light.skylight.setSpecular(new Vector3f(1.0f,0.985f,0.867f));
         Light.skylight.enableShadowCasting(true);
         cg.refdef.lights.add(Light.skylight);
         
@@ -449,7 +453,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     private void CalcViewValues() {
         speed = (float) (speed * 0.8 + cg.cur_lc.predictedPlayerState.velocity.length() * 0.2f);
         cg.refdef = new ViewParams();
-        
+        cg.refdef.forceVerticalFOVLock = cg_fovHorPlus.isTrue();
         ViewParams.SliceType slice = ViewParams.SliceType.NONE;
         switch(cg.nViewports) {
             case 2:
@@ -576,6 +580,18 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             CEntity cent = cg_entities[cg.snap.entities[i].number];
             cgr.AddCEntity(cent);
         }
+        
+        for (int i = 0; i < cg.snap.pss.length; i++) {
+            if(cg.snap.pss[i] == null) continue;
+            int clNum = cg.snap.pss[i].clientNum;
+            if(clNum != cg.cur_ps.clientNum) {
+                LocalClient lc = cg.getLocalClient(clNum);
+//                cg.snap.pss[i].ToEntityState(lc.predictedPlayerEntity.currentState, false);
+                cgr.AddCEntity(lc.predictedPlayerEntity);
+            }
+        }
+        
+        
 
         
 
@@ -607,12 +623,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         physcent.pe.boneMeshes = null;
         Common.LogDebug("Cleaned physics from centity");
     }
-
-    class ChatLine {
-        public String str = "";
-        //public String from;
-        public int time;
-    }
+    
+    
 
     // When set to a non-empty string, CGame wont run, only display the text
     public void LoadingString(String str) {
@@ -682,8 +694,15 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     private void ServerCommand(String command) {
         String[] tokens = Commands.TokenizeString(command, false);
         String cmd = tokens[0];
-        if(cmd == null || cmd.isEmpty())
-            return; // server claimed the command
+        int lc = 0;
+        if(cmd == null || cmd.isEmpty()) return; // server claimed the command
+        if(cmd.startsWith("lc") && cmd.length() > 2) {
+            try {
+                lc = Integer.parseInt(cmd.substring(2))+1;
+            } catch(NumberFormatException ex) {}
+            cmd = tokens[1];
+            tokens = Arrays.copyOfRange(tokens, 1, tokens.length);
+        }    
 
         if(cmd.equalsIgnoreCase("cp")) {
             // CenterPrint
@@ -696,13 +715,13 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         }
 
         if(cmd.equalsIgnoreCase("print")) {
-            Ref.cgame.Print(Commands.Args(tokens));
+            Ref.cgame.Print(lc, Commands.Args(tokens));
             return;
         }
 
         if(cmd.equalsIgnoreCase("chat")) {
             // TODO: Chat text overlay in console
-            Ref.cgame.Print(Commands.Args(tokens));
+            Ref.cgame.Print(lc, Commands.Args(tokens));
             return;
         }
 
@@ -720,11 +739,16 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         Common.Log("Unkown cgame command: " + cmd);
     }
 
-    public void Print(String str) {
-        ChatLine line = chatLines[chatIndex++ % chatLines.length];
-        line.str = str;
-        line.time = Ref.client.realtime;
+    public void Print(int clientIndex, String str) {
+        if(clientIndex < 0 || clientIndex >= 4) {
+            Ref.common.Error(Common.ErrorCode.DROP, "CGame.Print(): Invalid clientIndex " + clientIndex);
+        }
+        chatLogs[clientIndex].addLine(str);
         Common.Log(str);
+    }
+    
+    public void Print(String str) {
+        Print(cg.cur_localClientNum, str);
     }
 
     private void ConfigStringModified(String[] tokens) {
@@ -845,5 +869,22 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             return cg.cur_lc.predictedPlayerState.clientNum;
         else
             return -1;
+    }
+    
+    final static class ChatLog {
+        ArrayList<ChatLine> log = new ArrayList<ChatLine>();
+        void addLine(String str) {
+            ChatLine l = new ChatLine(str);
+            log.add(l);
+        }
+    }
+
+    final static class ChatLine {
+        String str = "";
+        int time;
+        ChatLine(String str) {
+            this.str = str;
+            time = Ref.client.realtime;
+        }
     }
 }

@@ -30,11 +30,15 @@ import org.lwjgl.util.vector.Vector3f;
  */
 public class RocketLauncher extends WeaponItem {
     private WeaponInfo wi = new WeaponInfo();
+    
+    private int splashDmg = 60;
+    private int splashRadius = 130;
+    private int directDmg = 75;
 
     public RocketLauncher() {
         wi.missileModel = Ref.ResMan.loadModel("data/weapons/rocketlauncher/rocket.iqm");
         wi.missileTrailFunc = missileTrailFunc;
-        wi.viewModel = Ref.ResMan.loadModel("data/weapons/rocketlauncher/rocket_vmodel.iqm");
+        wi.viewModel = Ref.ResMan.loadModel("data/models/rpg/rpg-7.iqm");
         wi.fireSound = "data/weapons/rocketlauncher/TF2RL_Fire.wav";
         wi.missileSound = "data/weapons/rocketlauncher/TF2RL_Loop.wav";
         wi.trailRadius = 16f;
@@ -62,7 +66,7 @@ public class RocketLauncher extends WeaponItem {
             Vector3f dir = new Vector3f(es.pos.delta);
             dir.normalise();
             Vector3f rndOffset = new Vector3f();
-            CubeMaterial mat = Ref.ResMan.LoadTexture("data/textures/smokepuff.png").asMaterial();
+            CubeMaterial mat = Ref.ResMan.LoadTexture("data/textures/smokepuff.tga").asMaterial();
             for (;t <= ent.trailTime; t += step) {
                 es.pos.Evaluate(t, lastPos);
                 Helper.VectorMA(lastPos, -16f, dir, lastPos);
@@ -119,11 +123,11 @@ public class RocketLauncher extends WeaponItem {
         r.s.weapon = getWeapon();
         r.r.ownernum = gc.s.number;
         r.parent = gc;
-        r.splashDamage = 100;
-        r.splashRadius = 130;
+        r.splashDamage = splashDmg;
+        r.splashRadius = splashRadius;
         r.meansOfDeath = MeansOfDeath.ROCKET;
         r.splashMeansOfDeath = MeansOfDeath.ROCKET_SPLASH;
-        r.damage = 100;
+        r.damage = directDmg;
         r.ClipMask = Content.MASK_SHOT;
         r.s.pos.type = Trajectory.LINEAR;
         r.s.pos.time = g.level.time - 10; // move a bit on first frame

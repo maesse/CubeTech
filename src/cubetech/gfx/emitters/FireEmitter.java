@@ -62,45 +62,59 @@ public class FireEmitter implements IEmitter {
         try {
             create(count, radius, 800, origin, CubeMaterial.Load("data/particles/fire.mat", true));
         } catch (Exception ex) {
-            create(count, radius, 800, origin, Ref.ResMan.LoadTexture("data/particles/fire.png").asMaterial());
+            create(count, radius, 800, origin, Ref.ResMan.LoadTexture("data/particles/fire.tga").asMaterial());
         }
     }
 
     private static void create(int count, float radius, int lifeTime, Vector3f origin, CubeMaterial mat) {
         int time = Ref.cgame.cg.time;
         for (int i= 0; i < count; i++) {
-            Vector3f dir = getRandomVector(false);
+            Vector3f dir = getRandomVector(true);
             if(dir.z < 0) dir.z *= -1f;
-            float rndVelocity =  radius*0.4f;
-
-
-
             float rnd = Ref.rnd.nextFloat();
-            int lifetimeRnd = (int)((rnd) * -300f) + lifeTime;
+            float rndVelocity =  radius*(0.3f + 0.8f * rnd);
+
+
+
+            
+            int lifetimeRnd = (int)((rnd) * 600f) + lifeTime;
             int timeRnd = time - (int)(rnd * 100) - 100;
 
+            
+            Vector3f rndOrigin = Helper.VectorMA(origin, rnd * 10, dir, null);
+            
+            dir.scale(rndVelocity);
+            float dirLen = dir.length();
             dir.x *= 0.4f;
             dir.y *= 0.4f;
-            Vector3f rndOrigin = Helper.VectorMA(origin, rnd * 10, dir, null);
-            float dirLen = dir.length();
-            dir.scale(rndVelocity);
-
+            Helper.VectorMA(rndOrigin, 1f, dir, rndOrigin);
+            
+            
+            
+            
             float startRnd = rnd * 0.2f;
             float r = 0.7f - startRnd;
             float g = 0.1f + startRnd;
             float b = 0f + startRnd*0.1f;
+            
 
             float endRnd = rnd * 0.15f;
             float r1 = endRnd;
             float g1 = endRnd;
             float b1 = endRnd;
-
+            
+            float lenFrac = Helper.Clamp(dirLen / 200f, 0, 1f);
+            float invLenFrac = 1f - lenFrac;
+            r = r * invLenFrac + r1 * lenFrac;
+            g = g * invLenFrac + g1 * lenFrac;
+            b = b * invLenFrac + b1 * lenFrac;
+            dirLen /= rndVelocity;
             if(dirLen > 1) dirLen = 1;
             float fadeScale = (1-dirLen)*0.3f;
             LocalEntity ent = LocalEntity.colorFadedSmokePuff(rndOrigin, dir, 80f + 40 * rnd, r, g, b, 1, lifetimeRnd, timeRnd, 0, mat, r1, g1, b1,1,0.3f+fadeScale);
             ent.rEntity.frame = i % mat.getFrameCount();
             ent.pos.type = Trajectory.GRAVITY;
-            ent.pos.duration = -20;
+            ent.pos.duration = (int)( -100 * (0.5f + 0.5f * rnd));
         }
     }
 

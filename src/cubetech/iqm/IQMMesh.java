@@ -92,11 +92,16 @@ public class IQMMesh {
             if(!noNormalMap) {
                 int lastdot = tex.name.lastIndexOf(".");
                 String cleanname = tex.name.substring(0, lastdot);
-                cleanname += "_normal" + tex.name.substring(lastdot);
-                if(ResourceManager.FileExists(cleanname)) {
-                    normalmap = Ref.ResMan.LoadTexture(cleanname);
+                if(cleanname.endsWith("_diffuse")) cleanname = cleanname.substring(0, cleanname.length()-"_diffuse".length());
+                cleanname += "_normal" ;
+                if(ResourceManager.FileExists(cleanname + tex.name.substring(lastdot)) ) {
+                    normalmap = Ref.ResMan.LoadTexture(cleanname + tex.name.substring(lastdot));
                     normalmap.textureSlot = 3;
                 } else {
+                    if(ResourceManager.FileExists(cleanname + ".png") ) {
+                        normalmap = Ref.ResMan.LoadTexture(cleanname + ".png");
+                        normalmap.textureSlot = 3;
+                    }
                     noNormalMap = true;
                 }
             }
@@ -108,6 +113,7 @@ public class IQMMesh {
             if(!noSpecularMap) {
                 int lastdot = tex.name.lastIndexOf(".");
                 String cleanname = tex.name.substring(0, lastdot);
+                if(cleanname.endsWith("_diffuse")) cleanname = cleanname.substring(0, cleanname.length()-"_diffuse".length());
                 cleanname += "_specular" + tex.name.substring(lastdot);
                 if(ResourceManager.FileExists(cleanname)) {
                     specularmap = Ref.ResMan.LoadTexture(cleanname);

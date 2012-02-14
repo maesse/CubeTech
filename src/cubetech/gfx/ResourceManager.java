@@ -1,5 +1,9 @@
 package cubetech.gfx;
 
+import cubetech.misc.Callback;
+import cubetech.Game.Gentity;
+import cubetech.common.IThinkMethod;
+import cubetech.gfx.TargaReader.TargaFile;
 import org.lwjgl.opengl.ARBTextureRg;
 import org.lwjgl.opengl.EXTFramebufferSRGB;
 import cubetech.gfx.Resource.ResourceType;
@@ -96,6 +100,7 @@ public final class ResourceManager {
     private CubeTexture whiteTexture = null;
     private CubeTexture noSpecularTexture = null;
     private CubeTexture noNormalTexture = null; // 1 pixel (0,0,1)
+    
 
     public ResourceManager() {
         // Setup color models needed for loading textures
@@ -466,6 +471,7 @@ public final class ResourceManager {
                               CubeTexture texture) throws IOException {
 
         int textureID = -1;
+        
         try {
             if(target == GL_TEXTURE_CUBE_MAP && texture != null && texture.loaded) {
                 texture.loaded = false;
@@ -538,27 +544,30 @@ public final class ResourceManager {
                               0,GL_RGBA,GL_UNSIGNED_BYTE,
                                convertImageData(loadImage(resourceName+"_dn.png", -90f),texture, false) );
             } else {
+                
                 // load image data
-                BufferedImage bufferedImage = null;
-                boolean flipY = true;
+                int srcPixelFormat = GL_RGBA;
+                ByteBuffer textureBuffer = null;
                 if(resourceName.toLowerCase().endsWith(".tga")) {
-                    bufferedImage = TargaReader.getImage(resourceName);
-                    flipY = false;
+                    TargaFile tgaFile = TargaReader.getImage(resourceName, true);
+                    texture.Width = tgaFile.width;
+                    texture.Height = tgaFile.height;
+                    textureBuffer = tgaFile.data;
                 } else {
-                    bufferedImage = loadImage(resourceName, 0f);
+                    BufferedImage bufferedImage = loadImage(resourceName, 0f);
+                    texture.Width = bufferedImage.getWidth();
+                    texture.Height = bufferedImage.getHeight();
+                    // convert that image into a byte buffer of texture data
+                    textureBuffer = convertImageData(bufferedImage,texture, true);
+                    srcPixelFormat = bufferedImage.getColorModel().hasAlpha() ? GL_RGBA : GL_RGB;
                 }
-                texture.Width = bufferedImage.getWidth();
-                texture.Height = bufferedImage.getHeight();
-
-                // convert that image into a byte buffer of texture data
-                ByteBuffer textureBuffer = convertImageData(bufferedImage,texture, flipY);
-                int srcPixelFormat = bufferedImage.getColorModel().hasAlpha() ? GL_RGBA : GL_RGB;
+                
                 // produce a texture from the byte buffer
                 glTexImage2D(target,0,dstPixelFormat,
-                              Helper.get2Fold(bufferedImage.getWidth()),
-                              Helper.get2Fold(bufferedImage.getHeight()),
+                              texture.Width,
+                              texture.Height,
                               0,srcPixelFormat,GL_UNSIGNED_BYTE,
-                              textureBuffer );
+                              textureBuffer);
             }
         } catch(IOException ex) {
             if(textureID > 0) {
@@ -707,24 +716,29 @@ public final class ResourceManager {
     }
 
     public static File OpenFileAsFile(String path) {
-        URL url = getClassLoader().getResource("cubetech/"+path);
         File file = null;
-        InputStream stream = null;
-        if(url == null) {
-            url = getClassLoader().getResource(path);
-
-            if(url == null) {
-                // Try looking on the filesystem
-                file = new File(path);
-                if(file == null || !file.canRead()) return null;
-                else {
-
-                    return file;
-
-                }
-            }
+        
+        if(Ref.common != null && Ref.common.isDeveloper()) {
+            file = new File(devpath.sValue+path);
+            if(!file.exists() || file.isDirectory()) file = null;
         }
-        return new File(url.getFile());
+        
+        if(file == null) {
+            URL url = getClassLoader().getResource("cubetech/"+path);
+            if(url != null) file = new File(url.getFile());
+        }
+        
+        if(file == null) {
+            URL url = getClassLoader().getResource(path);
+            if(url != null) file = new File(url.getFile());
+        }
+        
+        if(file == null) {
+            // Try looking on the filesystem
+            file = new File(path);
+            if(!file.exists() || file.isDirectory()) file = null;
+        }
+        return file;
     }
 
     // Figures out what materials we have
@@ -991,5 +1005,28 @@ public final class ResourceManager {
         return tex;
     }
 
-    
+    public Callback<File, Void> onFileModified = new Callback<File, Void>() {
+        public Void execute(File e, Object tag) {
+            if(tag instanceof String == false) return null;
+            String filename = (String)tag;
+            
+            Common.LogDebug("Detected file modification for " + filename);
+            
+            Resource res = Ressources.get(filename.toLowerCase());
+            if(res == null) {
+                Common.LogDebug("Can't find texture in cache.. aborting reload");
+            } else if(res.Type == ResourceType.TEXTURE && res.loaded && 
+                    (res.target == GL_TEXTURE_2D || res.target == GL_TEXTURE_CUBE_MAP)) {
+
+                res.loaded = false;
+                unloadedRessources.add(res);
+                Common.LogDebug("Queued file for loading");
+            } else {
+                Common.LogDebug("Won't try to load it.");
+            }
+            
+            return null;
+        }
+
+    };
 }

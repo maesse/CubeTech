@@ -198,7 +198,12 @@ public class Profiler {
                     entry.selfTime += subEntry.selfTime;
                     entry.sumTime += subEntry.sumTime;
                     if(subEntry.subTags != null) {
-                        entry.subTags.addAll(subEntry.subTags);
+                        if(entry.subTags == null) {
+                            entry.subTags = subEntry.subTags;
+                            subEntry.subTags = null;
+                        } else {
+                            entry.subTags.addAll(subEntry.subTags);
+                        }
                     }
                     entries.remove(j);
                 }

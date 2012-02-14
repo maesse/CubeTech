@@ -72,7 +72,7 @@ public class PlayerState {
     public boolean ducked;
     public int ducktime;
     public boolean[] oldButtons = new boolean[30];
-    public int viewheight = (int)Game.PlayerViewHeight;
+    public float viewheight = Game.PlayerViewHeight;
 
     // from game -> server, tells server what map data to send
     public ClientPersistant pers = null;
@@ -131,7 +131,7 @@ public class PlayerState {
         ducked = false;
         ducktime = 0;
         oldButtons = new boolean[30];
-         viewheight = (int)Game.PlayerViewHeight;
+         viewheight = Game.PlayerViewHeight;
     }
 
 //    // Use mouse position as a viewangle
@@ -280,7 +280,8 @@ public class PlayerState {
             externalEvent = 0;
             Gentity t = Ref.game.TempEntity(origin, evt);
             int n = t.s.number;
-            ToEntityState(t.s, false);
+            ToEntityState(t.s, true);
+            t.s.contents = 0;
             t.s.number = n;
             t.s.eType = EntityType.EVENTS + evt;
             t.s.eFlags |= EntityFlags.PLAYER_EVENT;
@@ -398,7 +399,7 @@ public class PlayerState {
         for (int i= 0; i < oldButtons.length; i++) {
             oldButtons[i] = (((buttons >> i) & 1) == 1);
         }
-        viewheight = msg.ReadDeltaInt(ps.viewheight);
+        viewheight = msg.ReadDeltaFloat(ps.viewheight);
         groundEntity = msg.ReadDeltaInt(ps.groundEntity);
         fallVelocity = msg.ReadDeltaFloat(ps.fallVelocity);
     }

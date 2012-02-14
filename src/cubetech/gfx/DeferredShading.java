@@ -98,6 +98,7 @@ public class DeferredShading {
         MultiRenderBuffer.MRBBuilder info = mrt.getInfo();
         if(resolution.x == info.getWidth() && resolution.y == info.getHeight()) return;
         mrt.dispose();
+        info = info.cloneFormats((int)resolution.x, (int)resolution.y);
         mrt = new MultiRenderBuffer(info);
     }
     
@@ -135,8 +136,9 @@ public class DeferredShading {
         GLRef.checkError();
         ARBFramebufferObject.glBindFramebuffer(ARBFramebufferObject.GL_DRAW_FRAMEBUFFER, 0);
         GLRef.checkError();
-        ARBFramebufferObject.glBlitFramebuffer(0, 0, w-1, h-1, 
-                0, 0, w-1, h-1, 
+        
+        ARBFramebufferObject.glBlitFramebuffer(currentView.ViewportX, currentView.ViewportY, (currentView.ViewportX+currentView.ViewportWidth)-1, (currentView.ViewportY+currentView.ViewportHeight)-1, 
+                currentView.ViewportX, currentView.ViewportY, (currentView.ViewportX+currentView.ViewportWidth)-1, (currentView.ViewportY+currentView.ViewportHeight)-1, 
                 GL_DEPTH_BUFFER_BIT, GL_NEAREST);
         GLRef.checkError();
         ARBFramebufferObject.glBindFramebuffer(ARBFramebufferObject.GL_READ_FRAMEBUFFER, 0);
@@ -214,6 +216,31 @@ public class DeferredShading {
         }
     }
     
+    private void applyAOTexture(boolean bind) {
+        if(bind) {
+            // set ssao
+            CubeTexture ssaoTex = null;
+            if(ssao.ssao_enable.isTrue()) {
+                ssaoTex = ssao.getSSAOTarget(true);
+                ssaoTex.textureSlot = 4;
+                ssaoTex.Bind();
+            } else {
+                CubeTexture white = Ref.ResMan.getWhiteTexture();
+                white.textureSlot = 4;
+                white.Bind();
+            }
+        } else {
+            if(ssao.ssao_enable.isTrue()) {
+                CubeTexture ssaoTex = ssao.getSSAOTarget(true);
+                if(ssaoTex != null) ssaoTex.Unbind();
+            } else {
+                CubeTexture white = Ref.ResMan.getWhiteTexture();
+                white.Unbind();
+                white.textureSlot = 0;
+            }
+        }
+    }
+    
     public void finalizeShading() {
         if(!r_deferred.isTrue()) return;
         if(currentView == null) return;
@@ -252,18 +279,30 @@ public class DeferredShading {
         GL11.glEnable(GL11.GL_DEPTH_TEST);
         GLState.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE);
         
+        if(envmap == null) envmap = Ref.ResMan.LoadTexture("data/textures/skybox/ibl_sky", true);
+//        envmap.textureSlot = 3;
+//        envmap.Bind();
+//        envmap.Unbind();
+        ssao.run(this, currentView);
+        applyAOTexture(true);
+        
+        
         SecTag t = Profiler.EnterSection(Sec.AMBIENT_PASS);
         Shader shader = Ref.glRef.getShader("DeferredAmbientCube");
+        
         Ref.glRef.PushShader(shader);
         shader.setUniform("viewmatrix", Matrix4f.invert(currentView.viewMatrix, null));
         shader.setUniform("ambientFactor", r_ambient.fValue);
         if(envmap == null) envmap = Ref.ResMan.LoadTexture("data/textures/skybox/ibl_sky", true);
         envmap.textureSlot = 3;
         envmap.Bind();
+        
+        
         fullscreenPass(shader, true, false, true);
         envmap.Unbind();
         Ref.glRef.PopShader();
         t.ExitSection();
+        
         
         
         
@@ -290,6 +329,10 @@ public class DeferredShading {
                     CubeTexture depth = shadows.getDepthTexture();
                     depth.textureSlot = 3;
                     depth.Bind();
+                    
+                    CubeTexture randomRot = Ref.glRef.shadowMan.getRotationTexture();
+                    randomRot.textureSlot = 5;
+                    randomRot.Bind();
 
                     Matrix4f[] shadowmat = shadows.getShadowViewProjections(4, light);
                     Vector4f shadowDepths = shadows.getCascadeDepths();
@@ -302,8 +345,9 @@ public class DeferredShading {
                     shader.setUniform("pcfOffsets", shadows.getPCFoffsets());
                     GLRef.checkError();
                     fullscreenPass(shader, true, true, true);
-                    Ref.glRef.PopShader();
+                    randomRot.Unbind();
                     depth.Unbind();
+                    Ref.glRef.PopShader();
                 } else {
                     shader = Ref.glRef.getShader("DeferredDirectionalLight");
                     Ref.glRef.PushShader(shader);
@@ -382,6 +426,8 @@ public class DeferredShading {
                 t.ExitSection();
             }
         }
+        
+        applyAOTexture(false);
         GLState.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);   
         
         shader = Ref.glRef.getShader("DeferredFog");
@@ -390,15 +436,16 @@ public class DeferredShading {
         fullscreenPass(shader, false, false, true);
         Ref.glRef.PopShader();
         
-        ssao.run(this);
         
+        ssao.debugDraw();
 
         GL11.glDepthFunc(GL11.GL_LEQUAL);
         GL11.glDepthMask(true);
-        currentView = null;
-        
         blitDepth();
-
+        
+        
+        
+        currentView = null;
     }
     
     private void singlePassLighting() {
@@ -410,7 +457,7 @@ public class DeferredShading {
         
         CubeTexture ssaoTex = null;
         if(ssao.ssao_enable.isTrue()) {
-            ssaoTex = ssao.getSSAOTarget();
+            ssaoTex = ssao.getSSAOTarget(true);
             Integer mapid = shader.textureMap.get("ssao");
             if(mapid != null && mapid >= 0) {
                 int uniformid = shader.GetTextureIndex(3);
@@ -477,7 +524,7 @@ public class DeferredShading {
     
     public void setTextures(Shader shader, boolean tex0, boolean tex1, boolean tex2) {
         for (int i = 0; i < 3; i++) {
-            if(i == 0 && !tex0 || i == 1 && !tex1 || i == 2 && !tex2) continue;
+            if((i == 0 && !tex0) || (i == 1 && !tex1) || (i == 2 && !tex2)) continue;
             Integer mapid = shader.textureMap.get("tex" + i);
             if(mapid != null && mapid >= 0) {
                 int shaderTexIndex = shader.GetTextureIndex(i);

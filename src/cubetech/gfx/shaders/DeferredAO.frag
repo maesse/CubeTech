@@ -12,6 +12,8 @@ uniform float kernelRadius;
 uniform mat4 projectionMatrix;
 uniform float far;
 
+uniform vec4 viewOffset = vec4(0.0,0.0,1.0,1.0);
+
 void main()
 {
     vec4 vtex2 = texture2D(tex2, texcoord);
@@ -31,8 +33,7 @@ void main()
     float occlusion = 0.0;
     vec3 samplesum = vec3(0,0,0);
     for(int i=0; i < NSAMPLES; i++) {
-        vec3 sample = vec3(tbn * kernel[i]);
-        sample = sample * kernelRadius * (1+depth*2.0) + position;
+        vec3 sample = vec3(tbn * kernel[i]) * kernelRadius * (1+depth*2.0) + position;
         // View space -> screen space
         vec4 offset = vec4(sample, 1.0);
         
@@ -43,18 +44,24 @@ void main()
         offset /= offset.w;
         offset.xy = offset.xy * 0.5 + 0.5;
 
+        offset.xy = viewOffset.xy + offset.xy * viewOffset.zw;
+
         // sample depth at point
         float sampleDepth = texture2D(tex2, offset.xy).w * -far;
         
-        float rangeCheck = abs(position.z - sampleDepth)  < kernelRadius ? 1.0 : 0.0;
-        occlusion += (sampleDepth   >= sample.z ? 1.0 : 0.0) * rangeCheck;
+        float rangeCheck = abs(position.z - sampleDepth) - kernelRadius;
+        if(rangeCheck < 0) { rangeCheck = 1.0; } else { rangeCheck = 1.0 - min(rangeCheck/kernelRadius, 1.0); }
+        float occFrac = 1.0;// - (length(kernel[i]))*0.7;
+        occlusion += (sampleDepth   >= sample.z ? 1.0 : 0.0) * occFrac * rangeCheck;
     }
-    occlusion =   1.0 - (occlusion / float(NSAMPLES));
+    occlusion =   abs(1.0 - (occlusion / float(NSAMPLES)));
 
     gl_FragColor.rgb = vec3(0,0,0);
-    gl_FragColor.rgb = vec3(abs(occlusion) );
+    gl_FragColor.rgb = vec3(occlusion * occlusion );
     //gl_FragColor.rgb = vec3(abs(sampleDepth - depth) * 1.0);
     //gl_FragColor.rg = (abs( offset.xy - texcoord) ) * 100.0;
+
+    //gl_FragColor.rgb = rnd.rgb;
     
     
     gl_FragColor.a = 1.0;

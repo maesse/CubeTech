@@ -14,6 +14,7 @@ import org.lwjgl.opengl.ARBUniformBufferObject;
 import org.lwjgl.opengl.ARBVertexShader;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
+import org.lwjgl.opengl.GL20;
 import static org.lwjgl.opengl.GL20.*;
 import org.lwjgl.util.vector.*;
 
@@ -222,7 +223,7 @@ public class IQMFrame {
         
         Ref.glRef.PopShader();
         
-//        debugdraw(position, axis, view);
+        debugdraw(position, axis, view);
     }
     
     public void renderCPUSkinned(Vector3f position, Vector3f[] axis, Vector4f color, int renderFlags, ViewParams view) {
@@ -639,7 +640,7 @@ public class IQMFrame {
             glPopMatrix();
         }
         
-        if( true && attachments != null) {
+        if( false && attachments != null) {
             Ref.glRef.pushShader("World");
             glDepthFunc(GL_ALWAYS);
             for (BoneAttachment attach : attachments.values()) {
@@ -700,46 +701,56 @@ public class IQMFrame {
 //        }
 
         if(true) {
-            Ref.glRef.pushShader("World");
+            Shader shader = Ref.glRef.getShader("PolyDeferred");
+            Ref.glRef.PushShader(shader);
             glLineWidth(2.0f);
             glDepthFunc(GL_ALWAYS);
-            glBegin(GL_LINES);
+            Ref.ResMan.getWhiteTexture().Bind();
+            
+            shader.setUniform("far", view.farDepth); 
+            shader.setUniform("ModelView", view.viewMatrix);
+            shader.setUniform("Projection", view.ProjectionMatrix);
+            
             Vector4f v = new Vector4f();
+            Matrix4f invView = Matrix4f.invert(view.viewMatrix, null);
+            Matrix4f invModel = Matrix4f.invert(modelMatrix, null);
+            Vector3f[] boneaxis = new Vector3f[] {new Vector3f(),new Vector3f(),new Vector3f()};
+            Matrix4f boneMatrix = null;
+            glBegin(GL_LINES);
             for (int i= 0; i < model.joints.length; i++) {
                 IQMJoint joint = model.joints[i];
-//                if(model.boneUsage != null && !model.boneUsage[i]) continue;
-                Helper.col(0, 0, 4);
                 
-                v.set(0,0,0,1);
-                Matrix4f.transform(joint.baseframe, v, v);
-                Matrix4f.transform(outframe[i], v, v);
-                Matrix4f.transform(modelMatrix, v, v);
+                // Calculate bone origin
+                Matrix4f mv = Matrix4f.mul(outframe[i], joint.baseframe, null);
+                mv = Matrix4f.mul(modelMatrix, mv, mv);
+                mv = Matrix4f.mul(invView, mv, mv);
+                v.set(mv.m30, mv.m31, mv.m32, 0);
                 
-                Vector3f[] boneaxis = new Vector3f[3];
-                for (int j = 0; j < 3; j++) {
-                    boneaxis[j] = new Vector3f();
-                }
-                Matrix4f boneMatrix = Matrix4f.transpose(outframe[i], null);
-                Helper.matrixToAxis(Matrix4f.mul(boneMatrix, Matrix4f.invert(modelMatrix, null), boneMatrix), boneaxis);
+                // Calculate bone axis
+                boneMatrix = Matrix4f.transpose(outframe[i], boneMatrix);
+                mv.transpose();
+                Helper.matrixToAxis(mv, boneaxis);
                 
+                // Draw axis
                 float lineSize = 3f;
                 for (int j= 0; j < 3; j++) {
                     lineSize = 3f;
-                    if(j == 0) Helper.col(10, 0, 0);
-                    if(j == 1) Helper.col(0, 10, 0);
-                    if(j == 2) {Helper.col(0, 0, 10); lineSize *= 2f;}
+                    if(j == 2) lineSize *= 2f;
                     boneaxis[j].normalise();
-
-                    glVertex3f(v.x - boneaxis[j].x * lineSize * 0.5f,
+                     
+                    GL20.glVertexAttrib3f(Shader.INDICE_POSITION,
+                            v.x - boneaxis[j].x * lineSize * 0.5f,
                             v.y - boneaxis[j].y * lineSize* 0.5f,
                             v.z - boneaxis[j].z * lineSize* 0.5f);
-                    glVertex3f(v.x + boneaxis[j].x * lineSize,
+                    GL20.glVertexAttrib3f(Shader.INDICE_POSITION,
+                            v.x + boneaxis[j].x * lineSize,
                             v.y + boneaxis[j].y * lineSize,
                             v.z + boneaxis[j].z * lineSize);
                 }
             }
 
             glEnd();
+            
             glDepthFunc(GL_LEQUAL);
             Ref.glRef.PopShader();
         }

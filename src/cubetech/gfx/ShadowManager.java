@@ -11,6 +11,7 @@ import cubetech.misc.Profiler;
 import cubetech.misc.Profiler.Sec;
 import cubetech.misc.Profiler.SecTag;
 import cubetech.misc.Ref;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import org.lwjgl.opengl.EXTFramebufferObject;
@@ -44,6 +45,7 @@ public class ShadowManager {
     public CVar shadow_filter;
     public CVar shadow_kernel;
     public CVar shadow_maxquality;
+    private CubeTexture rotationTexture;
     
     // Temp vectors
     private Vector4f[] tempFrustumPoints = new Vector4f[8];
@@ -165,12 +167,18 @@ public class ShadowManager {
 
         shadow_enable = Ref.cvars.Get("shadow_enable", "1", EnumSet.of(CVarFlags.NONE));
         shadow_enable.modified = false;
-        shadow_factor = Ref.cvars.Get("shadow_factor", "1.0", EnumSet.of(CVarFlags.NONE));
+        shadow_factor = Ref.cvars.Get("shadow_factor", "0.75", EnumSet.of(CVarFlags.NONE));
         shadow_filter = Ref.cvars.Get("shadow_filter", "linear", EnumSet.of(CVarFlags.ARCHIVE));
         shadow_kernel = Ref.cvars.Get("shadow_kernel", "0.5", EnumSet.of(CVarFlags.NONE));
         shadow_maxquality = Ref.cvars.Get("shadow_maxquality", "2", EnumSet.of(CVarFlags.NONE));
         shadow_maxquality.Max = 2;
         shadow_maxquality.Min = 0;
+        
+        rotationTexture = generateRotationNoiseTexture(64, 64);
+    }
+    
+    public CubeTexture getRotationTexture() {
+        return rotationTexture;
     }
     
     public void renderShadowsForLight(Light light, ViewParams view, IRenderCallback renderCallback) {
@@ -809,8 +817,37 @@ public class ShadowManager {
         return rendering;
     }
 
-    
-
+    // Creates a noise texture with baked sin/cos (of the random values) in the red and green channel
+    public static CubeTexture generateRotationNoiseTexture(int width, int height) {
+        float[] rnd = new float[height*width];
+        for (int i = 0; i < height*width; i++) {
+            rnd[i] = (float)(Ref.rnd.nextFloat()*Math.PI);
+        }
+        int texid = Ref.ResMan.CreateEmptyTexture(width, height, GL11.GL_TEXTURE_2D, false, null);
+        ByteBuffer buf = ByteBuffer.allocateDirect(width*height*3);
+        for (int i= 0; i < width*height; i++) {
+            // Calculate sin and cos for the random sample
+            // scale from [-1;1] to [0;1]
+            float red = (float)Math.sin(rnd[i])*0.5f + 0.5f;
+            float green = (float)Math.cos(rnd[i])*0.5f + 0.5f;
+            // scale from [0;1] to [0;255]
+            byte r = (byte)(red*255);
+            byte g = (byte)(green*255);
+            buf.put(r).put(g).put((byte)0);
+        }
+        buf.flip();
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGB, width, height, 0, GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, buf);
+        CubeTexture tex = new CubeTexture(GL11.GL_TEXTURE_2D, texid, "Generated Rotational Noise texture");
+        tex.loaded = true;
+        tex.Width = width;
+        tex.Height = height;
+        tex.textureSlot = 5;
+        tex.setWrap(GL11.GL_REPEAT);
+        tex.setFiltering(true, GL11.GL_LINEAR);
+        tex.setFiltering(false, GL11.GL_LINEAR);
+        GLRef.checkError();
+        return tex;
+    }
     
 
     public Vector4f[] getCascadeColors() {

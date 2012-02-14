@@ -32,7 +32,7 @@ public class Bot {
         }
 
         Vector3f lookDest = Ref.game.g_entities[0].r.currentOrigin;
-//        lookAt(cmd, lookDest);
+        lookAt(cmd, lookDest);
 
         float looklen = Helper.VectorDistance(lookDest, getOrigin());
 

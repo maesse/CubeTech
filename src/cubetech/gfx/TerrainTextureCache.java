@@ -78,7 +78,7 @@ public class TerrainTextureCache {
         }
 
         // Set up multitextures
-        multitexs[-CubeType.GRASS-1] = new MultiTexture(16*15,16*15+2,16*15+3);
+        multitexs[-CubeType.GRASS-1] = new MultiTexture(0,2,3);
 
         initialized = true;
     }
@@ -96,12 +96,13 @@ public class TerrainTextureCache {
         }else {
             dest.x += textureEpsilon;
         }
-        if(!ymin) {
+        if(ymin) {
             dest.y += sizeDelta - textureEpsilon;
         } else {
             dest.y += textureEpsilon;
         }
 
+        dest.y = 1f - dest.y;
 
         return dest;
     }

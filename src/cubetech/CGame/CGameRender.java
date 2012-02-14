@@ -50,9 +50,9 @@ public class CGameRender {
         cent.CalcLerpPosition();
         cent.Effects();
         if(cent == Ref.cgame.cg.cur_lc.predictedPlayerEntity && !Ref.cgame.cg_tps.isTrue() 
-                && (!Ref.cgame.cg_freecam.isTrue() || !Ref.cgame.cg.playingdemo)) {
+                && (!Ref.cgame.cg_freecam.isTrue() || !Ref.cgame.cg.playingdemo) ) {
             // Don't render local playermodel
-            if(cent.pe.boneMeshModel != null) {
+            if(cent.pe.boneMeshModel != null && Ref.cgame.cg.nViewports <= 1) {
                 Ref.cgame.centitiesWithPhysics.remove(cent);
                 Ref.cgame.cleanPhysicsFromCEntity(cent);
             }
@@ -106,7 +106,7 @@ public class CGameRender {
 
         WeaponInfo wi = w.getWeaponInfo();
         if(wi != null) {
-            Helper.rotateAroundDirection(ent.axis, game.cg.time/5f);
+            Helper.rotateAroundDirection(ent.axis, game.cg.time/2f);
 
             ent.model = wi.missileModel.buildFrame(0, 0, 0, null);
             ent.origin.set(cent.lerpOrigin);
@@ -482,8 +482,11 @@ public class CGameRender {
         int time = Ref.client.realtime;
         int lineIndex = 1;
         float lineHeight = Ref.textMan.GetCharHeight();
-        for (int i= 0; i < game.chatLines.length; i++) {
-            CGame.ChatLine line = game.chatLines[(game.chatIndex+7-i) % 8];
+        CGame.ChatLog log = game.chatLogs[game.cg.cur_localClientNum];
+        int start = log.log.size() - 8;
+        start = Helper.Clamp(start, 0, log.log.size());
+        for (int i= start; i < log.log.size(); i++) {
+            CGame.ChatLine line = log.log.get(i);
             if(time - line.time > game.cg_chattime.iValue + game.cg_chatfadetime.iValue)
                 continue;
 

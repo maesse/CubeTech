@@ -855,6 +855,8 @@ public class GLRef {
             builder.mapTextureUniform("tex1", 1);
             builder.mapTextureUniform("tex2", 2);
             builder.mapTextureUniform("shadows", 3);
+            builder.mapTextureUniform("ssao", 4);
+            builder.mapTextureUniform("randomRot", 5);
             builder.createShader();
             
             builder = new ShaderBuilder("DeferredAmbientCube");
@@ -863,6 +865,7 @@ public class GLRef {
             builder.mapTextureUniform("tex0", 0);
             builder.mapTextureUniform("tex2", 2);
             builder.mapTextureUniform("envmap", 3);
+            builder.mapTextureUniform("ssao", 4);
             builder.createShader();
             
             builder = new ShaderBuilder("DeferredFog");
@@ -878,6 +881,12 @@ public class GLRef {
             builder.setAttribute("v_coords", Shader.INDICE_COORDS);
             builder.mapTextureUniform("noise", 3);
             builder.mapTextureUniform("tex2", 2);
+            builder.createShader();
+            
+            builder = new ShaderBuilder("SSAOBlur");
+            builder.setAttribute("v_position", Shader.INDICE_POSITION);
+            builder.setAttribute("v_coords", Shader.INDICE_COORDS);
+            builder.mapTextureUniform("ssao", 4);
             builder.createShader();
 
             // soft sprites shader

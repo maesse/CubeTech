@@ -26,17 +26,17 @@ public class RingEmitter implements IEmitter {
         this.normal.set(normal);
         this.radius = radius;
 
-        mat = Ref.ResMan.LoadTexture("data/particles/ringexplosion.png").asMaterial();
+        mat = Ref.ResMan.LoadTexture("data/particles/ringexplosion.tga").asMaterial();
     }
 
     private static Vector3f up = new Vector3f(0, 0, 1);
     public static void spawn(float radius, Vector3f origin) {
         int time = Ref.cgame.cg.time;
         Vector3f normal = up;
-        CubeMaterial mat = Ref.ResMan.LoadTexture("data/particles/ringexplosion.png").asMaterial();
+        CubeMaterial mat = Ref.ResMan.LoadTexture("data/particles/ringexplosion.tga").asMaterial();
         // move origin a bit towards the normal so the ring doesn't spawn underground
         Vector3f correctedOrigin = Helper.VectorMA(origin, 1f, normal, null);
-        LocalEntity.ringExplosion(correctedOrigin, normal, radius, 400, time, mat, 1, 0.3f, 0, 1);
+        LocalEntity.ringExplosion(correctedOrigin, normal, radius, 150, time, mat, 1, 0.3f, 0, 1);
     }
 
     public void update(int msec) {

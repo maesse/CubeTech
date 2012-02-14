@@ -123,7 +123,7 @@ public class CGameState {
             
 
             if(model == null) {
-                Ref.cgame.Print("Can't register model");
+                Ref.cgame.Print(Ref.cgame.cg.cur_localClientNum, "Can't register model");
                 return;
             }
             
@@ -196,7 +196,7 @@ public class CGameState {
                 return;
             }
             
-            if(controllerIndex < 0 || controllerIndex >= 4 || cg.snap.lcIndex[controllerIndex] == -1) {
+            if(controllerIndex < 0 || controllerIndex >= 4) {
                 Common.Log("Invalid client index %d", controllerIndex);
                 return;
             }
@@ -205,12 +205,21 @@ public class CGameState {
             if(controllerIndex == 0) {
                 clientIndex = Ref.Input.getKeyboardClient();
             } else {
-                clientIndex = Ref.Input.getJoystickMapping(controllerIndex);
+                clientIndex = Ref.Input.getJoystickMapping(controllerIndex-1);
+            }
+            
+            if(clientIndex == -1) {
+                Common.Log("No player found");
+                return;
             }
             
             LocalClient lc = cg.localClients[clientIndex];
-            PlayerState ps = lc.snapPS;
+            if(lc == null || lc.snapPS == null) {
+                Common.Log("Player P%d is not in the game", clientIndex+1);
+                return;
+            }
             
+            PlayerState ps = lc.snapPS;
             Weapon current = lc.weaponSelect;
             Weapon newweap = null;
             if("next".equals(args[2])) {

@@ -26,11 +26,11 @@ public class TrailEmitter implements IEmitter {
         this.radius = radius;
         this.count = count;
 
-        mat = Ref.ResMan.LoadTexture("data/particles/spark.png").asMaterial();
+        mat = Ref.ResMan.LoadTexture("data/particles/spark.tga").asMaterial();
     }
 
     public static void spawn(Vector3f origin, float radius) {
-        create(10, radius, origin, 800, Ref.ResMan.LoadTexture("data/particles/spark.png").asMaterial());
+        create(10, radius, origin, 400, Ref.ResMan.LoadTexture("data/particles/spark.tga").asMaterial());
     }
 
     public void update(int msec) {
@@ -50,14 +50,19 @@ public class TrailEmitter implements IEmitter {
 
     private static void create(int count, float radius, Vector3f origin, int lifeTime, CubeMaterial mat) {
         int time = Ref.cgame.cg.time;
+        Vector3f hitNormal = new Vector3f(0, 0, 1);
             for (int i= 0; i < count; i++) {
                 Vector3f dir = getRandomVector(false);
-                float rndVelocity =  radius;
+                if(Vector3f.dot(dir, hitNormal) < 0) {
+                    dir.scale(-1f);
+                }
                 float rnd = Ref.rnd.nextFloat();
-                int lifetimeRnd = (int)((rnd) * -300f) + lifeTime;
+                float rndVelocity =  radius * (1.3f + 0.7f * rnd);
+                
+                int lifetimeRnd = (int)((rnd) * -50f) + lifeTime;
                 int timeRnd = time - (int)(rnd * 100);
                 dir.scale(rndVelocity);
-                LocalEntity ent = LocalEntity.sparkTrail(origin, dir, 8f, lifetimeRnd, timeRnd, mat,0.9f,0.56f,0,1);
+                LocalEntity ent = LocalEntity.sparkTrail(origin, dir, 8f, lifetimeRnd, timeRnd, mat,0.9f,0.56f * rnd,0,1);
                 ent.Type = LocalEntity.TYPE_SCALE_FADE_MOVE;
                 ent.Flags = LocalEntity.FLAG_DONT_SCALE;
             }

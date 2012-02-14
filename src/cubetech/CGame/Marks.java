@@ -583,7 +583,7 @@ public class Marks {
         public int returnedFragments;
     }
     
-    public static class BatchedRender extends AbstractBatchRender {
+    public static final class BatchedRender extends AbstractBatchRender {
         @Override
         public void setState(ViewParams view) {
             // Setup shader
@@ -643,6 +643,10 @@ public class Marks {
 
         public int getVertexCount() {
             return vertexCount;
+        }
+
+        public int getDrawMode() {
+            return GL11.GL_QUADS;
         }
     }
 }

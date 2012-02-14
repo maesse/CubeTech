@@ -162,14 +162,18 @@ public class CubeChunkDataWorker extends Thread {
         buf.putFloat(encodedNormals[index].x);
         buf.putFloat(encodedNormals[index].y);
     }
+    
+    private static final int AO_NONE = 255;
+    private static final int AO_ONE = 210;
+    private static final int AO_TWO = 172;
 
     private static void writeColorAndAO(Color color, boolean ao1, boolean ao2, boolean ao3, ByteBuffer dest) {
-        int ao = 255;
+        int ao = AO_NONE;
         if(!ao1 && !ao2) {
-            ao = 85;
+            ao = AO_TWO;
         } else if(!ao1 || !ao2) {
-            ao = 127;
-        } else if(!ao3) ao = 127;
+            ao = AO_ONE;
+        } else if(!ao3) ao = AO_ONE;
 
         dest.put((byte)(color.getRed() / 255f * ao));
         dest.put((byte)(color.getGreen() / 255f * ao));

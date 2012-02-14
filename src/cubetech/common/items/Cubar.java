@@ -22,6 +22,7 @@ import org.lwjgl.util.vector.Vector3f;
  */
 public class Cubar extends WeaponItem {
     WeaponInfo wi = new WeaponInfo();
+    private int maxReachLength = 10;
 
     public Cubar() {
         
@@ -47,7 +48,7 @@ public class Cubar extends WeaponItem {
     private void putOrRemoveBlock(GameClient gc, boolean put) {
         Vector3f dir = new Vector3f(gc.getForwardVector());
         Helper.Normalize(dir);
-        CubeCollision col = CubeMap.TraceRay(gc.ps.getViewOrigin(), dir, 8, Ref.cm.cubemap.chunks);
+        CubeCollision col = CubeMap.TraceRay(gc.ps.getViewOrigin(), dir, maxReachLength, Ref.cm.cubemap.chunks);
         if(col == null) return;
         SingleCube cube = new SingleCube(col);
 
@@ -79,7 +80,7 @@ public class Cubar extends WeaponItem {
                 }
 
                 if(ok) {
-                    destination.putBlock(CubeType.GRASS);
+                    destination.putBlock(CubeType.DIRT);
                 } else {
                     gc.SayTo("Server", "Cube placement blocked");
                 }
@@ -104,7 +105,7 @@ public class Cubar extends WeaponItem {
 
     @Override
     public int getFireTime() {
-        return 250;
+        return 165;
     }
 
     public String getClassName() {
@@ -133,7 +134,7 @@ public class Cubar extends WeaponItem {
         if(Ref.cgame.map != null) {
             Vector3f dir = Ref.cgame.cg.refdef.ViewAxis[0];
             Vector3f origin = Ref.cgame.cg.cur_lc.predictedPlayerState.getViewOrigin();
-            CubeCollision col = CubeMap.TraceRay(origin, dir, 8, Ref.cgame.map.chunks);
+            CubeCollision col = CubeMap.TraceRay(origin, dir, maxReachLength, Ref.cgame.map.chunks);
             if(col != null) {
                  cube = new SingleCube(col);
             }

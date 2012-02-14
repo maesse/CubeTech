@@ -157,9 +157,10 @@ public class IQMModel {
                 
                 // check for additive bonecontroller
                 if(ctrl != null && ctrl.type == BoneController.Type.ADDITIVE) {
-                    Matrix4f.mul(ctrl.getMatrix(), dest, dest);
+                    Matrix4f m = Matrix4f.mul(ctrl.getMatrix(), joints[i].invbaseframe, null);
+                    Matrix4f.mul(joints[i].baseframe, m, m);
+                    Matrix4f.mul(m, dest, dest);
                 }
-                
                 if(joints[i].parent >= 0) {
                     Matrix4f.mul(iqmFrame.outframe[joints[i].parent], dest, dest);
                 }

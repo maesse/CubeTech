@@ -622,8 +622,20 @@ public class SvClient {
 
     public void AddServerCommand(String str) {
         // do not send commands until the gamestate has been sent
-        if(state != SvClient.ClientState.PRIMED && state != SvClient.ClientState.ACTIVE)
+        if(state != SvClient.ClientState.PRIMED && state != SvClient.ClientState.ACTIVE) return;
+        
+        if(owner != -1) {
+            // send through owner
+            SvClient cl = Ref.server.clients[owner];
+            for (int i = 0; i < 3; i++) {
+                if(cl.localClients[i] == id) {
+                    str = "lc" + i + " " + str;
+                    cl.AddServerCommand(str);
+                    break;
+                }
+            }
             return;
+        }
 
         reliableSequence++;
 

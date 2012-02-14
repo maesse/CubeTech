@@ -131,7 +131,7 @@ public class PolyBatcher  {
     }
 
     // This will end up being one call
-    public static class BatchCall implements IBatchCall {
+    public static final class BatchCall implements IBatchCall {
         // Call state
         private CubeMaterial mat;
         private int entityFlags;
@@ -165,6 +165,10 @@ public class PolyBatcher  {
 
         public int getVertexCount() {
             return vertexCount;
+        }
+
+        public int getDrawMode() {
+            return GL_QUADS;
         }
     }
     

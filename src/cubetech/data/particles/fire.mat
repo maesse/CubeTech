@@ -1,4 +1,4 @@
-texture "fire.png"
+texture "fire.tga"
 translucent "2"
 ignorez "0"
 filter "1"

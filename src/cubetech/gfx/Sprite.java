@@ -206,8 +206,6 @@ public class Sprite {
 
     public void setLine(Vector2f start, Vector2f end) {
         float width = Ref.cgame.cg.refdef.FovX;
-        if(Ref.cgame.cg.refdef.w != 0)
-            width = Ref.cgame.cg.refdef.w;
         setLine(start, end, width / Ref.glRef.GetResolution().x);
     }
 
