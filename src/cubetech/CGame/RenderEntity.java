@@ -91,6 +91,8 @@ public class RenderEntity {
         model = null;
         color.set(255,255,255,255);
         outcolor.set(255,255,255,255);
+        oldOrigin.set(0,0,0);
+        oldOrigin2.set(0,0,0);
         origin.set(0,0,0);
         axis[0].set(1,0,0);
         axis[1].set(0,1,0);

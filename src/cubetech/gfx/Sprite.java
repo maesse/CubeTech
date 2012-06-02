@@ -210,12 +210,15 @@ public class Sprite {
     }
 
     public void setLine(Vector2f start, Vector2f end, float thickness) {
+        setLine(start,end,thickness, null);
+    }
+    public void setLine(Vector2f start, Vector2f end, float thickness, CubeTexture tex) {
         Vector2f delta = new Vector2f(end.x-start.x, end.y-start.y);
         float len = delta.length();
         Vector2f center = new Vector2f(start.x + delta.x * 0.5f, start.y + delta.y * 0.5f);
         float angle = (float)Math.atan2(delta.y, delta.x);
 
-        Texture = null;
+        Texture = tex;
         Center.set(center.x, center.y);
         Extent.set(len/2f, thickness * 0.5f);
         color.set(255, 255, 255, 255);

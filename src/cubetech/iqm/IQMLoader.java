@@ -1,10 +1,12 @@
 package cubetech.iqm;
 
+import cubetech.CGame.RenderEntity;
 import cubetech.common.Animations;
 import cubetech.common.Commands;
 import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.gfx.ResourceManager;
+import cubetech.misc.Ref;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
@@ -24,6 +26,8 @@ import org.lwjgl.util.vector.Vector4f;
  */
 public class IQMLoader {
     public static IQMModel LoadModel(String file) throws IOException {
+        int msec = Ref.common.Milliseconds();
+        
         ByteBuffer buffer = ResourceManager.OpenFileAsByteBuffer(file, true).getKey();
         buffer.order(ByteOrder.LITTLE_ENDIAN);
         IQMModel model = new IQMModel();
@@ -105,6 +109,21 @@ public class IQMLoader {
         
         parseIQMScript(model);
         
+        // Check if model needs to be rendered in multiple passes
+        boolean hasOpaque = false;
+        boolean hasTransparent = false;
+        for (IQMMesh iQMMesh : model.meshes) {
+            // pull out the nolight flag from this mesh
+            boolean trans = (iQMMesh.renderflags & RenderEntity.FLAG_NOLIGHT) != 0;
+            
+            if(trans) hasTransparent  = true;
+            else hasOpaque = true;
+        }
+        
+        if(hasOpaque && hasTransparent) {
+            model.needsMultiPass = true;
+        }
+        
         if(model.header.num_joints > 0 && model.joints.length > 0) {
             // Grab bone origins when in pose
             model.jointPose = new Vector3f[model.joints.length];
@@ -126,6 +145,11 @@ public class IQMLoader {
                 Logger.getLogger(IQMLoader.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
+        
+        int msec2 = Ref.common.Milliseconds();
+        
+        float totalSec = (msec2 - msec) / 1000f;
+        Common.LogDebug("Loaded model '%s' in %.2f seconds", file, totalSec);
         
         return model;
     }
@@ -188,6 +212,24 @@ public class IQMLoader {
                 for (int j = 0; j < model.joints.length; j++) {
                     if(model.joints[j].name.equalsIgnoreCase(bone)) {
                         model.attachments.put(name, model.joints[j]);
+                        break;
+                    }
+                }
+            } else if(cmd.name.equalsIgnoreCase("mesh")) {
+                String mesh = cmd.params.get("name");
+                
+                boolean transparent = false; // default
+                String trans = cmd.params.get("transparent");
+                if(trans != null) {
+                    transparent = trans.equalsIgnoreCase("true");
+                }
+                
+                // Meshes with transparent textures needs to be rendered after everything else
+                for (IQMMesh iQMMesh : model.meshes) {
+                    if(iQMMesh.name.equalsIgnoreCase(mesh)) {
+                        if(transparent) {
+                            iQMMesh.renderflags = RenderEntity.FLAG_NOLIGHT;
+                        }
                         break;
                     }
                 }

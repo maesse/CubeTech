@@ -5,6 +5,7 @@
 
 package cubetech.common;
 
+import cubetech.CGame.ViewParams;
 import cubetech.entities.EntityState;
 import cubetech.gfx.Shader;
 import cubetech.input.Input;
@@ -335,63 +336,67 @@ public class Helper {
     //
     public static void renderBBoxWireframe(float xmin, float ymin, float zmin, 
             float xmax, float ymax, float zmax,
-            Vector4f color) {
-        Ref.glRef.pushShader("World");
+            Vector4f color, ViewParams currentView) {
+        Shader shader = Ref.glRef.getShader("Poly");
+        Ref.glRef.PushShader(shader);
+        shader.setUniform("ModelView", currentView.viewMatrix);
+        shader.setUniform("Projection", currentView.ProjectionMatrix);
         // ready the texture
         Ref.ResMan.getWhiteTexture().Bind();
-        if(color != null) {
-            col(color);
-        } else {
-            col(1,0,0);
-        }
+        
         GL11.glBegin(GL11.GL_LINES);
 
         // Top: Z+
         {
-            GL11.glVertex3f(xmin,             ymin,             zmax);
-            GL11.glVertex3f(xmax,ymin,             zmax);
-            GL11.glVertex3f(xmax,ymin,             zmax);
-            GL11.glVertex3f(xmax,ymax,zmax);
-            GL11.glVertex3f(xmax,ymax,zmax);
-            GL11.glVertex3f(xmin,ymax,zmax);
-            GL11.glVertex3f(xmin,ymax,zmax);
-            GL11.glVertex3f(xmin,ymin,zmax);
+            if(color != null) {
+                GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, (byte)color.x, (byte)color.y, (byte)color.z, (byte)color.w);
+            } else {
+                GL20.glVertexAttrib4Nub(Shader.INDICE_COLOR, (byte)255,(byte)255,(byte)255,(byte)255);
+            }
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmin,             ymin,             zmax);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmax,ymin,             zmax);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmax,ymin,             zmax);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmax,ymax,zmax);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmax,ymax,zmax);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmin,ymax,zmax);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmin,ymax,zmax);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmin,ymin,zmax);
         }
 
         // Bottom: Z-
         {
-            GL11.glVertex3f(xmin,             ymin,             zmin);
-            GL11.glVertex3f(xmax,ymin,             zmin);
-            GL11.glVertex3f(xmax,ymin,             zmin);
-            GL11.glVertex3f(xmax,ymax,zmin);
-            GL11.glVertex3f(xmax,ymax,zmin);
-            GL11.glVertex3f(xmin,ymax,zmin);
-            GL11.glVertex3f(xmin,ymax,zmin);
-            GL11.glVertex3f(xmin,ymin,zmin);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmin,             ymin,             zmin);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmax,ymin,             zmin);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmax,ymin,             zmin);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmax,ymax,zmin);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmax,ymax,zmin);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmin,ymax,zmin);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmin,ymax,zmin);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmin,ymin,zmin);
         }
 
         // Y+
         {
-            GL11.glVertex3f(xmax,ymax,    zmax);
-            GL11.glVertex3f(xmax,ymax,     zmin);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmax,ymax,    zmax);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmax,ymax,     zmin);
         }
 
         // Y-
         {
-            GL11.glVertex3f(xmin,             ymin,     zmin );
-            GL11.glVertex3f(xmin,ymin,     zmax);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmin,             ymin,     zmin );
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmin,ymin,     zmax);
         }
 
         // X+
         {
-            GL11.glVertex3f(xmax ,ymin ,    zmin);
-            GL11.glVertex3f(xmax, ymin,                 zmax);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmax ,ymin ,    zmin);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmax, ymin,                 zmax);
         }
 
         // X-
         {
-            GL11.glVertex3f(xmin ,ymax ,    zmax);
-            GL11.glVertex3f(xmin ,ymax,     zmin);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmin ,ymax ,    zmax);
+            GL20.glVertexAttrib3f(Shader.INDICE_POSITION, xmin ,ymax,     zmin);
         }
         GL11.glEnd();
         Ref.glRef.PopShader();
@@ -521,12 +526,8 @@ public class Helper {
         return AnglesToAxis(angles, null);
     }
     public static final float RAD2DEG = (float) (180f/Math.PI);
-    public static Vector3f AxisToAngles(javax.vecmath.Matrix3f axisin, Vector3f angles) {
-        Vector3f[] axis = new Vector3f[3];
-        for (int i = 0; i < 3; i++) {
-            axis[i] = new Vector3f();
-        }
-        Helper.matrixToAxis(axisin, axis);
+
+    public static Vector3f AxisToAngles(Vector3f[] axis, Vector3f angles) {
         if(angles == null) angles = new Vector3f();
         Vector3f right = new Vector3f(axis[1]);
         right.scale(-1f);
@@ -752,21 +753,7 @@ public class Helper {
         return dest;
     }
     
-    public static void matrixToAxis(javax.vecmath.Matrix3f m, Vector3f[] dest) {
-//        m.invert();
-        assert(dest != null && dest.length >= 3);
-        dest[0].x = m.m00;
-        dest[0].y = m.m10;
-        dest[0].z = m.m20;
 
-        dest[1].x = m.m01;
-        dest[1].y = m.m11;
-        dest[1].z = m.m21;
-
-        dest[2].x = m.m02;
-        dest[2].y = m.m12;
-        dest[2].z = m.m22;
-    }
 
     public static Vector3f rotatePointAroundVector(Vector3f dest, Vector3f dir, Vector3f point, float deg) {
         if(dest == null) dest = new Vector3f();
@@ -931,6 +918,13 @@ public class Helper {
     public static boolean Equals(Vector2f a, Vector2f b) {
 //        return false;
         return (a.x == b.x && a.y == b.y);
+    }
+    
+    // String comparison with nullcheck
+    public static boolean Equals(String a, String b) {
+        if(a == null && b == null) return true;
+        if(a == null || b == null) return false;
+        return a.equals(b);
     }
 
     public static boolean Equals(Vector3f a, Vector3f b) {

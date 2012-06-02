@@ -132,7 +132,7 @@ public class Mover {
         for (Integer integer : query.List) {
             Gentity check = Ref.game.g_entities[integer];
             // only push items and players
-            if(check.s.eType != EntityType.ITEM && !check.isClient() && !check.physicsObject)
+            if(check.s.eType != EntityType.ITEM && !check.isClient())
                 continue;
 
             // see if the ent needs to be tested

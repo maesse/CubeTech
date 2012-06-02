@@ -6,7 +6,7 @@ import cubetech.CGame.CGame;
 import cubetech.CGame.Render;
 import cubetech.Game.Game;
 import cubetech.common.Common;
-import cubetech.net.Net;
+import cubetech.net.DefaultNet;
 
 import cubetech.collision.Collision;
 
@@ -39,7 +39,7 @@ public class Ref {
 //    public static StateManager StateMan;
     public static Random rnd;
     public static Common common;
-    public static Net net;
+    public static DefaultNet net;
     public static Collision collision;
 
     public static ISoundManager soundMan;
@@ -75,7 +75,7 @@ public class Ref {
         Ref.textMan = new TextManager(); // manages text-rendering
         Ref.Input = new Input(); // input subsystem
         
-        Ref.net = new Net(); // init network, creates sockets for client and server
+        Ref.net = new DefaultNet(); // init network, creates sockets for client and server
         Ref.collision = new Collision();
         Ref.soundMan = new ALSoundManager(); // loads, manages and plays sounds
         if(!noSound)
@@ -90,5 +90,6 @@ public class Ref {
         Ref.ui = new UI();
         Ref.cm = new ClipMap();
         
+        Ref.common.Init();
     }
 }

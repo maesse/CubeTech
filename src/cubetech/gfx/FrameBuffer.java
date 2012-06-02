@@ -132,7 +132,7 @@ public class FrameBuffer {
 
         if(useColor && !useDepth) {
             GL11.glDeleteTextures(fboColorId);
-            fboColorId = Ref.ResMan.CreateEmptyTexture(w,h,Target,false, null);
+            fboColorId = Ref.ResMan.getTextureLoader().CreateEmptyTexture(w,h,Target,false, null);
             glBindTexture(Target, 0);
             GLRef.checkError();
             // Attach it
@@ -145,7 +145,7 @@ public class FrameBuffer {
         else if(useColor && useDepth) {
             // Create the color texture
             GL11.glDeleteTextures(fboColorId);
-            fboColorId = Ref.ResMan.CreateEmptyTexture(w,h,Target,false, null);
+            fboColorId = Ref.ResMan.getTextureLoader().CreateEmptyTexture(w,h,Target,false, null);
             glBindTexture(Target, 0);
             GLRef.checkError();
             // Attach it
@@ -156,7 +156,7 @@ public class FrameBuffer {
                     0); // level
 
             GL11.glDeleteTextures(depthId);
-            depthId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, Target);
+            depthId = Ref.ResMan.getTextureLoader().CreateEmptyDepthTexture(w, h, depthBitResolution, Target);
             glBindTexture(Target, 0);
             GLRef.checkError();
             // Attach it
@@ -168,9 +168,9 @@ public class FrameBuffer {
         } else if(useDepth) {
             GL11.glDeleteTextures(fboColorId);
             if(Target == EXTTextureArray.GL_TEXTURE_2D_ARRAY_EXT) {
-                fboColorId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, Target, arrayLevels);
+                fboColorId = Ref.ResMan.getTextureLoader().CreateEmptyDepthTexture(w, h, depthBitResolution, Target, arrayLevels);
             } else {
-                fboColorId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, Target);
+                fboColorId = Ref.ResMan.getTextureLoader().CreateEmptyDepthTexture(w, h, depthBitResolution, Target);
             }
             glTexParameteri(Target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             glTexParameteri(Target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -258,7 +258,7 @@ public class FrameBuffer {
 
         if(useColor) {
             // Create the color texture
-            fboColorId = Ref.ResMan.CreateEmptyTexture(w,h,Target,false, null);
+            fboColorId = Ref.ResMan.getTextureLoader().CreateEmptyTexture(w,h,Target,false, null);
             glBindTexture(Target, 0);
             GLRef.checkError();
             // Attach it
@@ -274,7 +274,7 @@ public class FrameBuffer {
         }
 
         if(useDepth && useColor) {
-                depthId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, Target);
+                depthId = Ref.ResMan.getTextureLoader().CreateEmptyDepthTexture(w, h, depthBitResolution, Target);
                 glBindTexture(Target, 0);
                 GLRef.checkError();
                 // Attach it
@@ -287,9 +287,9 @@ public class FrameBuffer {
                         0); // level
         } else if(useDepth) {
             if(Target == EXTTextureArray.GL_TEXTURE_2D_ARRAY_EXT) {
-                fboColorId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, Target, arrayLevels);
+                fboColorId = Ref.ResMan.getTextureLoader().CreateEmptyDepthTexture(w, h, depthBitResolution, Target, arrayLevels);
             } else {
-                fboColorId = Ref.ResMan.CreateEmptyDepthTexture(w, h, depthBitResolution, Target);
+                fboColorId = Ref.ResMan.getTextureLoader().CreateEmptyDepthTexture(w, h, depthBitResolution, Target);
             }
             
             glTexParameteri(Target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);

@@ -5,6 +5,8 @@ import cubetech.gfx.ResourceManager;
 import cubetech.misc.Ref;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import nbullet.util.Transform;
+import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector3f;
 
 /**
@@ -19,11 +21,16 @@ public class IQMMesh {
     CubeTexture normalmap = null;
     CubeTexture specularmap = null;
     private boolean noNormalMap, noSpecularMap;
+    
     int first_vertex, num_vertexes;
     int first_triangle, num_triangles;
 
     private String modelPath = "";
     private IQMModel model;
+    // Renderflags from RenderEntity
+    public int renderflags;
+    // "info" mesh marker for meshes that shouldn't be rendered
+    public boolean infoMesh = false; 
 
     // This will return a list of triangles that make up this mesh.
     public Vector3f[] getVertices() {
@@ -35,6 +42,20 @@ public class IQMMesh {
             data[i*3+2] = model.in_position[tri.vertex[2]];
         }
         return data;
+    }
+    
+    public Vector3f[] getLocalMesh(Transform t) {
+        BoneMeshInfo info = new BoneMeshInfo();
+        info.mesh = this;
+        RigidBoneMesh mesh = new RigidBoneMesh(null, model, info);
+        if(t != null) {
+            Matrix4f m = mesh.getModelToBoneMatrix();
+            t.origin.x = m.m30;
+            t.origin.y = m.m31;
+            t.origin.z = m.m32;
+        }
+        
+        return mesh.getLocalMesh();
     }
 
     static void loadMesh(IQMModel model, ByteBuffer buffer) {

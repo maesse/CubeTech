@@ -624,41 +624,39 @@ public class GameClient extends Gentity implements IDieMethod, IPainMethod {
         return null;
     }
 
-    private static Vector3f touchRange  = new Vector3f(40,40,52);
     private void touchTriggers() {
-        if(ps.stats.Health <= 0) return;
-        Vector3f mins = Vector3f.sub(ps.origin, touchRange, null);
-        Vector3f maxs = Vector3f.add(ps.origin, touchRange, null);
-
+        if(isDead()) return;
+        
+        // Calculate player AABB
+        Vector3f playerMins = ps.ducked ? Game.PlayerDuckedMins : Game.PlayerMins;
+        Vector3f playerMaxs = ps.ducked ? Game.PlayerDuckedMaxs : Game.PlayerMaxs;
+        Vector3f mins = Vector3f.add(ps.origin, playerMins, null);
+        Vector3f maxs = Vector3f.add(ps.origin, playerMaxs, null);
+        
+        // Ask for entities inside the player volume
+        // maybe fix: add padding to this call
         SectorQuery q = Ref.server.EntitiesInBox(mins, maxs);
 
-        // can't use ent->absmin, because that has a one unit pad
-        Vector3f.add(ps.origin, r.mins, mins);
-        Vector3f.add(ps.origin, r.maxs, maxs);
-
+        // Go trough each hit
         for (Integer entNum : q.List) {
             Gentity hit = Ref.game.g_entities[entNum];
+            // Ignore the player
+            if(hit.s.number == this.s.number) continue;
+            
+            // Can't touch this!
             if(hit.touch == null) continue;
 
+            // Not a trigger
             if((hit.s.contents & Content.TRIGGER) == 0) continue;
-
-            // use seperate code for determining if an item is picked up
-            // so you don't have to actually contact its bounding box
-            if(hit.s.eType == EntityType.ITEM) {
-                if(!Ref.common.items.playerTouchesItem(ps, hit.s, Ref.game.level.time)) {
-                    continue;
-                }
-            } else {
-                if(!Ref.server.EntityContact(mins, maxs, hit.shEnt)) {
-                    continue;
-                }
+            
+            // Do AABB check last
+            if(!Ref.server.EntityContact(mins, maxs, hit.shEnt)) {
+                continue;
             }
 
             hit.touch.touch(hit, this);
         }
     }
-
-    
 
     public void die(Gentity inflictor, Gentity attacker, int dmg, MeansOfDeath mod) {
         if(ps.moveType == MoveType.DEAD) return;

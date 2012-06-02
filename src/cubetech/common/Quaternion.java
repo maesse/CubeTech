@@ -601,6 +601,7 @@ public class Quaternion extends Vector implements ReadableVector4f {
 	 * @return q
 	 */
 	public static Quaternion setFromMatrix(Matrix4f m, Quaternion q) {
+            if(q == null) q = new Quaternion();
 		return q.setFromMat(m.m00, m.m01, m.m02, m.m10, m.m11, m.m12, m.m20,
 				m.m21, m.m22);
 	}
@@ -617,9 +618,7 @@ public class Quaternion extends Vector implements ReadableVector4f {
                 
 	}
         
-        public final Quaternion setFromMatrix(javax.vecmath.Matrix3f m) {
-		return setFromMatrix(m, this);
-	}
+
 
 	/**
 	 * Sets the value of the source quaternion using the rotational component of the
@@ -636,10 +635,7 @@ public class Quaternion extends Vector implements ReadableVector4f {
 				m.m21, m.m22);
 	}
         
-        public static Quaternion setFromMatrix(javax.vecmath.Matrix3f m, Quaternion q) {
-		return q.setFromMat(m.m00, m.m01, m.m02, m.m10, m.m11, m.m12, m.m20,
-				m.m21, m.m22);
-	}
+     
 
 	/**
 	 * Private method to perform the matrix-to-quaternion conversion

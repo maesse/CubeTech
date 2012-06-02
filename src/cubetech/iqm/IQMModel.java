@@ -1,5 +1,6 @@
 package cubetech.iqm;
 
+import cubetech.CGame.ViewParams;
 import cubetech.gfx.VBO;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -71,6 +72,7 @@ public class IQMModel {
     
     VBO cachedVertexBuffer = null;
     VBO cachedIndiceBuffer = null;
+    boolean needsMultiPass = false; // can this model be rendered in one pass?
 
     IQMModel() {
         
@@ -167,29 +169,10 @@ public class IQMModel {
             }
         }
 
-        updateAttachments(iqmFrame);
+        
     }
     
-    // Updates bone origins and axis
-    private void updateAttachments(IQMFrame frame) {
-        if(attachments.isEmpty()) return;
-        frame.attachments.clear();
-        for (String att : attachments.keySet()) {
-            IQMJoint joint = attachments.get(att);
-            
-            BoneAttachment b = new BoneAttachment();
-            b.name = att;
-            b.boneIndex = joint.index;
-            Vector3f bonePose = jointPose[b.boneIndex];
-            b.lastposition.set(bonePose.x, bonePose.y, bonePose.z, 1f);
-            Matrix4f.transform(frame.outframe[b.boneIndex], b.lastposition, b.lastposition);
-
-            tempMatrix = Matrix4f.transpose(frame.outframe[b.boneIndex], tempMatrix);
-            Helper.matrixToAxis(tempMatrix, b.axis);
-            
-            frame.attachments.put(att, b);
-        }
-    }
+    
     
     public IQMFrame buildFrame(int frame, int oldframe, float backlerp, ArrayList<BoneController> controllers) {
         // Use cached frame if it's a static model
@@ -199,7 +182,7 @@ public class IQMModel {
         
         IQMFrame iqmFrame = new IQMFrame(this, frame, oldframe, backlerp);
         iqmFrame.controllers = controllers;
-        
+        iqmFrame.needMultiPass = needsMultiPass;
         
         blendAnimation(iqmFrame);
         if(isStatic()) staticFrame = iqmFrame;

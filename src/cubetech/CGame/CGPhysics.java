@@ -3,6 +3,7 @@ package cubetech.CGame;
 
 
 import cubetech.collision.CubeChunk;
+import cubetech.collision.DefaultPhysics;
 import cubetech.common.CVar;
 import cubetech.common.Helper;
 import cubetech.common.ICommand;
@@ -33,33 +34,23 @@ import org.lwjgl.util.vector.Vector3f;
  *
  * @author mads
  */
-public class CGPhysics {
-    public static final float INV_SCALE_FACTOR = 32f;
-    public static final float SCALE_FACTOR = 1f / INV_SCALE_FACTOR;
-
-    PhysicsSystem world;
-    BoxShape boxShape;
-    int lastPhysicsTime;
-    
+public class CGPhysics extends DefaultPhysics {
     // Shared vertex buffer for the physics-cubes
+    BoxShape boxShape;
     public VBO vertexBuffer;
     
     SoftBody soft;
     int[] softIndices;
     FloatBuffer softBuffer;
     
+    RigidBody pickedBody = null;
+    Point2PointConstraint pickConstraint = null;
+    Vector3f oldPickOrigin = new Vector3f();
+    float oldPickDist = 0f;
+    
 
-    CGPhysics() {
-        // Initalized the bullet physics world
-        world = new PhysicsSystem();
-        
-        CVar gravity = Ref.cvars.Find("sv_gravity");
-        float grav = 800 * SCALE_FACTOR;
-        if(gravity != null) {
-            grav = -gravity.fValue * SCALE_FACTOR;
-        }
-        world.setGravity(new Vector3f(0, 0, grav));
-//        world.testNativePhysics(); // creates test ground plane
+    public CGPhysics() {
+        super();
 
         float boxHalfSize = (CubeChunk.BLOCK_SIZE/2f) * SCALE_FACTOR;
         boxShape = new BoxShape(new Vector3f(boxHalfSize, boxHalfSize, boxHalfSize));
@@ -75,13 +66,14 @@ public class CGPhysics {
     }
 
 
+    
     public void stepPhysics() {
         int time = Ref.cgame.cg.time;
         
         
         handlePick();
         
-        world.stepPhysics(time, 10, Ref.common.com_timescale.fValue / 120f);
+        world.stepPhysics(time, maxSubSteps, Ref.common.com_timescale.fValue / stepFrequency);
         
         if(soft != null ) {
             // Update softbody vertices
@@ -171,68 +163,6 @@ public class CGPhysics {
     }
 
 
-    /**
-     * Grabs all bodies in the radius around origin and applies an outward force from origin to the bodies
-     * center
-     * @param origin
-     * @param radius
-     * @param force
-     * @param forcefalloff true if force should decrease with distance
-     */
-    public void explosionImpulse(Vector3f origin, float radius, float force, boolean forcefalloff) {
-//        GhostObject ghostObj = new GhostObject();
-//        
-//        // Set shape
-//        ghostObj.setCollisionShape(new SphereShape(radius*SCALE_FACTOR));
-//
-//        // Set origin
-//        Transform t = new Transform();
-//        t.setIdentity();
-//        t.origin.set(origin.x, origin.y, origin.z);
-//        t.origin.scale(SCALE_FACTOR); // scale to physics size
-//        ghostObj.setWorldTransform(t);
-//        
-//        // Don't push bodies away
-//        ghostObj.setCollisionFlags(ghostObj.getCollisionFlags() | CollisionFlags.NO_CONTACT_RESPONSE);
-//
-//        // add to world and out ghostobject list
-//        world.addCollisionObject(ghostObj);
-//        explosionObjects.add(ghostObj);
-    }
-
-
-    public void deleteBody(RigidBody body) {
-        world.removeRigidBody(body);
-        body.destroyAll();
-    }
-    
-    public void removeBody(RigidBody body) {
-        world.removeRigidBody(body);
-    }
-    
-    public void deleteBody(SoftBody body) {
-        world.removeSoftBody(body);
-        body.destroy();
-    }
-
-    public RigidBody localCreateRigidBody(float mass, Vector3f startTransform, CollisionShape shape) {
-        Matrix3f basis = new Matrix3f();
-        basis.setIdentity();
-        
-        DirectMotionState myMotionState = new DirectMotionState(basis, startTransform);
-        return localCreateRigidBody(mass, myMotionState, shape);
-    }
-
-    public RigidBody localCreateRigidBody(float mass, DirectMotionState mState, CollisionShape shape) {
-        RigidBody body = new RigidBody(mass, mState, shape);
-        world.addRigidBody(body);
-        return body;
-    }
-    
-    public void addRigidBody(RigidBody body) {
-        world.addRigidBody(body);
-    }
-    
     
     private ICommand pick_cmd = new ICommand() {
         public void RunCommand(String[] args) {
@@ -262,10 +192,7 @@ public class CGPhysics {
     };
 
 
-    RigidBody pickedBody = null;
-    Point2PointConstraint pickConstraint = null;
-    Vector3f oldPickOrigin = new Vector3f();
-    float oldPickDist = 0f;
+    
     
     private void handlePick(boolean activate, Vector3f origin, Vector3f ray) {
         if (activate) {
@@ -416,142 +343,7 @@ public class CGPhysics {
             lent.phys_body.setLinearVelocity(linVel);
             lent.phys_body.setAngularVelocity(new Vector3f(0f, 0f, 0f));
             lent.phys_body.setDamping(0.1f, 0.2f);
-            
-//            Vector3f org2 = Helper.VectorMA(origin, 100f, dir, null);
-//            LocalEntity lent2 = LocalEntity.physicsBox(org2, Ref.cgame.cg.time, 21000, Ref.ResMan.LoadTexture("data/textures/tile.png").asMaterial(), boxShape);
-////            Vector3f linVel2 = new Vector3f(dir.x, dir.y, dir.z);
-////            linVel2.normalise();
-////            linVel2.scale(force);
-//
-////            lent2.phys_body.setLinearVelocity(linVel2);
-////            lent2.phys_body.setAngularVelocity(new Vector3f(0f, 0f, 0f));
-////            lent2.phys_body.setDamping(0.1f, 0.2f);
-//            
-//            Transform a = new Transform();
-//            a.origin.set(0.0f, 0.0f, 0.5f);
-//            Transform b = new Transform();
-//            b.origin.set(0.0f, 0.0f, -0.5f);
-//            lent.phys_body.setCollisionFlags(RigidBody.CF_NO_CONTACT_RESPONSE);
-//            Generic6DofConstraint cons = new Generic6DofConstraint(world, lent.phys_body, lent2.phys_body, a, b, true);
-//            cons.setAngularLowerLimit(new Vector3f(-PhysicsSystem.SIMD_PI * 0.3f,-PhysicsSystem.SIMD_PI * 0.3f,-PhysicsSystem.SIMD_EPSILON));
-//            cons.setAngularUpperLimit(new Vector3f(PhysicsSystem.SIMD_PI * 0.3f,PhysicsSystem.SIMD_PI * 0.3f,PhysicsSystem.SIMD_EPSILON));
-//            world.addConstraint(cons, true);
-//            bodies.add(lent.phys_body);
         }
     }
 
-    void addChunk(CubeChunk chunk) {
-        ChunkShape shape = new ChunkShape(chunk.blockType);
-        
-        
-        Vector3f origin = new Vector3f(chunk.absmin[0] * SCALE_FACTOR, chunk.absmin[1] * SCALE_FACTOR, chunk.absmin[2] * SCALE_FACTOR);
-        CollisionObject chunkObject = new CollisionObject();
-        chunkObject.setCollisionShape(shape);
-        chunkObject.setCollisionFlags(CollisionObject.CF_STATIC_OBJECT);
-        chunkObject.setActivationState(CollisionObject.ActivationStates.DISABLE_SIMULATION);
-        chunkObject.setWorldTransform(BufferUtil.toNativeTransform(null, origin));
-        
-        short collisionFilterGroup =  CollisionObject.FILTER_STATIC;
-	short collisionFilterMask = (short) (CollisionObject.FILTER_ALL ^ CollisionObject.FILTER_STATIC);
-        world.addCollisionObject(chunkObject, collisionFilterGroup, collisionFilterMask);
-        
-
-////        chunk.physicsShape = localCreateRigidBody(0, tr, shape);
-////        chunk.physicsShape.forceActivationState(RigidBody.DISABLE_SIMULATION);
-//        chunk.physicsSystem = this; // a bit derp
-    }
-
-
-//    public RigidBody localCreateRigidKinematicBody(MotionState mState, CollisionShape shape) {
-//        // rigidbody is dynamic if and only if mass is non zero, otherwise static
-//        
-//
-//        javax.vecmath.Vector3f localInertia = new javax.vecmath.Vector3f(0f, 0f, 0f);
-//
-//        // using motionstate is recommended, it provides interpolation capabilities, and only synchronizes 'active' objects
-//        RigidBodyConstructionInfo cInfo = new RigidBodyConstructionInfo(0, mState, shape, localInertia);
-//        RigidBody body = new RigidBody(cInfo);
-//        body.setCollisionFlags(CollisionFlags.KINEMATIC_OBJECT);
-//        body.setActivationState(RigidBody.DISABLE_DEACTIVATION);
-//        
-//        
-//        world.addRigidBody(body);
-//        
-//        return body;
-//    }
-        
-//    private void createCharacterProxy() {
-//        Transform t = new Transform();
-//        t.setIdentity();
-//        
-//        MotionState ms = new KinematicMotionState(t);
-//        player = localCreateRigidKinematicBody(ms, characterShape);
-//    }
-
-    
-
-//    public ArrayList<GhostObject> explosionObjects = new ArrayList<GhostObject>();
-//    private void handleGhostObjects() {
-//        javax.vecmath.Vector3f impulse = new javax.vecmath.Vector3f(0, 0, 200);
-//        Transform t1 = new Transform();
-//        Transform t2 = new Transform();
-//        for (GhostObject ghostObject : explosionObjects) {
-//            ghostObject.getWorldTransform(t1); // get ghost center
-//            
-//            for (CollisionObject collisionObject : ghostObject.getOverlappingPairs()) {
-//                RigidBody b = RigidBody.upcast(collisionObject);
-//                if(b != null && !b.isStaticObject()) {
-//                    b.getWorldTransform(t2);
-//                    impulse.x = t2.origin.x - t1.origin.x;
-//                    impulse.y = t2.origin.y - t1.origin.y;
-//                    impulse.z = t2.origin.z - t1.origin.z;
-//                    float len = impulse.length();
-//                    impulse.normalize();
-//                    float scale = 200 - len;
-//                    impulse.scale(scale);
-//                    b.activate(true);
-//                    b.applyCentralImpulse(impulse);
-//                }
-//            }
-//            world.removeCollisionObject(ghostObject);
-//        }
-//        explosionObjects.clear();
-//    }
-   
-//    
-//    private class KinematicMotionState extends MotionState {
-//        Transform t;
-//        private KinematicMotionState(Transform t) {
-//            this.t = t;
-//        }
-//        @Override
-//        public Transform getWorldTransform(Transform t) {
-//            t.set(this.t);
-//            return t;
-//        }
-//
-//        @Override
-//        public void setWorldTransform(Transform t) {
-//            
-//        }
-//        
-//    }
-    
-//    private void updatePlayerProxy(RigidBody body, PlayerState ps) {
-//        Vector3f org = ps.origin;
-//        
-//        
-//        KinematicMotionState ms =  (KinematicMotionState) body.getMotionState();
-//        ms.t.origin.set(org.x, org.y, org.z);
-//        ms.t.origin.scale(SCALE_FACTOR);
-////        ms.t.origin.add(charHalfSize);
-//        
-//        javax.vecmath.Vector3f vel = new javax.vecmath.Vector3f(ps.velocity.x, ps.velocity.y, ps.velocity.z);
-//        vel.scale(SCALE_FACTOR);
-//        body.setLinearVelocity(vel);
-//    }
-
-    public PhysicsSystem getWorld() {
-        return world;
-    }
 }

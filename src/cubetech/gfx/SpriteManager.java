@@ -364,9 +364,11 @@ public class SpriteManager {
             int batchNext = i == nEvents?HUDSpriteOffset:events[i];
             int batchLenght = batchNext - batchStart;
             if(batchLenght > 0) {
+                if(batchLenght == 1 && i > 0 && Sprites[HUDSprites[events[i-1]]].special != 0) {} else {
                 // Draw
                 GL12.glDrawRangeElements(GL11.GL_TRIANGLES,batchStart*4,(batchNext*4)-1,6*batchLenght,GL11.GL_UNSIGNED_INT, offset);
                 offset += batchLenght*6*4;
+                }
             }
 
             // Handle event for next batch

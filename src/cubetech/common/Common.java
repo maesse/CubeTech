@@ -82,7 +82,7 @@ public class Common {
         DISCONNECT // client disconnected from the server
     }
 
-    private void Init() {
+    public void Init() {
         lasttime = Milliseconds();
         // Set up cvars
         maxfps = Ref.cvars.Get("maxfps", "100", EnumSet.of(CVarFlags.ARCHIVE));
@@ -133,11 +133,11 @@ public class Common {
             }
             System.setProperty("org.lwjgl.opengl.Window.undecorated", undecorated?"true":"false");
             Ref.InitRef(applet != null,noSound);
-            Ref.common.Init();
+            
             if(config != null) Ref.commands.ExecuteText(Commands.ExecType.NOW, "exec " + config);
 
             Ref.glRef.InitWindow(parentDisplay, applet, lowGraphics);
-            Ref.Input.Init(); // Initialize mouse and keyboard
+            Ref.Input.Init(false); // Initialize mouse and keyboard
             
             Ref.common.items = new ItemList();
             // Init client and server
@@ -211,25 +211,25 @@ public class Common {
         
         int msec = minMsec;
         
-        boolean sleepy = (com_sleepy.iValue == 1 && Ref.cvars.Find("r_vsync").iValue != 1) || (com_unfocused.isTrue() && !developer.isTrue());
+        boolean sleepy = (com_sleepy.isTrue() && !Ref.cvars.Find("r_vsync").isTrue()) || (com_unfocused.isTrue() && !developer.isTrue());
         try {
             do {
+                frametime = EventLoop(); // Handle packets while we wait
+                if(lasttime > frametime) lasttime = frametime;
+                msec = frametime - lasttime;
+                
                 // Sleepy frees up the CPU when not running vsync.
                 if(sleepy) {
                     int remaining = minMsec - msec;
                     try {
-                        if(remaining >= com_sleepPrecision.iValue)
+                        if(com_sleepPrecision.iValue != -1 && remaining >= com_sleepPrecision.iValue)
                             Thread.sleep(remaining);
-                        else if(remaining >= com_yieldPrecision.iValue)
-                            Thread.sleep(0);
+                        else if(com_yieldPrecision.iValue != -1 && remaining >= com_yieldPrecision.iValue)
+                            Thread.yield();
                     } catch (InterruptedException ex) {
                         System.out.println(ex);
                     }
                 }
-                frametime = EventLoop(); // Handle packets while we wait
-                if(lasttime > frametime)
-                    lasttime = frametime;
-                msec = frametime - lasttime;
             } while(msec < minMsec);
         
             Ref.commands.Execute(); // Pump commands
@@ -438,7 +438,7 @@ public class Common {
         Packet packet = Ref.net.GetPacket();
         if(packet != null) {
             // We have a packet!
-            return CreateEvent(packet.Time, Event.EventType.PACKET, 0, packet.type==Packet.SourceType.CLIENT?1:0, packet);
+            return CreateEvent(packet.time, Event.EventType.PACKET, 0, packet.type==Packet.ReceiverType.CLIENT?1:0, packet);
         }
 
         // Return an empty event

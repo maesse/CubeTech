@@ -1,5 +1,6 @@
 package cubetech.common.items;
 
+import cubetech.Game.GPhysicsEntity;
 import cubetech.Game.Gentity;
 import cubetech.common.Common;
 import cubetech.common.Content;
@@ -104,7 +105,7 @@ public class ItemList {
     }
 
     private Gentity launchItem(IItem item, Vector3f origin, Vector3f velocity, int ammo) {
-        Gentity dropped = Ref.game.Spawn();
+        Gentity dropped = Ref.game.Spawn(GPhysicsEntity.class);
         dropped.s.eType = EntityType.ITEM;
         dropped.s.modelindex = items2.indexOf(item);
         
@@ -116,7 +117,6 @@ public class ItemList {
         dropped.touch = TouchItem;
         dropped.SetOrigin(origin);
         dropped.count = ammo;
-        dropped.physicsObject = true;
         
         dropped.s.pos.type = Trajectory.LINEAR;
         dropped.s.pos.time = Ref.game.level.time;
@@ -253,7 +253,7 @@ public class ItemList {
 
     public boolean playerTouchesItem(PlayerState ps, EntityState item, int time) {
         Vector3f origin = item.pos.Evaluate(time);
-
+        
         if(ps.origin.x - origin.x > 26
                 || ps.origin.x - origin.x < -26
                 || ps.origin.y - origin.y > 26

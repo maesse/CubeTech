@@ -4,57 +4,46 @@ import cubetech.collision.CubeChunk;
 import cubetech.common.Common;
 import cubetech.common.Helper;
 import cubetech.common.Quaternion;
-import cubetech.common.items.Weapon;
 import cubetech.misc.Ref;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.lwjgl.util.vector.ReadableVector4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
-import org.lwjgl.util.vector.Vector4f;
 
 /**
  *
  * @author mads
  */
 public class NetBuffer {
-    final static int BIG_BUFFER_SIZE = 16384; // Allocate 1400 bytes
-    final static int BUFFER_SIZE = 1400; // Allocate 1400 bytes
-    final static int BIG_POOL_SIZE = 128;
-    final static int SMALL_POOL_SIZE = 256;
+    private final static int BIG_BUFFER_SIZE = 16384; // Allocate 16384 bytes
+    private final static int BUFFER_SIZE = 1400; // Allocate 1400 bytes
+    private final static int BIG_POOL_SIZE = 128;
+    private final static int SMALL_POOL_SIZE = 256;
     static NetBuffer[] BufferPool = new NetBuffer[SMALL_POOL_SIZE]; // Circular buffer
     static NetBuffer[] BigBufferPool = new NetBuffer[BIG_POOL_SIZE]; // Circular buffer
     static int PoolIndex = 0;
     static int BigPoolIndex = 0;
-    static boolean poolInit = false; // false untill first GetNetBuffer
+    
+    static {
+        for (int i = 0; i < SMALL_POOL_SIZE; i++) {
+            BufferPool[i] = new NetBuffer(BUFFER_SIZE);   
+        }
+        for (int i = 0; i < BIG_POOL_SIZE; i++) {
+            BigBufferPool[i] = new NetBuffer(BIG_BUFFER_SIZE);
+        }
+    }
 
     public boolean allowOverflow = false; 
     private ByteBuffer buffer = null;
 
     public static NetBuffer GetNetBuffer(boolean writeMagicHeader, boolean allowOverflow) {
-        // Init pool the first time
-        if(!poolInit) {
-            for (int i = 0; i < SMALL_POOL_SIZE; i++) {
-                BufferPool[i] = new NetBuffer(BUFFER_SIZE);   
-            }
-            for (int i = 0; i < BIG_POOL_SIZE; i++) {
-                BigBufferPool[i] = new NetBuffer(BIG_BUFFER_SIZE);
-            }
-
-            poolInit = true;
-        }
-
         NetBuffer buf;
-        if(allowOverflow)
-            buf = BigBufferPool[BigPoolIndex++ % BIG_POOL_SIZE];
-        else 
-            buf = BufferPool[PoolIndex++ % SMALL_POOL_SIZE];
+        if(allowOverflow) buf = BigBufferPool[BigPoolIndex++ % BIG_POOL_SIZE];
+        else buf = BufferPool[PoolIndex++ % SMALL_POOL_SIZE];
         buf.Clear();
         buf.allowOverflow = allowOverflow;
-        if(writeMagicHeader)
-            buf.Write(Net.MAGIC_NUMBER);
+        if(writeMagicHeader) buf.Write(DefaultNet.MAGIC_NUMBER);
         return buf;
     }
 

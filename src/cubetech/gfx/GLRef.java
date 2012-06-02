@@ -1,5 +1,7 @@
 package cubetech.gfx;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.Sys;
 import cubetech.common.Helper;
@@ -50,6 +52,7 @@ public class GLRef {
     private static Vector2f MinimumResolution = new Vector2f(800,600);
 
     private DisplayMode currentMode;
+    private DisplayMode windowedMode;
     private boolean screenHasFocus = false;
     private DisplayMode[] availableModes;
     private DisplayMode desktopMode;
@@ -63,6 +66,7 @@ public class GLRef {
     public CVar r_softparticles;
     private Vector2f resolution;
     CVar r_clearcolor;
+    private boolean ignoreOnce;
 
     private ArrayList<Shader> shader_recompile_queue = new ArrayList<Shader>();
 
@@ -92,9 +96,16 @@ public class GLRef {
     public DeferredShading deferred = null;
     public ShadowManager shadowMan;
     
+    private VideoManager videoManager = null;
+    
 
     public GLRef() {
         Init();
+    }
+    
+    public VideoManager getVideoManager() {
+        if(videoManager == null) videoManager = new VideoManager(512, 512);
+        return videoManager;
     }
 
     public void enqueueShaderRecompile(Shader shader) {
@@ -108,13 +119,13 @@ public class GLRef {
     public void InitWindow(Canvas parent, Applet applet, boolean lowGraphics) throws Exception {
         this.applet = applet;
         availableModes = Display.getAvailableDisplayModes();
-        shadersSupported = !lowGraphics;
+        shadersSupported = true;
         desktopMode = Display.getDesktopDisplayMode();
 
         Common.Log("Desktop displaymode: " + desktopMode);
         displayParent = parent; // Save off canvas if there is one
         SetResolution(r_mode.sValue);
-
+        windowedMode = currentMode;
         if(parent == null) {
             // If we are creating a new window, center it
             Display.setLocation(-1,-1);
@@ -212,16 +223,11 @@ public class GLRef {
         GLState.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glViewport(0, 0, currentMode.getWidth(), currentMode.getHeight());
         checkError();
-
-//        try {
-//            srgbBuffer = new FrameBuffer(true, true, (int)GetResolution().x, (int)GetResolution().y);
-//        } catch(Exception ex) {
-//            Common.Log("SRGB backbuffer disabled.");
-//            // don't set SRGB flag on textures
-//            Ref.ResMan.srgbSupported  = false;
-//        }
         
-        Ref.ResMan.generateTextures();
+        if(Ref.ResMan != null) {
+            // Should only be null in tests
+            Ref.ResMan.getTextureLoader().generateTextures();
+        }
         
         Ref.render = new Render();
 
@@ -231,10 +237,11 @@ public class GLRef {
             
         deferred = new DeferredShading();
         shadowMan = new ShadowManager();
-
         // There may be an error sitting in OpenGL.
         // If it isn't cleared, it may trigger an exception later on.
         checkError();
+        
+//        getDisplayImplementation();
     }
 
 
@@ -274,6 +281,24 @@ public class GLRef {
         m.store(matrixBuffer);
         matrixBuffer.flip();
         GL11.glLoadMatrix(matrixBuffer);
+    }
+    
+    private void getDisplayImplementation() {
+        try {
+            Field displayField = Display.class.getDeclaredField("display_impl");
+            displayField.setAccessible(true);
+            Object implObject = displayField.get(null);
+            Class<?> implClass = implObject.getClass();
+            Method[] methods = implClass.getDeclaredMethods();
+            for (Method method : methods) {
+                System.out.println(method);
+            }
+            
+            
+            
+        } catch (Exception ex) {
+            Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }
 
     // Mainly for checking if cvars have changed
@@ -337,22 +362,32 @@ public class GLRef {
 
                 if(r_fullscreen.isTrue()) {
                     System.out.println("Leaving fullscreen while unfocussed");
-//                    try {
-//                        //
-//
-//                    } catch (LWJGLException ex) {
-//                        Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
-//                    }
+                    try {
+//                        ignoreOnce = true;
+                        Display.setDisplayMode(windowedMode);
+                        Display.setFullscreen(false);
+                        
+                    } catch (LWJGLException ex) {
+                        Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
+                    }
                 }
             } else if(r_fullscreen.isTrue()) {
-                System.out.println("Bringing back dat fullscreen");
-                try {
-                    Display.setFullscreen(false);
-                    Display.setFullscreen(true);
-
-                } catch (LWJGLException ex) {
-                    Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
+                if(ignoreOnce) {
+                    ignoreOnce = false;
+                } else {
+                    
+                    System.out.println("Bringing back dat fullscreen");
+                    try {
+                        //Display.setDisplayMode(windowedMode);
+//                        Display.setFullscreen(false);
+//                        Display.setDisplayMode(windowedMode);
+                        Display.setDisplayMode(currentMode);
+                    
+                    } catch (LWJGLException ex) {
+                        Logger.getLogger(GLRef.class.getName()).log(Level.SEVERE, null, ex);
+                    }
                 }
+                
             }
         }
 
@@ -379,6 +414,7 @@ public class GLRef {
 
         checkError();
     }
+    
 
     private void SetFullscreen(boolean fullscreen) {
         try {
@@ -391,13 +427,16 @@ public class GLRef {
                 Ref.Input.ClearKeys();
 
             if(fullscreen) {
-                Display.setDisplayModeAndFullscreen(currentMode);
+                
+                Display.setFullscreen(true);
+                
+                //Display.setDisplayModeAndFullscreen(currentMode);
                 checkError();
             }
             else {
                 Display.setFullscreen(false);
                 checkError();
-                Display.setDisplayMode(currentMode);
+                //Display.setDisplayMode(currentMode);
                 checkError();
                 // Center window if not running in custom window
                 if(displayParent == null) {
@@ -498,6 +537,7 @@ public class GLRef {
                 glViewport(0, 0, newmode.getWidth(), newmode.getHeight());
                 checkError();
             }
+            
             currentMode = newmode;
             resolution = new Vector2f(currentMode.getWidth(), currentMode.getHeight());
             r_mode.sValue = currentMode.getWidth()+"x"+currentMode.getHeight();
@@ -1053,6 +1093,8 @@ public class GLRef {
     public void pushShader(String string) {
         PushShader(getShader(string));
     }
+
+    
 
     
 

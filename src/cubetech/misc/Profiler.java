@@ -37,7 +37,7 @@ public class Profiler {
     SV_PACKET,
     CL_PACKET,
     VBO_MAP,
-    RENDER_POLYBATCH}
+    RENDER_POLYBATCH, VideoUpdate}
 
     private static long[] timeTable = new long[Sec.values().length];
     private static float[] msTable = new float[Sec.values().length];

@@ -15,12 +15,24 @@ import java.nio.ByteOrder;
 public class BMPWriter {
     ByteBuffer source = null;
     int width, height;
+    Format format = Format.BGR;
+    
     private byte[] dest = null;
     
+    public enum Format {
+        RGB,
+        RGBA,
+        BGR
+    }
+    
     public BMPWriter(ByteBuffer src, int width, int height) {
+        this(src,width,height, Format.BGR);
+    }
+    public BMPWriter(ByteBuffer src, int width, int height, Format format) {
         this.source = src;
         this.width = width;
         this.height = height;
+        this.format = format;
     }
 
     public void setSource(ByteBuffer source) {
@@ -56,8 +68,47 @@ public class BMPWriter {
         dst.putInt(3000); // pixels pr meter :S
         dst.putInt(3000); // pixels pr meter :S
         dst.putInt(0); // colors in the color palette
-        dst.putInt(0); // number of "important" colors
-        dst.put(source);
+        dst.putInt(0); // number of "important" colors'
+        switch(format) {
+            case RGBA:
+                if(source.hasArray()) {
+                    byte[] src = source.array();
+                    for (int i = 0; i < width*height; i++) {
+                        dst.put(src[i*4+2]);
+                        dst.put(src[i*4+1]);
+                        dst.put(src[i*4]);
+                    }
+                } else {
+                    for (int i = 0; i < width*height; i++) {
+                        dst.put(source.get(i*4+2));
+                        dst.put(source.get(i*4+1));
+                        dst.put(source.get(i*4));
+                    }
+                }
+                break;
+            case RGB:
+                if(source.hasArray()) {
+                    byte[] src = source.array();
+                    for (int i = 0; i < width*height; i++) {
+                        dst.put(src[i*3+2]);
+                        dst.put(src[i*3+1]);
+                        dst.put(src[i*3]);
+                    }
+                } else {
+                    for (int i = 0; i < width*height; i++) {
+                        dst.put(source.get(i*3+2));
+                        dst.put(source.get(i*3+1));
+                        dst.put(source.get(i*3));
+                    }
+                }
+                break;
+            case BGR:
+                dst.put(source);
+                break;
+            default:
+                // error
+                break;
+        }
 
         return dest;
     }

@@ -1,38 +1,28 @@
 package cubetech.Game;
 
-import cubetech.CGame.CEntity;
-import cubetech.CGame.PlayerEntity;
 import cubetech.Game.Bot.GBot;
 import cubetech.collision.CollisionResult;
 import cubetech.collision.CubeChunk;
 import cubetech.common.CS;
 import cubetech.common.CVar;
 import cubetech.common.CVarFlags;
-import cubetech.common.Commands.ExecType;
 import cubetech.common.Common;
 import cubetech.common.Content;
 import cubetech.common.DamageFlag;
 import cubetech.common.Helper;
-import cubetech.common.ICommand;
 import cubetech.common.MeansOfDeath;
 import cubetech.common.items.IItem;
 import cubetech.entities.EntityType;
 import cubetech.entities.Event;
-import cubetech.entities.Func_Door;
 import cubetech.entities.IEntity;
 import cubetech.entities.SharedEntity;
 import cubetech.entities.Info_Player_Spawn;
 import cubetech.entities.Missiles;
-import cubetech.input.PlayerInput;
-import cubetech.iqm.RigidBoneMesh;
 import cubetech.misc.Ref;
 import cubetech.server.SvFlags;
 import cubetech.spatial.SectorQuery;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import nbullet.collision.shapes.CollisionShape;
 import org.lwjgl.util.vector.Vector3f;
 
 /**
@@ -42,7 +32,7 @@ import org.lwjgl.util.vector.Vector3f;
 public class Game {
     public static final Vector3f PlayerMins = new Vector3f(-15,-15,-46);
     public static final Vector3f PlayerMaxs = new Vector3f(15,15,40);
-    public static final float PlayerViewHeight = 26; // from center
+    public static final float PlayerViewHeight = 30; // from center
     public static final Vector3f PlayerDuckedMins = new Vector3f(-15,-15,-46);
     public static final Vector3f PlayerDuckedMaxs = new Vector3f(15,15,0);
     public static final float PlayerDuckedHeight = -7; // from center
@@ -124,7 +114,7 @@ public class Game {
         // initialize all clients for this game
         level.maxclients = g_maxclients.iValue;
         
-        level.physics = new PhysicsSystem();
+        level.physics = new SVPhysics();
         Ref.cm.cubemap.physics = level.physics;
         for (Object object : Ref.cm.cubemap.chunks.values().elements()) {
             CubeChunk chunk = (CubeChunk)object;
@@ -183,7 +173,7 @@ public class Game {
         level.time = time;
         int msec = level.time - level.previousTime;
         
-//        level.physics.stepPhysics(time);
+        level.physics.stepPhysics(time);
 
         //int start = Ref.common.Milliseconds();
         for (int i= 0; i < level.num_entities; i++) {
@@ -218,11 +208,6 @@ public class Game {
 
             if(ent.s.eType == EntityType.MISSILE) {
                 Missiles.runMissile(ent);
-                continue;
-            }
-
-            if(ent.s.eType == EntityType.ITEM || ent.physicsObject) {
-                ent.runItem();
                 continue;
             }
 

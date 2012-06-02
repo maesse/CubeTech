@@ -1,12 +1,5 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.CGame;
 
-import com.bulletphysics.linearmath.MotionState;
-import com.bulletphysics.linearmath.Transform;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Helper;
 import cubetech.misc.Ref;

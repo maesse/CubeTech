@@ -278,7 +278,7 @@ public final class Shader {
                 String[] tokens = Commands.TokenizeString(line, false);
                 if(tokens.length == 3)  {
                     try {
-                        ByteBuffer include = ResourceManager.OpenFileAsByteBuffer(path + tokens[2], false).getKey();
+                        ByteBuffer include = ResourceManager.OpenFileAsNetBuffer(path + tokens[2], false).getKey().GetBuffer();
                         byte[] includeData = new byte[include.limit()];
                         include.get(includeData);
                         String includeStr = new String(includeData, Charset.defaultCharset());

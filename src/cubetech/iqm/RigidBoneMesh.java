@@ -64,6 +64,8 @@ public class RigidBoneMesh {
         return originalInfo;
     }
     
+    
+    
     public void changeInfo(BoneMeshInfo info, CEntity cent) {
         if(this.info.equals(info)) return;
         BoneMeshInfo oldinfo = this.info;
@@ -89,10 +91,22 @@ public class RigidBoneMesh {
     
     private static RigidBoneMesh findParent(RigidBoneMesh src, CEntity cent) {
         int parentid = src.getJoint().getParent();
-        if(parentid < 0) return null;
+        
         
         IQMJoint[] joints = cent.pe.boneMeshModel.getJoints();
         
+        // Check for parent joint override in the bonemesh info
+        String parentOverride = src.info.parentBoneMeshJoint;
+        if(parentOverride != null) {
+            // Try to locate the joint
+            IQMJoint j = src.model.controllerMap.get(parentOverride.toLowerCase());
+            if(j != null) parentid = j.index;
+        }
+        
+        if(parentid < 0) return null;
+        
+        // Traverse the bone hierachy (child->parent) until
+        // a joint with a bonemesh is found or the end of the skeleton is reached
         RigidBoneMesh found = null;
         IQMJoint currentParent = null;
         do
@@ -102,6 +116,7 @@ public class RigidBoneMesh {
             // Check if there's a meshbone for this joint
             for (RigidBoneMesh mesh : cent.pe.boneMeshes) {
                 if(mesh.getJoint() == currentParent) {
+                    // Found it
                     found = mesh;
                     break;
                 }
@@ -400,11 +415,12 @@ public class RigidBoneMesh {
     public Matrix4f getPosedModelToBone(IQMFrame frame, Matrix4f dest) {
         Matrix4f boneMatrix = new Matrix4f(frame.outframe[joint.index]);
         dest = Matrix4f.mul(boneMatrix, modelToBone, dest);
-        
-        Matrix4f invModelToBone = (Matrix4f) new Matrix4f(modelToBone).invert();
-        Matrix4f Test = Matrix4f.mul(dest, invModelToBone, null);
-        
         return dest;
+    }
+    
+    public boolean hasBoneMeshParent(CEntity cent) {
+        RigidBoneMesh found = findParent(this, cent);
+        return found != null;
     }
 
     public void connectToParent(CEntity cent) {

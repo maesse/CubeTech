@@ -1,10 +1,10 @@
 package cubetech.CGame;
 
-import com.bulletphysics.BulletStats;
 import cubetech.collision.ClientCubeMap;
 import cubetech.Game.Gentity;
 import cubetech.Game.GentityFilter;
 import cubetech.collision.CubeChunk;
+import cubetech.collision.DefaultPhysics;
 import cubetech.common.*;
 import cubetech.common.items.*;
 import cubetech.entities.EntityFlags;
@@ -15,12 +15,18 @@ import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
 import cubetech.gfx.TextManager.Align;
 import cubetech.gfx.VBOPool;
+import cubetech.gfx.VideoManager;
 import cubetech.iqm.IQMModel;
 import cubetech.misc.Profiler;
 import cubetech.misc.Ref;
 import cubetech.snd.SoundHandle;
+import java.awt.Dimension;
 import java.util.ArrayList;
 import java.util.Locale;
+import nbullet.vehicle.DefaultVehicleRaycaster;
+import nbullet.vehicle.RaycastVehicle;
+import nbullet.vehicle.VehicleRaycasterResult;
+import nbullet.vehicle.WheelInfo;
 import org.lwjgl.util.Color;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
@@ -41,13 +47,15 @@ public class CGameRender {
     //
     // Entities
     //
-    void AddCEntity(CEntity cent) {
+    void AddCEntity(CEntity cent, boolean noLerp) {
         // event-only entities will have been dealt with already
         if(cent.currentState.eType >= EntityType.EVENTS)
             return;
 
         // calculate the current origin
-        cent.CalcLerpPosition();
+        if(!noLerp) {
+            cent.CalcLerpPosition();
+        }
         cent.Effects();
         if(cent == Ref.cgame.cg.cur_lc.predictedPlayerEntity && !Ref.cgame.cg_tps.isTrue() 
                 && (!Ref.cgame.cg_freecam.isTrue() || !Ref.cgame.cg.playingdemo) ) {
@@ -220,6 +228,18 @@ public class CGameRender {
     // UI
     //
     void Draw2D() {
+//        if(Ref.cgame.videoManager != null) {
+//            Dimension dim = VideoManager.dim;
+//            int w = 512, h = 512;
+//            if(dim != null) {
+//                w = dim.width;
+//                h = dim.height;
+//            }
+//            float hoffset = Ref.glRef.GetResolution().y / 2f - h / 2;
+//            Sprite spr = Ref.SpriteMan.GetSprite(Type.HUD);
+//            spr.Set(0, hoffset, w,h, Ref.cgame.videoManager.getTexture(), new Vector2f(0,1), new Vector2f(1, -1));
+//        }
+        
         drawPlayerHUD();
         if(game.cg.cur_viewport != 0) return;
         
@@ -281,6 +301,52 @@ public class CGameRender {
                     Ref.textMan.AddText(pos, vehicleInfo.get(i), Align.LEFT, Type.HUD);
                 }
                 
+                RaycastVehicle rv = v.getRaycastVehicle();
+                for (int i = 0; i < rv.getWheelCount(); i++) {
+                    WheelInfo wi = rv.getWheelInfo(i);
+                    Vector3f rayStart = wi.getRayHardPoint();
+                    Vector3f rayEnd = wi.getRayContactPoint();
+                    rayStart.scale(DefaultPhysics.INV_SCALE_FACTOR);
+                    rayEnd.scale(DefaultPhysics.INV_SCALE_FACTOR);
+                    
+                    RenderEntity rent = Ref.render.createEntity(REType.BBOX);
+                    rent.flags = RenderEntity.FLAG_NOLIGHT;
+                    rent.origin.set(rayEnd);
+                    boolean contact = wi.getRayIsInContact();
+                    if(contact) rent.outcolor.set(0, 255, 0, 255);
+                    else rent.outcolor.set(255, 0, 0, 255);
+                    
+                    Ref.render.addRefEntity(rent);
+                    
+                    rent = Ref.render.createEntity(REType.BBOX);
+                    rent.flags = RenderEntity.FLAG_NOLIGHT;
+                    rent.origin.set(rayStart);
+                    Ref.render.addRefEntity(rent);
+                }
+                
+//                DefaultVehicleRaycaster ray =  v.getRayCaster();
+//                Vector3f start = new Vector3f(0,0,5);
+//                Vector3f end = new Vector3f(0,0,-1);
+//                VehicleRaycasterResult res = new VehicleRaycasterResult();
+//                ray.castRay(start, end, res);
+//                end.set(res.hitPointInWorld);
+//                end.scale(DefaultPhysics.INV_SCALE_FACTOR);
+//                start.scale(DefaultPhysics.INV_SCALE_FACTOR);
+//                
+//                RenderEntity rent = Ref.render.createEntity(REType.BBOX);
+//                rent.flags = RenderEntity.FLAG_NOLIGHT;
+//                rent.origin.set(end);
+//                
+//                if(res.distFraction != 1.0f) rent.outcolor.set(0, 255, 0, 255);
+//                else rent.outcolor.set(255, 0, 0, 255);
+//
+//                Ref.render.addRefEntity(rent);
+//
+//                rent = Ref.render.createEntity(REType.BBOX);
+//                rent.flags = RenderEntity.FLAG_NOLIGHT;
+//                rent.origin.set(start);
+//                Ref.render.addRefEntity(rent);
+                
                 int lowStart = 1000;
                 int lowEnd = 3000;
                 int highStart = 2500;
@@ -296,11 +362,11 @@ public class CGameRender {
                 if(rpm < highStart) volumeHigh = 0.1f;
                 volumeHigh = 0.1f + (0.9f * (Helper.Clamp(rpm - highStart, 0, 2000) / 2000f));
                 
-                SoundHandle low = Ref.soundMan.AddWavSound("data/sounds/idle_engine.wav");
-                SoundHandle high = Ref.soundMan.AddWavSound("data/sounds/highrev_engine.wav");
-
-                Ref.soundMan.addLoopingSound(ent.s.number+2, ent.r.currentOrigin, ent.s.pos.delta, low, volumeLow, rpmLow);
-                Ref.soundMan.addLoopingSound(ent.s.number+1, ent.r.currentOrigin, ent.s.pos.delta, high, volumeHigh, rpmHigh);
+//                SoundHandle low = Ref.soundMan.AddWavSound("data/sounds/idle_engine.wav");
+//                SoundHandle high = Ref.soundMan.AddWavSound("data/sounds/highrev_engine.wav");
+//
+//                Ref.soundMan.addLoopingSound(ent.s.number+2, ent.r.currentOrigin, ent.s.pos.delta, low, volumeLow, rpmLow);
+//                Ref.soundMan.addLoopingSound(ent.s.number+1, ent.r.currentOrigin, ent.s.pos.delta, high, volumeHigh, rpmHigh);
             }
         }
     }
@@ -430,13 +496,13 @@ public class CGameRender {
         
         drawStackProfiler();
         
-        if(Ref.game != null && Ref.game.level.physics != null && Ref.game.level.physics.world != null) {
-            Ref.textMan.AddText(new Vector2f(900, 620), "gNumDeepPen: " + BulletStats.gNumDeepPenetrationChecks, Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(900, 620-Ref.textMan.GetCharHeight()), "gNumGjkChecks: " + BulletStats.gNumGjkChecks, Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(900, 620-Ref.textMan.GetCharHeight()*2f), "gNumSplitImpulseRec: " + BulletStats.gNumSplitImpulseRecoveries, Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(900, 620-Ref.textMan.GetCharHeight()*3f), "objects: " + Ref.game.level.physics.world.getNumCollisionObjects(), Align.LEFT, Type.HUD);
-            Ref.textMan.AddText(new Vector2f(900, 620-Ref.textMan.GetCharHeight()*4f), "pairs: " + Ref.game.level.physics.world.getBroadphase().getOverlappingPairCache().getNumOverlappingPairs(), Align.LEFT, Type.HUD);
-        }
+//        if(Ref.game != null && Ref.game.level.physics != null && Ref.game.level.physics.world != null) {
+//            Ref.textMan.AddText(new Vector2f(900, 620), "gNumDeepPen: " + BulletStats.gNumDeepPenetrationChecks, Align.LEFT, Type.HUD);
+//            Ref.textMan.AddText(new Vector2f(900, 620-Ref.textMan.GetCharHeight()), "gNumGjkChecks: " + BulletStats.gNumGjkChecks, Align.LEFT, Type.HUD);
+//            Ref.textMan.AddText(new Vector2f(900, 620-Ref.textMan.GetCharHeight()*2f), "gNumSplitImpulseRec: " + BulletStats.gNumSplitImpulseRecoveries, Align.LEFT, Type.HUD);
+//            Ref.textMan.AddText(new Vector2f(900, 620-Ref.textMan.GetCharHeight()*3f), "objects: " + Ref.game.level.physics.world.getNumCollisionObjects(), Align.LEFT, Type.HUD);
+//            Ref.textMan.AddText(new Vector2f(900, 620-Ref.textMan.GetCharHeight()*4f), "pairs: " + Ref.game.level.physics.world.getBroadphase().getOverlappingPairCache().getNumOverlappingPairs(), Align.LEFT, Type.HUD);
+//        }
         
         int offset = 0;
         for (String s : Ref.cgame.map.builder.getInfo()) {
@@ -522,12 +588,12 @@ public class CGameRender {
         int ping = Ref.cgame.cg.cur_ps.ping;
         int fps = Ref.client.clRender.currentFPS;
 
-        int in = Ref.net.clLastBytesIn;
-        int out = Ref.net.clLastBytesOut;
-        int inAvgBytes = Ref.net.clAvgBytesIn;
-        int outAvgBytes = Ref.net.clAvgBytesOut;
-        int inRate = Ref.net.clAvgPacketsIn;
-        int outRate = Ref.net.clAvgPacketsOut;
+        int in = Ref.net.stats.clLastBytesIn;
+        int out = Ref.net.stats.clLastBytesOut;
+        int inAvgBytes = Ref.net.stats.clAvgBytesIn;
+        int outAvgBytes = Ref.net.stats.clAvgBytesOut;
+        int inRate = Ref.net.stats.clAvgPacketsIn;
+        int outRate = Ref.net.stats.clAvgPacketsOut;
 
         int loss = 0; // Lost snapshot %
         int choke = 0; // Percentage of packets rate-delayed

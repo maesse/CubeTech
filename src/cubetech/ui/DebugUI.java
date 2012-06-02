@@ -19,7 +19,7 @@ import cubetech.misc.Log;
 import cubetech.misc.LogEventListener;
 import cubetech.misc.Ref;
 import cubetech.net.ConnectState;
-import cubetech.net.Net;
+import cubetech.net.DefaultNet;
 import java.awt.Canvas;
 import java.awt.Image;
 import java.awt.event.KeyEvent;
@@ -848,11 +848,11 @@ public class DebugUI extends javax.swing.JFrame implements LogEventListener {
             return;
         }
 
-        Net net = Ref.net;
-        clientByteIn.setText(""+net.clAvgBytesIn / 1024f);
-        clientByteOut.setText(""+net.clAvgBytesOut / 1024f);
-        clientPacketIn.setText(""+net.clAvgPacketsIn);
-        clientPacketOut.setText(""+net.clAvgPacketsOut);
+        DefaultNet net = Ref.net;
+        clientByteIn.setText(""+net.stats.clAvgBytesIn / 1024f);
+        clientByteOut.setText(""+net.stats.clAvgBytesOut / 1024f);
+        clientPacketIn.setText(""+net.stats.clAvgPacketsIn);
+        clientPacketOut.setText(""+net.stats.clAvgPacketsOut);
     }
 
     // Updates the whole client tab

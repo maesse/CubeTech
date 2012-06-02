@@ -22,7 +22,7 @@ public class LevelLocal {
     public boolean restarted;
     public boolean editmode = false;
     
-    public PhysicsSystem physics;
+    public SVPhysics physics;
 
     public int numConnectedClients; // not hooked up
 }

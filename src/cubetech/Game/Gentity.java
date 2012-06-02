@@ -1,13 +1,6 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 
 package cubetech.Game;
 
-import com.bulletphysics.collision.shapes.BoxShape;
-import com.bulletphysics.dynamics.RigidBody;
-import com.bulletphysics.linearmath.Transform;
 import cubetech.collision.CollisionResult;
 import cubetech.common.items.IItem;
 import cubetech.common.*;
@@ -49,8 +42,6 @@ public class Gentity {
     public boolean freeAfterEvent;
     public boolean unlinkAfterEvent;
 
-    public boolean physicsObject; // if true, it can be pushed by movers and fall off edges
-				  // all game items are physicsObjects,
     public float physicsBounce; // 1.0 = continuous bounce, 0.0 = no bounce
     public int ClipMask; // brushes with this content value will be collided against
                         // when moving.  items and corpses do not collide against
@@ -107,7 +98,6 @@ public class Gentity {
         splashRadius = 0;
         freeAfterEvent = false;
         unlinkAfterEvent = false;
-        physicsObject = false;
         classname = "";
         neverfree = false;
         freetime = 0;

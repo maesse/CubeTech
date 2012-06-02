@@ -75,6 +75,8 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
     
     public CGPhysics physics = new CGPhysics();
     
+    
+    
     /**
     *=================
     *CG_Init
@@ -197,6 +199,11 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             
             Ref.client.setUserCommand(cg.cur_lc.weaponSelect, cg.cur_lc.zoomSensitivity, cg.cur_localClientNum);
             cg.cur_lc.PredictPlayerState();
+            PlayerState ps = cg.cur_lc.predictedPlayerState;
+            ps.ToEntityState(cg.cur_lc.predictedPlayerEntity.currentState, false);
+            // lerp the non-predicted value for lightning gun origins
+            cg.cur_lc.predictedPlayerEntity.CalcLerpPosition();
+            cg_entities[cg.cur_ps.clientNum].CalcLerpPosition();
             cg.showScores = cg.cur_lc.predictedPlayerState.oldButtons[3];
         }
         
@@ -511,6 +518,18 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             }
 
             cg.refdef.Origin.z += cg.cur_lc.predictedPlayerState.viewheight;
+            
+            if(cg.cur_lc.predictedPlayerEntity.pe.isRagdoll) {
+                cg.refdef.Origin = new Vector3f(cg.cur_lc.predictedPlayerEntity.pe.lastCameraOrigin);
+                
+                Vector3f[] axis = cg.cur_lc.predictedPlayerEntity.pe.lastCameraAngles;
+                cg.refdef.ViewAxis[0].set(axis[2]).scale(1f).normalise();
+                cg.refdef.ViewAxis[1].set(axis[0]).scale(1f).normalise();
+                cg.refdef.ViewAxis[2].set(axis[1]).normalise();
+                //cg.refdef.ViewAxis[2].scale(-1f);
+                //cg.refdef.Angles = Helper.AxisToAngles(axis, null);
+                cg.refdef.forceViewAxis = true;
+            }
 
             if(cg_tps.isTrue()) {
                 cg.refdef.offsetThirdPerson();
@@ -568,17 +587,14 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
         cg.cur_lc.autoAngle = (float) ((((cg.time>>1) & 1023) * Math.PI * 2) / 1024.0f);
         
         // generate and add the entity from the playerstate
-        PlayerState ps = cg.cur_lc.predictedPlayerState;
-        ps.ToEntityState(cg.cur_lc.predictedPlayerEntity.currentState, false);
-        cgr.AddCEntity(cg.cur_lc.predictedPlayerEntity);
+        cgr.AddCEntity(cg.cur_lc.predictedPlayerEntity, true);
 
-        // lerp the non-predicted value for lightning gun origins
-        cg_entities[cg.cur_ps.clientNum].CalcLerpPosition();
+        
 
         // add each entity sent over by the server
         for (int i= 0; i < cg.snap.numEntities; i++) {
             CEntity cent = cg_entities[cg.snap.entities[i].number];
-            cgr.AddCEntity(cent);
+            cgr.AddCEntity(cent, false);
         }
         
         for (int i = 0; i < cg.snap.pss.length; i++) {
@@ -587,7 +603,7 @@ public class CGame implements ITrace, KeyEventListener, MouseEventListener {
             if(clNum != cg.cur_ps.clientNum) {
                 LocalClient lc = cg.getLocalClient(clNum);
 //                cg.snap.pss[i].ToEntityState(lc.predictedPlayerEntity.currentState, false);
-                cgr.AddCEntity(lc.predictedPlayerEntity);
+                cgr.AddCEntity(lc.predictedPlayerEntity, true);
             }
         }
         

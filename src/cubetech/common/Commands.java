@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 /**
- *
+ * Requires common and cvars
  * @author mads
  */
 public final class Commands {
@@ -233,7 +233,9 @@ public final class Commands {
 
         // send it as a server command if we are connected
         // this will usually result in a chat message
-        Ref.client.clc.ForwardCommandToServer(str, tokens);
+        if(Ref.client != null) {
+            Ref.client.clc.ForwardCommandToServer(str, tokens);
+        }
     }
 
     // Returns  a single string containing argv(1) to argv(argc()-1)

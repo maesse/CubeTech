@@ -1,6 +1,7 @@
 package cubetech.iqm;
 
 import cubetech.CGame.Render;
+import cubetech.CGame.RenderEntity;
 import cubetech.CGame.ViewParams;
 import cubetech.common.Common;
 import cubetech.common.Helper;
@@ -51,12 +52,13 @@ public class IQMFrame {
     IQMAnim currentAnim = null;
     public ArrayList<BoneController> controllers = null;
     HashMap<String, BoneAttachment> attachments = new HashMap<String, BoneAttachment>();
-    
+    public boolean needMultiPass = false;
     RigidBoneMesh rigidBoneMesh;
     
     // Generated
     Matrix4f modelMatrix = new Matrix4f();
     HashMap<IQMMesh, Vector3f[]> boneMeshes = null;
+    public HashMap<IQMMesh, CubeTexture> textureOverrides = new HashMap<IQMMesh, CubeTexture>();
     
     
     public IQMFrame(IQMModel model, int frame, int oldframe, float backlerp) {
@@ -84,7 +86,32 @@ public class IQMFrame {
     
     
     
-    
+     // Updates bone origins and axis
+    public void updateAttachments(Vector3f origin, Vector3f[] axis) {
+        if(model.attachments.isEmpty()) return;
+        Helper.getModelMatrix(axis, origin, modelMatrix);
+        attachments.clear();
+        for (String att : model.attachments.keySet()) {
+            IQMJoint joint = model.attachments.get(att);
+            
+            BoneAttachment b = new BoneAttachment();
+            b.name = att;
+            b.boneIndex = joint.index;
+
+            Matrix4f mv = Matrix4f.mul(outframe[b.boneIndex], joint.baseframe, null);
+            mv = Matrix4f.mul(modelMatrix, mv, mv);
+            
+            b.lastposition.set(mv.m30, mv.m31, mv.m32, 0);
+            
+            mv.transpose();
+            Helper.matrixToAxis(mv, b.axis);
+            for (int i = 0; i < 3; i++) {
+                b.axis[i].normalise();
+            }
+            
+            attachments.put(att, b);
+        }
+    }
     
     
     
@@ -130,7 +157,7 @@ public class IQMFrame {
 
         if(color != null) Helper.col(color);
         glDisable(GL_BLEND);
-        renderFromVBO(shadows);
+        renderFromVBO(shadows,deferred);
         
         glEnable(GL_BLEND);
 
@@ -208,22 +235,26 @@ public class IQMFrame {
         }
 
         // Update ubo if necesary
-        updateUBO(shader);        
+        updateUBO(shader);
 
         // Set model matrix
         Helper.getModelMatrix(axis, position, modelMatrix);
-        shader.setUniform("ModelView", Matrix4f.mul(view.viewMatrix, modelMatrix, modelMatrix));
+        shader.setUniform("Modell", modelMatrix);
+        shader.setUniform("View", view.viewMatrix);
+        shader.setUniform("ModelView", Matrix4f.mul(view.viewMatrix, modelMatrix, null));
         shader.setUniform("Projection", view.ProjectionMatrix);
 
         // render
         glDisable(GL_BLEND);
         if(color != null) Helper.col(color);
-        renderFromVBO(shadows);
+        renderFromVBO(shadows, deferred);
         glEnable(GL_BLEND);
         
         Ref.glRef.PopShader();
         
-        debugdraw(position, axis, view);
+        if(Ref.render.r_bonedebug.isTrue()) {
+            debugdraw(position, axis, view);
+        }
     }
     
     public void renderCPUSkinned(Vector3f position, Vector3f[] axis, Vector4f color, int renderFlags, ViewParams view) {
@@ -264,8 +295,8 @@ public class IQMFrame {
 
         Helper.getModelMatrix(axis, position, modelMatrix);
         shader.setUniform("Modell", modelMatrix);
-        Matrix4f.mul(view.viewMatrix, modelMatrix, modelMatrix);
-        shader.setUniform("ModelView", modelMatrix);
+        shader.setUniform("View", view.viewMatrix);
+        shader.setUniform("ModelView", Matrix4f.mul(view.viewMatrix, modelMatrix, null));
         shader.setUniform("Projection", view.ProjectionMatrix);
         
 
@@ -275,18 +306,35 @@ public class IQMFrame {
         
         Ref.glRef.PopShader();
 
-        debugdraw(position, axis, view);
+        if(Ref.render.r_bonedebug.isTrue()) {
+            debugdraw(position, axis, view);
+        }
     }    
 
-    private void renderFromVBO(boolean shadowPass) {
+    private void renderFromVBO(boolean shadowPass, boolean opaqueRender) {
         for (IQMMesh mesh : model.meshes) {
+            if(mesh.infoMesh) continue;
             boolean collisionMesh = mesh.name.equalsIgnoreCase("@convexcollision");
             if(collisionMesh) {
                 glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
             } else if(mesh.name.startsWith("@")) continue; // dont draw control-meshes
             
+            boolean needsAlpha = (mesh.renderflags & RenderEntity.FLAG_NOLIGHT) != 0;
+            if(opaqueRender == needsAlpha) continue;
+            
+            if(needsAlpha) {
+                GLState.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glEnable(GL_BLEND);
+            }
+            else glDisable(GL_BLEND);
+            
             if(!shadowPass) {
                 mesh.bindTextures();
+                CubeTexture override = textureOverrides.get(mesh);
+                if(override != null) {
+                    override.textureSlot = 0;
+                    override.Bind();
+                }
                 glCullFace(GL_FRONT);
             } else {
                 glDisable(GL_BLEND);
@@ -383,6 +431,7 @@ public class IQMFrame {
         shader.setUniform("shadow_factor", Ref.cvars.Find("shadow_factor").fValue);
         shader.setUniform("pcfOffsets", light.getShadowResult().getPCFoffsets());
         shader.setUniform("lightDirection", view.lights.get(0).getDirection());
+        shader.setUniform("ambient_factor", Ref.cvars.Find("r_ambient").fValue);
         GLRef.checkError();
     }
     
@@ -636,7 +685,7 @@ public class IQMFrame {
             glTranslatef(position.x, position.y, position.z);
             Vector3f min = model.min;
             Vector3f max = model.max;
-            Helper.renderBBoxWireframe(min.x, min.y, min.z, max.x, max.y, max.z,null);
+            Helper.renderBBoxWireframe(min.x, min.y, min.z, max.x, max.y, max.z,null, view);
             glPopMatrix();
         }
         
@@ -712,10 +761,7 @@ public class IQMFrame {
             shader.setUniform("Projection", view.ProjectionMatrix);
             
             Vector4f v = new Vector4f();
-            Matrix4f invView = Matrix4f.invert(view.viewMatrix, null);
-            Matrix4f invModel = Matrix4f.invert(modelMatrix, null);
             Vector3f[] boneaxis = new Vector3f[] {new Vector3f(),new Vector3f(),new Vector3f()};
-            Matrix4f boneMatrix = null;
             glBegin(GL_LINES);
             for (int i= 0; i < model.joints.length; i++) {
                 IQMJoint joint = model.joints[i];
@@ -723,11 +769,9 @@ public class IQMFrame {
                 // Calculate bone origin
                 Matrix4f mv = Matrix4f.mul(outframe[i], joint.baseframe, null);
                 mv = Matrix4f.mul(modelMatrix, mv, mv);
-                mv = Matrix4f.mul(invView, mv, mv);
                 v.set(mv.m30, mv.m31, mv.m32, 0);
                 
                 // Calculate bone axis
-                boneMatrix = Matrix4f.transpose(outframe[i], boneMatrix);
                 mv.transpose();
                 Helper.matrixToAxis(mv, boneaxis);
                 

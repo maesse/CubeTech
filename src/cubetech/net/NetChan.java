@@ -8,97 +8,92 @@ package cubetech.net;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.misc.Ref;
+import cubetech.net.Packet.ReceiverType;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
 /**
- *
+ * Netchan packet format:
+ * 1 bit fragment indicator
+ * 31 bits (outgoing) sequence number
+ * if source is client: 32 bits ident number
+ * if fragment bit set: 16 bits fragment offset
+ * if fragment bit set: 16 bits fragment length
+ * extra data
  * @author mads
  */
 public class NetChan {
-    public static final int FRAGMENT_BIT = (1<<30);
-    public static final int MSG_LEN = 16348;
+    public static final int FRAGMENT_BIT = (1<<30); // bit flag for fragmented packets
+    public static final int MSG_LEN = 16348; // max total length
     public static final int MAX_PACKET_SIZE = 1400;
-    public static final int FRAGMENT_SIZE = MAX_PACKET_SIZE - 100;
+    public static final int FRAGMENT_SIZE = MAX_PACKET_SIZE - 100; // when to fragment
 
     // Sequencing
     public int incomingSequence;
     public int outgoingSequence;
 
-    public NetSource source;
+    public Packet.ReceiverType source; // this socket represents a client or server
     public InetSocketAddress addr;
     
-    public int qport; // qport value to write when transmitting
+    private int ident; // qport value to write when transmitting
     public int dropped; // between last packet and previous
 
     // Incomming fragment assembly
-    int fragmentSequence;
-    int fragmentLenght;
-    byte[] fragmentBuffer = new byte[MSG_LEN];
+    private int fragmentSequence;
+    private int fragmentLenght;
+    private byte[] fragmentBuffer = new byte[MSG_LEN];
 
     // Outgoing fragment buffer
     // we need to space out the sending of large fragmented messages
-    public boolean unsentFragments;
-    public int unsentFragmentStart;
-    public int unsentLenght;
-    byte[] unsentBuffer = new byte[MSG_LEN];
+    private boolean unsentFragments;
+    private int unsentFragmentStart;
+    private int unsentLenght;
+    private byte[] unsentBuffer = new byte[MSG_LEN];
+    
+    private Net net;
 
     public boolean isBot = false;
-
-    public boolean isLocalhost() {
-        if(addr == null) return false;
-        return (addr.getAddress().isLoopbackAddress());
-    }
-
-    public boolean isLAN() {
-        if(addr == null) return isBot;
-        // todo: test
-        return (addr.getAddress().isAnyLocalAddress());
+    
+    public NetChan(Net net, ReceiverType source, InetSocketAddress address, int ident) {
+        this.net = net;
+        addr = address;
+        this.source = source;
+        this.ident = ident;
+        incomingSequence = 0;
+        outgoingSequence = 1;
     }
 
     public void TransmitNextFragment() {
         NetBuffer newbuf = NetBuffer.GetNetBuffer(true, false);
+        
+        // Write header
         newbuf.Write(outgoingSequence | FRAGMENT_BIT);
-
-        if(source == NetSource.CLIENT)
-            newbuf.Write(qport);
+        if(source == ReceiverType.CLIENT) newbuf.Write(getIdent());
 
         int fragLen = FRAGMENT_SIZE;
         if(unsentFragmentStart + fragLen > unsentLenght) {
             fragLen = unsentLenght - unsentFragmentStart;
         }
-
+        // Write fragment header
         newbuf.Write(unsentFragmentStart);
         newbuf.Write(fragLen);
+        
+        // Write data
         newbuf.Write(unsentBuffer, unsentFragmentStart, fragLen);
 
-        Ref.net.SendPacket(source, newbuf, addr);
+        // Send
+        net.SendPacket(source, newbuf, addr);
 
         unsentFragmentStart += fragLen;
 
         // this exit condition is a little tricky, because a packet
-	// that is exactly the fragment length still needs to send
-	// a second packet of zero length so that the other side
-	// can tell there aren't more to follow
+        // that is exactly the fragment length still needs to send
+        // a second packet of zero length so that the other side
+        // can tell there aren't more to follow
         if(unsentFragmentStart == unsentLenght && fragmentLenght != FRAGMENT_SIZE) {
             outgoingSequence++;
-            unsentFragments = false;
+            setUnsentFragments(false);
         }
-    }
-
-    
-
-    public enum NetSource {
-        CLIENT,
-        SERVER
-    }
-    
-    public NetChan(NetSource source, InetSocketAddress address, int qport) {
-        addr = address;
-        this.source = source;
-        this.qport = qport;
-        incomingSequence = 0;
-        outgoingSequence = 1;
     }
 
     public void Transmit(NetBuffer buf) {
@@ -106,54 +101,50 @@ public class NetChan {
             Ref.common.Error(ErrorCode.DROP, "NetChan.Transmit(): lenght > MSG_MAX");
         unsentFragmentStart = 0;
 
+        buf.Flip();
+        
+        if(isBot) return;
+        
         // fragment large reliable messages
-        if(buf.GetBuffer().position() > FRAGMENT_SIZE) {
-            unsentFragments = true;
-            unsentLenght = buf.GetBuffer().position();
-
-            buf.Flip();
+        if(buf.GetBuffer().limit() > FRAGMENT_SIZE) {
+            // Reset fragment state
+            setUnsentFragments(true);
+            unsentLenght = buf.GetBuffer().limit();
+            
+            // Copy data to sendbuffer
             buf.GetBuffer().get(unsentBuffer, 0, unsentLenght);
 
+            // Send first fragment
             TransmitNextFragment();
             return;
         }
 
+        // Create final buffer
         NetBuffer newbuf = NetBuffer.GetNetBuffer(true, false);
-        newbuf.Write(outgoingSequence);
-        outgoingSequence++;
-
-        if(source == NetSource.CLIENT)
-            newbuf.Write(qport);
-        buf.Flip();
+        
+        // Write header
+        newbuf.Write(outgoingSequence++);
+        if(source == ReceiverType.CLIENT) newbuf.Write(getIdent());
+        
+        // Write data
         newbuf.GetBuffer().put(buf.GetBuffer());
-        if(isBot) return;
-        Ref.net.SendPacket(source, newbuf, addr);
+        
+        // Send
+        net.SendPacket(source, newbuf, addr);
     }
 
     public boolean Process(Packet packet) {
         // get seq
         int seq = packet.buf.ReadInt();
-        
 
         boolean fragmented = false;
-        if((seq & FRAGMENT_BIT) > 0) {
+        if((seq & FRAGMENT_BIT) != 0) {
             seq &= ~FRAGMENT_BIT;
             fragmented = true;
         }
 
-//        System.out.println("seq:" + seq);
-
         // read qport if server
-        if(source == NetSource.SERVER)
-            qport = packet.buf.ReadInt();
-
-        // Read the fragment information
-        int fragStart = 0;
-        int fragLen = 0;
-        if(fragmented) {
-            fragStart = packet.buf.ReadInt();
-            fragLen = packet.buf.ReadInt();
-        }
+        if(source == ReceiverType.SERVER) ident = packet.buf.ReadInt();        
 
         //
         // discard out of order or duplicated packets
@@ -168,14 +159,17 @@ public class NetChan {
         // dropped packets don't keep the message from being used
         //
         dropped = seq - (incomingSequence + 1);
-        if(dropped > 0)
-            Common.LogDebug("Dropped " + dropped + " at " + seq);
+        if(dropped > 0) Common.LogDebug("Dropped " + dropped + " at " + seq);
 
         //
-	// if this is the final framgent of a reliable message,
-	// bump incoming_reliable_sequence
-	//
+        // if this is the final framgent of a reliable message,
+        // bump incoming_reliable_sequence
+        //
         if(fragmented) {
+            // Read the fragment information
+            int fragStart = packet.buf.ReadInt();
+            int fragLen = packet.buf.ReadInt();
+            
             // TTimo
             // make sure we add the fragments in correct order
             // either a packet was dropped, or we received this one too soon
@@ -189,7 +183,7 @@ public class NetChan {
             // if we missed a fragment, dump the message
             if(fragStart != fragmentLenght) {
                 // we can still keep the part that we have so far,
-		// so we don't need to clear chan->fragmentLength
+                // so we don't need to clear chan->fragmentLength
                 Common.LogDebug("Dumping fragment");
                 return false;
             }
@@ -217,21 +211,47 @@ public class NetChan {
             // copy the full message over the partial fragment
             packet.buf = NetBuffer.GetNetBuffer(false, true);
             ByteBuffer buf = packet.buf.GetBuffer();
-            buf.position(0);
+            // Fake header
             buf.putInt(seq);
             buf.putInt(seq);
+            // put data
             buf.put(fragmentBuffer, 0, fragmentLenght);
-            fragmentLenght = 0;
+            
             buf.flip();
-            buf.getInt();
-            buf.getInt();
-//            System.out.println("got full fragment");
-//            incomingSequence = seq;
-//            return true;
+            buf.position(4*2);
+            
+            fragmentLenght = 0;
         }
-
 
         incomingSequence = seq;
         return true;
+    }
+    
+    public boolean isUnsentFragments() {
+        return unsentFragments;
+    }
+
+    public void setUnsentFragments(boolean unsentFragments) {
+        this.unsentFragments = unsentFragments;
+    }
+
+    public int getIdent() {
+        return ident;
+    }
+
+    public boolean isLocalhost() {
+        if(addr == null) return false;
+        return (addr.getAddress().isLoopbackAddress());
+    }
+
+    public boolean isLAN() {
+        if(addr == null) return isBot;
+        // todo: test
+        return (addr.getAddress().isAnyLocalAddress());
+    }
+    
+    public int getUnsentBytes() {
+        if(unsentFragments) return unsentLenght - unsentFragmentStart;
+        return 0;
     }
 }

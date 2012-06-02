@@ -1,8 +1,7 @@
 package cubetech.CGame;
 
-import cubetech.collision.CubeCollision;
-import cubetech.collision.CubeMap;
-import cubetech.common.CVar;
+import cubetech.collision.CollisionResult;
+import cubetech.common.Content;
 import cubetech.common.Helper;
 import cubetech.gfx.Light;
 import cubetech.gfx.RenderList;
@@ -12,10 +11,8 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
-import javax.vecmath.Matrix3f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.GLU;
-import org.lwjgl.util.vector.Matrix;
 import org.lwjgl.util.vector.Matrix4f;
 import org.lwjgl.util.vector.Vector2f;
 import org.lwjgl.util.vector.Vector3f;
@@ -54,6 +51,7 @@ public class ViewParams {
     
     public Matrix4f viewMatrix = new Matrix4f();
     public Vector3f[] ViewAxis = new Vector3f[3];
+    public boolean forceViewAxis = false; // when true, viewaxis has been set for us (instead of angles)
     private float[] view = new float[16];
     public Plane[] planes = new Plane[4];
     
@@ -96,7 +94,9 @@ public class ViewParams {
         GL11.glOrtho(0, fovx, 0, FovY, 1, -1000);
         ProjectionMatrix = readOpenGLProjection(ProjectionMatrix);
 
-        ViewAxis = Helper.AnglesToAxis(Angles, ViewAxis);
+        if(!forceViewAxis) {
+            ViewAxis = Helper.AnglesToAxis(Angles, ViewAxis);
+        }
 
         view[0] = ViewAxis[0].x;
         view[4] = ViewAxis[0].y;
@@ -181,7 +181,9 @@ public class ViewParams {
             fov = Ref.cgame.cg.demofov;
         }
 
-        ViewAxis = Helper.AnglesToAxis(Angles, ViewAxis);
+        if(!forceViewAxis) {
+            ViewAxis = Helper.AnglesToAxis(Angles, ViewAxis);
+        }
         
         setup3DProjection(fov, aspect, 64, near, far);
         
@@ -413,47 +415,76 @@ public class ViewParams {
     }
 
     void offsetThirdPerson() {
+        // Limit pitch
         Vector3f focusAngle = new Vector3f(Angles);
-        if(focusAngle.x > 75) focusAngle.x = 75;
+        if(focusAngle.x > 90) focusAngle.x = 90; // don't go too far overhead
 
+        // Get forward vector
         Vector3f forward = new Vector3f();
         Helper.AngleVectors(focusAngle, forward, null, null);
-//        forward.scale(-1f);
 
-        float focusDistance = 100;
+        // Figure out where the player is looking
+        float focusDistance = 200;
         Vector3f focusPoint = Helper.VectorMA(Origin, focusDistance, forward, null);
-        Vector3f view = new Vector3f(Origin);
-        view.z += 8;
-        Angles.x *= 0.5f;
-
+        
         Vector3f t_forward = new Vector3f(), t_right = new Vector3f(), t_up = new Vector3f();
         Helper.AngleVectors(Angles, t_forward, t_right, t_up);
-        t_forward.set(forward);
-        t_forward.scale(-1f);
+
+        Vector3f neworigin = new Vector3f(Origin);
+        neworigin.z += 35;
+        Helper.VectorMA(neworigin, 65, t_right, neworigin);
+        float thirdPersonAngle = 0;
+        float thirdPersonRange = 100;
+        float forwardScale = (float)Math.cos(thirdPersonAngle/180.0f * Math.PI);
+        float sideScale = (float)Math.sin(thirdPersonAngle/180.0f * Math.PI);
+        Helper.VectorMA(neworigin, -thirdPersonRange * forwardScale, t_forward, neworigin);
+        Helper.VectorMA(neworigin, -thirdPersonRange * sideScale, t_right, neworigin);
         
-
-        CubeCollision col = CubeMap.TraceRay(view, t_forward, 8, Ref.cgame.map.chunks);
-        t_forward.normalise();
-        float len = 150;
-        if(col != null) {
-            Vector3f start = new Vector3f(view);
-            Vector3f delta = Helper.VectorMA(view, len, t_forward, null);
-            Vector3f.sub(delta, start, delta);
-            delta = new Vector3f(t_forward);
-            delta.scale(len);
-
-            Plane p = col.getHitPlane();
-            float frac = p.findIntersection(start, delta);
-            frac -= 0.07f; if( frac < 0) frac = 0f;
-            len *= frac;
+        // Try to figure out exactly where the weapon is aiming
+        Vector3f end = Helper.VectorMA(Origin, focusDistance, t_forward, null);
+        CollisionResult res = Ref.cgame.Trace(Origin, end, null, null, Content.MASK_SHOT, Ref.cgame.cg.cur_lc.clientNum);
+        if(res.hit) {
+            Vector3f hit = res.getPOI(null);
+            
+            focusPoint.set(hit);
+            if(true) {
+                // Debug focus point
+                RenderEntity ent = Ref.render.createEntity(REType.BBOX);
+                ent.flags = RenderEntity.FLAG_NOLIGHT | RenderEntity.FLAG_NOSHADOW;
+                ent.origin.set(focusPoint);
+                Ref.render.addRefEntity(ent);
+            }
         }
-        Helper.VectorMA(view, len, t_forward, view);
+        
+        Origin.set(neworigin);
+        
+        
+        float maxForceLength = 100; // apply full power at this length
+        float acceleration = 10;
+        
+        
+        if(Ref.cgame.cg.cur_lc.lastFocusPoint != null) {
+            Vector3f lastFocus = new Vector3f(Ref.cgame.cg.cur_lc.lastFocusPoint);
+            
+            Vector3f focusDelta = Vector3f.sub(focusPoint, lastFocus,  null);
+            float deltaLength = focusDelta.length();
+            float maxLength = 3000;
+            if(deltaLength < maxLength && deltaLength != 0.0) {
+                float linForceFrac = Helper.Clamp(deltaLength/maxForceLength, 0, 1);
+                float smoothFrac = Helper.SimpleSpline(linForceFrac) * 0.5f;
 
-        Origin.set(view);
+                Helper.VectorMA(lastFocus, smoothFrac, focusDelta, focusPoint);
+            }
+            Ref.cgame.cg.cur_lc.lastFocusPoint.set(focusPoint);
+        } else {
+            Ref.cgame.cg.cur_lc.lastFocusPoint = new Vector3f(focusPoint);
+        }
+        
+        
         Vector3f.sub(focusPoint, Origin, focusPoint);
-        float focusDist = (float) Math.sqrt(focusPoint.x * focusPoint.x + focusPoint.y * focusPoint.y);
-        if(focusDist < 1) focusDist = 1;
-        Angles.x = (float) (-180f / Math.PI * Math.atan2(focusPoint.z, focusDist));
+        
+        focusPoint.normalise();
+        Helper.VectorToAngles(focusPoint, Angles);
     }
     
 }

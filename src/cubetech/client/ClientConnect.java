@@ -10,7 +10,7 @@ import cubetech.input.Input;
 import cubetech.input.PlayerInput;
 import cubetech.misc.Ref;
 import cubetech.net.*;
-import cubetech.net.NetChan.NetSource;
+import cubetech.net.Packet.ReceiverType;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -367,7 +367,7 @@ public class ClientConnect {
     public void PacketEvent(Packet data) {
         LastPacketTime = Ref.client.realtime;
 
-        if(data.OutOfBand)
+        if(data.outOfBand)
         {
             ConnectionlessPacket(data);
             return;
@@ -379,7 +379,7 @@ public class ClientConnect {
         //
         // packet from server
         //
-        if(!data.endpoitn.equals(ServerAddr)) {
+        if(!data.endPoint.equals(ServerAddr)) {
             Common.LogDebug("Sequence packet without connection");
             return;
         }
@@ -474,7 +474,7 @@ public class ClientConnect {
                 return;
             }
 
-            if(!packet.endpoitn.equals(ServerAddr))
+            if(!packet.endPoint.equals(ServerAddr))
             {
                 // This challenge response is not coming from the expected address.
                 // Check whether we have a matching client challenge to prevent
@@ -499,7 +499,7 @@ public class ClientConnect {
 
             // take this address as the new server address.  This allows
             // a server proxy to hand off connections to multiple servers
-            ServerAddr = packet.endpoitn;
+            ServerAddr = packet.endPoint;
             //System.out.println("Got challenge response.");
             return;
         }
@@ -515,15 +515,15 @@ public class ClientConnect {
                 return;
             }
 
-            if(!packet.endpoitn.equals(ServerAddr))
+            if(!packet.endPoint.equals(ServerAddr))
             {
                 Common.Log("ConnectResponse from wrong address. ignored.");
                 return;
             }
 
-            netchan = new NetChan(NetSource.CLIENT, packet.endpoitn, Ref.cvars.Find("net_qport").iValue);
+            netchan = new NetChan(Ref.net, ReceiverType.CLIENT, packet.endPoint, Ref.cvars.Find("net_qport").iValue);
             try {
-                Ref.net.ConnectClient(packet.endpoitn);
+                Ref.net.ConnectClient(packet.endPoint);
             } catch (SocketException ex) {
                 Ref.common.Error(ErrorCode.DROP, "Couldn't establish connection to host: \n" + Common.getExceptionString(ex));
             }
@@ -537,13 +537,13 @@ public class ClientConnect {
         // a disconnect message from the server, which will happen if the server
 	// dropped the connection but it is still getting packets from us
         if(c.equalsIgnoreCase("disconnect")) {
-            DisconnectPacket(packet.endpoitn);
+            DisconnectPacket(packet.endPoint);
             return;
         }
 
         // echo request from server
         if(c.equalsIgnoreCase("echo")) {
-            Ref.net.SendOutOfBandPacket(NetSource.CLIENT, packet.endpoitn, Commands.ArgsFrom(tokens, 1));
+            Ref.net.SendOutOfBandPacket(ReceiverType.CLIENT, packet.endPoint, Commands.ArgsFrom(tokens, 1));
             return;
         }
 
@@ -560,7 +560,7 @@ public class ClientConnect {
             return;
         }
 
-        Common.LogDebug("Unknown OOB packet from " + packet.endpoitn.toString());
+        Common.LogDebug("Unknown OOB packet from " + packet.endPoint.toString());
     }
 
     public void ForwardCommandToServer(String str, String[] tokens) {
@@ -621,7 +621,7 @@ public class ClientConnect {
         switch(state) {
             case CONNECTING:
                 String data = "getchallenge " + challenge;
-                Ref.net.SendOutOfBandPacket(NetSource.CLIENT, ServerAddr, data);
+                Ref.net.SendOutOfBandPacket(ReceiverType.CLIENT, ServerAddr, data);
                 Common.Log("Connecting...");
                 break;
             case CHALLENGING:
@@ -633,7 +633,7 @@ public class ClientConnect {
                 cs = Info.SetValueForKey(cs, "challenge", ""+challenge);
 
                 data = String.format("connect \"%s\"", cs);
-                Ref.net.SendOutOfBandPacket(NetSource.CLIENT, ServerAddr, data);
+                Ref.net.SendOutOfBandPacket(ReceiverType.CLIENT, ServerAddr, data);
                 Ref.cvars.modifiedFlags.remove(CVarFlags.USER_INFO);
 //                System.out.println("CL: Got challenge.");
                 break;

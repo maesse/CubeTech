@@ -1,8 +1,10 @@
 package cubetech.gfx;
 
+import cubetech.misc.Ref;
 import cubetech.common.CVars;
 import cubetech.common.Commands;
-import cubetech.misc.Ref;
+
+import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.junit.After;
@@ -26,11 +28,14 @@ public class GLRefTest {
     public static void setUpClass() throws Exception {
         Ref.commands = new Commands();
         Ref.cvars = new CVars();
+        Ref.rnd = new Random();
         Ref.glRef = new GLRef();
+        Ref.ResMan = new ResourceManager();
 
         try {
             Ref.glRef.InitWindow(null, null, true);
         } catch (Exception ex) {
+            ex.printStackTrace();
             Logger.getLogger(GLRefTest.class.getName()).log(Level.SEVERE, null, ex);
             fail(ex.getMessage());
         }

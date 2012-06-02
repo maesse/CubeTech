@@ -84,6 +84,8 @@ public class Input {
     public CVar j_deadzone;
     
     private InputOverlay overlay;
+    
+    private int realtime;
 
     public Input() {
         binds = new Binds(this);
@@ -271,7 +273,7 @@ public class Input {
         }
     }
 
-    public void Init() throws LWJGLException {
+    public void Init(boolean nojoy) throws LWJGLException {
         if(initialized) return;
         
         // Keyboard init
@@ -287,8 +289,11 @@ public class Input {
         Mouse.create();
         mouseButtonStates = new boolean[Mouse.getButtonCount()];
 
-        // Controllers init
-        Controllers.create();
+        in_nojoy.set(nojoy?"1":"0");
+        if(!in_nojoy.isTrue()) {
+            // Controllers init
+            Controllers.create();
+        }
         
         kbState = new ControllerState("KB");
         
@@ -299,8 +304,8 @@ public class Input {
     
     private void updateControllerCount() {
         if(true) return; // broken. need to modify lwjgl/jinput code to fix this
-        if(lastControllerCheck + controllerCheckTimeout > Ref.client.realtime) return;
-        lastControllerCheck = Ref.client.realtime;
+        if(lastControllerCheck + controllerCheckTimeout > realtime) return;
+        lastControllerCheck = realtime;
         
         // Hax: LWJGL doesn't detect new controllers at runtime, so keep an eye on controller count
         // and re-init the controllers when the count changes
@@ -359,7 +364,15 @@ public class Input {
         return clientInputs[index];
     }
 
-    public void Update() {
+    public void Update(int realtime) {
+        // send intentions now
+        // Get delta msecs since last frame from the common subsystem
+        frame_msec = realtime-this.realtime;
+        this.realtime = realtime;
+        // if running less than 5fps, truncate the extra time to prevent
+        // unexpected moves after a hitch
+        if(frame_msec > 200) frame_msec = 200;
+        
         GLRef.checkError();
         
         Display.processMessages();
@@ -387,21 +400,21 @@ public class Input {
 
         // Repeat backspace events
         if(Keyboard.isKeyDown(Keyboard.KEY_BACK)) {
-            if(backSpaceTime == 0) backSpaceTime = Ref.client.realtime + backSpaceGracePeriod;
+            if(backSpaceTime == 0) backSpaceTime = realtime + backSpaceGracePeriod;
             // Send keydown-event
-            else if(Ref.client.realtime > backSpaceTime) {
-                backSpaceTime = Ref.client.realtime + backSpaceRepeat;
+            else if(realtime > backSpaceTime) {
+                backSpaceTime = realtime + backSpaceRepeat;
                 FireKeyEvent(new KeyEvent(GetKey(Keyboard.KEY_BACK)));
             }
         } else backSpaceTime = 0;
 
         // Send mwheel keyUp events if it's time
-        if(mWheelDownTime != 0 && Ref.client.realtime - mWheelDownTime > 50) {
-            binds.ParseBinding(binds.StringToKey("MWHEELDOWN"), false, (int) (Ref.client.realtime));
+        if(mWheelDownTime != 0 && realtime - mWheelDownTime > 50) {
+            binds.ParseBinding(binds.StringToKey("MWHEELDOWN"), false, (int) (realtime));
             mWheelDownTime = 0;
         }
-        if(mWheelUpTime != 0 && Ref.client.realtime - mWheelUpTime > 50) {
-            binds.ParseBinding(binds.StringToKey("MWHEELUP"), false, (int) (Ref.client.realtime));
+        if(mWheelUpTime != 0 && realtime - mWheelUpTime > 50) {
+            binds.ParseBinding(binds.StringToKey("MWHEELUP"), false, (int) (realtime));
             mWheelUpTime = 0;
         }
         
@@ -469,7 +482,7 @@ public class Input {
                 Key key = keys[keyIndex];
                 key.Changed = true;
                 key.Pressed = pressed;
-                key.Time = Ref.client.realtime;
+                key.Time = realtime;
                 key.Name = buttonStr;
                 FireKeyEvent(new KeyEvent(key));
             }
@@ -481,19 +494,19 @@ public class Input {
                 Key key = keys[keyIndex];
                 key.Changed = true;
                 key.Pressed = true;
-                key.Time = Ref.client.realtime;
+                key.Time = realtime;
                 key.Name = "MWHEELDOWN";
                 FireKeyEvent(new KeyEvent(key));
-                mWheelDownTime = Ref.client.realtime;
+                mWheelDownTime = realtime;
             } else if(wheelDelta > 0) {
                 int keyIndex = binds.StringToKey("MWHEELUP");
                 Key key = keys[keyIndex];
                 key.Changed = true;
                 key.Pressed = true;
-                key.Time = Ref.client.realtime;
+                key.Time = realtime;
                 key.Name = "MWHEELUP";
                 FireKeyEvent(new KeyEvent(key));
-                mWheelUpTime = Ref.client.realtime;
+                mWheelUpTime = realtime;
             }
         }
         
@@ -536,7 +549,7 @@ public class Input {
                         continue;
                     }
                     else if(key == Keyboard.KEY_ESCAPE) {
-                        if((GetKeyCatcher() & KEYCATCH_CONSOLE) > 0) {
+                        if((GetKeyCatcher() & KEYCATCH_CONSOLE) > 0 && Ref.Console != null) {
                             // Close console
                             Ref.Console.Close();
                             continue;
@@ -554,12 +567,14 @@ public class Input {
 //                        }
 
                         if((GetKeyCatcher() & KEYCATCH_UI) == 0) {
-                            if(Ref.client.clc.state == ConnectState.ACTIVE)
-                                Ref.ui.SetActiveMenu(MENU.MAINMENU);
-                            else if(Ref.client.clc.state != ConnectState.DISCONNECTED) {
-                                // Escape can abort an connection attempt
-                                Ref.commands.ExecuteText(ExecType.NOW, "disconnect\n");
-                                Ref.ui.SetActiveMenu(MENU.MAINMENU);
+                            if(Ref.client != null) {
+                                if(Ref.client.clc.state == ConnectState.ACTIVE)
+                                    Ref.ui.SetActiveMenu(MENU.MAINMENU);
+                                else if(Ref.client.clc.state != ConnectState.DISCONNECTED) {
+                                    // Escape can abort an connection attempt
+                                    Ref.commands.ExecuteText(ExecType.NOW, "disconnect\n");
+                                    Ref.ui.SetActiveMenu(MENU.MAINMENU);
+                                }
                             }
                             continue;
                         } else {

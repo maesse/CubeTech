@@ -45,38 +45,15 @@ public class PlayerRender {
         this.game = game;
     }
     
-    // Render a player
-    public void renderPlayer(CEntity cent) {
-        ClientInfo ci = game.cgs.clientinfo[cent.currentState.number];
-        if(!ci.infoValid) return;
-        if((cent.currentState.eFlags & EntityFlags.NODRAW) != 0) return;
-        RenderEntity ent = Ref.render.createEntity(REType.MODEL);
-        
-        
-        
-        
-        IQMModel model = Ref.ResMan.loadModel(ci.modelName);
-        
-        if(model == null) return;
+    private void checkContents(CEntity cent) {
         if(cent.pe.boneMeshModel != null) {
             boolean wasdead = false;
             boolean isdead = false;
                     
             if(cent.currentState.contents != cent.pe.lastcontents) {
-            
                 wasdead = (cent.pe.lastcontents & Content.CORPSE) != 0;
                 isdead = (cent.currentState.contents & Content.CORPSE) != 0;
             } 
-//            else {
-//                for (int i = 0; i < Ref.cgame.cg.localClients.length; i++) {
-//                    LocalClient cl = Ref.cgame.cg.localClients[i];
-//                    if(cl.validPPS && cl.clientNum == cent.currentState.number) {
-//                        wasdead = cl.wasDead;
-//                        isdead = cl.predictedPlayerState.stats.Health <= 0;
-//                        break;
-//                    }
-//                }
-//            }
             if(wasdead != isdead) {
                 if(!wasdead && isdead) {
                     // Make ragdoll
@@ -90,47 +67,65 @@ public class PlayerRender {
             }
         }
         cent.pe.lastcontents = cent.currentState.contents;
+    }
+    
+    // Render a player
+    public void renderPlayer(CEntity cent) {
+        // Ignore if has nodraw flag
+        // todo: move further back
+        if((cent.currentState.eFlags & EntityFlags.NODRAW) != 0) return;
         
+        // Check that the player has a valid model
+        ClientInfo ci = game.cgs.clientinfo[cent.currentState.number];
+        if(!ci.infoValid) return;
+        IQMModel model = Ref.ResMan.loadModel(ci.modelName);
+        if(model == null) return;
         
-        // set origin & angles
+        // Handles toggling of ragdolls
+        checkContents(cent);
+        
+        RenderEntity ent = Ref.render.createEntity(REType.MODEL);
+        // set origin
         ent.origin.set(cent.lerpOrigin);
         ent.origin.z += Game.PlayerMins.z;
-
-        Vector3f angles = new Vector3f(1,0,0);
-
-        angles.set(cent.lerpAngles);
-        if(angles.x > 1) angles.x = 1;
-        if(angles.x < -25) angles.x = -25;
-        ent.axis = Helper.AnglesToAxis(angles, ent.axis);
-
-        ArrayList<BoneController> controllers = playerAngles(cent, ent);
-
+        
+        // Figure out skeletal animation for this player
         playerAnimation(cent, ent);
+
+        // Calculate angles and generate bone controllers
+        ArrayList<BoneController> controllers = playerAngles(cent, ent);
+        
+        // physics controlled bones need to read out the
+        // bone matrixes before they are baked into the model
         handleMeshBonesPre(cent, ent, model, controllers);
+        
+        // Builds a fully animated "frame" of a model, ready for rendeirng
         ent.model = model.buildFrame(ent.frame, ent.oldframe, ent.backlerp, controllers);
         
+        // physics might want to know about the new pose
         handleMeshBonesPost(cent, ent);
         
-        
-
-        // Fade out when close to camera
-        Vector3f cameraOrigin = Ref.cgame.cg.refdef.Origin;
-        Vector3f entityOrigin = ent.origin;
-
-        float distance = Helper.VectorDistance(cameraOrigin, entityOrigin);
-        float maxdist = 60; // where fadeout starts
-        float mindist = 30; // where model is completely transparent
-        if(distance < maxdist) {
-            distance -= mindist;
-            if(distance < 2) distance = 2;
-            distance /= maxdist-mindist;
+        // Maybe just store the last boneattachments in the cent.pe?
+        ent.model.updateAttachments(ent.origin, ent.axis);
+        BoneAttachment eye = ent.model.getAttachment("Eye");
+        if(eye != null) {
+            cent.pe.lastCameraOrigin = eye.lastposition;
+            cent.pe.lastCameraAngles = eye.axis;
+        } else {
+            cent.pe.lastCameraOrigin = null;
+            cent.pe.lastCameraAngles = null;
         }
-
-        ent.color = new Vector4f(255, 255, 255, 255f);
-
-        Ref.render.addRefEntity(ent);
-        addWeaponToPlayer(cent, ent);
         
+        // Override texture
+        if(Ref.glRef.getVideoManager().isPlaying()) {
+            ent.model.textureOverrides.put(model.getMesh("Cube.002"), Ref.glRef.getVideoManager().getTexture());
+        }
+        
+        ent.color = new Vector4f(255, 255, 255, 255f);
+        Ref.render.addRefEntity(ent);
+        
+        // Add weapon
+        addWeaponToPlayer(cent, ent);
     }
     
     
@@ -150,6 +145,7 @@ public class PlayerRender {
         
         if(hasRigidBoneMeshes && hasBoneMeshes) {
             // Update rigid bodies
+            Matrix4f invModelMatrix = (Matrix4f)Helper.getModelMatrix(ent.axis, ent.origin, null).invert();
             for (RigidBoneMesh rigidBoneMesh : cent.pe.boneMeshes) {
                 // Ensure that the bones are connected appropiately
                 if(rigidBoneMesh.info.type != BoneMeshInfo.Type.RIGID) {
@@ -166,10 +162,9 @@ public class PlayerRender {
                     Helper.transposeAxis(meshMatrix);
 
                     // Bring into model space
-                    Matrix4f modelMatrix = Helper.getModelMatrix(ent.axis, ent.origin, null);
-                    modelMatrix.invert();
-                    Matrix4f poseMatrix = Matrix4f.mul(modelMatrix, meshMatrix, null);
-                    Matrix4f boneMatrix = rigidBoneMesh.getBoneFromPosedModelMatrix(poseMatrix, null);
+                    
+                    Matrix4f poseMatrix = Matrix4f.mul(invModelMatrix, meshMatrix, meshMatrix);
+                    Matrix4f boneMatrix = rigidBoneMesh.getBoneFromPosedModelMatrix(poseMatrix, poseMatrix);
                     
                     // Override the current bone pose with a bonecontroller
                     BoneController controller = new BoneController(BoneController.Type.ABSOLUTE, 
@@ -183,11 +178,13 @@ public class PlayerRender {
     // Requires that there's a bonemesh for the models rootbone
     public void makeRagdoll(CEntity cent) {
         boolean hasRigidBoneMeshes = cent.pe.boneMeshes != null;
+        cent.pe.isRagdoll = true;
         if(hasRigidBoneMeshes) {
             for (RigidBoneMesh rigidBoneMesh : cent.pe.boneMeshes) {
-                if(rigidBoneMesh.isBoneToPhysics() && rigidBoneMesh.getJoint().getParent() < 0) {
+                if(rigidBoneMesh.isBoneToPhysics() && !rigidBoneMesh.hasBoneMeshParent(cent)) {
                     // Found root bone
                     rigidBoneMesh.setBoneToPhysics(false);
+                    Common.Log("Found root bone " + rigidBoneMesh.getJoint().getName());
                 } else {
                     // make into a flexible meshbone
                     BoneMeshInfo newinfo = rigidBoneMesh.info.clone(null);
@@ -201,6 +198,7 @@ public class PlayerRender {
     
     // unragdollify
     private void unmakeRagdoll(CEntity cent) {
+        cent.pe.isRagdoll = false;
         boolean hasRigidBoneMeshes = cent.pe.boneMeshes != null;
         if(hasRigidBoneMeshes) {
             for (RigidBoneMesh rigidBoneMesh : cent.pe.boneMeshes) {
@@ -236,7 +234,7 @@ public class PlayerRender {
             // Add each mesh according to it's info
             for (BoneMeshInfo boneMeshInfo : boneMeshes) {
                 // prepare the mesh
-                RigidBoneMesh boneMesh = new RigidBoneMesh(game.physics.world, model, boneMeshInfo);
+                RigidBoneMesh boneMesh = new RigidBoneMesh(game.physics.getWorld(), model, boneMeshInfo);
                 cent.pe.boneMeshes.add(boneMesh);
                 
                 Matrix4f modelMatrix = Helper.getModelMatrix(ent.axis, ent.origin, null);
@@ -295,7 +293,7 @@ public class PlayerRender {
         IQMModel weaponModel = w.getWeaponInfo().worldModel;
         if(weaponModel == null || ent.model == null) return;
 
-        
+        //ent.model.updateAttachments(ent.origin, ent.axis);
         BoneAttachment bone = ent.model.getAttachment("weapon");
         if(bone == null) return;
 
@@ -308,17 +306,18 @@ public class PlayerRender {
         
         went.model = weaponModel.buildFrame(0, 0, 0, null);
 
-        Helper.transform(ent.axis, ent.origin, boneOrigin);
+        //Helper.transform(ent.axis, ent.origin, boneOrigin);
         went.origin.set(boneOrigin);
 
         Vector3f[] test = new Vector3f[3];
-        test[2] = new Vector3f(3,0,0);
-        test[0] = new Vector3f(0,-3,0);
-        test[1] = new Vector3f(0,0,-3);
+        
+        test[0] = new Vector3f(0,2,0);
+        test[1] = new Vector3f(0,0,-2);
+        test[2] = new Vector3f(-2,0,0);
         
 
         Helper.mul(test, bone.axis, test);
-        Helper.mul(test, ent.axis, test);
+        //Helper.mul(test, ent.axis, test);
 
         went.axis = test;
 
@@ -449,23 +448,30 @@ public class PlayerRender {
         if(noangles != null && noangles.isTrue()) {
             headAngle.set(1,0,0);
         }
+        
+        
         headAngle.y = Helper.AngleMod(headAngle.y);
-
-        int dir = (int)cent.currentState.Angles2.y;
-        if(dir < 0 || dir > 7) {
-            Common.LogDebug("Invalid movedirection %d", dir);
-            return null;
-        }
+        
         Vector3f legsAngle = new Vector3f();
         Vector3f torsoAngle = new Vector3f();
         
         if(cent.pe.lastRenderFrame != Ref.client.framecount) {
+            int dir = (int)cent.currentState.Angles2.y;
+            if(dir < 0 || dir > 7) {
+                Common.LogDebug("Invalid movedirection %d", dir);
+                return null;
+            }
+            
             cent.pe.legs.pitching = false;
             cent.pe.torso.pitching = false;
             
             // yaw
             torsoAngle.y = headAngle.y + 0.35f * moveOffsets[dir];
+//            if(cent.currentState.number == 1) {
+//                Ref.cgame.Print(0, ""+torsoAngle.y);
+//            }
             legsAngle.y = headAngle.y + moveOffsets[dir];
+            
             swingAngles(torsoAngle.y, 10, 90, game.cg_swingspeed.fValue, cent.pe.torso, true, 1f); // yaw
             Animations anim = cent.currentState.frameAsAnimation();
             if(anim != null && anim == Animations.IDLE) {
@@ -476,29 +482,34 @@ public class PlayerRender {
             } else {
                 swingAngles(legsAngle.y, 40, 110, game.cg_swingspeed.fValue, cent.pe.legs, true, 1f); // yaw
             }
+            
+            // pitch
+            float dest;
+            if(headAngle.x < 0 ) {
+                dest = (headAngle.x) * 0.75f;
+                if(dest < -60) dest = -60;
+            } else {
+                dest = headAngle.x * 0.75f;
+                if(dest> 60) dest = 60;
+            }
+
+            swingAngles(dest, 0, 30, 0.1f, cent.pe.torso, false, 1f);
+            cent.pe.lastRenderFrame = Ref.client.framecount;
         }
-        cent.pe.lastRenderFrame = Ref.client.framecount;
+        
         
         torsoAngle.y = cent.pe.torso.yawAngle;
         legsAngle.y = cent.pe.legs.yawAngle;
 
-        // pitch
-        float dest;
-        if(headAngle.x < 0 ) {
-            dest = (headAngle.x) * 0.75f;
-            if(dest < -60) dest = -60;
-        } else {
-            dest = headAngle.x * 0.75f;
-            if(dest> 60) dest = 60;
-        }
         
-        swingAngles(dest, 0, 30, 0.1f, cent.pe.torso, false, 1f);
+        
         headAngle.x = cent.pe.torso.pitchAngle;
-        BoneController hips = new BoneController(BoneController.Type.ADDITIVE, "Hip", new Vector3f(-torsoAngle.x, legsAngle.y-torsoAngle.y, 0));
+        
+        BoneController hips = new BoneController(BoneController.Type.ADDITIVE, "Hip", new Vector3f(headAngle.y-legsAngle.y, legsAngle.x-torsoAngle.x, 0));
         BoneController head = new BoneController(BoneController.Type.ADDITIVE, "Spine", new Vector3f(0,torsoAngle.x-headAngle.x,0));
         rent.axis = Helper.AnglesToAxis(new Vector3f(0, torsoAngle.y, torsoAngle.z), rent.axis);
         ArrayList<BoneController> controllers = new ArrayList<BoneController>();
-        //controllers.add(hips);
+        controllers.add(hips);
         controllers.add(head);
         return controllers;
     }
@@ -523,6 +534,7 @@ public class PlayerRender {
         // modify the speed depending on the delta
 	// so it doesn't seem so linear
         swing = Helper.AngleSubtract(dest, angle) ;
+        
         float scale = Math.abs(swing);
         scale /= (float)clampTolerance;
 //        scale /= swingTolerance;
@@ -650,10 +662,11 @@ public class PlayerRender {
 
         Ref.render.addRefEntity(ent);
         ArrayList<BoneController> ctrls = new ArrayList<BoneController>();
-        Vector3f boneAngles = new Vector3f((float)Math.sin(Ref.cgame.cg.time/1000f)*16f,0,0);
+        
         BoneController gunBone = new BoneController(BoneController.Type.ADDITIVE, "WeaponController", weaponAngles);
         ctrls.add(gunBone);
         ent.model = model.buildFrame(ent.frame, ent.oldframe, ent.backlerp, ctrls);
+        ent.model.updateAttachments(ent.origin, ent.axis);
         BoneAttachment muzzleBone = ent.model.getAttachment("muzzle");
         if(muzzleBone == null || winfo.flashTexture == null) return;
 //
@@ -667,17 +680,24 @@ public class PlayerRender {
         flash.mat.blendmode = CubeMaterial.BlendMode.ONE;
         flash.outcolor.set(255,255,255,255);
         flash.radius = 5f;
-        Matrix4f modelMatrix = createModelMatrix(ent.axis, ent.origin, null);
+
         Vector4f vec = new Vector4f(muzzleBone.lastposition.x, muzzleBone.lastposition.y, muzzleBone.lastposition.z, 1);
-        Matrix4f.transform(modelMatrix, vec, vec);
+
         flash.origin.set(vec.x, vec.y, vec.z);
         // Get attachment point
-        Vector3f[] rotatedMuzzleAxis = new Vector3f[3];
-        rotatedMuzzleAxis[0] = muzzleBone.axis[0];//muzzleBone.axis[1];
-        rotatedMuzzleAxis[1] = muzzleBone.axis[2];
-        rotatedMuzzleAxis[2] = muzzleBone.axis[0];
-        Helper.rotateAroundDirection(rotatedMuzzleAxis, (Ref.rnd.nextFloat()-0.5f)*60f);
-        Helper.mul(rotatedMuzzleAxis, ent.axis, flash.axis);
+        flash.axis[0].set(muzzleBone.axis[0]);
+        flash.axis[1].set(muzzleBone.axis[2]);
+        flash.axis[2].set(muzzleBone.axis[1]);
+        float rnd = (Ref.rnd.nextFloat()-0.5f)*60f;
+        float cos = (float)Math.cos(rnd);
+        float sin = (float)Math.sin(rnd);
+        // Rotate around x axis
+        Vector3f[] rotAxis = new Vector3f[] {new Vector3f(), new Vector3f(), new Vector3f()};
+        rotAxis[0] = new Vector3f(cos,-sin,0);
+        rotAxis[1] = new Vector3f(sin,cos,0);
+        rotAxis[2] = new Vector3f(0,0,1);
+        
+        Helper.mul(rotAxis, flash.axis, flash.axis);
         Ref.render.addRefEntity(flash);
     }
     
@@ -703,10 +723,10 @@ public class PlayerRender {
 
         
         CEntity cent = game.cg.cur_lc.predictedPlayerEntity;
-        swingAngles(angles.x, 0, 10, 0.1f, cent.pe.torso, true, 1f);
-        swingAngles(angles.y, 0, 30, 0.2f, cent.pe.torso, false, 1f);
-        angles.x = cent.pe.torso.yawAngle;
-        angles.y = cent.pe.torso.pitchAngle;
+        swingAngles(angles.x, 0, 10, 0.1f, cent.pe.fpsweapon, true, 1f);
+        swingAngles(angles.y, 0, 30, 0.2f, cent.pe.fpsweapon, false, 1f);
+        angles.x = cent.pe.fpsweapon.yawAngle;
+        angles.y = cent.pe.fpsweapon.pitchAngle;
         
         angles.x = Helper.AngleSubtract(angles.x, game.cg.refdef.Angles.x)*angleScale.x;
         angles.y = Helper.AngleSubtract(angles.y, game.cg.refdef.Angles.y)*angleScale.y;
@@ -717,28 +737,5 @@ public class PlayerRender {
         angles.y = tmp;
         
     }
-    
-    private Matrix4f createModelMatrix(Vector3f[] axis, Vector3f position, Matrix4f dest) {
-        if(dest == null) dest = new Matrix4f();
-        // Set rotation matrix
-        FloatBuffer viewbuffer = Ref.glRef.matrixBuffer;
-        viewbuffer.position(0);
-        viewbuffer.put(axis[0].x);viewbuffer.put(axis[1].x);viewbuffer.put(axis[2].x);viewbuffer.put(0);
-        viewbuffer.put(axis[0].y);viewbuffer.put(axis[1].y);viewbuffer.put(axis[2].y); viewbuffer.put(0);
-        viewbuffer.put(axis[0].z); viewbuffer.put(axis[1].z); viewbuffer.put(axis[2].z);viewbuffer.put(0);
-        viewbuffer.put(0); viewbuffer.put(0); viewbuffer.put(0); viewbuffer.put(1);
-        viewbuffer.flip();
-        Matrix4f mMatrix = (Matrix4f) dest.load(viewbuffer);
-        mMatrix.invert();
-        mMatrix.m30 = position.x;
-        mMatrix.m31 = position.y;
-        mMatrix.m32 = position.z;
-
-        viewbuffer.clear();
-        return mMatrix;
-    }
-
-    
-    
     
 }

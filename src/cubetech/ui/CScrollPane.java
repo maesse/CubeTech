@@ -1,6 +1,7 @@
 package cubetech.ui;
 
 import cubetech.collision.Collision;
+import cubetech.common.Helper;
 import cubetech.gfx.CubeTexture;
 import cubetech.gfx.Sprite;
 import cubetech.gfx.SpriteManager.Type;
@@ -65,6 +66,8 @@ public class CScrollPane extends CContainer {
             mouseDown = evt.Pressed;
         if(!isMouseEnter())
             mouseDown = false;
+        
+        
 
         // Figure out how much can be scrolled
         Vector2f vertOverflow = new Vector2f(componentSize.x - viewSize.x,componentSize.y - viewSize.y);
@@ -72,6 +75,11 @@ public class CScrollPane extends CContainer {
             vertOverflow.x = 0;
         if(vertOverflow.y < 0)
             vertOverflow.y = 0;
+        
+        if(evt.WheelDelta != 0) {
+            vertPositon -= evt.WheelDelta * 20;
+        }
+        vertPositon = Helper.Clamp(vertPositon, 0, vertOverflow.y);
         
         Vector2f intPos = getInternalPosition();
         Vector2f intSize = getInternalSize();

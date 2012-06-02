@@ -1,109 +1,75 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.net;
 
-import cubetech.common.CVar;
-import cubetech.common.CVarFlags;
 import cubetech.common.Common;
 import cubetech.misc.Ref;
 import java.io.IOException;
-import java.net.BindException;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.SocketException;
-import java.net.UnknownHostException;
+import java.net.*;
 import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
 import java.util.LinkedList;
 import java.util.Queue;
-import java.nio.channels.*;
-import java.util.EnumSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
  *
- * @author mads
+ * @author Mads
  */
-public final class Net {
-    public final static int DEFAULT_PORT = 27015;
-    final static int LOWDELAY_FLAG = 0x10; // Socket Flag
-
+public class Net {
     // Recieved packets must start with one of these integers
     public final static int MAGIC_NUMBER = 0x43124510; // for connected peers
     public final static int OOB_MAGIC = 0xffffffff; // out of band packets
+    private final static int LOWDELAY_FLAG = 0x10; // Socket Flag
     
-    private DatagramChannel srvChannel;
-    private DatagramSocket  srvSocket;
+    // Server socket
+    protected DatagramChannel srvChannel;
+    protected DatagramSocket  srvSocket;
 
-    private DatagramChannel cliChannel;
-    private DatagramSocket  cliSocket;
-
-    // incomming/outgoing Stats
-    public int clAvgBytesIn, clAvgPacketsIn;
-    public int clLastBytesIn, clLastBytesOut;
-    public int clAvgBytesOut, clAvgPacketsOut;
-    public int svAvgBytesIn, svAvgPacketsIn;
-    public int svAvgBytesOut, svAvgPacketsOut;
-
+    // Client socket
+    protected DatagramChannel cliChannel;
+    protected DatagramSocket  cliSocket;
+    
+    // Stats
+    public NetStats stats = new NetStats();
     private int lastUpdateTime;
-    private int tclAvgBytesIn, tclAvgPacketsIn;
-    private int tclAvgBytesOut, tclAvgPacketsOut;
-    private int tsvAvgBytesIn, tsvAvgPacketsIn;
-    private int tsvAvgBytesOut, tsvAvgPacketsOut;
-
-    public CVar net_svport = Ref.cvars.Get("net_svport", ""+DEFAULT_PORT, EnumSet.of(CVarFlags.TEMP));
-    public CVar net_clport = Ref.cvars.Get("net_clport", "", EnumSet.of(CVarFlags.TEMP));
-    public CVar net_graph = Ref.cvars.Get("net_graph", "0", EnumSet.of(CVarFlags.ARCHIVE));
-    boolean netInited = false; // Set to true when net finishes initializing
+    
+    // Set to true when net finishes initializing
+    boolean initialized = false; 
+    
     // Queued outgoing packets
-    public Queue<Packet> packets = new LinkedList<Packet>();
+    private Queue<Packet> packets = new LinkedList<Packet>();
 
-    private void UpdateStats() {
-        if(Ref.client == null)
-            return; // client system not running, no reason to record anything
-        
-        if(lastUpdateTime + 1000 < Ref.client.realtime)
-        {
-            lastUpdateTime = Ref.client.realtime;
-        } else
-            return;
-        
-        clAvgPacketsIn = tclAvgPacketsIn;
-        clAvgPacketsOut = tclAvgPacketsOut;
-        svAvgPacketsIn = tsvAvgPacketsIn;
-        svAvgPacketsOut = tsvAvgPacketsOut;
-        clAvgBytesIn = tclAvgBytesIn ;
-        clAvgBytesOut = tclAvgBytesOut ;
-        svAvgBytesIn = tsvAvgBytesIn;
-        svAvgBytesOut = tsvAvgBytesOut;
-        tclAvgPacketsIn = 0;
-        tclAvgPacketsOut = 0;
-        tsvAvgPacketsIn = 0;
-        tsvAvgPacketsOut = 0;
-        tclAvgBytesIn = 0;
-        tclAvgBytesOut = 0;
-        tsvAvgBytesIn = 0;
-        tsvAvgBytesOut = 0;
+    public Net(int port) {
+        try {
+            openServerSocket(port);
+            openClientSocket();
+            initialized = true;
+        } catch (IOException ex) {
+            Logger.getLogger(DefaultNet.class.getName()).log(Level.SEVERE, null, ex);
+            initialized = false;
+        }
     }
-
+    
     public Net() {
         try {
-            InitNet();
-            netInited = true;
+            openClientSocket();
+            initialized = true;
         } catch (IOException ex) {
-            Logger.getLogger(Net.class.getName()).log(Level.SEVERE, null, ex);
-            netInited = false;
+            Logger.getLogger(DefaultNet.class.getName()).log(Level.SEVERE, null, ex);
+            initialized = false;
         }
-
-        // Get a random unsigned short for qport
-        Ref.cvars.Get("net_qport", "" + (Ref.rnd.nextInt(65535)&0xffff), EnumSet.of(CVarFlags.INIT));
+    }    
+    
+    public void updateStats() {
+        if(Ref.client == null || !initialized) return;
+        if(lastUpdateTime + 1000 > Ref.client.realtime) return;
+        lastUpdateTime = Ref.client.realtime;
+        
+        stats.updateStats();
     }
 
-    public void SendOutOfBandPacket(NetChan.NetSource source, InetSocketAddress dest, String data) {
+    public void SendOutOfBandPacket(Packet.ReceiverType source, InetSocketAddress dest, String data) {
+        checkInitialized();
         NetBuffer buf = NetBuffer.GetNetBuffer(false, false);
         // OOB packets need this
         buf.Write(OOB_MAGIC);
@@ -111,41 +77,28 @@ public final class Net {
         SendPacket(source, buf, dest);
     }
 
-    public void SendPacket(NetChan.NetSource source, NetBuffer buffer, InetSocketAddress dest) {
+    public void SendPacket(Packet.ReceiverType source, NetBuffer buffer, InetSocketAddress dest) {
+        checkInitialized();
         ByteBuffer buf = buffer.GetBuffer();
         int size = buf.position();
        // System.out.println("Client: Sending " + buf.position() + "bytes");
         buf.flip();
         try {
-            if(source == NetChan.NetSource.CLIENT) {
-                tclAvgBytesOut += size;
-                clLastBytesOut = size;
-                tclAvgPacketsOut++;
+            if(source == Packet.ReceiverType.CLIENT) {
+                stats.tclAvgBytesOut += size;
+                stats.clLastBytesOut = size;
+                stats.tclAvgPacketsOut++;
                 if(cliChannel.send(buf, dest) == 0)
                     Common.LogDebug("Net.Client: Outgoing packet queued by JVM/OS");
             } else {
-                tsvAvgBytesOut += size;
-                tsvAvgPacketsOut++;
+                stats.tsvAvgBytesOut += size;
+                stats.tsvAvgPacketsOut++;
                 if(srvChannel.send(buf, dest) == 0)
                     Common.LogDebug("Net.Server: Outgoing packet queued by JVM/OS");
             }
         } catch (IOException ex) {
-            Logger.getLogger(Net.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(DefaultNet.class.getName()).log(Level.SEVERE, null, ex);
         }
-    }
-
-    public String GetBroadcastAddress() {
-        String str;
-        try {
-            str = InetAddress.getLocalHost().getHostAddress();
-            int lastdot = str.lastIndexOf('.');
-            str = str.substring(0, lastdot) + ".255";
-            return str;
-        } catch (UnknownHostException ex) {
-            Logger.getLogger(Net.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return "255.255.255.255";
-        
     }
 
     public Packet GetPacket() {
@@ -153,18 +106,18 @@ public final class Net {
     }
 
     public void ConnectClient(InetSocketAddress addr) throws SocketException {
+        checkInitialized();
         cliSocket.connect(addr);
     }
     
     public void disconnectClient() {
+        checkInitialized();
         cliSocket.disconnect();
     }
 
     // Keep the water flowin', baby
-    public void PumpNet() {
-//        netInited = false;
-        if(!netInited)
-            return;
+    public void PumpNet(int time) {
+        if(!initialized) return;
         
         try {
             // Recieve Server
@@ -175,15 +128,15 @@ public final class Net {
             while ((addr = (InetSocketAddress) srvChannel.receive(destBuf)) != null) {
                 destBuf.flip();
                 int size = destBuf.limit();
-                tsvAvgBytesIn += size;
-                tsvAvgPacketsIn++;
+                stats.tsvAvgBytesIn += size;
+                stats.tsvAvgPacketsIn++;
                 // Check if it's a packet we know
                 int magic = destBuf.getInt();
                 if(magic == MAGIC_NUMBER || magic == OOB_MAGIC)
                 {
                     size -= 4;
                     //System.out.println("Server: Recieved " + size + "bytes");
-                    Packet packet = new Packet(Packet.SourceType.SERVER, addr, dest, magic == OOB_MAGIC);
+                    Packet packet = new Packet(Packet.ReceiverType.SERVER, addr, dest, magic == OOB_MAGIC, time);
                     // Enqueue it
                     packets.add(packet);
                 }
@@ -196,16 +149,16 @@ public final class Net {
             while ((addr = (InetSocketAddress) cliChannel.receive(destBuf)) != null) {
                 destBuf.flip();
                 int size = destBuf.limit();
-                tclAvgBytesIn += size;
-                clLastBytesIn = size;
-                tclAvgPacketsIn++;
+                stats.tclAvgBytesIn += size;
+                stats.clLastBytesIn = size;
+                stats.tclAvgPacketsIn++;
                 // Check if it's a packet we know
                 int magic = destBuf.getInt();
                 if(magic == MAGIC_NUMBER || magic == OOB_MAGIC)
                 {
                     size -= 4;
                     //System.out.println("Client: Recieved " + size + "bytes");
-                    Packet packet = new Packet(Packet.SourceType.CLIENT, addr, dest, magic == OOB_MAGIC);
+                    Packet packet = new Packet(Packet.ReceiverType.CLIENT, addr, dest, magic == OOB_MAGIC, time);
                     // Enqueue it
                     packets.add(packet);
                 }
@@ -214,70 +167,62 @@ public final class Net {
                 destBuf = dest.GetBuffer();
             }
         } catch (IOException ex) {
-            Logger.getLogger(Net.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(DefaultNet.class.getName()).log(Level.SEVERE, null, ex);
         }
 
-        UpdateStats();
+        updateStats();
     }
 
     public void shutdown() {
         DestroyClientSocket();
         DestroyServerSocket();
     }
-
-    void InitNet() throws IOException {
-        if(srvChannel != null)
-            DestroyServerSocket();
+    
+    public void openServerSocket(int port) throws IOException {
+        if(srvChannel != null) DestroyServerSocket();            
 
         srvChannel = DatagramChannel.open();
         srvChannel.configureBlocking(false); // non-blocking
         srvSocket = srvChannel.socket();
+        
         // Try DEFAULT_PORT first, then increment by 1, etc..
         for (int i= 0; i < 5; i++) {
             try {
-                srvSocket.bind(new InetSocketAddress("0.0.0.0",DEFAULT_PORT + i));
-                Ref.cvars.Set2("net_svport", ""+(DEFAULT_PORT + i), true);
+                srvSocket.bind(new InetSocketAddress("0.0.0.0",port + i));
                 break;
             } catch (BindException e) {
-                if(i < 4)
-                    continue;
+                if(i < 4) continue;
                 Common.Log("Failed to find a bindable server port.");
                 throw e;
             }
         }
         
         srvSocket.setTrafficClass(LOWDELAY_FLAG);
-
-        if(cliChannel != null)
-            DestroyClientSocket();
+    }
+    
+    private void openClientSocket() throws IOException {
+        if(cliChannel != null) DestroyClientSocket();
 
         cliChannel = DatagramChannel.open();
         cliChannel.configureBlocking(false);
         cliSocket = cliChannel.socket();
         cliSocket.bind(null);
-        
-//        int buf = cliSocket.getReceiveBufferSize();
-//        cliSocket.setReceiveBufferSize(1400);
-//        cliSocket.setSendBufferSize(1400);
-//        srvSocket.setReceiveBufferSize(1400);
-//        srvSocket.setSendBufferSize(1400);
         cliSocket.setTrafficClass(LOWDELAY_FLAG);
-        Ref.cvars.Set2("net_clport", ""+cliSocket.getPort(), true);
     }
 
-    void DestroyClientSocket() {
+    private void DestroyClientSocket() {
         cliSocket.close();
         cliSocket = null;
         
         try {
             cliChannel.close();
         } catch (IOException ex) {
-            Logger.getLogger(Net.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(DefaultNet.class.getName()).log(Level.SEVERE, null, ex);
         }
         cliChannel = null;
     }
 
-    void DestroyServerSocket() {
+    private void DestroyServerSocket() {
         // CLean up the socket
         srvSocket.close();
         srvSocket = null;
@@ -285,15 +230,18 @@ public final class Net {
         try {
             srvChannel.close();
         } catch (IOException ex) {
-            Logger.getLogger(Net.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(DefaultNet.class.getName()).log(Level.SEVERE, null, ex);
         }
         srvChannel = null;
     }
+    
+    private void checkInitialized() {
+        if(!initialized) throw new RuntimeException("Net is disabled.");
+    }
 
-    public InetSocketAddress LookupHost(String server) {
+    public InetSocketAddress LookupHost(String server, int defaultPort) {
         int portIndex = server.lastIndexOf(":");
-        int port = DEFAULT_PORT;
-        
+        int port = defaultPort;
         if(portIndex > 0) {
             try {
                 port = Integer.parseInt(server.substring(portIndex+1, server.length()));
@@ -306,6 +254,17 @@ public final class Net {
         InetSocketAddress addr = new InetSocketAddress(server, port);
         return addr;
     }
-
     
+    public static String GetBroadcastAddress() {
+        String str;
+        try {
+            str = InetAddress.getLocalHost().getHostAddress();
+            int lastdot = str.lastIndexOf('.');
+            str = str.substring(0, lastdot) + ".255";
+            return str;
+        } catch (UnknownHostException ex) {
+            Logger.getLogger(DefaultNet.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return "255.255.255.255";
+    }
 }

@@ -6,9 +6,9 @@ import cubetech.common.ICommand;
 import cubetech.common.Info;
 import cubetech.misc.MasterServer;
 import cubetech.misc.Ref;
-import cubetech.net.Net;
-import cubetech.net.NetChan.NetSource;
+import cubetech.net.DefaultNet;
 import cubetech.net.Packet;
+import cubetech.net.Packet.ReceiverType;
 import cubetech.ui.ServerListUI;
 import cubetech.ui.ServerListUI.ServerSource;
 import java.net.InetSocketAddress;
@@ -49,13 +49,13 @@ public class ServerBrowser {
     public boolean handlePacket(Packet packet, String[] tokens, String c) {
         // server responding to an info broadcast
         if(c.equalsIgnoreCase("infoResponse")) {
-            ServerInfoPacket(packet.endpoitn, tokens);
+            ServerInfoPacket(packet.endPoint, tokens);
             return true;
         }
 
         // server responding to a get playerlist
         if(c.equalsIgnoreCase("statusResponse")) {
-            ServerStatusResponse(packet.endpoitn, tokens);
+            ServerStatusResponse(packet.endPoint, tokens);
             return true;
         }
         
@@ -94,7 +94,7 @@ public class ServerBrowser {
                 cl_pinglist[firstEmpty].adr = info.adr;
                 cl_pinglist[firstEmpty].time = 0;
                 cl_pinglist[firstEmpty].start = Ref.common.Milliseconds();
-                Ref.net.SendOutOfBandPacket(NetSource.CLIENT, info.adr, "getinfo");
+                Ref.net.SendOutOfBandPacket(ReceiverType.CLIENT, info.adr, "getinfo");
             }
         }
 
@@ -154,7 +154,7 @@ public class ServerBrowser {
         try {
             // if this isn't the correct protocol version, ignore it
             int protocol = Integer.parseInt(Info.ValueForKey(info, "protocol"));
-            if(protocol != Net.MAGIC_NUMBER) {
+            if(protocol != DefaultNet.MAGIC_NUMBER) {
                 Common.Log("Different protocol info packet: " + protocol);
                 return;
             }
@@ -281,8 +281,8 @@ public class ServerBrowser {
 		// can nicely run multiple servers
                 for (int j= 0; j < 5; j++) {
 
-                    InetSocketAddress to = new InetSocketAddress(Ref.net.GetBroadcastAddress(), Net.DEFAULT_PORT + j);
-                    Ref.net.SendOutOfBandPacket(NetSource.CLIENT, to, msg);
+                    InetSocketAddress to = new InetSocketAddress(Ref.net.GetBroadcastAddress(), DefaultNet.DEFAULT_PORT + j);
+                    Ref.net.SendOutOfBandPacket(ReceiverType.CLIENT, to, msg);
                 }
             }
         }

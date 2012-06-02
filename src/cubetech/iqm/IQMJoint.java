@@ -30,6 +30,12 @@ public class IQMJoint {
         return name;
     }
     
+    public Vector3f getJointOrigin(Vector3f dest) {
+        if(dest == null) dest = new Vector3f();
+        dest.set(jointDelta.x, jointDelta.y, jointDelta.z);
+        return dest;
+    }
+    
     public int getIndex() {
         return index;
     }

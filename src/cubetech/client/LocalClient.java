@@ -44,6 +44,7 @@ public class LocalClient {
     public boolean wasDead = true;
     
     public PlayerState snapPS = null;
+    public Vector3f lastFocusPoint = null;
     
     public LocalClient(int index, int localIndex) {
         clientNum = index;

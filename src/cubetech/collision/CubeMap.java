@@ -3,7 +3,7 @@ package cubetech.collision;
 import cern.colt.function.LongObjectProcedure;
 import cern.colt.map.OpenLongObjectHashMap;
 import cubetech.CGame.ChunkRender;
-import cubetech.Game.PhysicsSystem;
+import cubetech.Game.SVPhysics;
 import cubetech.common.Common;
 import cubetech.common.Common.ErrorCode;
 import cubetech.common.Helper;
@@ -43,7 +43,7 @@ public class CubeMap {
     private static Vector3f tempStart = new Vector3f();
     private static Vector3f tempEnd = new Vector3f();
     
-    public PhysicsSystem physics;
+    public SVPhysics physics;
 
     private static byte[] uncompressBuffer = new byte[CubeChunk.CHUNK_SIZE + 1 + 8]; // max possible size
     static int nChunkUpdates = 0;

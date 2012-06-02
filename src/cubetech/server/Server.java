@@ -1,8 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package cubetech.server;
 
 import cubetech.Game.Bot.GBot;
@@ -16,10 +11,10 @@ import cubetech.input.PlayerInput;
 import cubetech.iqm.IQMModel;
 import cubetech.misc.MasterServer;
 import cubetech.misc.Ref;
-import cubetech.net.Net;
+import cubetech.net.DefaultNet;
 import cubetech.net.NetChan;
-import cubetech.net.NetChan.NetSource;
 import cubetech.net.Packet;
+import cubetech.net.Packet.ReceiverType;
 import cubetech.server.ServerRun.ServerState;
 import cubetech.server.SvClient.ClientState;
 import cubetech.spatial.SectorQuery;
@@ -450,7 +445,7 @@ public final class Server implements ITrace {
      */
     public void PacketEvent(Packet data) {
         // Out Of Band packets is mostly for connecting
-        if(data.OutOfBand) {
+        if(data.outOfBand) {
             ConnectionLessPacket(data);
             return;
         }
@@ -466,20 +461,20 @@ public final class Server implements ITrace {
             if(cl.state == ClientState.FREE)
                 continue;
 
-            if(!data.endpoitn.getAddress().equals(cl.netchan.addr.getAddress()))
+            if(!data.endPoint.getAddress().equals(cl.netchan.addr.getAddress()))
                 continue;
 
             // it is possible to have multiple clients from a single IP
             // address, so they are differentiated by the qport variable
-            if(cl.netchan.qport != qport)
+            if(cl.netchan.getIdent() != qport)
                 continue;
 
             // the IP port can't be used to differentiate them, because
             // some address translating routers periodically change UDP
             // port assignments
-            if(cl.netchan.addr.getPort() != data.endpoitn.getPort()) {
+            if(cl.netchan.addr.getPort() != data.endPoint.getPort()) {
                 Common.Log("Fixing up translation port");
-                cl.netchan.addr = new InetSocketAddress(cl.netchan.addr.getAddress(), data.endpoitn.getPort());
+                cl.netchan.addr = new InetSocketAddress(cl.netchan.addr.getAddress(), data.endPoint.getPort());
             }
 
             // make sure it is a valid, in sequence packet
@@ -504,20 +499,20 @@ public final class Server implements ITrace {
 
         str = tokens[0];
         if(str.equalsIgnoreCase("getchallenge"))
-            GetChallenge(data.endpoitn);
+            GetChallenge(data.endPoint);
         else if(str.equalsIgnoreCase("connect"))
-            DirectConnect(data.endpoitn, tokens);
+            DirectConnect(data.endPoint, tokens);
         else if(str.equalsIgnoreCase("getstatus"))
-            Status(data.endpoitn, tokens);
+            Status(data.endPoint, tokens);
         else if(str.equalsIgnoreCase("getinfo"))
-            Info(data.endpoitn, tokens);
+            Info(data.endPoint, tokens);
         else if(str.equalsIgnoreCase("disconnect")) {
             // if a client starts up a local server, we may see some spurious
             // server disconnect messages when their new server sees our final
             // sequenced messages to the old client
         }
         else
-            Common.LogDebug("bad connectionless packet from " + data.endpoitn + ": " + str);
+            Common.LogDebug("bad connectionless packet from " + data.endPoint + ": " + str);
     }
 
     private void CheckTimeouts() {
@@ -623,7 +618,7 @@ public final class Server implements ITrace {
         chal.challenge = (Ref.rnd.nextInt() << 16) ^ Ref.rnd.nextInt() ^ time;
         chal.wasRefused = false;
         chal.pingTime = time;
-        Ref.net.SendOutOfBandPacket(NetSource.SERVER, from, String.format("challengeResponse %d %d", chal.challenge, chal.clientChallenge));
+        Ref.net.SendOutOfBandPacket(ReceiverType.SERVER, from, String.format("challengeResponse %d %d", chal.challenge, chal.clientChallenge));
     }
     
     public void addExtraLocalClient(SvClient owner, int lc, String userinfo) {
@@ -642,7 +637,7 @@ public final class Server implements ITrace {
         newcl.id = n;
         SharedEntity gent = sv.gentities[n];
         newcl.gentity = gent;
-        newcl.netchan = new NetChan(NetSource.SERVER, owner.netchan.addr, owner.netchan.qport);
+        newcl.netchan = new NetChan(Ref.net, ReceiverType.SERVER, owner.netchan.addr, owner.netchan.getIdent());
         
         newcl.userinfo = userinfo;
         newcl.owner = newcl.gentity.r.owner = owner.id;
@@ -653,7 +648,7 @@ public final class Server implements ITrace {
         
         String denied = Ref.game.Client_Connect(n, true, false);
         if(denied != null) {
-            Ref.net.SendOutOfBandPacket(NetSource.SERVER, owner.netchan.addr, String.format("print \"%s\"", denied));
+            Ref.net.SendOutOfBandPacket(ReceiverType.SERVER, owner.netchan.addr, String.format("print \"%s\"", denied));
             Common.Log("Game rejected connection: " + denied);
             return;
         }
@@ -702,7 +697,7 @@ public final class Server implements ITrace {
 
             // No challenge found
             if(i == challenges.length) {
-                Ref.net.SendOutOfBandPacket(NetSource.SERVER, from, String.format("print \"No or bad challenge for you address.\""));
+                Ref.net.SendOutOfBandPacket(ReceiverType.SERVER, from, String.format("print \"No or bad challenge for you address.\""));
                 return;
             }
 
@@ -728,7 +723,7 @@ public final class Server implements ITrace {
                 continue;
 
             if(from.getAddress().equals(cl.netchan.addr.getAddress()) &&
-                    (from.getPort() == cl.netchan.addr.getPort() || qport == cl.netchan.qport)) {
+                    (from.getPort() == cl.netchan.addr.getPort() || qport == cl.netchan.getIdent())) {
                 Common.LogDebug("Reconnect...");
                 clients[i] = new SvClient();
                 clients[i].id = i;
@@ -757,7 +752,7 @@ public final class Server implements ITrace {
 //            }
 
             if(newcl == null) {
-                Ref.net.SendOutOfBandPacket(NetSource.SERVER, from, String.format("print \"Server is full.\""));
+                Ref.net.SendOutOfBandPacket(ReceiverType.SERVER, from, String.format("print \"Server is full.\""));
                 Common.Log("Rejected connection: Server is full");
                 return;
             }
@@ -782,7 +777,7 @@ public final class Server implements ITrace {
         }
 
         // save the address
-        newcl.netchan = new NetChan(NetSource.SERVER, from, qport);
+        newcl.netchan = new NetChan(Ref.net, ReceiverType.SERVER, from, qport);
 
         // save the userinfo
         newcl.userinfo = userinfo;
@@ -790,7 +785,7 @@ public final class Server implements ITrace {
         // get the game a chance to reject this connection or modify the userinfo
         String denied = Ref.game.Client_Connect(i, true, false);
         if(denied != null) {
-            Ref.net.SendOutOfBandPacket(NetSource.SERVER, from, String.format("print \"%s\"", denied));
+            Ref.net.SendOutOfBandPacket(ReceiverType.SERVER, from, String.format("print \"%s\"", denied));
             Common.Log("Rejected a connection: " + denied);
             return;
         }
@@ -800,7 +795,7 @@ public final class Server implements ITrace {
         
 
         // send the connect packet to the client
-        Ref.net.SendOutOfBandPacket(NetSource.SERVER, from, "connectResponse");
+        Ref.net.SendOutOfBandPacket(ReceiverType.SERVER, from, "connectResponse");
         newcl.state = ClientState.CONNECTED;
         newcl.nextSnapshotTime = time;
         newcl.lastPacketTime = time;
@@ -883,6 +878,7 @@ public final class Server implements ITrace {
         if(!ent.worldSector.UnlinkEntity(ent)) {
             Common.Log("Warning: UnlinkEntity: Not found in worldsector");
         }
+        ent.worldSector = null;
     }
 
 
@@ -1102,7 +1098,7 @@ public final class Server implements ITrace {
             }
         }
 
-        Ref.net.SendOutOfBandPacket(NetSource.SERVER, from, String.format("statusResponse\n%s\n%s", info, status));
+        Ref.net.SendOutOfBandPacket(ReceiverType.SERVER, from, String.format("statusResponse\n%s\n%s", info, status));
     }
 
     /*
@@ -1131,14 +1127,14 @@ public final class Server implements ITrace {
         // echo back the parameter to status. so servers can use it as a challenge
 	// to prevent timed spoofed reply packets that add ghost servers
         info = Info.SetValueForKey(info, "challenge", arg);
-        info = Info.SetValueForKey(info, "protocol", ""+Net.MAGIC_NUMBER);
+        info = Info.SetValueForKey(info, "protocol", ""+DefaultNet.MAGIC_NUMBER);
         info = Info.SetValueForKey(info, "hostname", sv_hostname.sValue);
         info = Info.SetValueForKey(info, "mapname", sv_mapname.sValue);
         info = Info.SetValueForKey(info, "clients", ""+playercount);
         info = Info.SetValueForKey(info, "sv_maxclients", ""+sv_maxclients.iValue);
         info = Info.SetValueForKey(info, "gametype", ""+sv_gametype.iValue);
 
-        Ref.net.SendOutOfBandPacket(NetSource.SERVER, from, String.format("infoResponse\n%s", info));
+        Ref.net.SendOutOfBandPacket(ReceiverType.SERVER, from, String.format("infoResponse\n%s", info));
     }
 
     // Inits some structures on the first mapload
@@ -1343,7 +1339,7 @@ public final class Server implements ITrace {
                 client.gentity.s.number = i;
                 client.state = ClientState.ACTIVE;
                 client.lastPacketTime = time;
-                if(client.netchan == null) client.netchan = new NetChan(NetSource.CLIENT, null, 0);
+                if(client.netchan == null) client.netchan = new NetChan(Ref.net, ReceiverType.CLIENT, null, 0);
                 client.netchan.isBot = true;
                 client.rate = 16384;
                 return i;

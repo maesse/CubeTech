@@ -111,14 +111,8 @@ public class Client {
         // drop the connection
         CheckTimeout();
         
-        // send intentions now
-        // Get delta msecs since last frame from the common subsystem
-        Ref.Input.frame_msec = frametime;
-
-        // if running less than 5fps, truncate the extra time to prevent
-        // unexpected moves after a hitch
-        if(Ref.Input.frame_msec > 200) Ref.Input.frame_msec = 200;
-        Ref.Input.Update();
+        
+        Ref.Input.Update(realtime);
         clc.SendCommand();
         
         // resend a connection request if necessary

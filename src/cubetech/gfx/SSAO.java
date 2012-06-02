@@ -273,7 +273,7 @@ public class SSAO {
     
     public static CubeTexture generateNoiseTexture(int width, int height) {
         Vector3f[] noiseData = generateNoise(width * height);
-        int texid = Ref.ResMan.CreateEmptyTexture(width, height, GL11.GL_TEXTURE_2D, false, null);
+        int texid = Ref.ResMan.getTextureLoader().CreateEmptyTexture(width, height, GL11.GL_TEXTURE_2D, false, null);
         ByteBuffer buf = ByteBuffer.allocateDirect(width*height*3);
         for (int i= 0; i < width*height; i++) {
             buf.put((byte)(noiseData[i].x * 255));

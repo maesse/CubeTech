@@ -823,7 +823,7 @@ public class ShadowManager {
         for (int i = 0; i < height*width; i++) {
             rnd[i] = (float)(Ref.rnd.nextFloat()*Math.PI);
         }
-        int texid = Ref.ResMan.CreateEmptyTexture(width, height, GL11.GL_TEXTURE_2D, false, null);
+        int texid = Ref.ResMan.getTextureLoader().CreateEmptyTexture(width, height, GL11.GL_TEXTURE_2D, false, null);
         ByteBuffer buf = ByteBuffer.allocateDirect(width*height*3);
         for (int i= 0; i < width*height; i++) {
             // Calculate sin and cos for the random sample

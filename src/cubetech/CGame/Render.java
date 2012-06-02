@@ -32,6 +32,7 @@ public class Render {
     
     CVar r_gpuskin = Ref.cvars.Get("r_gpuskin", "1", EnumSet.of(CVarFlags.NONE));
     public CVar r_nocull = Ref.cvars.Get("r_nocull", "0", EnumSet.of(CVarFlags.TEMP));
+    public CVar r_bonedebug = Ref.cvars.Get("r_bonedebug", "0", EnumSet.of(CVarFlags.TEMP));
     public CVar r_batchsprites = Ref.cvars.Get("r_batchsprites", "1", EnumSet.of(CVarFlags.TEMP));
     
     private ArrayList<RenderEntity> renderList = new ArrayList<RenderEntity>();
@@ -89,7 +90,14 @@ public class Render {
                 if(re.Type == REType.SPRITE) continue; // sprites are rendered without depth writing
             }
             
-            if(postDeferred != re.hasFlag(RenderEntity.FLAG_NOLIGHT)) continue;
+            if(postDeferred != re.hasFlag(RenderEntity.FLAG_NOLIGHT)) {
+                if(re.Type == REType.MODEL && re.model.needMultiPass) {
+                    // This model needs to be rendered multiple times
+                } else
+                {
+                    continue;
+                }
+            }
             
             Matrix4f tmpMatrix = null;
             if(re.hasFlag(RenderEntity.FLAG_WEAPONPROJECTION)) {
@@ -429,11 +437,11 @@ public class Render {
             Matrix4f.mul(viewmatrix, model, model);
             Ref.glRef.glLoadMatrix(model);
             Helper.renderBBoxWireframe(mins.x, mins.y, mins.z,
-                maxs.x, maxs.y, maxs.z, ent.outcolor);
+                maxs.x, maxs.y, maxs.z, ent.outcolor, view);
             GL11.glPopMatrix();
         } else {
             Helper.renderBBoxWireframe(-mins.x+position.x, -mins.y+position.y, -mins.z+position.z,
-                mins.x+position.x, mins.y+position.y, mins.z+position.z, ent.outcolor);
+                mins.x+position.x, mins.y+position.y, mins.z+position.z, ent.outcolor, view);
         }
         
         GL11.glEnable(GL11.GL_DEPTH_TEST);

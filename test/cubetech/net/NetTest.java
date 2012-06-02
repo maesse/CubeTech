@@ -11,6 +11,7 @@ import cubetech.misc.Ref;
 import cubetech.common.CVars;
 import cubetech.common.Common;
 import cubetech.gfx.ResourceManager;
+import cubetech.net.Packet.ReceiverType;
 import java.net.InetSocketAddress;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -59,8 +60,8 @@ public class NetTest {
     @Test
     public void testOOBPacket() {
         System.out.println("GetPacket");
-        Net net = new Net();
-        net.SendOutOfBandPacket(NetChan.NetSource.CLIENT, new InetSocketAddress("localhost", Net.DEFAULT_PORT), "YO DAWG");
+        DefaultNet net = new DefaultNet();
+        net.SendOutOfBandPacket(ReceiverType.CLIENT, new InetSocketAddress("localhost", DefaultNet.DEFAULT_PORT), "YO DAWG");
         try {
             Thread.sleep(100);
         } catch (InterruptedException ex) {
@@ -68,7 +69,7 @@ public class NetTest {
         }
         net.PumpNet();
         Packet result = net.GetPacket();
-        assertTrue(result.OutOfBand);
+        assertTrue(result.outOfBand);
         assertEquals("YO DAWG", result.buf.ReadString());
         // TODO review the generated test code and remove the default call to fail.
         //fail("The test case is a prototype.");

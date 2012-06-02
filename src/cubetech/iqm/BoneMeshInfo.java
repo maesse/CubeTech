@@ -1,6 +1,7 @@
 package cubetech.iqm;
 
 import cubetech.common.Common;
+import cubetech.common.Helper;
 import java.util.HashMap;
 
 /**
@@ -37,11 +38,17 @@ public class BoneMeshInfo {
     public float sdampingx = 0.3f;
     public float sdampingy = 0.3f;
     public float sdampingz = 0.3f;
+    
+    // Use this joint's bonemesh as parent.
+    // Usefull for advanced bone hiareachy
+    public String parentBoneMeshJoint = null;
 
+    
     // Reads in the given parameters
     public BoneMeshInfo(HashMap<String, String> params) {
         try {
             String v;
+            if((v = params.get("parent")) != null) parentBoneMeshJoint = v;
             if((v = params.get("mass")) != null) mass = Float.parseFloat(v);
             if((v = params.get("rminx")) != null) rminx = Float.parseFloat(v);
             if((v = params.get("rminy")) != null) rminy = Float.parseFloat(v);
@@ -64,7 +71,7 @@ public class BoneMeshInfo {
         }
     }
     
-    private BoneMeshInfo() {}
+    public BoneMeshInfo() {}
     
     public boolean equals(BoneMeshInfo other) {
         if(other == null) return false;
@@ -88,7 +95,8 @@ public class BoneMeshInfo {
                 other.sforcez == sforcez &&
                 other.sdampingx == sdampingx &&
                 other.sdampingy == sdampingy &&
-                other.sdampingz == sdampingz);
+                other.sdampingz == sdampingz &&
+                Helper.Equals(other.parentBoneMeshJoint, parentBoneMeshJoint));
     }
     
     public BoneMeshInfo clone(BoneMeshInfo info) {
@@ -111,7 +119,8 @@ public class BoneMeshInfo {
         info.sforcez = sforcez;
         info.sdampingx = sdampingx;
         info.sdampingy = sdampingy;
-        info.sdampingz = sdampingz;    
+        info.sdampingz = sdampingz;
+        info.parentBoneMeshJoint = parentBoneMeshJoint;
         return info;
     }
     

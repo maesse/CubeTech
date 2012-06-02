@@ -245,8 +245,8 @@ public class SvClient {
             return; // not time yet
         }
 
-        if(netchan.unsentFragments) {
-            nextSnapshotTime = Ref.server.time + RateMsec(netchan.unsentLenght - netchan.unsentFragmentStart);
+        if(netchan.isUnsentFragments()) {
+            nextSnapshotTime = Ref.server.time + RateMsec(netchan.getUnsentBytes());
             TransmitNextFragment();
             return;
         }
@@ -760,7 +760,7 @@ public class SvClient {
 
     private void Transmit(NetBuffer buf) {
         buf.Write(SVC.OPS_EOF);
-        if(netchan.unsentFragments) {
+        if(netchan.isUnsentFragments()) {
 //            System.out.println("Unsent fragments, queued");
             // Store message in new buffer, so it doesn't get run over
             NetBuffer queuedBuf = NetBuffer.CreateCustom(buf.GetBuffer().duplicate());
@@ -773,7 +773,7 @@ public class SvClient {
 
     private void TransmitNextFragment() {
         netchan.TransmitNextFragment();
-        if(!netchan.unsentFragments) {
+        if(!netchan.isUnsentFragments()) {
             // the last fragment was transmitted, check wether we have queued messages
             if(netchan_queue.peek() != null) {
 //                Common.LogDebug("Popping queued message: %d left", netchan_queue.size());

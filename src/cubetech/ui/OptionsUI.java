@@ -8,6 +8,8 @@ import cubetech.gfx.TextManager.Align;
 import cubetech.input.MouseEvent;
 import cubetech.misc.Ref;
 import cubetech.ui.CContainer.Direction;
+import java.util.Arrays;
+import java.util.Comparator;
 import org.lwjgl.opengl.DisplayMode;
 import org.lwjgl.util.vector.Vector2f;
 
@@ -192,8 +194,19 @@ public class OptionsUI implements IMenu {
         CContainer resCont = new CContainer(new FlowLayout(false, false, true));
         resCont.setResizeToChildren(Direction.VERTICAL);
         DisplayMode[] modes = Ref.glRef.getNiceModes();
+        Arrays.sort(modes, new Comparator<DisplayMode>() {
+            public int compare(DisplayMode a, DisplayMode b) {
+                if(a.getWidth() != b.getWidth()) {
+                    return a.getWidth()<b.getWidth()?-1:1;
+                } else if(a.getHeight() == b.getHeight()) return 0;
+                else {
+                    return a.getHeight()<b.getHeight()?-1:1;
+                }
+            }
+        });
+                
         for (DisplayMode mode : modes) {
-            String str = String.format("%dx%d", mode.getWidth(), mode.getHeight());
+            String str = String.format("%dx%d@%dhz (%dbpp)", mode.getWidth(), mode.getHeight(), mode.getFrequency(), mode.getBitsPerPixel());
             CButton resBut = new CButton(str, null, Align.LEFT, 1, setResolution);
             resBut.tag = mode;
             resCont.addComponent(resBut);

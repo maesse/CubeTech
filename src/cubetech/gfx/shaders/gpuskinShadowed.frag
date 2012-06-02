@@ -7,6 +7,7 @@ uniform mat4 shadowMatrix[4];
 uniform vec4 pcfOffsets[4];
 uniform float shadow_bias;
 uniform float shadow_factor;
+uniform float ambient_factor = 1.0;
 
 uniform samplerCube envmap;
 uniform sampler2D tex;
@@ -55,32 +56,25 @@ float getShadowFraction()
 void main()
 {
     // Start with ambient
-    vec4 ambientcolor = gl_LightModel.ambient * textureCube(envmap, reflectDir);
+    vec3 ambientcolor = textureCube(envmap, -reflectDir).rgb * ambient_factor;
     vec4 texcol = texture2D(tex, coords);
     vec3 mnormal = normalize(2.0 * texture2D(normalmap, coords.st).rgb - 1.0);
-    vec4 speccolor = texture2D(specularmap, coords.st);
-    vec3 n = mnormal; // normalize the interpolated normal
+    vec3 speccolor = texture2D(specularmap, coords.st).rgb;
+    vec3 n = invTan * mnormal; // normalize the interpolated normal
 
-    //speccolor = vec4(1,1,1,1);
-    n = vec3(0,0,1);
-    
     float NdotL = (max(dot(n, lightVec), 0.0));
-    vec4 diff = texcol * NdotL;
+    vec3 diff = texcol.rgb * NdotL;
 
-    //diff = vec4(NdotL);
-    //diff.w = 1.0;
-
-    vec4 spec = vec4(0,0,0,1);
+    vec3 spec = vec3(0,0,0);
     // Blinn-Phong
     if(NdotL > 0.0) {
         vec3 halfV = normalize(halfVec);
         float NdotHV = max(dot(n, halfV), 0.0);
         spec = pow(NdotHV, 32.0) * speccolor * 2.0;
     }
-
-    gl_FragColor.rgb = ambientcolor.rgb * texcol.rgb + (diff.rgb + spec.rgb) * getShadowFraction();
-    //gl_FragColor.rgb *= 0.0001;
-    //gl_FragColor.rgb += (invTan * n);
-    //gl_FragColor.rgb += vec3(spec.rgb);
-    gl_FragColor.a = 1.0;
+    float shadow = shadow_factor * getShadowFraction() + (1.0 - shadow_factor);
+    gl_FragColor.rgb = texcol.rgb * ((diff + spec) * shadow + ambientcolor);
+    gl_FragColor.a  = texcol.a;
+    //gl_FragColor.rgb = vec3(NdotL);
+    //gl_FragColor.rgb = abs(ambientcolor);
 }
